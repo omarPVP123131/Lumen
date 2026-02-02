@@ -1,0 +1,1 @@
+C:\Users\Omar\Documents\Documentos\ WEb\LumenRust\target\debug\lumen.exe: C:\Users\Omar\Documents\Documentos\ WEb\LumenRust\src\instructions.rs C:\Users\Omar\Documents\Documentos\ WEb\LumenRust\src\main.rs C:\Users\Omar\Documents\Documentos\ WEb\LumenRust\src\stack.rs C:\Users\Omar\Documents\Documentos\ WEb\LumenRust\src\vm.rs

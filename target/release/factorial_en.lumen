@@ -1,0 +1,5 @@
+import english
+
+d = 23
+
+print (d)
