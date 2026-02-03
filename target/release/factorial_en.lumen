@@ -1,5 +1,3 @@
-import english
-
 d = 23
 
-print (d)
+imprimir (d)
