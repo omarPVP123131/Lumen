@@ -138,28 +138,28 @@ si (edad >= 18) {
 
 ## Interfaz de línea de comandos
 
-### Ejecutar código fuente directamente
+### Ejecutar código fuente directamente FUNCIONA
 ```bash
 lumen run programa.nv
 ```
 
-### Compilar a bytecode
+### Compilar a bytecode (EN PRUEBAS)
 ```bash
 lumen build programa.nv
 # Genera: programa.nvc
 ```
 
-### Ejecutar bytecode compilado
+### Ejecutar bytecode compilado PROXIMAMENTE
 ```bash
 lumen run programa.nvc
 ```
 
-### Verificar sintaxis y semántica sin ejecutar
+### Verificar sintaxis y semántica sin ejecutar PROXIMAMENTE
 ```bash
 lumen check programa.nv
 ```
 
-### Mostrar bytecode generado (modo educativo)
+### Mostrar bytecode generado (modo educativo) PROXIMAMENTE
 ```bash
 lumen disasm programa.nvc
 ```
@@ -334,9 +334,9 @@ LÚMEN es un proyecto de código abierto que acepta contribuciones. Si deseas pa
 
 ### Seguimiento del desarrollo
 
-* **Repositorio**: [URL del repositorio]
-* **Documentación**: [URL de la documentación]
-* **Comunidad**: [Discord/Foro/etc.]
+* **Repositorio**: [[URL del repositorio]](https://github.com/omarPVP123131/Lumen)
+* **Documentación**: [[URL de la documentación](https://github.com/omarPVP123131/Lumen/tree/master/docs)]
+* **Comunidad**: [PROXIMAMENTE]
 
 ---
 
