@@ -275,8 +275,7 @@ Ninguna institución educativa o tercero posee derechos de propiedad intelectual
 Fundador y Presidente — **TriXxo Corp**  
 Estudiante de Ingeniería
 
-**Contacto**: [Incluir método de contacto si deseas]  
-**Sitio web**: [Incluir URL si existe]
+**Sitio web**: [https://portfolio-react-nine-xi.vercel.app/]
 
 ---
 
