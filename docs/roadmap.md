@@ -406,48 +406,45 @@ matematicas = "1.0"
 
 ---
 
-### Fase 40 — Publicación crates.io + Release Oficial v1.0
-**Objetivo**: LÚMEN disponible como crate de Rust y release oficial.
+### Fase 40 — Release Oficial v1.0
+**Objetivo**: LÚMEN listo para distribución pública desde GitHub.
 
-- Publicar todos los crates del workspace en crates.io
-- Tag `v1.0.0` en GitHub
+- Tag `v1.0.0` en GitHub (✅ completado)
 - Release notes completas
-- README actualizado con badges de crates.io
+- GitHub Release con assets
+- README actualizado con badges
 
 **Criterio de aceptación**:
-- [ ] `cargo install lumen-cli` funciona
-- [ ] `lumen --version` muestra v1.0.0
-- [ ] Página de crates.io con documentación
-- [ ] GitHub Release con assets
+- [ ] Release en GitHub con notas y tag v1.0.0
+- [ ] Binarios para las 3 plataformas (CI)
+- [ ] README actualizado
 - [ ] Anuncio público
 
 ---
 
-## Post-1.0 (v1.x+)
+## Más allá de v1.0
 
-Una vez alcanzada la fase 40, LÚMEN se considera estable v1.0. A partir de ahí:
+Una vez alcanzada la fase 40, estas funcionalidades se explorarán en versiones posteriores sin fecha definida:
 
-### v1.1 — Herramientas
+### Herramientas
 - LSP server con autocompletado y diagnósticos en tiempo real
 - Extensión VS Code con syntax highlighting
 - Linter (`lumen lint`) con reglas de estilo configurables
 - Debugger: breakpoints, step-over/step-into, watch variables
 
-### v1.2 — Educación
+### Educación y Ecosistema
 - Playground web compilado a WASM
 - Visualización del stack en tiempo real
 - Modo "clase": exportar ejecución paso a paso
 - Tutorial interactivo embebido en el playground
 
-### v2.0 — Madurez
+### Madurez del compilador
 - Compilación separada de módulos
 - Sistema de traits (interfaces)
 - NaN-boxing para representación compacta de valores
 - FFI para llamar C desde LÚMEN
 - Tail call optimization
-
-### v3.0 — Futuro
-- Concurrenza: hilos ligeros / async-await
+- Concurrencia: hilos ligeros / async-await
 - JIT compilation para hot paths
 - Self-hosting: compilador de LÚMEN escrito en LÚMEN
 - Target WASM nativo
