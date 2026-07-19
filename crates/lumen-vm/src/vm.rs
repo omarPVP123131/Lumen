@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use lumen_codegen::bytecode::{Bytecode, Instruction, Opcode};
+use lumen_codegen::bytecode::{Bytecode, Instruction, Opcode, FuncMeta};
 use crate::value::Value;
 
 #[derive(Debug)]
@@ -19,14 +19,21 @@ pub struct VM {
     bytecode: Bytecode,
     output: Vec<String>,
     call_stack: Vec<usize>,
+    func_index_cache: HashMap<String, usize>,
 }
 
 impl VM {
     pub fn new(bytecode: Bytecode) -> Self {
         let ip = bytecode.funcs.iter()
             .find(|f| f.name == "__main__")
+            .or_else(|| bytecode.funcs.iter().find(|f| f.name == "main"))
+            .or_else(|| bytecode.funcs.first())
             .map(|f| f.start)
             .unwrap_or(0);
+        let mut func_index_cache = HashMap::new();
+        for (i, func) in bytecode.funcs.iter().enumerate() {
+            func_index_cache.insert(func.name.clone(), i);
+        }
         Self {
             stack: Vec::new(),
             locals: vec![HashMap::new()],
@@ -34,7 +41,13 @@ impl VM {
             bytecode,
             output: Vec::new(),
             call_stack: Vec::new(),
+            func_index_cache,
         }
+    }
+
+    fn find_func(&self, name: &str) -> Option<&FuncMeta> {
+        self.func_index_cache.get(name)
+            .and_then(|&idx| self.bytecode.funcs.get(idx))
     }
 
     pub fn run(&mut self) -> Result<(), VmError> {
@@ -136,6 +149,9 @@ impl VM {
                     (Value::Float(a), Value::Float(b)) => (a - b).abs() < f64::EPSILON,
                     (Value::Str(a), Value::Str(b)) => a == b,
                     (Value::Bool(a), Value::Bool(b)) => a == b,
+                    (Value::Struct { name: an, fields: af }, Value::Struct { name: bn, fields: bf }) => {
+                        an == bn && af == bf
+                    }
                     _ => false,
                 };
                 self.push(Value::Bool(result));
@@ -150,6 +166,9 @@ impl VM {
                     (Value::Float(a), Value::Float(b)) => (a - b).abs() >= f64::EPSILON,
                     (Value::Str(a), Value::Str(b)) => a != b,
                     (Value::Bool(a), Value::Bool(b)) => a != b,
+                    (Value::Struct { name: an, fields: af }, Value::Struct { name: bn, fields: bf }) => {
+                        an != bn || af != bf
+                    }
                     _ => true,
                 };
                 self.push(Value::Bool(result));
@@ -235,6 +254,55 @@ impl VM {
             }
             Opcode::Halt => {
                 self.ip = usize::MAX;
+            }
+            Opcode::StructNew => {
+                // handled in execute_with_idx
+            }
+            Opcode::StructGet => {
+                let field_name = self.pop()?;
+                let struct_val = self.pop()?;
+                let field = match &field_name {
+                    Value::Str(s) => s.clone(),
+                    _ => return Err(VmError::TypeError("StructGet requires string field name".to_string())),
+                };
+                match struct_val {
+                    Value::Struct { fields, .. } => {
+                        let val = fields.iter().find(|(name, _)| name == &field);
+                        match val {
+                            Some((_, v)) => self.push(v.clone()),
+                            None => return Err(VmError::Runtime(format!("Campo '{}' no encontrado en struct", field))),
+                        }
+                    }
+                    _ => return Err(VmError::TypeError("StructGet requires struct value".to_string())),
+                }
+            }
+            Opcode::StructSet => {
+                let new_val = self.pop()?;
+                let field_name = self.pop()?;
+                let struct_val = self.pop()?;
+                let field = match &field_name {
+                    Value::Str(s) => s.clone(),
+                    _ => return Err(VmError::TypeError("StructSet requires string field name".to_string())),
+                };
+                match struct_val {
+                    Value::Struct { name, mut fields } => {
+                        let pos = fields.iter().position(|(n, _)| n == &field);
+                        match pos {
+                            Some(i) => {
+                                fields[i] = (field, new_val);
+                                self.push(Value::Struct { name, fields });
+                            }
+                            None => return Err(VmError::Runtime(format!("Campo '{}' no encontrado en struct", field))),
+                        }
+                    }
+                    _ => return Err(VmError::TypeError("StructSet requires struct value".to_string())),
+                }
+            }
+            Opcode::FuncRef => {
+                // handled in execute_with_idx
+            }
+            Opcode::CallValue => {
+                // handled in execute_with_idx
             }
             Opcode::ArrayNew => {
                 // handled in execute_with_idx
@@ -364,16 +432,58 @@ impl VM {
                     self.push(Value::Void);
                 } else if name == "leer" || name == "read" {
                     self.push(Value::Str(String::new()));
-                } else if let Some(func) = self.bytecode.funcs.iter().find(|f| f.name == name) {
+                } else if let Some(func) = self.find_func(&name) {
+                    let func_start = func.start;
+                    let func_params = func.params.clone();
                     self.call_stack.push(self.ip);
                     let mut scope = HashMap::new();
-                    for (i, param_name) in func.params.iter().enumerate() {
+                    for (i, param_name) in func_params.iter().enumerate() {
                         if let Some(arg) = args.get(i) {
                             scope.insert(param_name.clone(), arg.clone());
                         }
                     }
                     self.locals.push(scope);
-                    self.ip = func.start;
+                    self.ip = func_start;
+                } else {
+                    return Err(VmError::UndefinedFunction(name));
+                }
+            }
+            Opcode::FuncRef => {
+                let name = self.bytecode.strings.get(idx).cloned().unwrap_or_default();
+                self.push(Value::Func(name));
+            }
+            Opcode::CallValue => {
+                let argc = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
+                let mut args = Vec::new();
+                for _ in 0..argc {
+                    args.push(self.pop()?);
+                }
+                args.reverse();
+                let callee = self.pop()?;
+                let name = match &callee {
+                    Value::Func(n) => n.clone(),
+                    _ => return Err(VmError::TypeError("Se esperaba una función para llamar".to_string())),
+                };
+                if name == "imprimir" || name == "print" {
+                    for arg in args {
+                        let s = format!("{}", arg);
+                        self.output.push(s);
+                    }
+                    self.push(Value::Void);
+                } else if name == "leer" || name == "read" {
+                    self.push(Value::Str(String::new()));
+                } else if let Some(func) = self.find_func(&name) {
+                    let func_start = func.start;
+                    let func_params = func.params.clone();
+                    self.call_stack.push(self.ip);
+                    let mut scope = HashMap::new();
+                    for (i, param_name) in func_params.iter().enumerate() {
+                        if let Some(arg) = args.get(i) {
+                            scope.insert(param_name.clone(), arg.clone());
+                        }
+                    }
+                    self.locals.push(scope);
+                    self.ip = func_start;
                 } else {
                     return Err(VmError::UndefinedFunction(name));
                 }
@@ -386,6 +496,36 @@ impl VM {
                 }
                 items.reverse();
                 self.push(Value::Array(items));
+            }
+            Opcode::StructNew => {
+                let struct_name = self.bytecode.strings.get(idx).cloned().unwrap_or_default();
+                let argc_idx = self.ip;
+                self.ip += 1;
+                let count = if argc_idx < self.bytecode.instructions.len() {
+                    if let Instruction::WithIdx(_, nidx) = &self.bytecode.instructions[argc_idx] {
+                        self.bytecode.nums.get(*nidx).copied().unwrap_or(0.0) as usize
+                    } else { 0 }
+                } else { 0 };
+                let mut field_names = Vec::with_capacity(count);
+                for _ in 0..count {
+                    field_names.push(self.pop()?);
+                }
+                field_names.reverse();
+                let mut field_values = Vec::with_capacity(count);
+                for _ in 0..count {
+                    field_values.push(self.pop()?);
+                }
+                field_values.reverse();
+                let fields: Vec<(String, Value)> = field_names.into_iter().zip(field_values.into_iter())
+                    .map(|(name, val)| {
+                        let n = match name {
+                            Value::Str(s) => s,
+                            _ => "?".to_string(),
+                        };
+                        (n, val)
+                    })
+                    .collect();
+                self.push(Value::Struct { name: struct_name, fields });
             }
             Opcode::Jmp => {
                 let target = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;

@@ -1,0 +1,3 @@
+funcion numero cuadrado(numero x) {
+    retornar x * x;
+}

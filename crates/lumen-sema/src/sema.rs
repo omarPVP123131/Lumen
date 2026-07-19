@@ -12,6 +12,14 @@ pub enum TypeInfo {
     Booleano,
     Void,
     Lista(Box<TypeInfo>),
+    Func {
+        param_types: Vec<TypeInfo>,
+        return_type: Box<TypeInfo>,
+    },
+    Struct {
+        name: String,
+        fields: Vec<(String, TypeInfo)>,
+    },
 }
 
 #[derive(Clone)]
@@ -58,6 +66,7 @@ impl Scope {
 pub struct SemanticAnalyzer {
     scopes: Vec<Scope>,
     functions: HashMap<String, (TypeInfo, Vec<TypeInfo>, usize)>,
+    structs: HashMap<String, Vec<(String, TypeInfo)>>,
     errors: Vec<SemError>,
     loop_depth: usize,
 }
@@ -67,6 +76,7 @@ impl SemanticAnalyzer {
         Self {
             scopes: vec![Scope::new()],
             functions: HashMap::new(),
+            structs: HashMap::new(),
             errors: Vec::new(),
             loop_depth: 0,
         }
@@ -74,6 +84,7 @@ impl SemanticAnalyzer {
 
     pub fn analyze(mut self, program: &mut Program) -> Vec<SemError> {
         self.collect_functions(program);
+        self.collect_structs(program);
         self.analyze_program(program);
         self.errors
     }
@@ -81,10 +92,21 @@ impl SemanticAnalyzer {
     fn collect_functions(&mut self, program: &Program) {
         for node in program {
             if let DeclOrStmt::Decl(Decl::Function { return_type, name, params, .. }) = node {
-                let ret = type_to_info(return_type.clone());
-                let params_t: Vec<TypeInfo> = params.iter().map(|p| type_to_info(p.param_type.clone())).collect();
+                let ret = self.type_to_info(return_type.clone());
+                let params_t: Vec<TypeInfo> = params.iter().map(|p| self.type_to_info(p.param_type.clone())).collect();
                 let default_count = params.iter().filter(|p| p.default.is_some()).count();
                 self.functions.insert(name.clone(), (ret, params_t, default_count));
+            }
+        }
+    }
+
+    fn collect_structs(&mut self, program: &Program) {
+        for node in program {
+            if let DeclOrStmt::Decl(Decl::Struct { name, fields, .. }) = node {
+                let struct_fields: Vec<(String, TypeInfo)> = fields.iter().map(|f| {
+                    (f.name.clone(), self.type_to_info(f.field_type.clone()))
+                }).collect();
+                self.structs.insert(name.clone(), struct_fields);
             }
         }
     }
@@ -105,7 +127,7 @@ impl SemanticAnalyzer {
     fn analyze_decl(&mut self, decl: &Decl) -> TypeInfo {
         match decl {
             Decl::Variable { var_type, name, init, span } => {
-                let declared_type = type_to_info(var_type.clone());
+                let declared_type = self.type_to_info(var_type.clone());
                 let _init_type = init.as_ref().map(|e| self.analyze_expr(e)).unwrap_or(declared_type.clone());
                 if let Some(ref init_expr) = init {
                     let init_type = self.analyze_expr(init_expr);
@@ -137,7 +159,7 @@ impl SemanticAnalyzer {
                             suggestion: "Mueve este parámetro antes de los parámetros con valor por defecto".to_string(),
                         });
                     }
-                    let pt = type_to_info(p.param_type.clone());
+                    let pt = self.type_to_info(p.param_type.clone());
                     if let Err(e) = self.current_scope().define(&p.name, pt, p.span) {
                         self.errors.push(e);
                     }
@@ -146,7 +168,13 @@ impl SemanticAnalyzer {
                     let _ret = self.analyze_decl_or_stmt(node);
                 }
                 self.scopes.pop();
-                type_to_info(return_type.clone())
+                self.type_to_info(return_type.clone())
+            }
+            Decl::Struct { name, fields, span: _ } => {
+                let struct_fields: Vec<(String, TypeInfo)> = fields.iter().map(|f| {
+                    (f.name.clone(), self.type_to_info(f.field_type.clone()))
+                }).collect();
+                TypeInfo::Struct { name: name.clone(), fields: struct_fields }
             }
         }
     }
@@ -163,6 +191,10 @@ impl SemanticAnalyzer {
                             span: *span,
                             suggestion: format!("Usa un valor de tipo '{:?}' para asignar a '{}'", sym.var_type, name),
                         });
+                    }
+                } else if matches!(value_type, TypeInfo::Func { .. }) {
+                    if let Err(e) = self.current_scope().define(name, value_type.clone(), *span) {
+                        self.errors.push(e);
                     }
                 } else {
                     self.errors.push(SemError {
@@ -286,6 +318,44 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
+            Stmt::FieldAssign { expr, field, value, span } => {
+                let expr_type = self.analyze_expr(expr);
+                let value_type = self.analyze_expr(value);
+                match &expr_type {
+                    TypeInfo::Struct { fields, .. } => {
+                        let field_type = fields.iter().find(|(name, _)| name == field);
+                        match field_type {
+                            Some((_, ft)) => {
+                                if !can_assign(ft, &value_type) {
+                                    self.errors.push(SemError {
+                                        code: "E031".to_string(),
+                                        message: format!("No puedes asignar un valor de tipo '{:?}' al campo '{}' de tipo '{:?}'", value_type, field, ft),
+                                        span: *span,
+                                        suggestion: format!("Usa un valor de tipo '{:?}' para el campo '{}'", ft, field),
+                                    });
+                                }
+                            }
+                            None => {
+                                self.errors.push(SemError {
+                                    code: "E059".to_string(),
+                                    message: format!("El struct no tiene un campo llamado '{}'", field),
+                                    span: *span,
+                                    suggestion: format!("Revisa los campos del struct, '{}' no existe", field),
+                                });
+                            }
+                        }
+                    }
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E060".to_string(),
+                            message: format!("No puedes asignar un campo a un valor de tipo '{:?}'", expr_type),
+                            span: *span,
+                            suggestion: "Solo los structs tienen campos asignables".to_string(),
+                        });
+                    }
+                }
+                TypeInfo::Void
+            }
             Stmt::Expr { expr, .. } => {
                 self.analyze_expr(expr)
             }
@@ -295,6 +365,7 @@ impl SemanticAnalyzer {
                 self.scopes.pop();
                 TypeInfo::Void
             }
+            Stmt::Import { .. } => TypeInfo::Void,
         }
     }
 
@@ -454,13 +525,49 @@ impl SemanticAnalyzer {
                                 if callee == "imprimir" || callee == "print" || callee == "leer" || callee == "read" {
                                     TypeInfo::Void
                                 } else {
-                                    self.errors.push(SemError {
-                                        code: "E042".to_string(),
-                                        message: format!("La función '{}' no está definida", callee),
-                                        span: *span,
-                                        suggestion: format!("Define la función '{}' antes de llamarla", callee),
-                                    });
-                                    TypeInfo::Void
+                                    let var_type = self.lookup(&callee).map(|s| s.var_type.clone());
+                                    match var_type {
+                                        Some(TypeInfo::Func { param_types, return_type }) => {
+                                            if args.len() != param_types.len() {
+                                                self.errors.push(SemError {
+                                                    code: "E040".to_string(),
+                                                    message: format!("La función '{}' espera {} argumentos, pero se pasaron {}", callee, param_types.len(), args.len()),
+                                                    span: *span,
+                                                    suggestion: format!("Pasa {} argumentos a '{}'", param_types.len(), callee),
+                                                });
+                                            } else {
+                                                for (i, (got, expected)) in arg_types.iter().zip(param_types.iter()).enumerate() {
+                                                    if !can_assign(expected, got) {
+                                                        self.errors.push(SemError {
+                                                            code: "E041".to_string(),
+                                                            message: format!("El argumento {} de '{}' debe ser '{:?}', no '{:?}'", i + 1, callee, expected, got),
+                                                            span: *span,
+                                                            suggestion: format!("Pasa un valor de tipo '{:?}' en el argumento {}", expected, i + 1),
+                                                        });
+                                                    }
+                                                }
+                                            }
+                                            *return_type
+                                        }
+                                        Some(other) => {
+                                            self.errors.push(SemError {
+                                                code: "E058".to_string(),
+                                                message: format!("'{}' no es una función, es de tipo '{:?}'", callee, other),
+                                                span: *span,
+                                                suggestion: format!("'{}' no se puede llamar porque no es una función", callee),
+                                            });
+                                            TypeInfo::Void
+                                        }
+                                        None => {
+                                            self.errors.push(SemError {
+                                                code: "E042".to_string(),
+                                                message: format!("La función '{}' no está definida", callee),
+                                                span: *span,
+                                                suggestion: format!("Define la función '{}' antes de llamarla", callee),
+                                            });
+                                            TypeInfo::Void
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -468,7 +575,7 @@ impl SemanticAnalyzer {
                     Expr::Lambda { params, body, .. } => {
                         self.scopes.push(Scope::new());
                         for p in params {
-                            let pt = type_to_info(p.param_type.clone());
+                    let pt = self.type_to_info(p.param_type.clone());
                             if let Err(e) = self.current_scope().define(&p.name, pt, p.span) {
                                 self.errors.push(e);
                             }
@@ -484,13 +591,40 @@ impl SemanticAnalyzer {
                         ret_type
                     }
                     _ => {
-                        self.errors.push(SemError {
-                            code: "E042".to_string(),
-                            message: "Solo puedes llamar funciones por nombre o funciones anónimas".to_string(),
-                            span: *span,
-                            suggestion: "Usa un identificador de función".to_string(),
-                        });
-                        TypeInfo::Void
+                        let callee_type = self.analyze_expr(callee);
+                        match callee_type {
+                            TypeInfo::Func { param_types, return_type } => {
+                                if args.len() != param_types.len() {
+                                    self.errors.push(SemError {
+                                        code: "E040".to_string(),
+                                        message: format!("La función espera {} argumentos, pero se pasaron {}", param_types.len(), args.len()),
+                                        span: *span,
+                                        suggestion: format!("Pasa {} argumentos", param_types.len()),
+                                    });
+                                } else {
+                                    for (i, (got, expected)) in arg_types.iter().zip(param_types.iter()).enumerate() {
+                                        if !can_assign(expected, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!("El argumento {} debe ser '{:?}', no '{:?}'", i + 1, expected, got),
+                                                span: *span,
+                                                suggestion: format!("Pasa un valor de tipo '{:?}' en el argumento {}", expected, i + 1),
+                                            });
+                                        }
+                                    }
+                                }
+                                *return_type
+                            }
+                            _ => {
+                                self.errors.push(SemError {
+                                    code: "E058".to_string(),
+                                    message: format!("Solo puedes llamar funciones, no valores de tipo '{:?}'", callee_type),
+                                    span: *span,
+                                    suggestion: "Usa un identificador de función".to_string(),
+                                });
+                                TypeInfo::Void
+                            }
+                        }
                     }
                 }
             }
@@ -603,16 +737,105 @@ impl SemanticAnalyzer {
             Expr::Lambda { params, body, .. } => {
                 self.scopes.push(Scope::new());
                 for p in params {
-                    let pt = type_to_info(p.param_type.clone());
+                    let pt = self.type_to_info(p.param_type.clone());
                     if let Err(e) = self.current_scope().define(&p.name, pt, p.span) {
                         self.errors.push(e);
                     }
                 }
+                let mut ret_type = TypeInfo::Void;
                 for node in body {
-                    self.analyze_decl_or_stmt(node);
+                    match self.analyze_decl_or_stmt(node) {
+                        TypeInfo::Void => {}
+                        t => ret_type = t,
+                    }
                 }
                 self.scopes.pop();
-                TypeInfo::Void
+                let param_types = params.iter().map(|p| self.type_to_info(p.param_type.clone())).collect();
+                TypeInfo::Func {
+                    param_types,
+                    return_type: Box::new(ret_type),
+                }
+            }
+            Expr::StructInit { struct_name, fields, span } => {
+                let struct_type = self.structs.get(struct_name).cloned();
+                match struct_type {
+                    Some(expected_fields) => {
+                        for (fname, fval) in fields {
+                            let val_type = self.analyze_expr(fval);
+                            let field_def = expected_fields.iter().find(|(name, _)| name == fname);
+                            match field_def {
+                                Some((_, ft)) => {
+                                    if !can_assign(ft, &val_type) {
+                                        self.errors.push(SemError {
+                                            code: "E031".to_string(),
+                                            message: format!("El campo '{}' espera un valor de tipo '{:?}', no '{:?}'", fname, ft, val_type),
+                                            span: *span,
+                                            suggestion: format!("Usa un valor de tipo '{:?}' para el campo '{}'", ft, fname),
+                                        });
+                                    }
+                                }
+                                None => {
+                                    self.errors.push(SemError {
+                                        code: "E059".to_string(),
+                                        message: format!("El struct '{}' no tiene un campo llamado '{}'", struct_name, fname),
+                                        span: *span,
+                                        suggestion: format!("Revisa los campos de '{}', '{}' no existe", struct_name, fname),
+                                    });
+                                }
+                            }
+                        }
+                        // Check all required fields are provided
+                        for (expected_name, _) in &expected_fields {
+                            if !fields.iter().any(|(name, _)| name == expected_name) {
+                                self.errors.push(SemError {
+                                    code: "E061".to_string(),
+                                    message: format!("Falta el campo '{}' en la inicialización de '{}'", expected_name, struct_name),
+                                    span: *span,
+                                    suggestion: format!("Agrega el campo '{}' al inicializar '{}'", expected_name, struct_name),
+                                });
+                            }
+                        }
+                        TypeInfo::Struct { name: struct_name.clone(), fields: expected_fields }
+                    }
+                    None => {
+                        self.errors.push(SemError {
+                            code: "E062".to_string(),
+                            message: format!("El struct '{}' no está definido", struct_name),
+                            span: *span,
+                            suggestion: format!("Define el struct '{}' antes de usarlo", struct_name),
+                        });
+                        TypeInfo::Void
+                    }
+                }
+            }
+            Expr::FieldAccess { expr, field, span } => {
+                let expr_type = self.analyze_expr(expr);
+                match &expr_type {
+                    TypeInfo::Struct { fields, .. } => {
+                        let field_type = fields.iter().find(|(name, _)| name == field);
+                        match field_type {
+                            Some((_, ft)) => ft.clone(),
+                            None => {
+                                self.errors.push(SemError {
+                                    code: "E059".to_string(),
+                                    message: format!("El struct no tiene un campo llamado '{}'", field),
+                                    span: *span,
+                                    suggestion: format!("Revisa los campos del struct, '{}' no existe", field),
+                                });
+                                TypeInfo::Void
+                            }
+                        }
+                    }
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E060".to_string(),
+                            message: format!("No puedes acceder a un campo de un valor de tipo '{:?}'", expr_type),
+                            span: *span,
+                            suggestion: "Solo los structs tienen campos".to_string(),
+                        });
+                        TypeInfo::Void
+                    }
+                }
             }
             Expr::Grouping { expr, .. } => self.analyze_expr(expr),
         }
@@ -632,14 +855,24 @@ impl SemanticAnalyzer {
     }
 }
 
-fn type_to_info(t: Type) -> TypeInfo {
-    match t {
-        Type::Numero => TypeInfo::Decimal,
-        Type::Entero => TypeInfo::Entero,
-        Type::Decimal => TypeInfo::Decimal,
-        Type::Texto => TypeInfo::Texto,
-        Type::Booleano => TypeInfo::Booleano,
-        Type::Lista(inner) => TypeInfo::Lista(Box::new(type_to_info(*inner))),
+impl SemanticAnalyzer {
+    fn type_to_info(&self, t: Type) -> TypeInfo {
+        match t {
+            Type::Numero => TypeInfo::Decimal,
+            Type::Entero => TypeInfo::Entero,
+            Type::Decimal => TypeInfo::Decimal,
+            Type::Texto => TypeInfo::Texto,
+            Type::Booleano => TypeInfo::Booleano,
+            Type::Lista(inner) => TypeInfo::Lista(Box::new(self.type_to_info(*inner))),
+            Type::Func { param_types, return_type } => TypeInfo::Func {
+                param_types: param_types.into_iter().map(|t| self.type_to_info(t)).collect(),
+                return_type: Box::new(self.type_to_info(*return_type)),
+            },
+            Type::Struct(name) => {
+                let fields = self.structs.get(&name).cloned().unwrap_or_default();
+                TypeInfo::Struct { name, fields }
+            }
+        }
     }
 }
 
@@ -653,6 +886,15 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
     if let (TypeInfo::Lista(t_inner), TypeInfo::Lista(v_inner)) = (target, value) {
         if **v_inner == TypeInfo::Void { return true; }
         return can_assign(t_inner, v_inner);
+    }
+    if let (TypeInfo::Func { param_types: tp, return_type: tr },
+            TypeInfo::Func { param_types: vp, return_type: vr }) = (target, value) {
+        if tp.len() != vp.len() { return false; }
+        if !can_assign(tr, vr) { return false; }
+        for (t, v) in tp.iter().zip(vp.iter()) {
+            if !can_assign(t, v) { return false; }
+        }
+        return true;
     }
     false
 }

@@ -1,0 +1,11 @@
+funcion numero suma(numero a, numero b) {
+    retornar a + b;
+}
+
+funcion numero resta(numero a, numero b) {
+    retornar a - b;
+}
+
+funcion numero multiplica(numero a, numero b) {
+    retornar a * b;
+}

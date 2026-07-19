@@ -406,3 +406,109 @@ imprimir(suma());";
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("SemError"));
 }
+
+// --- Struct tests ---
+
+#[test]
+fn test_struct_decl_and_init() {
+    let src = "estructura Persona { nombre: texto, edad: numero }
+Persona p = Persona { nombre: \"Ana\", edad: 30 };
+imprimir(p.nombre);
+imprimir(p.edad);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["Ana", "30"]);
+}
+
+#[test]
+fn test_struct_field_access() {
+    let src = "estructura Punto { x: entero, y: entero }
+Punto pt = Punto { x: 10, y: 20 };
+imprimir(pt.x);
+imprimir(pt.y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["10", "20"]);
+}
+
+#[test]
+fn test_struct_field_assign() {
+    let src = "estructura Punto { x: entero, y: entero }
+Punto pt = Punto { x: 10, y: 20 };
+pt.x = 30;
+imprimir(pt.x);
+imprimir(pt.y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["30", "20"]);
+}
+
+#[test]
+fn test_struct_value_semantics() {
+    let src = "estructura Punto { x: entero, y: entero }
+Punto a = Punto { x: 1, y: 2 };
+Punto b = a;
+b.x = 99;
+imprimir(a.x);
+imprimir(b.x);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "99"]);
+}
+
+#[test]
+fn test_struct_english_keywords() {
+    let src = "struct Person { name: string, age: number }
+Person p = Person { name: \"Bob\", age: 25 };
+print(p.name);
+print(p.age);
+p.age = 26;
+print(p.age);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["Bob", "25", "26"]);
+}
+
+#[test]
+fn test_struct_multiple_fields() {
+    let src = "estructura Rect { ancho: decimal, alto: decimal, area: decimal }
+Rect r = Rect { ancho: 5.5, alto: 3.0, area: 16.5 };
+imprimir(r.ancho);
+imprimir(r.alto);
+imprimir(r.area);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["5.5", "3", "16.5"]);
+}
+
+#[test]
+fn test_struct_missing_field_error() {
+    let src = "estructura Punto { x: entero, y: entero }
+Punto pt = Punto { x: 10 };";
+    let result = run_source(src);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_struct_undefined_field_error() {
+    let src = "estructura Punto { x: entero, y: entero }
+Punto pt = Punto { x: 10, y: 20, z: 30 };";
+    let result = run_source(src);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_struct_field_type_error() {
+    let src = "estructura Punto { x: entero, y: entero }
+Punto pt = Punto { x: 10, y: \"veinte\" };";
+    let result = run_source(src);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_struct_in_struct() {
+    let src = "estructura Direccion { calle: texto, numero: entero }
+estructura Persona { nombre: texto, direccion: texto }
+Persona p = Persona { nombre: \"Ana\", direccion: \"Calle 123\" };
+imprimir(p.nombre);
+imprimir(p.direccion);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["Ana", "Calle 123"]);
+}

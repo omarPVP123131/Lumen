@@ -36,6 +36,8 @@ impl Parser {
                          TokenKind::Number, TokenKind::Integer, TokenKind::Float,
                          TokenKind::String, TokenKind::Boolean]) {
             self.parse_declaration().map(DeclOrStmt::Decl)
+        } else if self.check_ident() && self.check_ident_next() {
+            self.parse_declaration().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
             if self.check_next(&[TokenKind::Numero, TokenKind::Entero, TokenKind::Decimal,
                                   TokenKind::Texto, TokenKind::Booleano,
@@ -62,6 +64,10 @@ impl Parser {
             self.parse_continue().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::Elegir, TokenKind::Match]) {
             self.parse_match().map(DeclOrStmt::Stmt)
+        } else if self.check(&[TokenKind::Estructura, TokenKind::Struct]) {
+            self.parse_struct_decl().map(DeclOrStmt::Decl)
+        } else if self.check(&[TokenKind::Importar, TokenKind::Import]) {
+            self.parse_import().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::LeftBrace]) {
             self.parse_block_stmt().map(DeclOrStmt::Stmt)
         } else {
@@ -115,6 +121,98 @@ impl Parser {
         let body = self.parse_block()?;
         Some(Decl::Function {
             return_type, name, params, body,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_struct_decl(&mut self) -> Option<Decl> {
+        let start = self.peek().span;
+        self.advance();
+        let name = self.expect_ident()?;
+
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error("E017", "Se esperaba '{' para la estructura", start, "Agrega '{' para definir los campos");
+            return None;
+        }
+        self.advance();
+
+        let mut fields = Vec::new();
+        while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
+            if self.check(&[TokenKind::Eof]) { break; }
+
+            let field_start = self.peek().span;
+            let field_name = self.expect_field_name()?;
+
+            if !self.check(&[TokenKind::Colon]) {
+                self.error("E052", "Se esperaba ':' después del nombre del campo", self.peek().span, "Agrega ':' después del nombre del campo");
+                return None;
+            }
+            self.advance();
+
+            let field_type = self.parse_type()?;
+
+            fields.push(StructField {
+                field_type,
+                name: field_name,
+                span: Span::merge(&field_start, &self.previous().span),
+            });
+
+            if self.check(&[TokenKind::Comma]) {
+                self.advance();
+            } else if !self.check(&[TokenKind::RightBrace]) {
+                self.error("E012", "Se esperaba ',' o '}' para cerrar la estructura", self.peek().span, "Agrega ',' entre campos o '}' para cerrar");
+                return None;
+            }
+        }
+
+        if !self.check(&[TokenKind::RightBrace]) {
+            self.error("E017", "Se esperaba '}' para cerrar la estructura", start, "Agrega '}' al final de la estructura");
+            return None;
+        }
+        self.advance();
+
+        Some(Decl::Struct {
+            name,
+            fields,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_import(&mut self) -> Option<Stmt> {
+        let start = self.peek().span;
+        self.advance(); // consume importar/import
+        let path = if let TokenKind::StrLiteral(s) = &self.peek().kind {
+            let s = s.clone();
+            self.advance();
+            s
+        } else if self.check_ident() {
+            let token = self.advance()?;
+            match token.kind {
+                TokenKind::Ident(s) => s,
+                _ => unreachable!(),
+            }
+        } else {
+            self.error("E011", "Se esperaba una ruta de archivo o nombre de módulo", self.peek().span, "Escribe \"archivo.nv\" o nombre_del_modulo");
+            return None;
+        };
+        let alias = if self.check(&[TokenKind::Como, TokenKind::As]) {
+            self.advance();
+            if self.check_ident() {
+                let token = self.advance()?;
+                match token.kind {
+                    TokenKind::Ident(s) => Some(s),
+                    _ => unreachable!(),
+                }
+            } else {
+                self.error("E011", "Se esperaba un nombre de alias", self.peek().span, "Escribe un identificador como alias");
+                None
+            }
+        } else {
+            None
+        };
+        self.expect_semicolon();
+        Some(Stmt::Import {
+            path, alias,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -376,6 +474,33 @@ impl Parser {
                 name, value,
                 span: Span::merge(&start, &self.previous().span),
             })
+        } else if self.check_ident() && self.check_next(&[TokenKind::Dot]) {
+            let expr = self.parse_expression()?;
+            if self.check(&[TokenKind::Equal]) {
+                self.advance();
+                let value = Box::new(self.parse_expression()?);
+                self.expect_semicolon();
+                match expr {
+                    Expr::FieldAccess { expr: target, field, .. } => {
+                        Some(Stmt::FieldAssign {
+                            expr: target,
+                            field,
+                            value,
+                            span: Span::merge(&start, &self.previous().span),
+                        })
+                    }
+                    _ => {
+                        self.error("E024", "No se puede asignar a esta expresión", start, "Solo se puede asignar a campos de struct");
+                        None
+                    }
+                }
+            } else {
+                self.expect_semicolon();
+                Some(Stmt::Expr {
+                    expr: Box::new(expr),
+                    span: Span::merge(&start, &self.previous().span),
+                })
+            }
         } else {
             let expr = self.parse_expression()?;
             self.expect_semicolon();
@@ -535,11 +660,11 @@ impl Parser {
             } else if self.check(&[TokenKind::Dot]) {
                 let start = expr.span();
                 self.advance();
-                let method = match self.advance() {
+                let field = match self.advance() {
                     Some(t) => match t.kind {
                         TokenKind::Ident(s) => s,
                         _ => {
-                            self.error("E024", "Se esperaba un nombre de método después de '.'", t.span, "Escribe el nombre del método");
+                            self.error("E024", "Se esperaba un nombre de campo después de '.'", t.span, "Escribe el nombre del campo");
                             return Some(expr);
                         }
                     },
@@ -563,16 +688,15 @@ impl Parser {
                     let span = Span::merge(&start, &self.previous().span);
                     expr = Expr::MethodCall {
                         expr: Box::new(expr),
-                        method,
+                        method: field,
                         args,
                         span,
                     };
                 } else {
                     let span = Span::merge(&start, &self.previous().span);
-                    expr = Expr::MethodCall {
+                    expr = Expr::FieldAccess {
                         expr: Box::new(expr),
-                        method,
-                        args: Vec::new(),
+                        field,
                         span,
                     };
                 }
@@ -730,6 +854,41 @@ impl Parser {
                 args,
                 span: Span::merge(&span, &self.previous().span),
             })
+        } else if self.check(&[TokenKind::LeftBrace]) {
+            self.advance();
+            let mut fields = Vec::new();
+            while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
+                if self.check(&[TokenKind::Eof]) { break; }
+                let field_name = self.expect_field_name()?;
+
+                if !self.check(&[TokenKind::Colon]) {
+                    self.error("E052", "Se esperaba ':' después del nombre del campo", self.peek().span, "Agrega ':' después del nombre del campo");
+                    return None;
+                }
+                self.advance();
+
+                let value = self.parse_expression()?;
+                fields.push((field_name, value));
+
+                if self.check(&[TokenKind::Comma]) {
+                    self.advance();
+                } else if !self.check(&[TokenKind::RightBrace]) {
+                    self.error("E012", "Se esperaba ',' o '}'", self.peek().span, "Agrega ',' entre campos o '}' para cerrar");
+                    return None;
+                }
+            }
+
+            if !self.check(&[TokenKind::RightBrace]) {
+                self.error("E022", "Se esperaba '}' para cerrar la estructura", span, "Agrega '}' al final");
+                return None;
+            }
+            self.advance();
+
+            Some(Expr::StructInit {
+                struct_name: name,
+                fields,
+                span: Span::merge(&span, &self.previous().span),
+            })
         } else {
             Some(Expr::Ident { name, span })
         }
@@ -756,6 +915,9 @@ impl Parser {
                 } else {
                     Some(Type::Lista(Box::new(Type::Decimal)))
                 }
+            }
+            TokenKind::Ident(name) => {
+                Some(Type::Struct(name))
             }
             _ => None,
         }
@@ -797,6 +959,12 @@ impl Parser {
         matches!(self.peek().kind, TokenKind::Ident(_))
     }
 
+    fn check_ident_next(&self) -> bool {
+        if self.is_at_end() { return false; }
+        matches!(self.peek().kind, TokenKind::Ident(_)) && self.pos + 1 < self.tokens.len()
+            && matches!(self.tokens[self.pos + 1].kind, TokenKind::Ident(_))
+    }
+
     fn check_next(&self, kinds: &[TokenKind]) -> bool {
         if self.pos + 1 >= self.tokens.len() { return false; }
         let kind = &self.tokens[self.pos + 1].kind;
@@ -805,6 +973,45 @@ impl Parser {
 
     fn is_at_end(&self) -> bool {
         self.pos >= self.tokens.len() || matches!(self.peek().kind, TokenKind::Eof)
+    }
+
+    fn expect_field_name(&mut self) -> Option<String> {
+        let token = self.peek();
+        match &token.kind {
+            TokenKind::Ident(s) => {
+                let s = s.clone();
+                self.advance();
+                Some(s)
+            }
+            TokenKind::Numero | TokenKind::Number => { self.advance(); Some("numero".to_string()) }
+            TokenKind::Entero | TokenKind::Integer => { self.advance(); Some("entero".to_string()) }
+            TokenKind::Decimal | TokenKind::Float => { self.advance(); Some("decimal".to_string()) }
+            TokenKind::Texto | TokenKind::String => { self.advance(); Some("texto".to_string()) }
+            TokenKind::Booleano | TokenKind::Boolean => { self.advance(); Some("booleano".to_string()) }
+            TokenKind::Lista | TokenKind::Array => { self.advance(); Some("lista".to_string()) }
+            TokenKind::Verdadero | TokenKind::True => { self.advance(); Some("verdadero".to_string()) }
+            TokenKind::Falso | TokenKind::False => { self.advance(); Some("falso".to_string()) }
+            TokenKind::Funcion | TokenKind::Function => { self.advance(); Some("funcion".to_string()) }
+            TokenKind::Retornar | TokenKind::Return => { self.advance(); Some("retornar".to_string()) }
+            TokenKind::Si | TokenKind::If => { self.advance(); Some("si".to_string()) }
+            TokenKind::Sino | TokenKind::Else => { self.advance(); Some("sino".to_string()) }
+            TokenKind::Mientras | TokenKind::While => { self.advance(); Some("mientras".to_string()) }
+            TokenKind::Para | TokenKind::For => { self.advance(); Some("para".to_string()) }
+            TokenKind::Imprimir | TokenKind::Print => { self.advance(); Some("imprimir".to_string()) }
+            TokenKind::Leer | TokenKind::Read => { self.advance(); Some("leer".to_string()) }
+            TokenKind::Romper | TokenKind::Break => { self.advance(); Some("romper".to_string()) }
+            TokenKind::Continuar | TokenKind::Continue => { self.advance(); Some("continuar".to_string()) }
+            TokenKind::Elegir | TokenKind::Match => { self.advance(); Some("elegir".to_string()) }
+            TokenKind::Caso | TokenKind::Case => { self.advance(); Some("caso".to_string()) }
+            TokenKind::Defecto | TokenKind::Default => { self.advance(); Some("defecto".to_string()) }
+            TokenKind::Estructura | TokenKind::Struct => { self.advance(); Some("estructura".to_string()) }
+            TokenKind::Importar | TokenKind::Import => { self.advance(); Some("importar".to_string()) }
+            TokenKind::Como | TokenKind::As => { self.advance(); Some("como".to_string()) }
+            _ => {
+                self.error("E011", "Se esperaba un nombre de campo", token.span, "Escribe un identificador");
+                None
+            }
+        }
     }
 
     fn expect_ident(&mut self) -> Option<String> {
@@ -855,7 +1062,8 @@ impl Parser {
                 | TokenKind::Continuar | TokenKind::Continue
                 | TokenKind::Elegir | TokenKind::Match
                 | TokenKind::LeftBrace
-                | TokenKind::LeftBracket => return,
+                | TokenKind::LeftBracket
+                | TokenKind::Importar | TokenKind::Import => return,
                 _ => { self.advance(); }
             }
         }
@@ -886,6 +1094,9 @@ fn token_matches(kind: &TokenKind, expected: &TokenKind) -> bool {
             | (TokenKind::Elegir, TokenKind::Match) | (TokenKind::Match, TokenKind::Elegir)
             | (TokenKind::Caso, TokenKind::Case) | (TokenKind::Case, TokenKind::Caso)
             | (TokenKind::Defecto, TokenKind::Default) | (TokenKind::Default, TokenKind::Defecto)
+            | (TokenKind::Estructura, TokenKind::Struct) | (TokenKind::Struct, TokenKind::Estructura)
+            | (TokenKind::Importar, TokenKind::Import) | (TokenKind::Import, TokenKind::Importar)
+            | (TokenKind::Como, TokenKind::As) | (TokenKind::As, TokenKind::Como)
         )
 }
 
@@ -904,7 +1115,9 @@ impl Spannable for Expr {
             | Expr::Unary { span, .. } | Expr::Call { span, .. }
             | Expr::Grouping { span, .. } | Expr::List { span, .. }
             | Expr::Index { span, .. } | Expr::MethodCall { span, .. }
-            | Expr::Lambda { span, .. } => *span,
+            | Expr::Lambda { span, .. }
+            | Expr::StructInit { span, .. }
+            | Expr::FieldAccess { span, .. } => *span,
         }
     }
 }
@@ -1026,7 +1239,7 @@ imprimir(resultado);";
 
     #[test]
     fn test_error_invalid_type() {
-        let source = "foo x = 42;";
+        let source = "123 x = 42;";
         let (_program, errors) = parse(source);
         assert!(!errors.is_empty());
     }

@@ -10,7 +10,7 @@ pub enum Value {
     Temp(usize),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Op {
     Add,
     Sub,
@@ -28,7 +28,7 @@ pub enum Op {
     Not,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instr {
     ConstInt(i64),
     ConstFloat(f64),
@@ -39,6 +39,8 @@ pub enum Instr {
     Binary(Op),
     Unary(Op),
     Call(String, usize),
+    FuncRef(String),
+    CallValue(usize),
     Return,
     Print,
     Read,
@@ -47,10 +49,14 @@ pub enum Instr {
     ArraySet,
     ArrayLen,
     ArrayPush,
+    StructNew(String, usize),
+    StructGet,
+    StructSet,
     Jmp(usize),
     JmpIf(usize),
     Label(usize),
     Phi(usize, usize),
+    Nop,
     Halt,
 }
 

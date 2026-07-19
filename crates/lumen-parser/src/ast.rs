@@ -24,6 +24,18 @@ pub enum Decl {
         body: Vec<DeclOrStmt>,
         span: Span,
     },
+    Struct {
+        name: String,
+        fields: Vec<StructField>,
+        span: Span,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StructField {
+    pub field_type: Type,
+    pub name: String,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,8 +98,19 @@ pub enum Stmt {
         expr: Box<Expr>,
         span: Span,
     },
+    FieldAssign {
+        expr: Box<Expr>,
+        field: String,
+        value: Box<Expr>,
+        span: Span,
+    },
     Block {
         stmts: Vec<DeclOrStmt>,
+        span: Span,
+    },
+    Import {
+        path: String,
+        alias: Option<String>,
         span: Span,
     },
 }
@@ -155,6 +178,16 @@ pub enum Expr {
         body: Vec<DeclOrStmt>,
         span: Span,
     },
+    StructInit {
+        struct_name: String,
+        fields: Vec<(String, Expr)>,
+        span: Span,
+    },
+    FieldAccess {
+        expr: Box<Expr>,
+        field: String,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -187,6 +220,11 @@ pub enum Type {
     Texto,
     Booleano,
     Lista(Box<Type>),
+    Func {
+        param_types: Vec<Type>,
+        return_type: Box<Type>,
+    },
+    Struct(String),
 }
 
 impl Expr {
@@ -198,7 +236,9 @@ impl Expr {
             | Expr::Unary { span, .. } | Expr::Call { span, .. }
             | Expr::Grouping { span, .. } | Expr::List { span, .. }
             | Expr::Index { span, .. } | Expr::MethodCall { span, .. }
-            | Expr::Lambda { span, .. } => *span,
+            | Expr::Lambda { span, .. }
+            | Expr::StructInit { span, .. }
+            | Expr::FieldAccess { span, .. } => *span,
         }
     }
 }

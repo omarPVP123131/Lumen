@@ -1,5 +1,5 @@
 pub const CHUNK_MAGIC: &[u8; 4] = b"LUMN";
-pub const CHUNK_VERSION: u32 = 3;
+pub const CHUNK_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Opcode {
@@ -36,6 +36,11 @@ pub enum Opcode {
     ArraySet = 30,
     ArrayLen = 31,
     ArrayPush = 32,
+    FuncRef = 33,
+    CallValue = 34,
+    StructNew = 35,
+    StructGet = 36,
+    StructSet = 37,
 }
 
 impl Opcode {
@@ -73,7 +78,12 @@ impl Opcode {
             29 => Some(Opcode::ArrayGet),
             30 => Some(Opcode::ArraySet),
             31 => Some(Opcode::ArrayLen),
-            32 => Some(Opcode::ArrayPush),
+             32 => Some(Opcode::ArrayPush),
+             33 => Some(Opcode::FuncRef),
+             34 => Some(Opcode::CallValue),
+             35 => Some(Opcode::StructNew),
+             36 => Some(Opcode::StructGet),
+             37 => Some(Opcode::StructSet),
             _ => None,
         }
     }

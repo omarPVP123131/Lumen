@@ -1,0 +1,16 @@
+estructura Persona {
+    nombre: texto,
+    edad: numero
+}
+
+Persona persona = Persona { nombre: "Ana", edad: 30 };
+imprimir(persona.nombre);
+imprimir(persona.edad);
+
+persona.edad = 31;
+imprimir(persona.edad);
+
+Persona copia = persona;
+copia.edad = 25;
+imprimir(persona.edad);
+imprimir(copia.edad);

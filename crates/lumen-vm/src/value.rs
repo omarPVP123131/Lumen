@@ -7,6 +7,11 @@ pub enum Value {
     Str(String),
     Bool(bool),
     Array(Vec<Value>),
+    Func(String),
+    Struct {
+        name: String,
+        fields: Vec<(String, Value)>,
+    },
     Void,
 }
 
@@ -33,6 +38,8 @@ impl Value {
             Value::Float(n) => *n != 0.0,
             Value::Str(s) => !s.is_empty(),
             Value::Array(v) => !v.is_empty(),
+            Value::Func(_) => true,
+            Value::Struct { .. } => true,
             Value::Void => false,
         }
     }
@@ -54,6 +61,11 @@ impl fmt::Display for Value {
             Value::Array(v) => {
                 let items: Vec<String> = v.iter().map(|x| format!("{}", x)).collect();
                 write!(f, "[{}]", items.join(", "))
+            }
+            Value::Func(s) => write!(f, "<funcion {}>", s),
+            Value::Struct { name: _, fields } => {
+                let items: Vec<String> = fields.iter().map(|(k, v)| format!("{}: {}", k, v)).collect();
+                write!(f, "{{ {} }}", items.join(", "))
             }
             Value::Void => write!(f, "void"),
         }

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use lumen_parser::ast::{DeclOrStmt, Decl, Stmt, Expr, BinOp, UnOp};
+use std::collections::{HashMap, HashSet};
+use lumen_parser::ast::{DeclOrStmt, Decl, Stmt, Expr, BinOp, UnOp, Param};
 use crate::ir::*;
 
 struct LoopLabels {
@@ -16,6 +16,7 @@ pub struct IRBuilder {
     lambda_counter: usize,
     loop_labels: Vec<LoopLabels>,
     default_params: HashMap<String, Vec<Option<Expr>>>,
+    fn_names: HashSet<String>,
 }
 
 impl IRBuilder {
@@ -29,12 +30,17 @@ impl IRBuilder {
             lambda_counter: 0,
             loop_labels: Vec::new(),
             default_params: HashMap::new(),
+            fn_names: HashSet::new(),
         }
     }
 
     pub fn build(mut self, program: &[DeclOrStmt]) -> crate::ir::Program {
         let has_toplevel_code = program.iter().any(|node| {
-            !matches!(node, DeclOrStmt::Decl(Decl::Function { .. }))
+            match node {
+                DeclOrStmt::Decl(Decl::Function { .. }) => false,
+                DeclOrStmt::Decl(Decl::Struct { .. }) => false,
+                _ => true,
+            }
         });
 
         for node in program {
@@ -46,6 +52,7 @@ impl IRBuilder {
                     instrs: Vec::new(),
                 };
                 self.program.funcs.insert(name.clone(), func);
+                self.fn_names.insert(name.clone());
             }
         }
 
@@ -66,6 +73,7 @@ impl IRBuilder {
                 instrs: Vec::new(),
             };
             self.program.funcs.insert("__main__".to_string(), main_func);
+            self.fn_names.insert("__main__".to_string());
             self.current_func = Some("__main__".to_string());
         }
 
@@ -116,7 +124,13 @@ impl IRBuilder {
                 if self.program.funcs.contains_key("__main__") {
                     self.current_func = Some("__main__".to_string());
                     self.current_instrs = Vec::new();
+                } else {
+                    self.current_func = None;
                 }
+            }
+            Decl::Struct { .. } => {
+                // Struct declarations are collected during IR build setup
+                // No code generation needed for the declaration itself
             }
         }
     }
@@ -188,6 +202,19 @@ impl IRBuilder {
                 }
                 self.emit(Instr::Return);
             }
+            Stmt::FieldAssign { expr, field, value, .. } => {
+                let var_name = match expr.as_ref() {
+                    Expr::Ident { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                self.gen_expr(expr);
+                self.emit(Instr::ConstStr(field.clone()));
+                self.gen_expr(value);
+                self.emit(Instr::StructSet);
+                if let Some(name) = var_name {
+                    self.emit(Instr::Store(name));
+                }
+            }
             Stmt::Expr { expr, .. } => {
                 self.gen_expr(expr);
             }
@@ -229,6 +256,7 @@ impl IRBuilder {
                     self.gen_decl_or_stmt(node);
                 }
             }
+            Stmt::Import { .. } => {}
         }
     }
 
@@ -279,62 +307,50 @@ impl IRBuilder {
                     Expr::Grouping { expr, .. } => expr.as_ref(),
                     other => other,
                 };
-                let callee_name = match callee_inner {
-                    Expr::Ident { name, .. } => name.clone(),
+                match callee_inner {
+                    Expr::Ident { name, .. } => {
+                        if self.fn_names.contains(name)
+                            || matches!(name.as_str(), "imprimir" | "print" | "leer" | "read")
+                        {
+                            for arg in args {
+                                self.gen_expr(arg);
+                            }
+                            let defaults = self.default_params.get(name).cloned();
+                            let argc = if let Some(defaults) = defaults {
+                                let mut count = args.len();
+                                for i in args.len()..defaults.len() {
+                                    if let Some(default_expr) = &defaults[i] {
+                                        self.gen_expr(default_expr);
+                                        count += 1;
+                                    }
+                                }
+                                count
+                            } else {
+                                args.len()
+                            };
+                            self.emit(Instr::Call(name.clone(), argc));
+                        } else {
+                            self.emit(Instr::Load(name.clone()));
+                            for arg in args {
+                                self.gen_expr(arg);
+                            }
+                            self.emit(Instr::CallValue(args.len()));
+                        }
+                    }
                     Expr::Lambda { params, body, .. } => {
-                        let lambda_name = format!("__lambda_{}", self.lambda_counter);
-                        self.lambda_counter += 1;
-                        let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
-                        let func = Func {
-                            name: lambda_name.clone(),
-                            params: param_names,
-                            entry: 0,
-                            instrs: Vec::new(),
-                        };
-                        self.program.funcs.insert(lambda_name.clone(), func);
-                        let saved_instrs = std::mem::take(&mut self.current_instrs);
-                        let saved_func = self.current_func.clone();
-                        let saved_temp = self.temp_counter;
-                        let saved_label = self.label_counter;
-                        let saved_loop = std::mem::take(&mut self.loop_labels);
-                        self.current_func = Some(lambda_name.clone());
-                        self.current_instrs = Vec::new();
-                        self.temp_counter = 0;
-                        self.label_counter = 0;
-                        for node in body {
-                            self.gen_decl_or_stmt(node);
+                        let lambda_name = self.compile_lambda(params, body);
+                        for arg in args {
+                            self.gen_expr(arg);
                         }
-                        if !self.current_instrs.iter().any(|i| matches!(i, Instr::Return)) {
-                            self.emit(Instr::Return);
-                        }
-                        self.finalize_func();
-                        self.current_func = saved_func;
-                        self.current_instrs = saved_instrs;
-                        self.temp_counter = saved_temp;
-                        self.label_counter = saved_label;
-                        self.loop_labels = saved_loop;
-                        lambda_name
+                        self.emit(Instr::Call(lambda_name, args.len()));
                     }
-                    _ => String::new(),
-                };
-                for arg in args {
-                    self.gen_expr(arg);
-                }
-                let defaults = self.default_params.get(&callee_name).cloned();
-                let argc = if let Some(defaults) = defaults {
-                    let mut count = args.len();
-                    for i in args.len()..defaults.len() {
-                        if let Some(default_expr) = &defaults[i] {
-                            self.gen_expr(default_expr);
-                            count += 1;
+                    _ => {
+                        self.gen_expr(callee);
+                        for arg in args {
+                            self.gen_expr(arg);
                         }
+                        self.emit(Instr::CallValue(args.len()));
                     }
-                    count
-                } else {
-                    args.len()
-                };
-                if !callee_name.is_empty() {
-                    self.emit(Instr::Call(callee_name, argc));
                 }
             }
             Expr::List { items, .. } => {
@@ -373,40 +389,60 @@ impl IRBuilder {
             Expr::Grouping { expr, .. } => {
                 self.gen_expr(expr);
             }
+            Expr::StructInit { struct_name, fields, .. } => {
+                for (_, val) in fields {
+                    self.gen_expr(val);
+                }
+                for (name, _) in fields {
+                    self.emit(Instr::ConstStr(name.clone()));
+                }
+                self.emit(Instr::StructNew(struct_name.clone(), fields.len()));
+            }
+            Expr::FieldAccess { expr, field, .. } => {
+                self.gen_expr(expr);
+                self.emit(Instr::ConstStr(field.clone()));
+                self.emit(Instr::StructGet);
+            }
             Expr::Lambda { params, body, .. } => {
-                let lambda_name = format!("__lambda_{}", self.lambda_counter);
-                self.lambda_counter += 1;
-                let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
-                let func = Func {
-                    name: lambda_name.clone(),
-                    params: param_names,
-                    entry: 0,
-                    instrs: Vec::new(),
-                };
-                self.program.funcs.insert(lambda_name.clone(), func);
-                let saved_instrs = std::mem::take(&mut self.current_instrs);
-                let saved_func = self.current_func.clone();
-                let saved_temp = self.temp_counter;
-                let saved_label = self.label_counter;
-                let saved_loop = std::mem::take(&mut self.loop_labels);
-                self.current_func = Some(lambda_name.clone());
-                self.current_instrs = Vec::new();
-                self.temp_counter = 0;
-                self.label_counter = 0;
-                for node in body {
-                    self.gen_decl_or_stmt(node);
-                }
-                if !self.current_instrs.iter().any(|i| matches!(i, Instr::Return)) {
-                    self.emit(Instr::Return);
-                }
-                self.finalize_func();
-                self.current_func = saved_func;
-                self.current_instrs = saved_instrs;
-                self.temp_counter = saved_temp;
-                self.label_counter = saved_label;
-                self.loop_labels = saved_loop;
+                let lambda_name = self.compile_lambda(params, body);
+                self.emit(Instr::FuncRef(lambda_name));
             }
         }
+    }
+
+    fn compile_lambda(&mut self, params: &[Param], body: &[DeclOrStmt]) -> String {
+        let lambda_name = format!("__lambda_{}", self.lambda_counter);
+        self.lambda_counter += 1;
+        let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+        let func = Func {
+            name: lambda_name.clone(),
+            params: param_names,
+            entry: 0,
+            instrs: Vec::new(),
+        };
+        self.program.funcs.insert(lambda_name.clone(), func);
+        let saved_instrs = std::mem::take(&mut self.current_instrs);
+        let saved_func = self.current_func.clone();
+        let saved_temp = self.temp_counter;
+        let saved_label = self.label_counter;
+        let saved_loop = std::mem::take(&mut self.loop_labels);
+        self.current_func = Some(lambda_name.clone());
+        self.current_instrs = Vec::new();
+        self.temp_counter = 0;
+        self.label_counter = 0;
+        for node in body {
+            self.gen_decl_or_stmt(node);
+        }
+        if !self.current_instrs.iter().any(|i| matches!(i, Instr::Return)) {
+            self.emit(Instr::Return);
+        }
+        self.finalize_func();
+        self.current_func = saved_func;
+        self.current_instrs = saved_instrs;
+        self.temp_counter = saved_temp;
+        self.label_counter = saved_label;
+        self.loop_labels = saved_loop;
+        lambda_name
     }
 
     fn emit(&mut self, instr: Instr) {
@@ -423,8 +459,231 @@ impl IRBuilder {
         if let Some(ref name) = self.current_func {
             if let Some(func) = self.program.funcs.get_mut(name) {
                 func.instrs = std::mem::take(&mut self.current_instrs);
+                Self::optimize_func(func);
             }
         }
+    }
+
+    pub fn fold_constants_pass(instrs: &[Instr]) -> Vec<Instr> {
+        let mut result = Vec::with_capacity(instrs.len());
+        let mut i = 0;
+        while i < instrs.len() {
+            // Binary folding: ConstX(a), ConstY(b), Binary(op)
+            if i + 2 < instrs.len() {
+                if let Some(folded) = Self::try_fold_binary(&instrs[i], &instrs[i + 1], &instrs[i + 2]) {
+                    result.push(folded);
+                    i += 3;
+                    continue;
+                }
+            }
+            // Unary folding: ConstX(a), Unary(op)
+            if i + 1 < instrs.len() {
+                if let Some(folded) = Self::try_fold_unary(&instrs[i], &instrs[i + 1]) {
+                    result.push(folded);
+                    i += 2;
+                    continue;
+                }
+            }
+            result.push(instrs[i].clone());
+            i += 1;
+        }
+        result
+    }
+
+    fn try_fold_binary(a: &Instr, b: &Instr, op: &Instr) -> Option<Instr> {
+        match (a, b, op) {
+            // Int +-*/ Int
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Add)) => {
+                Some(Instr::ConstInt(a.overflowing_add(*b).0))
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Sub)) => {
+                Some(Instr::ConstInt(a.overflowing_sub(*b).0))
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Mul)) => {
+                Some(Instr::ConstInt(a.overflowing_mul(*b).0))
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Div)) => {
+                if *b != 0 {
+                    if a % b == 0 {
+                        Some(Instr::ConstInt(a / b))
+                    } else {
+                        Some(Instr::ConstFloat(*a as f64 / *b as f64))
+                    }
+                } else { None }
+            }
+            // Float +-*/ Float
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Add)) => {
+                Some(Instr::ConstFloat(a + b))
+            }
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Sub)) => {
+                Some(Instr::ConstFloat(a - b))
+            }
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Mul)) => {
+                Some(Instr::ConstFloat(a * b))
+            }
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Div)) => {
+                if *b != 0.0 { Some(Instr::ConstFloat(a / b)) } else { None }
+            }
+            // Mixed Int/Float arithmetic
+            (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Add)) => {
+                Some(Instr::ConstFloat(*a as f64 + b))
+            }
+            (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Sub)) => {
+                Some(Instr::ConstFloat(*a as f64 - b))
+            }
+            (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Mul)) => {
+                Some(Instr::ConstFloat(*a as f64 * b))
+            }
+            (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Div)) => {
+                if *b != 0.0 { Some(Instr::ConstFloat(*a as f64 / b)) } else { None }
+            }
+            (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Add)) => {
+                Some(Instr::ConstFloat(a + *b as f64))
+            }
+            (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Sub)) => {
+                Some(Instr::ConstFloat(a - *b as f64))
+            }
+            (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Mul)) => {
+                Some(Instr::ConstFloat(a * *b as f64))
+            }
+            (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Div)) => {
+                if *b != 0 { Some(Instr::ConstFloat(a / *b as f64)) } else { None }
+            }
+            // Int comparisons
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Equal)) => {
+                Some(Instr::ConstBool(a == b))
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::NotEqual)) => {
+                Some(Instr::ConstBool(a != b))
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Less)) => {
+                Some(Instr::ConstBool(a < b))
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::LessEqual)) => {
+                Some(Instr::ConstBool(a <= b))
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Greater)) => {
+                Some(Instr::ConstBool(a > b))
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::GreaterEqual)) => {
+                Some(Instr::ConstBool(a >= b))
+            }
+            // Float comparisons
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Equal)) => {
+                Some(Instr::ConstBool((a - b).abs() < f64::EPSILON))
+            }
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::NotEqual)) => {
+                Some(Instr::ConstBool((a - b).abs() >= f64::EPSILON))
+            }
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Less)) => {
+                Some(Instr::ConstBool(a < b))
+            }
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::LessEqual)) => {
+                Some(Instr::ConstBool(a <= b))
+            }
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Greater)) => {
+                Some(Instr::ConstBool(a > b))
+            }
+            (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::GreaterEqual)) => {
+                Some(Instr::ConstBool(a >= b))
+            }
+            // Mixed Int/Float comparisons
+            (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Equal)) => {
+                Some(Instr::ConstBool((*a as f64 - b).abs() < f64::EPSILON))
+            }
+            (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::NotEqual)) => {
+                Some(Instr::ConstBool((*a as f64 - b).abs() >= f64::EPSILON))
+            }
+            (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Less)) => {
+                Some(Instr::ConstBool((*a as f64) < *b))
+            }
+            (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Greater)) => {
+                Some(Instr::ConstBool((*a as f64) > *b))
+            }
+            (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Equal)) => {
+                Some(Instr::ConstBool((a - *b as f64).abs() < f64::EPSILON))
+            }
+            (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::NotEqual)) => {
+                Some(Instr::ConstBool((a - *b as f64).abs() >= f64::EPSILON))
+            }
+            (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Less)) => {
+                Some(Instr::ConstBool(*a < *b as f64))
+            }
+            (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Greater)) => {
+                Some(Instr::ConstBool(*a > *b as f64))
+            }
+            // Bool logical ops
+            (Instr::ConstBool(a), Instr::ConstBool(b), Instr::Binary(Op::And)) => {
+                Some(Instr::ConstBool(*a && *b))
+            }
+            (Instr::ConstBool(a), Instr::ConstBool(b), Instr::Binary(Op::Or)) => {
+                Some(Instr::ConstBool(*a || *b))
+            }
+            (Instr::ConstBool(a), Instr::ConstBool(b), Instr::Binary(Op::Equal)) => {
+                Some(Instr::ConstBool(a == b))
+            }
+            (Instr::ConstBool(a), Instr::ConstBool(b), Instr::Binary(Op::NotEqual)) => {
+                Some(Instr::ConstBool(a != b))
+            }
+            // String concatenation
+            (Instr::ConstStr(a), Instr::ConstStr(b), Instr::Binary(Op::Add)) => {
+                Some(Instr::ConstStr(format!("{}{}", a, b)))
+            }
+            _ => None,
+        }
+    }
+
+    fn try_fold_unary(a: &Instr, op: &Instr) -> Option<Instr> {
+        match (a, op) {
+            (Instr::ConstInt(n), Instr::Unary(Op::Negate)) => {
+                Some(Instr::ConstInt(n.overflowing_neg().0))
+            }
+            (Instr::ConstFloat(n), Instr::Unary(Op::Negate)) => {
+                Some(Instr::ConstFloat(-n))
+            }
+            (Instr::ConstBool(b), Instr::Unary(Op::Not)) => {
+                Some(Instr::ConstBool(!b))
+            }
+            (Instr::ConstInt(n), Instr::Unary(Op::Not)) => {
+                Some(Instr::ConstBool(*n == 0))
+            }
+            (Instr::ConstFloat(n), Instr::Unary(Op::Not)) => {
+                Some(Instr::ConstBool(*n == 0.0))
+            }
+            _ => None,
+        }
+    }
+
+    fn optimize_func(func: &mut Func) {
+        let mut current = func.instrs.clone();
+
+        // Run constant folding multiple passes for chained operations
+        for _ in 0..3 {
+            let new = Self::fold_constants_pass(&current);
+            if new == current {
+                break;
+            }
+            current = new;
+        }
+
+        // Remove consecutive Nops (keep at most one)
+        let mut optimized = Vec::with_capacity(current.len());
+        let mut prev_nop = false;
+        for instr in &current {
+            match instr {
+                Instr::Nop => {
+                    if !prev_nop {
+                        optimized.push(instr.clone());
+                        prev_nop = true;
+                    }
+                }
+                _ => {
+                    optimized.push(instr.clone());
+                    prev_nop = false;
+                }
+            }
+        }
+        func.instrs = optimized;
     }
 }
 
@@ -479,5 +738,199 @@ numero x = suma(3, 4);
 imprimir(x);";
         let program = build_ir(source);
         assert!(program.funcs.contains_key("suma"));
+    }
+
+    #[test]
+    fn test_constant_folding_int_add() {
+        let instrs = vec![
+            Instr::ConstInt(2),
+            Instr::ConstInt(3),
+            Instr::Binary(Op::Add),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstInt(5)));
+    }
+
+    #[test]
+    fn test_constant_folding_int_sub() {
+        let instrs = vec![
+            Instr::ConstInt(10),
+            Instr::ConstInt(3),
+            Instr::Binary(Op::Sub),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstInt(7)));
+    }
+
+    #[test]
+    fn test_constant_folding_int_mul() {
+        let instrs = vec![
+            Instr::ConstInt(6),
+            Instr::ConstInt(7),
+            Instr::Binary(Op::Mul),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstInt(42)));
+    }
+
+    #[test]
+    fn test_constant_folding_float_add() {
+        let instrs = vec![
+            Instr::ConstFloat(1.5),
+            Instr::ConstFloat(2.5),
+            Instr::Binary(Op::Add),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstFloat(v) if (v - 4.0).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn test_constant_folding_comparison_lt() {
+        let instrs = vec![
+            Instr::ConstInt(3),
+            Instr::ConstInt(5),
+            Instr::Binary(Op::Less),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstBool(true)));
+    }
+
+    #[test]
+    fn test_constant_folding_comparison_gt() {
+        let instrs = vec![
+            Instr::ConstInt(5),
+            Instr::ConstInt(3),
+            Instr::Binary(Op::Greater),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstBool(true)));
+    }
+
+    #[test]
+    fn test_constant_folding_bool_and() {
+        let instrs = vec![
+            Instr::ConstBool(true),
+            Instr::ConstBool(false),
+            Instr::Binary(Op::And),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstBool(false)));
+    }
+
+    #[test]
+    fn test_constant_folding_bool_or() {
+        let instrs = vec![
+            Instr::ConstBool(false),
+            Instr::ConstBool(true),
+            Instr::Binary(Op::Or),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstBool(true)));
+    }
+
+    #[test]
+    fn test_constant_folding_string_concat() {
+        let instrs = vec![
+            Instr::ConstStr("Hola ".to_string()),
+            Instr::ConstStr("Mundo".to_string()),
+            Instr::Binary(Op::Add),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(&folded[0], Instr::ConstStr(s) if s == "Hola Mundo"));
+    }
+
+    #[test]
+    fn test_constant_folding_unary_negate_int() {
+        let instrs = vec![
+            Instr::ConstInt(5),
+            Instr::Unary(Op::Negate),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstInt(-5)));
+    }
+
+    #[test]
+    fn test_constant_folding_unary_negate_float() {
+        let instrs = vec![
+            Instr::ConstFloat(3.14),
+            Instr::Unary(Op::Negate),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstFloat(v) if (v - (-3.14)).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn test_constant_folding_unary_not_bool() {
+        let instrs = vec![
+            Instr::ConstBool(true),
+            Instr::Unary(Op::Not),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstBool(false)));
+    }
+
+    #[test]
+    fn test_constant_folding_chained() {
+        let instrs = vec![
+            Instr::ConstInt(1),
+            Instr::ConstInt(2),
+            Instr::Binary(Op::Add),
+            Instr::ConstInt(3),
+            Instr::Binary(Op::Add),
+        ];
+        let mut current = instrs;
+        for _ in 0..3 {
+            current = IRBuilder::fold_constants_pass(&current);
+        }
+        assert_eq!(current.len(), 1);
+        assert!(matches!(current[0], Instr::ConstInt(6)));
+    }
+
+    #[test]
+    fn test_constant_folding_mixed_int_float() {
+        let instrs = vec![
+            Instr::ConstInt(3),
+            Instr::ConstFloat(2.5),
+            Instr::Binary(Op::Add),
+        ];
+        let folded = IRBuilder::fold_constants_pass(&instrs);
+        assert_eq!(folded.len(), 1);
+        assert!(matches!(folded[0], Instr::ConstFloat(v) if (v - 5.5).abs() < f64::EPSILON));
+    }
+
+    #[test]
+    fn test_dce_removes_consecutive_nops() {
+        let mut func = Func {
+            name: "test".to_string(),
+            params: vec![],
+            entry: 0,
+            instrs: vec![
+                Instr::Nop,
+                Instr::Nop,
+                Instr::ConstInt(42),
+                Instr::Nop,
+                Instr::Nop,
+                Instr::Nop,
+                Instr::Store("x".to_string()),
+            ],
+        };
+        IRBuilder::optimize_func(&mut func);
+        assert_eq!(func.instrs.len(), 4);
+        assert!(matches!(func.instrs[0], Instr::Nop));
+        assert!(matches!(func.instrs[1], Instr::ConstInt(42)));
+        assert!(matches!(func.instrs[2], Instr::Nop));
+        assert!(matches!(func.instrs[3], Instr::Store(_)));
     }
 }

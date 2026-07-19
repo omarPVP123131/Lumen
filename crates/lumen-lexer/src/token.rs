@@ -71,6 +71,9 @@ pub enum TokenKind {
     Elegir,
     Caso,
     Defecto,
+    Estructura,
+    Importar,
+    Como,
 
     // English equivalents
     If,
@@ -94,6 +97,9 @@ pub enum TokenKind {
     Match,
     Case,
     Default,
+    Struct,
+    Import,
+    As,
 
     // Identifiers & Literals
     Ident(String),
@@ -158,6 +164,7 @@ impl TokenKind {
             "elegir" => Some(TokenKind::Elegir),
             "caso" => Some(TokenKind::Caso),
             "defecto" => Some(TokenKind::Defecto),
+            "estructura" => Some(TokenKind::Estructura),
             "if" => Some(TokenKind::If),
             "else" => Some(TokenKind::Else),
             "while" => Some(TokenKind::While),
@@ -179,6 +186,11 @@ impl TokenKind {
             "match" => Some(TokenKind::Match),
             "case" => Some(TokenKind::Case),
             "default" => Some(TokenKind::Default),
+            "struct" => Some(TokenKind::Struct),
+            "importar" => Some(TokenKind::Importar),
+            "import" => Some(TokenKind::Import),
+            "como" => Some(TokenKind::Como),
+            "as" => Some(TokenKind::As),
             _ => None,
         }
     }
@@ -206,6 +218,9 @@ impl TokenKind {
             TokenKind::Elegir | TokenKind::Match => "elegir",
             TokenKind::Caso | TokenKind::Case => "caso",
             TokenKind::Defecto | TokenKind::Default => "defecto",
+            TokenKind::Estructura | TokenKind::Struct => "estructura",
+            TokenKind::Importar | TokenKind::Import => "importar",
+            TokenKind::Como | TokenKind::As => "como",
             _ => "",
         }
     }
