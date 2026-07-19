@@ -1,0 +1,19 @@
+[package]
+name = "lumen-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "lumen"
+path = "src/main.rs"
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
+lumen-codegen = { path = "../lumen-codegen" }
+lumen-vm = { path = "../lumen-vm" }

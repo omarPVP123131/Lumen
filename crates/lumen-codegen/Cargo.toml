@@ -1,0 +1,15 @@
+[package]
+name = "lumen-codegen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lumen-ir = { path = "../lumen-ir" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest = "1"

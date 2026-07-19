@@ -1,0 +1,7 @@
+entero resultado = funcion(entero x) { retornar x * 2; }(5);
+imprimir(resultado);
+
+texto saludo = funcion(texto nombre) { retornar "Hola " + nombre; }("Mundo");
+imprimir(saludo);
+
+imprimir(funcion(entero a, entero b) { retornar a + b; }(10, 20));

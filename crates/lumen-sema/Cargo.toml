@@ -1,0 +1,13 @@
+[package]
+name = "lumen-sema"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+serde.workspace = true
+thiserror.workspace = true

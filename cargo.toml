@@ -1,0 +1,23 @@
+[workspace]
+members = [
+    "crates/lumen-lexer",
+    "crates/lumen-parser",
+    "crates/lumen-sema",
+    "crates/lumen-ir",
+    "crates/lumen-codegen",
+    "crates/lumen-vm",
+    "crates/lumen-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Omar Palomares Velasco <trixxo@corp>"]
+license = "MIT"
+repository = "https://github.com/TriXxoCorp/lumen"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"

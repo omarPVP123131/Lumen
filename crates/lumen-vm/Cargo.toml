@@ -1,0 +1,17 @@
+[package]
+name = "lumen-vm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lumen-codegen = { path = "../lumen-codegen" }
+thiserror.workspace = true
+
+[dev-dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }

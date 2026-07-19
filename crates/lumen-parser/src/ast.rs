@@ -1,0 +1,204 @@
+use lumen_lexer::token::Span;
+use serde::{Deserialize, Serialize};
+
+pub type Program = Vec<DeclOrStmt>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DeclOrStmt {
+    Decl(Decl),
+    Stmt(Stmt),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Decl {
+    Variable {
+        var_type: Type,
+        name: String,
+        init: Option<Box<Expr>>,
+        span: Span,
+    },
+    Function {
+        return_type: Type,
+        name: String,
+        params: Vec<Param>,
+        body: Vec<DeclOrStmt>,
+        span: Span,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Param {
+    pub param_type: Type,
+    pub name: String,
+    pub default: Option<Box<Expr>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchArm {
+    pub value: Expr,
+    pub body: Vec<DeclOrStmt>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Stmt {
+    Assignment {
+        name: String,
+        value: Box<Expr>,
+        span: Span,
+    },
+    If {
+        condition: Box<Expr>,
+        then_body: Vec<DeclOrStmt>,
+        else_body: Option<Vec<DeclOrStmt>>,
+        span: Span,
+    },
+    While {
+        condition: Box<Expr>,
+        body: Vec<DeclOrStmt>,
+        span: Span,
+    },
+    For {
+        init: Box<Decl>,
+        condition: Box<Expr>,
+        update: Box<Stmt>,
+        body: Vec<DeclOrStmt>,
+        span: Span,
+    },
+    Return {
+        value: Option<Box<Expr>>,
+        span: Span,
+    },
+    Break {
+        span: Span,
+    },
+    Continue {
+        span: Span,
+    },
+    Match {
+        expr: Box<Expr>,
+        arms: Vec<MatchArm>,
+        default: Option<Vec<DeclOrStmt>>,
+        span: Span,
+    },
+    Expr {
+        expr: Box<Expr>,
+        span: Span,
+    },
+    Block {
+        stmts: Vec<DeclOrStmt>,
+        span: Span,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Expr {
+
+    Int {
+        value: i64,
+        span: Span,
+    },
+    Float {
+        value: f64,
+        span: Span,
+    },
+    Str {
+        value: String,
+        span: Span,
+    },
+    Bool {
+        value: bool,
+        span: Span,
+    },
+    Ident {
+        name: String,
+        span: Span,
+    },
+    Binary {
+        op: BinOp,
+        left: Box<Expr>,
+        right: Box<Expr>,
+        span: Span,
+    },
+    Unary {
+        op: UnOp,
+        operand: Box<Expr>,
+        span: Span,
+    },
+    Call {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+        span: Span,
+    },
+    Grouping {
+        expr: Box<Expr>,
+        span: Span,
+    },
+    List {
+        items: Vec<Expr>,
+        span: Span,
+    },
+    Index {
+        expr: Box<Expr>,
+        index: Box<Expr>,
+        span: Span,
+    },
+    MethodCall {
+        expr: Box<Expr>,
+        method: String,
+        args: Vec<Expr>,
+        span: Span,
+    },
+    Lambda {
+        params: Vec<Param>,
+        body: Vec<DeclOrStmt>,
+        span: Span,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    And,
+    Or,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum UnOp {
+    Negate,
+    Not,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Type {
+    Numero,
+    Entero,
+    Decimal,
+    Texto,
+    Booleano,
+    Lista(Box<Type>),
+}
+
+impl Expr {
+    pub fn span(&self) -> Span {
+        match self {
+            Expr::Int { span, .. } | Expr::Float { span, .. }
+            | Expr::Str { span, .. } | Expr::Bool { span, .. }
+            | Expr::Ident { span, .. } | Expr::Binary { span, .. }
+            | Expr::Unary { span, .. } | Expr::Call { span, .. }
+            | Expr::Grouping { span, .. } | Expr::List { span, .. }
+            | Expr::Index { span, .. } | Expr::MethodCall { span, .. }
+            | Expr::Lambda { span, .. } => *span,
+        }
+    }
+}

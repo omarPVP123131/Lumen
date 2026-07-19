@@ -1,0 +1,6 @@
+entero contador = 0;
+
+mientras (contador < 5) {
+    imprimir(contador);
+    contador = contador + 1;
+}

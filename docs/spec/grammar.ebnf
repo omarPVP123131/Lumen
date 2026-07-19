@@ -1,0 +1,91 @@
+(* LÚMEN Grammar v1.0 - EBNF Specification *)
+
+(* --- Top Level --- *)
+program = { declaration | statement } ;
+
+(* --- Declarations --- *)
+declaration = variable_decl | function_decl ;
+
+variable_decl = type_annotation , identifier , [ "=" , expression ] , ";" ;
+
+function_decl = "funcion" , type_annotation , identifier , "(" , [ parameter_list ] , ")" , block ;
+
+parameter_list = parameter , { "," , parameter } ;
+parameter = type_annotation , identifier ;
+
+(* --- Statements --- *)
+statement = variable_decl
+          | assignment
+          | if_stmt
+          | while_stmt
+          | for_stmt
+          | return_stmt
+          | expr_stmt
+          | block ;
+
+assignment = identifier , "=" , expression , ";" ;
+
+if_stmt = "si" , "(" , expression , ")" , block , [ "sino" , block ] ;
+
+while_stmt = "mientras" , "(" , expression , ")" , block ;
+
+for_stmt = "para" , "(" , variable_decl , expression , ";" , assignment , ")" , block ;
+
+return_stmt = "retornar" , [ expression ] , ";" ;
+
+expr_stmt = expression , ";" ;
+
+block = "{" , { declaration | statement } , "}" ;
+
+(* --- Expressions (Pratt parsing - precedence levels) --- *)
+expression = comparison ;
+
+(* Level 1: Logical OR *)
+logical_or = logical_and , { "||" , logical_and } ;
+
+(* Level 2: Logical AND *)
+logical_and = comparison , { "&&" , comparison } ;
+
+(* Level 3: Comparison *)
+comparison = addition , [ comparison_op , addition ] ;
+comparison_op = "==" | "!=" | "<" | "<=" | ">" | ">=" ;
+
+(* Level 4: Addition *)
+addition = term , { ("+" | "-") , term } ;
+
+(* Level 5: Multiplication *)
+multiplication = unary , { ("*" | "/") , unary } ;
+
+(* Level 6: Unary *)
+unary = [ ("-" | "!") ] , primary ;
+
+(* Level 7: Primary *)
+primary = literal
+        | identifier , [ "(" , [ argument_list ] , ")" ]
+        | "(" , expression , ")"
+        ;
+
+(* --- Auxiliary --- *)
+argument_list = expression , { "," , expression } ;
+
+type_annotation = "numero" | "entero" | "decimal" | "texto" | "booleano" ;
+
+literal = numeric_literal | string_literal | boolean_literal ;
+
+numeric_literal = digit , { digit } , [ "." , digit , { digit } ] ;
+string_literal = "\"" , { character } , "\"" ;
+boolean_literal = "verdadero" | "falso" ;
+
+identifier = ( letter | "_" ) , { letter | digit | "_" } ;
+
+(* --- Character Classes --- *)
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+       | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+       | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
+       | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" ;
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+(* Comments *)
+comment_line = "//" , { character } , newline ;
+comment_block = "/*" , { character } , "*/" ;

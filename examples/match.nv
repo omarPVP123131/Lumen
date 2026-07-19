@@ -1,0 +1,7 @@
+entero x = 2;
+elegir (x) {
+    caso 1: imprimir("uno");
+    caso 2: imprimir("dos");
+    caso 3: imprimir("tres");
+    defecto: imprimir("otro");
+}

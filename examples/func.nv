@@ -1,0 +1,6 @@
+funcion entero suma(entero a, entero b) {
+    retornar a + b;
+}
+
+entero resultado = suma(3, 7);
+imprimir(resultado);

@@ -1,0 +1,15 @@
+[package]
+name = "lumen-parser"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

@@ -1,0 +1,21 @@
+# Rust
+target/
+**/*.rs.bk
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Bytecode outputs
+*.nvc
+
+# Coverage
+coverage.json
+coverage/
+lcov.info
+
+# OS
+.DS_Store
+Thumbs.db

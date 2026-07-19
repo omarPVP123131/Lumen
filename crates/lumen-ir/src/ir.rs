@@ -1,0 +1,78 @@
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone)]
+pub enum Value {
+    Int(i64),
+    Float(f64),
+    Str(String),
+    Bool(bool),
+    Ident(String),
+    Temp(usize),
+}
+
+#[derive(Debug, Clone)]
+pub enum Op {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    And,
+    Or,
+    Negate,
+    Not,
+}
+
+#[derive(Debug, Clone)]
+pub enum Instr {
+    ConstInt(i64),
+    ConstFloat(f64),
+    ConstStr(String),
+    ConstBool(bool),
+    Load(String),
+    Store(String),
+    Binary(Op),
+    Unary(Op),
+    Call(String, usize),
+    Return,
+    Print,
+    Read,
+    ArrayNew(usize),
+    ArrayGet,
+    ArraySet,
+    ArrayLen,
+    ArrayPush,
+    Jmp(usize),
+    JmpIf(usize),
+    Label(usize),
+    Phi(usize, usize),
+    Halt,
+}
+
+#[derive(Debug, Clone)]
+pub struct Func {
+    pub name: String,
+    pub params: Vec<String>,
+    pub entry: usize,
+    pub instrs: Vec<Instr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub funcs: BTreeMap<String, Func>,
+    pub entry: String,
+}
+
+impl Program {
+    pub fn new() -> Self {
+        Self {
+            funcs: BTreeMap::new(),
+            entry: String::new(),
+        }
+    }
+}
