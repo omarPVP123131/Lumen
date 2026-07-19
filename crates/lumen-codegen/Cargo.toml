@@ -5,6 +5,8 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Generación de bytecode .nvc para el lenguaje LÚMEN — compiler backend"
+keywords = ["lumen", "language", "bytecode", "codegen", "educational"]
 
 [dependencies]
 lumen-ir = { path = "../lumen-ir" }

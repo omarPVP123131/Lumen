@@ -5,6 +5,8 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "IR (Intermediate Representation) del compilador LÚMEN — three-address code + optimizaciones"
+keywords = ["lumen", "language", "ir", "optimization", "educational"]
 
 [dependencies]
 lumen-lexer = { path = "../lumen-lexer" }

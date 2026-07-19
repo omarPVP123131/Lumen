@@ -5,6 +5,8 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Análisis semántico del lenguaje LÚMEN — type checking, scopes, módulos"
+keywords = ["lumen", "language", "semantic", "type-checking", "educational"]
 
 [dependencies]
 lumen-lexer = { path = "../lumen-lexer" }

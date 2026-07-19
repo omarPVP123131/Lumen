@@ -5,6 +5,8 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "CLI del lenguaje LÚMEN — run, build, check, disasm"
+keywords = ["lumen", "language", "cli", "compiler", "educational"]
 
 [[bin]]
 name = "lumen"

@@ -5,6 +5,8 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Parser/AST del lenguaje de programación LÚMEN — recursive descent + Pratt parsing"
+keywords = ["lumen", "language", "parser", "ast", "educational"]
 
 [dependencies]
 lumen-lexer = { path = "../lumen-lexer" }
