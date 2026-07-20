@@ -187,19 +187,36 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
                 prefix_expr(expr, prefix, locals);
             }
         }
+        Decl::Destructure { targets, init, .. } => {
+            for target in targets.iter_mut() {
+                if let Some(ref mut t_type) = target.var_type {
+                    prefix_type(t_type, prefix);
+                }
+                if target.name != "_" {
+                    if top_level {
+                        target.name = format!("{}_{}", prefix, target.name);
+                    } else {
+                        locals.insert(target.name.clone());
+                    }
+                }
+            }
+            prefix_expr(init, prefix, locals);
+        }
         Decl::Function {
             return_type,
             name,
             params,
             body,
+            type_params,
             ..
         } => {
-            prefix_type(return_type, prefix);
+            let type_params_set: HashSet<String> = type_params.iter().cloned().collect();
+            prefix_type_with_params(return_type, prefix, &type_params_set);
             if top_level {
                 *name = format!("{}_{}", prefix, name);
             }
             for p in params.iter_mut() {
-                prefix_type(&mut p.param_type, prefix);
+                prefix_type_with_params(&mut p.param_type, prefix, &type_params_set);
                 if let Some(default) = &mut p.default {
                     prefix_expr(default, prefix, locals);
                 }
@@ -212,12 +229,18 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
                 prefix_node(node, prefix, &mut func_locals, false);
             }
         }
-        Decl::Struct { name, fields, .. } => {
+        Decl::Struct {
+            name,
+            fields,
+            type_params,
+            ..
+        } => {
             if top_level {
                 *name = format!("{}_{}", prefix, name);
             }
+            let type_params_set: HashSet<String> = type_params.iter().cloned().collect();
             for field in fields.iter_mut() {
-                prefix_type(&mut field.field_type, prefix);
+                prefix_type_with_params(&mut field.field_type, prefix, &type_params_set);
             }
         }
         Decl::Enum { name, variants, .. } => {
@@ -338,6 +361,16 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
                 prefix_node(node, prefix, &mut block_locals, false);
             }
         }
+        Stmt::Destructure { targets, value, .. } => {
+            for target in targets.iter_mut() {
+                if target.name != "_" {
+                    if !locals.contains(target.name.as_str()) {
+                        target.name = format!("{}_{}", prefix, target.name);
+                    }
+                }
+            }
+            prefix_expr(value, prefix, locals);
+        }
     }
 }
 
@@ -356,10 +389,18 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
         Expr::Unary { operand, .. } => {
             prefix_expr(operand, prefix, locals);
         }
-        Expr::Call { callee, args, .. } => {
+        Expr::Call {
+            callee,
+            args,
+            type_args,
+            ..
+        } => {
             prefix_expr(callee, prefix, locals);
             for arg in args.iter_mut() {
                 prefix_expr(arg, prefix, locals);
+            }
+            for ta in type_args.iter_mut() {
+                prefix_type(ta, prefix);
             }
         }
         Expr::Grouping { expr: inner, .. } => {
@@ -399,11 +440,15 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
         Expr::StructInit {
             struct_name,
             fields,
+            type_args,
             ..
         } => {
             *struct_name = format!("{}_{}", prefix, struct_name);
             for (_, value) in fields.iter_mut() {
                 prefix_expr(value, prefix, locals);
+            }
+            for ta in type_args.iter_mut() {
+                prefix_type(ta, prefix);
             }
         }
         Expr::FieldAccess { expr: target, .. } => {
@@ -443,9 +488,57 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
     }
 }
 
+fn prefix_type_with_params(t: &mut Type, prefix: &str, type_params: &HashSet<String>) {
+    match t {
+        Type::Struct(name) if type_params.contains(name.as_str()) => {
+            // Don't prefix type parameter names
+        }
+        Type::GenericStruct { name, args } => {
+            if !type_params.contains(name.as_str()) {
+                *name = format!("{}_{}", prefix, name);
+            }
+            for arg in args.iter_mut() {
+                prefix_type_with_params(arg, prefix, type_params);
+            }
+        }
+        Type::Lista(inner) => prefix_type_with_params(inner, prefix, type_params),
+        Type::Func {
+            param_types,
+            return_type,
+        } => {
+            for p in param_types.iter_mut() {
+                prefix_type_with_params(p, prefix, type_params);
+            }
+            prefix_type_with_params(return_type, prefix, type_params);
+        }
+        Type::Struct(name) => {
+            *name = format!("{}_{}", prefix, name);
+        }
+        Type::Resultado { ok, err } => {
+            prefix_type_with_params(ok, prefix, type_params);
+            prefix_type_with_params(err, prefix, type_params);
+        }
+        Type::Opcion(inner) => {
+            prefix_type_with_params(inner, prefix, type_params);
+        }
+        Type::Tuple(types) => {
+            for t in types.iter_mut() {
+                prefix_type_with_params(t, prefix, type_params);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn prefix_type(t: &mut Type, prefix: &str) {
     match t {
         Type::Lista(inner) => prefix_type(inner, prefix),
+        Type::GenericStruct { name, args } => {
+            *name = format!("{}_{}", prefix, name);
+            for arg in args.iter_mut() {
+                prefix_type(arg, prefix);
+            }
+        }
         Type::Func {
             param_types,
             return_type,

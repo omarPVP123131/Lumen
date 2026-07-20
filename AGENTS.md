@@ -9,16 +9,16 @@
 | Crate | Tests | Type |
 |-------|-------|------|
 | lumen-lexer | 24 | unit |
-| lumen-parser | 36 | unit |
-| lumen-sema | 38 | unit |
+| lumen-parser | 42 | unit |
+| lumen-sema | 43 | unit |
 | lumen-ir | 20 | unit + folding |
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 78 | e2e |
-| **Total** | **259** | |
+| lumen-vm | 102 | e2e |
+| **Total** | **294** | |
 
-**0 warnings, 259 tests passing.**
+**0 warnings, 294 tests passing.**
 
 ---
 
@@ -83,6 +83,40 @@ Lexer, parser, sema, IR, bytecode, VM, CLI, arrays, control de flujo avanzado.
 - Bytecode: `OptionSome(41)`, `OptionNone(42)`
 - VM: `Value::Opcion(Option<Box<Value>>)`, comparación por igualdad
 - Tests: 5 sema, 10 e2e
+
+### Fase 23: Enums/Tipos Suma ✅
+- Sintaxis: `enum Nombre { Variante, Variante(tipo, ...) }`
+- Constructor: `Nombre::Variante` o `Nombre::Variante(valor)`
+- `DoubleColon` (::) para acceso a variantes
+- Sema: validación de tipos en construcción y matching
+- VM: `Value::Enum { name, variant, fields }`, opcode `EnumCtor(43)`
+- Tests: 5 sema, 15 e2e
+
+### Fase 24: Tuplas ✅
+- Sintaxis: `(tipo, tipo)` y `(expr, expr)`
+- Acceso por índice: `tupla.0`, `tupla.1`
+- VM: `Value::Tuple(Vec<Value>)`, opcodes `TupleNew(44)`, `TupleAccess(45)`
+- Tests: 4 e2e
+
+### Fase 25: Destructuring ✅
+- Sintaxis: `entero x, texto y = expr` (declaración) y `x, y = expr` (asignación)
+- Wildcard `_`: `entero x, _ = (1, 2)` ignora elementos
+- AST: `Decl::Destructure`, `Stmt::Destructure`, `DestructureTarget`
+- Parser: desugaring en `parse_destructure_decl()` y `parse_destructure_assign_stmt()`
+- Sema: valida tupla, verifica tipos/aridad, registra variables, omite `_`
+- IR: temp variable `__dt_N` + `Load`/`TupleAccess(i)`/`Store` por cada target
+- Sin cambios en bytecode o VM (reutiliza `TupleAccess` existente)
+- Loader: prefixing de nombres en targets de destructuración
+- Tests: 14 e2e (declaración, asignación, wildcard, errores de tipo/aridad, 3 elementos, expresiones, inglés)
+
+### Fase 26: Genéricos Básicos ✅
+- Sintaxis: `<T, U>` en funciones y estructuras
+- Soporte en llamadas: `identidad<entero>(42)`
+- Soporte en structs: `Par<entero, texto> { ... }`
+- Implementación: Type erasure (compile-time checking)
+- Parser: `parse_type_params`, `parse_type_args`, tracking de contexto genérico
+- Sema: sustitución de tipos en firmas y validación
+- Tests: 6 parser, 5 sema, 6 e2e
 
 ---
 

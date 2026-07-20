@@ -10,6 +10,13 @@ pub enum DeclOrStmt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DestructureTarget {
+    pub var_type: Option<Type>,
+    pub name: String,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Decl {
     Variable {
         var_type: Type,
@@ -17,16 +24,23 @@ pub enum Decl {
         init: Option<Box<Expr>>,
         span: Span,
     },
+    Destructure {
+        targets: Vec<DestructureTarget>,
+        init: Box<Expr>,
+        span: Span,
+    },
     Function {
         return_type: Type,
         name: String,
         params: Vec<Param>,
         body: Vec<DeclOrStmt>,
+        type_params: Vec<String>,
         span: Span,
     },
     Struct {
         name: String,
         fields: Vec<StructField>,
+        type_params: Vec<String>,
         span: Span,
     },
     Enum {
@@ -131,6 +145,11 @@ pub enum Stmt {
         body: Vec<DeclOrStmt>,
         span: Span,
     },
+    Destructure {
+        targets: Vec<DestructureTarget>,
+        value: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,6 +188,7 @@ pub enum Expr {
     Call {
         callee: Box<Expr>,
         args: Vec<Expr>,
+        type_args: Vec<Type>,
         span: Span,
     },
     Grouping {
@@ -198,6 +218,7 @@ pub enum Expr {
     StructInit {
         struct_name: String,
         fields: Vec<(String, Expr)>,
+        type_args: Vec<Type>,
         span: Span,
     },
     FieldAccess {
@@ -276,6 +297,10 @@ pub enum Type {
         return_type: Box<Type>,
     },
     Struct(String),
+    GenericStruct {
+        name: String,
+        args: Vec<Type>,
+    },
     Resultado {
         ok: Box<Type>,
         err: Box<Type>,

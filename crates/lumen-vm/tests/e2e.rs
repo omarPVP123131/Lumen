@@ -858,3 +858,186 @@ fn test_tuple_type_error() {
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("SemError"));
 }
+
+// --- Destructuring Tests ---
+
+#[test]
+fn test_destructure_declaration() {
+    let src = "entero x, texto y = (1, \"hola\");
+imprimir(x);
+imprimir(y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "hola"]);
+}
+
+#[test]
+fn test_destructure_assignment() {
+    let src = "entero x = 0;
+texto y = \"\";
+x, y = (1, \"mundo\");
+imprimir(x);
+imprimir(y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "mundo"]);
+}
+
+#[test]
+fn test_destructure_wildcard() {
+    let src = "entero x, _ = (1, 2);
+imprimir(x);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1"]);
+}
+
+#[test]
+fn test_destructure_three_elements() {
+    let src = "entero a, texto b, decimal c = (1, \"x\", 3.5);
+imprimir(a);
+imprimir(b);
+imprimir(c);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "x", "3.5"]);
+}
+
+#[test]
+fn test_destructure_type_error() {
+    let result = run_source("entero x, texto y = (1, 2);");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_destructure_arity_error() {
+    let result = run_source("entero x, texto y = (1, \"a\", 3);");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_destructure_assign_arity_error() {
+    let result = run_source("entero x = 0; entero y = 0; x, y = (1, 2, 3);");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_destructure_assign_not_tuple_error() {
+    let result = run_source("entero x = 0; entero y = 0; x, y = 42;");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_destructure_decl_not_tuple_error() {
+    let result = run_source("entero x, entero y = 42;");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_destructure_wildcard_middle() {
+    let src = "entero a, _, entero c = (1, 2, 3);
+imprimir(a);
+imprimir(c);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "3"]);
+}
+
+#[test]
+fn test_destructure_array_access() {
+    let src = "lista<entero> nums = [10, 20];
+entero x, entero y = (nums[0], nums[1]);
+imprimir(x);
+imprimir(y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["10", "20"]);
+}
+
+#[test]
+fn test_destructure_expression() {
+    let src = "entero a, entero b = (1 + 2, 3 * 4);
+imprimir(a);
+imprimir(b);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["3", "12"]);
+}
+
+#[test]
+fn test_destructure_english_keywords() {
+    let src = "integer x, string y = (42, \"hello\");
+print(x);
+print(y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["42", "hello"]);
+}
+
+#[test]
+fn test_destructure_assign_wildcard() {
+    let src = "entero x = 0;
+entero y = 0;
+x, _, y = (1, 2, 3);
+imprimir(x);
+imprimir(y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "3"]);
+}
+
+// --- Generics Tests ---
+
+#[test]
+fn test_generic_function_identity_int() {
+    let src = "funcion T identidad<T>(T valor) { retornar valor; }
+entero x = identidad<entero>(42);
+imprimir(x);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["42"]);
+}
+
+#[test]
+fn test_generic_function_identity_string() {
+    let src = "funcion T identidad<T>(T valor) { retornar valor; }
+texto s = identidad<texto>(\"hola\");
+imprimir(s);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["hola"]);
+}
+
+#[test]
+fn test_generic_struct_pair() {
+    let src = "estructura Par<T, U> { primero: T, segundo: U }
+Par<entero, texto> p = Par<entero, texto> { primero: 1, segundo: \"hola\" };
+imprimir(p.primero);
+imprimir(p.segundo);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "hola"]);
+}
+
+#[test]
+fn test_generic_struct_pair_numeric() {
+    let src = "estructura Par<T, U> { primero: T, segundo: U }
+Par<entero, decimal> p = Par<entero, decimal> { primero: 42, segundo: 3.5 };
+imprimir(p.primero);
+imprimir(p.segundo);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["42", "3.5"]);
+}
+
+#[test]
+fn test_generic_function_type_error() {
+    let src = "funcion T identidad<T>(T valor) { retornar valor; }
+entero x = identidad<entero>(\"hola\");";
+    let result = run_source(src);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_generic_function_with_struct() {
+    let src = "funcion T id<T>(T v) { retornar v; }
+entero x = id<entero>(99);
+texto s = id<texto>(\"mundo\");
+imprimir(x);
+imprimir(s);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["99", "mundo"]);
+}

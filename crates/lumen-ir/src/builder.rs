@@ -64,7 +64,9 @@ impl IRBuilder {
         }
 
         for node in program {
-            if let DeclOrStmt::Decl(Decl::Function { name, params, .. }) = node {
+            if let DeclOrStmt::Decl(Decl::Function {
+                name, params, ..
+            }) = node {
                 let defaults: Vec<Option<Expr>> = params
                     .iter()
                     .map(|p| p.default.clone().map(|boxed| *boxed))
@@ -118,6 +120,20 @@ impl IRBuilder {
                 if let Some(init_expr) = init {
                     self.gen_expr(init_expr);
                     self.emit(Instr::Store(name.clone()));
+                }
+            }
+            Decl::Destructure { targets, init, .. } => {
+                let temp = format!("__dt_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.gen_expr(init);
+                self.emit(Instr::Store(temp.clone()));
+                for (i, target) in targets.iter().enumerate() {
+                    if target.name == "_" {
+                        continue;
+                    }
+                    self.emit(Instr::Load(temp.clone()));
+                    self.emit(Instr::TupleAccess(i));
+                    self.emit(Instr::Store(target.name.clone()));
                 }
             }
             Decl::Function { name, body, .. } => {
@@ -338,6 +354,20 @@ impl IRBuilder {
                 self.emit(Instr::Label(end_label));
             }
             Stmt::Import { .. } => {}
+            Stmt::Destructure { targets, value, .. } => {
+                let temp = format!("__dt_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.gen_expr(value);
+                self.emit(Instr::Store(temp.clone()));
+                for (i, target) in targets.iter().enumerate() {
+                    if target.name == "_" {
+                        continue;
+                    }
+                    self.emit(Instr::Load(temp.clone()));
+                    self.emit(Instr::TupleAccess(i));
+                    self.emit(Instr::Store(target.name.clone()));
+                }
+            }
         }
     }
 
@@ -385,7 +415,12 @@ impl IRBuilder {
                     UnOp::Not => Op::Not,
                 }));
             }
-            Expr::Call { callee, args, .. } => {
+            Expr::Call {
+                callee,
+                args,
+                type_args: _,
+                ..
+            } => {
                 let callee_inner = match callee.as_ref() {
                     Expr::Grouping { expr, .. } => expr.as_ref(),
                     other => other,
@@ -475,6 +510,7 @@ impl IRBuilder {
             Expr::StructInit {
                 struct_name,
                 fields,
+                type_args: _,
                 ..
             } => {
                 for (_, val) in fields {

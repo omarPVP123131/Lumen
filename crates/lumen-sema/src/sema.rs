@@ -1,5 +1,5 @@
 use crate::error::SemError;
-use lumen_lexer::token::Span;
+use lumen_lexer::token::{Pos, Span};
 use lumen_parser::ast::*;
 use std::collections::HashMap;
 
@@ -27,6 +27,7 @@ pub enum TypeInfo {
     Opcion(Box<TypeInfo>),
     Enum(String),
     Tuple(Vec<TypeInfo>),
+    TypeVar(String),
 }
 
 #[derive(Clone)]
@@ -78,8 +79,8 @@ impl Scope {
 
 pub struct SemanticAnalyzer {
     scopes: Vec<Scope>,
-    functions: HashMap<String, (TypeInfo, Vec<TypeInfo>, usize)>,
-    structs: HashMap<String, Vec<(String, TypeInfo)>>,
+    functions: HashMap<String, (TypeInfo, Vec<TypeInfo>, usize, Vec<String>)>,
+    structs: HashMap<String, (Vec<(String, TypeInfo)>, Vec<String>)>,
     enums: HashMap<String, Vec<(String, Vec<TypeInfo>)>>,
     errors: Vec<SemError>,
     loop_depth: usize,
@@ -117,17 +118,18 @@ impl SemanticAnalyzer {
                 return_type,
                 name,
                 params,
+                type_params,
                 ..
             }) = node
             {
-                let ret = self.type_to_info(return_type.clone());
+                let ret = self.resolve_type(return_type.clone(), type_params);
                 let params_t: Vec<TypeInfo> = params
                     .iter()
-                    .map(|p| self.type_to_info(p.param_type.clone()))
+                    .map(|p| self.resolve_type(p.param_type.clone(), type_params))
                     .collect();
                 let default_count = params.iter().filter(|p| p.default.is_some()).count();
                 self.functions
-                    .insert(name.clone(), (ret, params_t, default_count));
+                    .insert(name.clone(), (ret, params_t, default_count, type_params.clone()));
             }
         }
     }
@@ -153,12 +155,12 @@ impl SemanticAnalyzer {
 
     fn collect_structs(&mut self, program: &Program) {
         for node in program {
-            if let DeclOrStmt::Decl(Decl::Struct { name, fields, .. }) = node {
+            if let DeclOrStmt::Decl(Decl::Struct { name, fields, type_params, .. }) = node {
                 let struct_fields: Vec<(String, TypeInfo)> = fields
                     .iter()
-                    .map(|f| (f.name.clone(), self.type_to_info(f.field_type.clone())))
+                    .map(|f| (f.name.clone(), self.resolve_type(f.field_type.clone(), type_params)))
                     .collect();
-                self.structs.insert(name.clone(), struct_fields);
+                self.structs.insert(name.clone(), (struct_fields, type_params.clone()));
             }
         }
     }
@@ -208,14 +210,88 @@ impl SemanticAnalyzer {
                 }
                 declared_type
             }
+            Decl::Destructure {
+                targets,
+                init,
+                span,
+            } => {
+                let init_type = self.analyze_expr(init);
+                let tuple_types = match &init_type {
+                    TypeInfo::Tuple(types) => types.clone(),
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E068".to_string(),
+                            message: format!(
+                                "La destructuración requiere una tupla, no '{:?}'",
+                                init_type
+                            ),
+                            span: *span,
+                            suggestion: "Usa una expresión de tipo tupla en el lado derecho"
+                                .to_string(),
+                        });
+                        return TypeInfo::Void;
+                    }
+                };
+                if targets.len() != tuple_types.len() {
+                    self.errors.push(SemError {
+                        code: "E069".to_string(),
+                        message: format!("La destructuración espera {} variables pero la tupla tiene {} elementos", targets.len(), tuple_types.len()),
+                        span: *span,
+                        suggestion: format!("Usa {} variables en la destructuración", tuple_types.len()),
+                    });
+                    return TypeInfo::Void;
+                }
+                for (i, target) in targets.iter().enumerate() {
+                    if target.name == "_" {
+                        continue;
+                    }
+                    if let Some(ref t_type) = target.var_type {
+                        let declared_type = self.type_to_info(t_type.clone());
+                        let element_type = &tuple_types[i];
+                        if !can_assign(&declared_type, element_type) {
+                            self.errors.push(SemError {
+                                code: "E031".to_string(),
+                                message: format!("No puedes asignar un valor de tipo '{:?}' a la variable '{}' de tipo '{:?}'", element_type, target.name, declared_type),
+                                span: target.span,
+                                suggestion: format!("Usa un tipo '{:?}' para la variable '{}'", element_type, target.name),
+                            });
+                        }
+                        if let Err(e) =
+                            self.current_scope()
+                                .define(&target.name, declared_type, target.span)
+                        {
+                            self.errors.push(e);
+                        }
+                    } else {
+                        let element_type = tuple_types[i].clone();
+                        if let Err(e) =
+                            self.current_scope()
+                                .define(&target.name, element_type, target.span)
+                        {
+                            self.errors.push(e);
+                        }
+                    }
+                }
+                TypeInfo::Void
+            }
             Decl::Function {
                 return_type,
                 name: _,
                 params,
                 body,
+                type_params,
                 span: _,
             } => {
                 self.scopes.push(Scope::new());
+                for tp in type_params {
+                    if let Err(e) = self.current_scope().define(
+                        tp,
+                        TypeInfo::TypeVar(tp.clone()),
+                        Span::new(Pos::new(0, 0), Pos::new(0, 0)),
+                    ) {
+                        self.errors.push(e);
+                    }
+                }
                 let mut seen_default = false;
                 for p in params {
                     if p.default.is_some() {
@@ -228,7 +304,7 @@ impl SemanticAnalyzer {
                             suggestion: "Mueve este parámetro antes de los parámetros con valor por defecto".to_string(),
                         });
                     }
-                    let pt = self.type_to_info(p.param_type.clone());
+                    let pt = self.resolve_type(p.param_type.clone(), type_params);
                     if let Err(e) = self.current_scope().define(&p.name, pt, p.span) {
                         self.errors.push(e);
                     }
@@ -237,16 +313,17 @@ impl SemanticAnalyzer {
                     let _ret = self.analyze_decl_or_stmt(node);
                 }
                 self.scopes.pop();
-                self.type_to_info(return_type.clone())
+                self.resolve_type(return_type.clone(), type_params)
             }
             Decl::Struct {
                 name,
                 fields,
+                type_params,
                 span: _,
             } => {
                 let struct_fields: Vec<(String, TypeInfo)> = fields
                     .iter()
-                    .map(|f| (f.name.clone(), self.type_to_info(f.field_type.clone())))
+                    .map(|f| (f.name.clone(), self.resolve_type(f.field_type.clone(), type_params)))
                     .collect();
                 TypeInfo::Struct {
                     name: name.clone(),
@@ -537,6 +614,62 @@ impl SemanticAnalyzer {
                 TypeInfo::Void
             }
             Stmt::Import { .. } => TypeInfo::Void,
+            Stmt::Destructure {
+                targets,
+                value,
+                span,
+            } => {
+                let value_type = self.analyze_expr(value);
+                let tuple_types = match &value_type {
+                    TypeInfo::Tuple(types) => types.clone(),
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E068".to_string(),
+                            message: format!(
+                                "La destructuración requiere una tupla, no '{:?}'",
+                                value_type
+                            ),
+                            span: *span,
+                            suggestion: "Usa una expresión de tipo tupla en el lado derecho"
+                                .to_string(),
+                        });
+                        return TypeInfo::Void;
+                    }
+                };
+                if targets.len() != tuple_types.len() {
+                    self.errors.push(SemError {
+                        code: "E069".to_string(),
+                        message: format!("La destructuración espera {} variables pero la tupla tiene {} elementos", targets.len(), tuple_types.len()),
+                        span: *span,
+                        suggestion: format!("Usa {} variables en la destructuración", tuple_types.len()),
+                    });
+                    return TypeInfo::Void;
+                }
+                for (i, target) in targets.iter().enumerate() {
+                    if target.name == "_" {
+                        continue;
+                    }
+                    let element_type = &tuple_types[i];
+                    if let Some(sym) = self.lookup(&target.name) {
+                        if !can_assign(&sym.var_type, element_type) {
+                            self.errors.push(SemError {
+                                code: "E031".to_string(),
+                                message: format!("No puedes asignar un valor de tipo '{:?}' a la variable '{}' de tipo '{:?}'", element_type, target.name, sym.var_type),
+                                span: target.span,
+                                suggestion: format!("Usa un valor de tipo '{:?}' para '{}'", sym.var_type, target.name),
+                            });
+                        }
+                    } else {
+                        self.errors.push(SemError {
+                            code: "E033".to_string(),
+                            message: format!("La variable '{}' no está declarada", target.name),
+                            span: target.span,
+                            suggestion: format!("Declara '{}' antes de usarla", target.name),
+                        });
+                    }
+                }
+                TypeInfo::Void
+            }
         }
     }
 
@@ -667,7 +800,12 @@ impl SemanticAnalyzer {
                     }
                 }
             }
-            Expr::Call { callee, args, span } => {
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } => {
                 let callee_inner = match callee.as_ref() {
                     Expr::Grouping { expr, .. } => expr.as_ref(),
                     other => other,
@@ -679,9 +817,31 @@ impl SemanticAnalyzer {
                 match callee_inner {
                     Expr::Ident { name, .. } => {
                         let callee = name.clone();
-                        match self.functions.get(&callee) {
-                            Some((ret_type, param_types, default_count)) => {
-                                let min_args = param_types.len() - default_count;
+                        let func_info = self.functions.get(&callee).cloned();
+                        match func_info {
+                            Some((ret_type, param_types, default_count, fn_type_params)) => {
+                                // Build substitution map if type_args provided
+                                let subst = if !type_args.is_empty() && !fn_type_params.is_empty() {
+                                    let mut map = HashMap::new();
+                                    for (tp, ta) in fn_type_params.iter().zip(type_args.iter()) {
+                                        map.insert(tp.clone(), self.type_to_info(ta.clone()));
+                                    }
+                                    Some(map)
+                                } else {
+                                    None
+                                };
+                                // Substitute types
+                                let subst_param_types: Vec<TypeInfo> = if let Some(ref s) = subst {
+                                    param_types.iter().map(|pt| substitute_typevars(pt, s)).collect()
+                                } else {
+                                    param_types.clone()
+                                };
+                                let subst_ret_type = if let Some(ref s) = subst {
+                                    substitute_typevars(&ret_type, s)
+                                } else {
+                                    ret_type.clone()
+                                };
+                                let min_args = subst_param_types.len() - default_count;
                                 if args.len() < min_args {
                                     self.errors.push(SemError {
                                         code: "E040".to_string(),
@@ -689,19 +849,19 @@ impl SemanticAnalyzer {
                                         span: *span,
                                         suggestion: format!("Pasa al menos {} argumentos a '{}'", min_args, callee),
                                     });
-                                    return ret_type.clone();
+                                    return subst_ret_type;
                                 }
-                                if args.len() > param_types.len() {
+                                if args.len() > subst_param_types.len() {
                                     self.errors.push(SemError {
                                         code: "E040".to_string(),
-                                        message: format!("La función '{}' espera como máximo {} argumentos, pero se pasaron {}", callee, param_types.len(), args.len()),
+                                        message: format!("La función '{}' espera como máximo {} argumentos, pero se pasaron {}", callee, subst_param_types.len(), args.len()),
                                         span: *span,
-                                        suggestion: format!("Pasa como máximo {} argumentos a '{}'", param_types.len(), callee),
+                                        suggestion: format!("Pasa como máximo {} argumentos a '{}'", subst_param_types.len(), callee),
                                     });
-                                    return ret_type.clone();
+                                    return subst_ret_type;
                                 }
                                 for (i, (got, expected)) in
-                                    arg_types.iter().zip(param_types.iter()).enumerate()
+                                    arg_types.iter().zip(subst_param_types.iter()).enumerate()
                                 {
                                     if !can_assign(expected, got) {
                                         self.errors.push(SemError {
@@ -712,7 +872,7 @@ impl SemanticAnalyzer {
                                         });
                                     }
                                 }
-                                ret_type.clone()
+                                subst_ret_type
                             }
                             None => {
                                 if callee == "imprimir"
@@ -1014,14 +1174,32 @@ impl SemanticAnalyzer {
             Expr::StructInit {
                 struct_name,
                 fields,
+                type_args,
                 span,
             } => {
-                let struct_type = self.structs.get(struct_name).cloned();
-                match struct_type {
-                    Some(expected_fields) => {
+                let struct_info = self.structs.get(struct_name).cloned();
+                match struct_info {
+                    Some((expected_fields, st_type_params)) => {
+                        // Build substitution map if type_args provided
+                        let subst = if !type_args.is_empty() && !st_type_params.is_empty() {
+                            let mut map = HashMap::new();
+                            for (tp, ta) in st_type_params.iter().zip(type_args.iter()) {
+                                map.insert(tp.clone(), self.type_to_info(ta.clone()));
+                            }
+                            Some(map)
+                        } else {
+                            None
+                        };
+                        let resolved_fields: Vec<(String, TypeInfo)> = if let Some(ref s) = subst {
+                            expected_fields.iter()
+                                .map(|(name, ft)| (name.clone(), substitute_typevars(ft, s)))
+                                .collect()
+                        } else {
+                            expected_fields.clone()
+                        };
                         for (fname, fval) in fields {
                             let val_type = self.analyze_expr(fval);
-                            let field_def = expected_fields.iter().find(|(name, _)| name == fname);
+                            let field_def = resolved_fields.iter().find(|(name, _)| name == fname);
                             match field_def {
                                 Some((_, ft)) => {
                                     if !can_assign(ft, &val_type) {
@@ -1050,7 +1228,7 @@ impl SemanticAnalyzer {
                             }
                         }
                         // Check all required fields are provided
-                        for (expected_name, _) in &expected_fields {
+                        for (expected_name, _) in &resolved_fields {
                             if !fields.iter().any(|(name, _)| name == expected_name) {
                                 self.errors.push(SemError {
                                     code: "E061".to_string(),
@@ -1068,7 +1246,7 @@ impl SemanticAnalyzer {
                         }
                         TypeInfo::Struct {
                             name: struct_name.clone(),
-                            fields: expected_fields,
+                            fields: resolved_fields,
                         }
                     }
                     None => {
@@ -1308,6 +1486,43 @@ impl SemanticAnalyzer {
 }
 
 impl SemanticAnalyzer {
+    fn resolve_type(&self, t: Type, type_params: &[String]) -> TypeInfo {
+        match t {
+            Type::Struct(ref name) if type_params.contains(name) => {
+                TypeInfo::TypeVar(name.clone())
+            }
+            Type::GenericStruct { name, args } => {
+                // Resolve type args too
+                let resolved_args: Vec<TypeInfo> = args
+                    .into_iter()
+                    .map(|a| self.resolve_type(a, type_params))
+                    .collect();
+                if let Some((fields, st_type_params)) = self.structs.get(&name) {
+                    let mut subst = HashMap::new();
+                    for (tp, ta) in st_type_params.iter().zip(resolved_args.iter()) {
+                        subst.insert(tp.clone(), ta.clone());
+                    }
+                    let resolved_fields: Vec<(String, TypeInfo)> = fields
+                        .iter()
+                        .map(|(fname, ft)| (fname.clone(), substitute_typevars(ft, &subst)))
+                        .collect();
+                    TypeInfo::Struct {
+                        name,
+                        fields: resolved_fields,
+                    }
+                } else if self.enums.contains_key(&name) {
+                    TypeInfo::Enum(name)
+                } else {
+                    TypeInfo::Struct {
+                        name,
+                        fields: vec![],
+                    }
+                }
+            }
+            _ => self.type_to_info(t),
+        }
+    }
+
     fn type_to_info(&self, t: Type) -> TypeInfo {
         match t {
             Type::Numero => TypeInfo::Decimal,
@@ -1326,11 +1541,34 @@ impl SemanticAnalyzer {
                     .collect(),
                 return_type: Box::new(self.type_to_info(*return_type)),
             },
+            Type::GenericStruct { name, args } => {
+                if let Some((fields, type_params)) = self.structs.get(&name) {
+                    let mut subst = HashMap::new();
+                    for (tp, ta) in type_params.iter().zip(args.iter()) {
+                        subst.insert(tp.clone(), self.type_to_info(ta.clone()));
+                    }
+                    let resolved_fields: Vec<(String, TypeInfo)> = fields
+                        .iter()
+                        .map(|(fname, ft)| (fname.clone(), substitute_typevars(ft, &subst)))
+                        .collect();
+                    TypeInfo::Struct {
+                        name,
+                        fields: resolved_fields,
+                    }
+                } else if self.enums.contains_key(&name) {
+                    TypeInfo::Enum(name)
+                } else {
+                    TypeInfo::Struct {
+                        name,
+                        fields: vec![],
+                    }
+                }
+            }
             Type::Struct(name) => {
                 if self.enums.contains_key(&name) {
                     TypeInfo::Enum(name)
                 } else {
-                    let fields = self.structs.get(&name).cloned().unwrap_or_default();
+                    let fields = self.structs.get(&name).map(|(f, _)| f.clone()).unwrap_or_default();
                     TypeInfo::Struct { name, fields }
                 }
             }
@@ -1346,12 +1584,43 @@ impl SemanticAnalyzer {
     }
 }
 
+fn substitute_typevars(typ: &TypeInfo, subst: &HashMap<String, TypeInfo>) -> TypeInfo {
+    match typ {
+        TypeInfo::TypeVar(name) => subst.get(name).cloned().unwrap_or(typ.clone()),
+        TypeInfo::Lista(inner) => TypeInfo::Lista(Box::new(substitute_typevars(inner, subst))),
+        TypeInfo::Func {
+            param_types,
+            return_type,
+        } => TypeInfo::Func {
+            param_types: param_types.iter().map(|p| substitute_typevars(p, subst)).collect(),
+            return_type: Box::new(substitute_typevars(return_type, subst)),
+        },
+        TypeInfo::Resultado { ok, err } => TypeInfo::Resultado {
+            ok: Box::new(substitute_typevars(ok, subst)),
+            err: Box::new(substitute_typevars(err, subst)),
+        },
+        TypeInfo::Opcion(inner) => TypeInfo::Opcion(Box::new(substitute_typevars(inner, subst))),
+        TypeInfo::Tuple(types) => {
+            TypeInfo::Tuple(types.iter().map(|t| substitute_typevars(t, subst)).collect())
+        }
+        TypeInfo::Struct { name, fields } => TypeInfo::Struct {
+            name: name.clone(),
+            fields: fields.iter().map(|(n, t)| (n.clone(), substitute_typevars(t, subst))).collect(),
+        },
+        _ => typ.clone(),
+    }
+}
+
 fn is_numeric(t: &TypeInfo) -> bool {
     matches!(t, TypeInfo::Entero | TypeInfo::Decimal | TypeInfo::Numero)
 }
 
 fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
     if target == value {
+        return true;
+    }
+    // TypeVar matches any type
+    if matches!(target, TypeInfo::TypeVar(_)) || matches!(value, TypeInfo::TypeVar(_)) {
         return true;
     }
     if *target == TypeInfo::Decimal && *value == TypeInfo::Entero {
@@ -1725,5 +1994,54 @@ imprimir(unir([\"a\", \"b\"]));";
     fn test_opcion_english_keywords() {
         let errors = analyze("option<integer> x = some(42); option<string> y = none;");
         assert!(errors.is_empty());
+    }
+
+    // --- Generics tests ---
+
+    #[test]
+    fn test_generic_function_valid() {
+        let src = "funcion T identidad<T>(T valor) { retornar valor; }
+entero x = identidad<entero>(42);
+imprimir(x);";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_generic_function_type_mismatch() {
+        let src = "funcion T identidad<T>(T valor) { retornar valor; }
+entero x = identidad<entero>(\"hola\");";
+        let errors = analyze(src);
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E041");
+    }
+
+    #[test]
+    fn test_generic_struct_valid() {
+        let src = "estructura Par<T, U> { primero: T, segundo: U }
+Par<entero, texto> p = Par<entero, texto> { primero: 1, segundo: \"hola\" };
+imprimir(p.primero);
+imprimir(p.segundo);";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_generic_struct_field_type_mismatch() {
+        let src = "estructura Par<T, U> { primero: T, segundo: U }
+Par<entero, texto> p = Par<entero, texto> { primero: \"mal\", segundo: \"hola\" };";
+        let errors = analyze(src);
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E031");
+    }
+
+    #[test]
+    fn test_generic_identity_different_types() {
+        let src = "funcion T id<T>(T v) { retornar v; }
+entero x = id<entero>(42);
+texto s = id<texto>(\"hola\");
+decimal d = id<decimal>(3.5);";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
     }
 }

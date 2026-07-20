@@ -7,6 +7,7 @@ pub struct Parser {
     pos: usize,
     errors: Vec<ParseError>,
     no_struct_init: bool,
+    type_params_stack: Vec<Vec<String>>,
 }
 
 impl Parser {
@@ -16,6 +17,7 @@ impl Parser {
             pos: 0,
             errors: Vec::new(),
             no_struct_init: false,
+            type_params_stack: Vec::new(),
         }
     }
 
@@ -57,6 +59,7 @@ impl Parser {
             TokenKind::Boolean,
         ]) || (self.check_ident() && self.check_ident_next())
             || self.check_next_is_tuple_type()
+            || self.check_ident_next_is_generic_type()
         {
             self.parse_declaration().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
@@ -119,6 +122,11 @@ impl Parser {
         let start = self.peek().span;
         let var_type = self.parse_type()?;
         let name = self.expect_ident()?;
+
+        if self.check(&[TokenKind::Comma]) {
+            return self.parse_destructure_decl(var_type, name, start);
+        }
+
         let init = if self.check(&[TokenKind::Equal]) {
             self.advance();
             Some(Box::new(self.parse_expression()?))
@@ -134,11 +142,69 @@ impl Parser {
         })
     }
 
+    fn parse_destructure_decl(
+        &mut self,
+        first_type: Type,
+        first_name: String,
+        start: Span,
+    ) -> Option<Decl> {
+        let mut targets = Vec::new();
+        targets.push(DestructureTarget {
+            var_type: Some(first_type),
+            name: first_name,
+            span: Span::merge(&start, &start),
+        });
+
+        loop {
+            self.advance();
+            let t_start = self.peek().span;
+            if self.check_ident() && self.peek_ident_is("_") {
+                self.advance();
+                targets.push(DestructureTarget {
+                    var_type: None,
+                    name: "_".to_string(),
+                    span: Span::merge(&t_start, &self.previous().span),
+                });
+            } else {
+                let t_type = self.parse_type()?;
+                let t_name = self.expect_ident()?;
+                targets.push(DestructureTarget {
+                    var_type: Some(t_type),
+                    name: t_name,
+                    span: Span::merge(&t_start, &self.previous().span),
+                });
+            }
+            if !self.check(&[TokenKind::Comma]) {
+                break;
+            }
+        }
+
+        if !self.check(&[TokenKind::Equal]) {
+            self.error(
+                "E012",
+                "Se esperaba '=' para la destructuración",
+                start,
+                "Agrega '=' después de las variables",
+            );
+            return None;
+        }
+        self.advance();
+        let init = Box::new(self.parse_expression()?);
+        self.expect_semicolon();
+        Some(Decl::Destructure {
+            targets,
+            init,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
     fn parse_function(&mut self) -> Option<Decl> {
         let start = self.peek().span;
         self.advance();
         let return_type = self.parse_type()?;
         let name = self.expect_ident()?;
+
+        let type_params = self.parse_type_params();
 
         if !self.check(&[TokenKind::LeftParen]) {
             self.error(
@@ -170,12 +236,22 @@ impl Parser {
         }
         self.advance();
 
+        // Push type params into stack for body parsing
+        let saved_type_params = self.type_params_stack.clone();
+        if !type_params.is_empty() {
+            self.type_params_stack.push(type_params.clone());
+        }
         let body = self.parse_block()?;
+        if !type_params.is_empty() {
+            self.type_params_stack.pop();
+        }
+        self.type_params_stack = saved_type_params;
         Some(Decl::Function {
             return_type,
             name,
             params,
             body,
+            type_params,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -184,6 +260,8 @@ impl Parser {
         let start = self.peek().span;
         self.advance();
         let name = self.expect_ident()?;
+
+        let type_params = self.parse_type_params();
 
         if !self.check(&[TokenKind::LeftBrace]) {
             self.error(
@@ -251,6 +329,7 @@ impl Parser {
         Some(Decl::Struct {
             name,
             fields,
+            type_params,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -382,6 +461,55 @@ impl Parser {
         Some(Stmt::Import {
             path,
             alias,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_destructure_assign_stmt(&mut self, start: Span) -> Option<Stmt> {
+        let mut targets = Vec::new();
+        loop {
+            let t_start = self.peek().span;
+            if self.check_ident() {
+                let name = match &self.peek().kind {
+                    TokenKind::Ident(s) => s.clone(),
+                    _ => unreachable!(),
+                };
+                self.advance();
+                targets.push(DestructureTarget {
+                    var_type: None,
+                    name,
+                    span: Span::merge(&t_start, &self.previous().span),
+                });
+            } else {
+                self.error(
+                    "E011",
+                    "Se esperaba un identificador en la destructuración",
+                    self.peek().span,
+                    "Escribe un nombre de variable",
+                );
+                return None;
+            }
+            if !self.check(&[TokenKind::Comma]) {
+                break;
+            }
+            self.advance();
+        }
+
+        if !self.check(&[TokenKind::Equal]) {
+            self.error(
+                "E012",
+                "Se esperaba '=' para la destructuración",
+                start,
+                "Agrega '=' después de las variables",
+            );
+            return None;
+        }
+        self.advance();
+        let value = Box::new(self.parse_expression()?);
+        self.expect_semicolon();
+        Some(Stmt::Destructure {
+            targets,
+            value,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -776,6 +904,11 @@ impl Parser {
 
     fn parse_expr_or_assign(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
+
+        if self.check_next_comma_and_ident() {
+            return self.parse_destructure_assign_stmt(start);
+        }
+
         if self.check_ident() && self.check_next(&[TokenKind::Equal]) {
             let name = match self.advance() {
                 Some(t) => match t.kind {
@@ -1097,6 +1230,7 @@ impl Parser {
                 expr = Expr::Call {
                     callee: Box::new(expr),
                     args,
+                    type_args: Vec::new(),
                     span,
                 };
             } else {
@@ -1397,8 +1531,88 @@ impl Parser {
             Some(Expr::Call {
                 callee: Box::new(Expr::Ident { name, span }),
                 args,
+                type_args: Vec::new(),
                 span: Span::merge(&span, &self.previous().span),
             })
+        } else if self.check(&[TokenKind::Less]) && self.is_type_arg_start() {
+            let type_args = self.parse_type_args()?;
+            if self.check(&[TokenKind::LeftParen]) {
+                self.advance();
+                let mut args = Vec::new();
+                if !self.check(&[TokenKind::RightParen]) {
+                    args.push(self.parse_expression()?);
+                    while self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                        args.push(self.parse_expression()?);
+                    }
+                }
+                if !self.check(&[TokenKind::RightParen]) {
+                    self.error(
+                        "E015",
+                        "Se esperaba ')'",
+                        span,
+                        "Agrega ')' para cerrar la llamada",
+                    );
+                    return None;
+                }
+                self.advance();
+                Some(Expr::Call {
+                    callee: Box::new(Expr::Ident { name, span }),
+                    args,
+                    type_args,
+                    span: Span::merge(&span, &self.previous().span),
+                })
+            } else if self.check(&[TokenKind::LeftBrace]) && !self.no_struct_init {
+                self.advance();
+                let mut fields = Vec::new();
+                while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
+                    if self.check(&[TokenKind::Eof]) {
+                        break;
+                    }
+                    let field_name = self.expect_field_name()?;
+                    if !self.check(&[TokenKind::Colon]) {
+                        self.error(
+                            "E052",
+                            "Se esperaba ':' después del nombre del campo",
+                            self.peek().span,
+                            "Agrega ':' después del nombre del campo",
+                        );
+                        return None;
+                    }
+                    self.advance();
+                    let value = self.parse_expression()?;
+                    fields.push((field_name, value));
+                    if self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                    } else if !self.check(&[TokenKind::RightBrace]) {
+                        self.error(
+                            "E012",
+                            "Se esperaba ',' o '}'",
+                            self.peek().span,
+                            "Agrega ',' entre campos o '}' para cerrar",
+                        );
+                        return None;
+                    }
+                }
+                if !self.check(&[TokenKind::RightBrace]) {
+                    self.error(
+                        "E022",
+                        "Se esperaba '}' para cerrar la estructura",
+                        span,
+                        "Agrega '}' al final",
+                    );
+                    return None;
+                }
+                self.advance();
+                Some(Expr::StructInit {
+                    struct_name: name,
+                    fields,
+                    type_args,
+                    span: Span::merge(&span, &self.previous().span),
+                })
+            } else {
+                Some(Expr::Ident { name, span })
+            }
         } else if self.check(&[TokenKind::LeftBrace]) && !self.no_struct_init {
             self.advance();
             let mut fields = Vec::new();
@@ -1449,11 +1663,171 @@ impl Parser {
             Some(Expr::StructInit {
                 struct_name: name,
                 fields,
+                type_args: Vec::new(),
                 span: Span::merge(&span, &self.previous().span),
             })
         } else {
             Some(Expr::Ident { name, span })
         }
+    }
+
+    fn parse_type_params(&mut self) -> Vec<String> {
+        if !self.check(&[TokenKind::Less]) {
+            return Vec::new();
+        }
+        self.advance();
+        let mut params = Vec::new();
+        let token = self.advance();
+        match token {
+            Some(t) => match t.kind {
+                TokenKind::Ident(name) => {
+                    params.push(name);
+                    while self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                        let next = self.advance();
+                        match next {
+                            Some(t2) => match t2.kind {
+                                TokenKind::Ident(s) => params.push(s),
+                                _ => {
+                                    self.error(
+                                        "E011",
+                                        "Se esperaba un identificador para el parámetro de tipo",
+                                        t2.span,
+                                        "Escribe un nombre de parámetro de tipo",
+                                    );
+                                    return params;
+                                }
+                            },
+                            None => return params,
+                        }
+                    }
+                }
+                _ => {
+                    self.error(
+                        "E011",
+                        "Se esperaba un identificador para el parámetro de tipo",
+                        t.span,
+                        "Escribe un nombre de parámetro de tipo",
+                    );
+                    return params;
+                }
+            },
+            None => return params,
+        }
+        if !self.check(&[TokenKind::Greater]) {
+            self.error(
+                "E021",
+                "Se esperaba '>' para cerrar los parámetros de tipo",
+                self.peek().span,
+                "Agrega '>' después de los parámetros de tipo",
+            );
+            return params;
+        }
+        self.advance();
+        params
+    }
+
+    fn is_type_arg_start(&self) -> bool {
+        if self.pos + 1 >= self.tokens.len() {
+            return false;
+        }
+        let next = &self.tokens[self.pos + 1].kind;
+        matches!(
+            next,
+            TokenKind::Numero
+                | TokenKind::Number
+                | TokenKind::Entero
+                | TokenKind::Integer
+                | TokenKind::Decimal
+                | TokenKind::Float
+                | TokenKind::Texto
+                | TokenKind::String
+                | TokenKind::Booleano
+                | TokenKind::Boolean
+                | TokenKind::Lista
+                | TokenKind::Array
+                | TokenKind::Resultado
+                | TokenKind::Result
+                | TokenKind::Opcion
+                | TokenKind::Option
+                | TokenKind::LeftParen
+        ) || self.is_next_type_param()
+    }
+
+    fn is_next_type_param(&self) -> bool {
+        if self.pos + 1 >= self.tokens.len() {
+            return false;
+        }
+        let next = &self.tokens[self.pos + 1];
+        match &next.kind {
+            TokenKind::Ident(name) => {
+                self.type_params_stack.iter().any(|params| params.contains(name))
+            }
+            _ => false,
+        }
+    }
+
+    fn parse_type_args(&mut self) -> Option<Vec<Type>> {
+        if !self.check(&[TokenKind::Less]) {
+            return Some(Vec::new());
+        }
+        self.advance();
+        let mut args = Vec::new();
+        args.push(self.parse_type()?);
+        while self.check(&[TokenKind::Comma]) {
+            self.advance();
+            args.push(self.parse_type()?);
+        }
+        if !self.check(&[TokenKind::Greater]) {
+            self.error(
+                "E021",
+                "Se esperaba '>' para cerrar los argumentos de tipo",
+                self.peek().span,
+                "Agrega '>' después de los argumentos de tipo",
+            );
+            return None;
+        }
+        self.advance();
+        Some(args)
+    }
+
+    /// Check if the token after next (at pos + 2) is a type keyword or known type param
+    fn is_type_at(&self, idx: usize) -> bool {
+        if idx >= self.tokens.len() {
+            return false;
+        }
+        let kind = &self.tokens[idx].kind;
+        let is_type_keyword = matches!(
+            kind,
+            TokenKind::Numero
+                | TokenKind::Number
+                | TokenKind::Entero
+                | TokenKind::Integer
+                | TokenKind::Decimal
+                | TokenKind::Float
+                | TokenKind::Texto
+                | TokenKind::String
+                | TokenKind::Booleano
+                | TokenKind::Boolean
+                | TokenKind::Lista
+                | TokenKind::Array
+                | TokenKind::Resultado
+                | TokenKind::Result
+                | TokenKind::Opcion
+                | TokenKind::Option
+                | TokenKind::LeftParen
+        );
+        if is_type_keyword {
+            return true;
+        }
+        if let TokenKind::Ident(name) = kind {
+            return self.type_params_stack.iter().any(|params| params.contains(name));
+        }
+        false
+    }
+
+    fn is_next_type_in_type_context(&self) -> bool {
+        self.is_type_at(self.pos + 1)
     }
 
     fn parse_type(&mut self) -> Option<Type> {
@@ -1483,7 +1857,14 @@ impl Parser {
                     Some(Type::Lista(Box::new(Type::Decimal)))
                 }
             }
-            TokenKind::Ident(name) => Some(Type::Struct(name)),
+            TokenKind::Ident(name) => {
+                if self.check(&[TokenKind::Less]) && self.is_next_type_in_type_context() {
+                    let args = self.parse_type_args()?;
+                    Some(Type::GenericStruct { name, args })
+                } else {
+                    Some(Type::Struct(name))
+                }
+            }
             TokenKind::Resultado | TokenKind::Result => {
                 if !self.check(&[TokenKind::Less]) {
                     self.error(
@@ -1609,6 +1990,48 @@ impl Parser {
         )
     }
 
+    fn check_ident_next_is_generic_type(&self) -> bool {
+        if !self.check_ident() {
+            return false;
+        }
+        if self.pos + 2 >= self.tokens.len() {
+            return false;
+        }
+        if !matches!(&self.tokens[self.pos + 1].kind, TokenKind::Less) {
+            return false;
+        }
+        if !self.is_type_at(self.pos + 2) {
+            return false;
+        }
+        // Peek past the <...> to ensure what follows is a variable name, not ( or {
+        let after_gt = self.find_token_after_type_args(self.pos);
+        if let Some(tok) = after_gt {
+            matches!(tok.kind, TokenKind::Ident(_))
+        } else {
+            false
+        }
+    }
+
+    /// Starting from an Ident at `start_pos` followed by `<`, find the token after the matching `>`.
+    fn find_token_after_type_args(&self, start_pos: usize) -> Option<&Token> {
+        let mut depth = 0u32;
+        let mut i = start_pos + 1; // start at <
+        while i < self.tokens.len() {
+            match &self.tokens[i].kind {
+                TokenKind::Less => depth += 1,
+                TokenKind::Greater => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return self.tokens.get(i + 1);
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        None
+    }
+
     // --- Helpers ---
 
     fn advance(&mut self) -> Option<Token> {
@@ -1664,6 +2087,23 @@ impl Parser {
         }
         let kind = &self.tokens[self.pos + 1].kind;
         kinds.iter().any(|k| token_matches(kind, k))
+    }
+
+    fn check_next_comma_and_ident(&self) -> bool {
+        if self.pos + 2 >= self.tokens.len() {
+            return false;
+        }
+        matches!(&self.tokens[self.pos].kind, TokenKind::Ident(_))
+            && matches!(&self.tokens[self.pos + 1].kind, TokenKind::Comma)
+            && matches!(&self.tokens[self.pos + 2].kind, TokenKind::Ident(_))
+    }
+
+    fn peek_ident_is(&self, s: &str) -> bool {
+        if let TokenKind::Ident(ref name) = &self.peek().kind {
+            name == s
+        } else {
+            false
+        }
     }
 
     fn is_at_end(&self) -> bool {
@@ -1983,7 +2423,6 @@ impl Spannable for Expr {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2345,4 +2784,92 @@ para a en nums {
         assert_eq!(program.len(), 1);
         assert!(matches!(&program[0], DeclOrStmt::Stmt(Stmt::For { .. })));
     }
+
+    // --- Generics parser tests ---
+
+    #[test]
+    fn test_parse_generic_function() {
+        let source = "funcion T identidad<T>(T valor) { retornar valor; }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+        if let DeclOrStmt::Decl(Decl::Function { name, type_params, .. }) = &program[0] {
+            assert_eq!(name, "identidad");
+            assert_eq!(type_params, &vec!["T".to_string()]);
+        } else {
+            panic!("Expected Function declaration");
+        }
+    }
+
+    #[test]
+    fn test_parse_generic_function_multi_param() {
+        let source = "funcion T foo<T, U>(T a, U b) { retornar a; }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Function { type_params, .. }) = &program[0] {
+            assert_eq!(type_params, &vec!["T".to_string(), "U".to_string()]);
+        } else {
+            panic!("Expected Function declaration");
+        }
+    }
+
+    #[test]
+    fn test_parse_generic_struct() {
+        let source = "estructura Par<T, U> { primero: T, segundo: U }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Struct { name, type_params, .. }) = &program[0] {
+            assert_eq!(name, "Par");
+            assert_eq!(type_params, &vec!["T".to_string(), "U".to_string()]);
+        } else {
+            panic!("Expected Struct declaration");
+        }
+    }
+
+    #[test]
+    fn test_parse_generic_call() {
+        let source = "identidad<entero>(42);";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+        if let DeclOrStmt::Stmt(Stmt::Expr { expr, .. }) = &program[0] {
+            if let Expr::Call { type_args, .. } = expr.as_ref() {
+                assert_eq!(type_args.len(), 1);
+                assert_eq!(type_args[0], Type::Entero);
+            } else {
+                panic!("Expected Call expression");
+            }
+        } else {
+            panic!("Expected Expr statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_generic_struct_init() {
+        let source = "Par<entero, texto> p = Par<entero, texto> { primero: 1, segundo: \"hola\" };";
+        let (program, errors) = parse(source);
+        if !errors.is_empty() {
+            let lexer = lumen_lexer::lexer::Lexer::new(source);
+            let (tokens, _) = lexer.tokenize();
+            for (i, t) in tokens.iter().enumerate() {
+                println!("  {}: {:?} {:?}", i, t.kind, t.span);
+            }
+            panic!("Parse errors: {:?}", errors);
+        }
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_comparison_still_works() {
+        let source = "x < y;";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+        if let DeclOrStmt::Stmt(Stmt::Expr { expr, .. }) = &program[0] {
+            assert!(matches!(expr.as_ref(), Expr::Binary { op: BinOp::Less, .. }));
+        } else {
+            panic!("Expected Expr statement");
+        }
+    }
 }
+
