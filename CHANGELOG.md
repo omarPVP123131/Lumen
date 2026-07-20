@@ -1,22 +1,28 @@
 # Changelog
 
-## v1.0.1 — Julio 2026
+## v1.1.0 — Julio 2026
 
 ### Added
-- **Fase 21: For-Each Loop** — Sintaxis `para x en expr` / `for x in expr` para iterar sobre listas.
-  - Desugaring a while-loop en IR, reutiliza opcodes existentes.
-  - 31 nuevos tests (19 unit + 12 e2e).
-  - Ejemplo en `examples/foreach.nv`.
-- **Fase 22: Opcion/Optional Type** — Tipo opcional/nullable seguro `opcion<T>`.
-  - Variantes `algun(valor)` y `ninguno`.
-  - Opcodes `OptionSome(41)` y `OptionNone(42)`.
-  - 15 nuevos tests (5 sema + 10 e2e).
-  - Ejemplo en `examples/opcion.nv`.
+- **Fase 21: For-Each Loop** — Sintaxis `para x en expr` / `for x in expr`.
+  - 31 tests. Ejemplo `examples/foreach.nv`.
+- **Fase 22: Opcion/Optional Type** — `opcion<T>` con `algun(valor)` y `ninguno`.
+  - 15 tests. Opcodes 41 y 42. Ejemplo `examples/opcion.nv`.
+- **Fase 23: Enums/Tipos Suma** — `enum Nombre { Variante, Variante(tipo) }`.
+  - Namespaced access `Nombre::Variante`. Opcode `EnumCtor(43)`.
+  - 20 tests.
+- **Fase 24: Tuplas** — `(tipo, tipo)` y acceso `expr.0`, `expr.1`.
+  - Opcodes `TupleNew(44)`, `TupleAccess(45)`. 4 tests.
+- **Fase 25: Destructuring** — `entero x, texto y = expr`, wildcard `_`.
+  - 14 tests.
+- **Fase 26: Genéricos Básicos** — `<T, U>` en funciones y structs.
+  - 17 tests.
+- README mejorado con ejemplos de todas las características.
+- Roadmap actualizado marcando fases 23-26 como completadas.
 
 ### Changed
-- Workspace version actualizada a 1.0.1.
+- Workspace version a 1.1.0.
 - CI ahora corre en branches `master` y `main`.
-- Sema: match arms y comparaciones usan `can_assign` (soporta `ninguno` → `Opcion<T>`).
+- MSRV actualizado a 1.82.
 
 ## v1.0.0 — Julio 2026
 
