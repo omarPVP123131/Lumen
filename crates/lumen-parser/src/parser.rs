@@ -103,6 +103,8 @@ impl Parser {
             self.parse_match().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::Estructura, TokenKind::Struct]) {
             self.parse_struct_decl().map(DeclOrStmt::Decl)
+        } else if self.check(&[TokenKind::Enum]) {
+            self.parse_enum().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Importar, TokenKind::Import]) {
             self.parse_import().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::LeftBrace]) {
@@ -248,6 +250,87 @@ impl Parser {
         Some(Decl::Struct {
             name,
             fields,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_enum(&mut self) -> Option<Decl> {
+        let start = self.peek().span;
+        self.advance();
+        let name = self.expect_ident()?;
+
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error(
+                "E017",
+                "Se esperaba '{' para la enumeración",
+                start,
+                "Agrega '{' para definir las variantes",
+            );
+            return None;
+        }
+        self.advance();
+
+        let mut variants = Vec::new();
+        while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
+            if self.check(&[TokenKind::Eof]) {
+                break;
+            }
+            let var_start = self.peek().span;
+            let var_name = self.expect_ident()?;
+            let var_types = if self.check(&[TokenKind::LeftParen]) {
+                self.advance();
+                let mut types = Vec::new();
+                if !self.check(&[TokenKind::RightParen]) {
+                    types.push(self.parse_type()?);
+                    while self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                        types.push(self.parse_type()?);
+                    }
+                }
+                if !self.check(&[TokenKind::RightParen]) {
+                    self.error(
+                        "E015",
+                        "Se esperaba ')'",
+                        var_start,
+                        "Agrega ')' para cerrar los tipos de la variante",
+                    );
+                    return None;
+                }
+                self.advance();
+                types
+            } else {
+                Vec::new()
+            };
+            variants.push(EnumVariant {
+                name: var_name,
+                types: var_types,
+                span: Span::merge(&var_start, &self.previous().span),
+            });
+            if self.check(&[TokenKind::Comma]) {
+                self.advance();
+            } else if !self.check(&[TokenKind::RightBrace]) {
+                self.error(
+                    "E012",
+                    "Se esperaba ',' o '}' para cerrar la enumeración",
+                    self.peek().span,
+                    "Agrega ',' entre variantes o '}' para cerrar",
+                );
+                return None;
+            }
+        }
+        if !self.check(&[TokenKind::RightBrace]) {
+            self.error(
+                "E017",
+                "Se esperaba '}' para cerrar la enumeración",
+                start,
+                "Agrega '}' al final de la enumeración",
+            );
+            return None;
+        }
+        self.advance();
+        Some(Decl::Enum {
+            name,
+            variants,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -1205,7 +1288,40 @@ impl Parser {
     }
 
     fn parse_call_or_ident(&mut self, name: String, span: Span) -> Option<Expr> {
-        if self.check(&[TokenKind::LeftParen]) {
+        if self.check(&[TokenKind::DoubleColon]) {
+            self.advance();
+            let variant = self.expect_ident()?;
+            let args = if self.check(&[TokenKind::LeftParen]) {
+                self.advance();
+                let mut args = Vec::new();
+                if !self.check(&[TokenKind::RightParen]) {
+                    args.push(self.parse_expression()?);
+                    while self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                        args.push(self.parse_expression()?);
+                    }
+                }
+                if !self.check(&[TokenKind::RightParen]) {
+                    self.error(
+                        "E015",
+                        "Se esperaba ')'",
+                        span,
+                        "Agrega ')' para cerrar los argumentos",
+                    );
+                    return None;
+                }
+                self.advance();
+                args
+            } else {
+                Vec::new()
+            };
+            Some(Expr::EnumCtor {
+                enum_name: name,
+                variant,
+                args,
+                span: Span::merge(&span, &self.previous().span),
+            })
+        } else if self.check(&[TokenKind::LeftParen]) {
             self.advance();
             let mut args = Vec::new();
             if !self.check(&[TokenKind::RightParen]) {
@@ -1748,7 +1864,8 @@ impl Spannable for Expr {
             | Expr::Error { span, .. }
             | Expr::Intentar { span, .. }
             | Expr::Algun { span, .. }
-            | Expr::Ninguno { span, .. } => *span,
+            | Expr::Ninguno { span, .. }
+            | Expr::EnumCtor { span, .. } => *span,
         }
     }
 }

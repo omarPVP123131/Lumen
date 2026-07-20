@@ -220,6 +220,16 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
                 prefix_type(&mut field.field_type, prefix);
             }
         }
+        Decl::Enum { name, variants, .. } => {
+            if top_level {
+                *name = format!("{}_{}", prefix, name);
+            }
+            for variant in variants.iter_mut() {
+                for t in variant.types.iter_mut() {
+                    prefix_type(t, prefix);
+                }
+            }
+        }
     }
 }
 
@@ -412,6 +422,16 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             prefix_expr(inner, prefix, locals);
         }
         Expr::Ninguno { .. } => {}
+        Expr::EnumCtor {
+            enum_name, args, ..
+        } => {
+            if !locals.contains(enum_name.as_str()) && !is_builtin(enum_name) {
+                *enum_name = format!("{}_{}", prefix, enum_name);
+            }
+            for arg in args.iter_mut() {
+                prefix_expr(arg, prefix, locals);
+            }
+        }
     }
 }
 

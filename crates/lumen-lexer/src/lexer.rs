@@ -119,7 +119,14 @@ impl Lexer {
                 Some('[') => tokens.push(self.single_token(TokenKind::LeftBracket)),
                 Some(']') => tokens.push(self.single_token(TokenKind::RightBracket)),
                 Some('.') => tokens.push(self.single_token(TokenKind::Dot)),
-                Some(':') => tokens.push(self.single_token(TokenKind::Colon)),
+                Some(':') => {
+                    if self.peek() == Some(':') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::DoubleColon));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Colon));
+                    }
+                }
                 Some('=') => {
                     if self.peek() == Some('=') {
                         self.advance();

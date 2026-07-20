@@ -173,6 +173,18 @@ impl VM {
                         },
                     ) => an == bn && af == bf,
                     (Value::Opcion(a), Value::Opcion(b)) => a == b,
+                    (
+                        Value::Enum {
+                            name: an,
+                            variant: av,
+                            fields: af,
+                        },
+                        Value::Enum {
+                            name: bn,
+                            variant: bv,
+                            fields: bf,
+                        },
+                    ) => an == bn && av == bv && af == bf,
                     _ => false,
                 };
                 self.push(Value::Bool(result));
@@ -198,6 +210,18 @@ impl VM {
                         },
                     ) => an != bn || af != bf,
                     (Value::Opcion(a), Value::Opcion(b)) => a != b,
+                    (
+                        Value::Enum {
+                            name: an,
+                            variant: av,
+                            fields: af,
+                        },
+                        Value::Enum {
+                            name: bn,
+                            variant: bv,
+                            fields: bf,
+                        },
+                    ) => an != bn || av != bv || af != bf,
                     _ => true,
                 };
                 self.push(Value::Bool(result));
@@ -466,6 +490,9 @@ impl VM {
             Opcode::OptionNone => {
                 self.push(Value::Opcion(None));
             }
+            Opcode::EnumCtor => {
+                // handled in execute_with_idx
+            }
             _ => {}
         }
         Ok(())
@@ -672,6 +699,45 @@ impl VM {
                     let target = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
                     self.ip = target;
                 }
+            }
+            Opcode::EnumCtor => {
+                let enum_name = self.bytecode.strings.get(idx).cloned().unwrap_or_default();
+                let var_idx = self.ip;
+                self.ip += 1;
+                let variant = if var_idx < self.bytecode.instructions.len() {
+                    if let Instruction::WithIdx(_, vidx) = &self.bytecode.instructions[var_idx] {
+                        self.bytecode
+                            .strings
+                            .get(*vidx)
+                            .cloned()
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                };
+                let argc_idx = self.ip;
+                self.ip += 1;
+                let argc = if argc_idx < self.bytecode.instructions.len() {
+                    if let Instruction::WithIdx(_, nidx) = &self.bytecode.instructions[argc_idx] {
+                        self.bytecode.nums.get(*nidx).copied().unwrap_or(0.0) as usize
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
+                let mut fields = Vec::with_capacity(argc);
+                for _ in 0..argc {
+                    fields.push(self.pop()?);
+                }
+                fields.reverse();
+                self.push(Value::Enum {
+                    name: enum_name,
+                    variant,
+                    fields,
+                });
             }
             _ => {}
         }

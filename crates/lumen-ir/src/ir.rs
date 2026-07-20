@@ -57,6 +57,11 @@ pub enum Instr {
     TryUnwrap,
     OptionSome,
     OptionNone,
+    EnumCtor {
+        enum_name: String,
+        variant: String,
+        argc: usize,
+    },
     Jmp(usize),
     JmpIf(usize),
     Label(usize),

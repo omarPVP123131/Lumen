@@ -12,6 +12,11 @@ pub enum Value {
         name: String,
         fields: Vec<(String, Value)>,
     },
+    Enum {
+        name: String,
+        variant: String,
+        fields: Vec<Value>,
+    },
     Exito(Box<Value>),
     Error(Box<Value>),
     Opcion(Option<Box<Value>>),
@@ -61,6 +66,7 @@ impl Value {
             Value::Array(v) => !v.is_empty(),
             Value::Func(_) => true,
             Value::Struct { .. } => true,
+            Value::Enum { .. } => true,
             Value::Exito(_) => true,
             Value::Error(_) => true,
             Value::Opcion(Some(_)) => true,
@@ -94,6 +100,18 @@ impl fmt::Display for Value {
                     .map(|(k, v)| format!("{}: {}", k, v))
                     .collect();
                 write!(f, "{{ {} }}", items.join(", "))
+            }
+            Value::Enum {
+                name,
+                variant,
+                fields,
+            } => {
+                if fields.is_empty() {
+                    write!(f, "{}::{}", name, variant)
+                } else {
+                    let items: Vec<String> = fields.iter().map(|x| format!("{}", x)).collect();
+                    write!(f, "{}::{}({})", name, variant, items.join(", "))
+                }
             }
             Value::Exito(v) => write!(f, "exito({})", v),
             Value::Error(v) => write!(f, "error({})", v),

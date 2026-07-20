@@ -46,6 +46,7 @@ pub enum Opcode {
     TryUnwrap = 40,
     OptionSome = 41,
     OptionNone = 42,
+    EnumCtor = 43,
 }
 
 impl Opcode {
@@ -94,6 +95,7 @@ impl Opcode {
             40 => Some(Opcode::TryUnwrap),
             41 => Some(Opcode::OptionSome),
             42 => Some(Opcode::OptionNone),
+            43 => Some(Opcode::EnumCtor),
             _ => None,
         }
     }

@@ -44,7 +44,9 @@ impl IRBuilder {
         let has_toplevel_code = program.iter().any(|node| {
             !matches!(
                 node,
-                DeclOrStmt::Decl(Decl::Function { .. }) | DeclOrStmt::Decl(Decl::Struct { .. })
+                DeclOrStmt::Decl(Decl::Function { .. })
+                    | DeclOrStmt::Decl(Decl::Struct { .. })
+                    | DeclOrStmt::Decl(Decl::Enum { .. })
             )
         });
 
@@ -144,6 +146,10 @@ impl IRBuilder {
             }
             Decl::Struct { .. } => {
                 // Struct declarations are collected during IR build setup
+                // No code generation needed for the declaration itself
+            }
+            Decl::Enum { .. } => {
+                // Enum declarations are collected during IR build setup
                 // No code generation needed for the declaration itself
             }
         }
@@ -506,6 +512,21 @@ impl IRBuilder {
             }
             Expr::Ninguno { .. } => {
                 self.emit(Instr::OptionNone);
+            }
+            Expr::EnumCtor {
+                enum_name,
+                variant,
+                args,
+                ..
+            } => {
+                for arg in args {
+                    self.gen_expr(arg);
+                }
+                self.emit(Instr::EnumCtor {
+                    enum_name: enum_name.clone(),
+                    variant: variant.clone(),
+                    argc: args.len(),
+                });
             }
         }
     }

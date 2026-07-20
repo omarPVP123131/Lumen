@@ -29,12 +29,24 @@ pub enum Decl {
         fields: Vec<StructField>,
         span: Span,
     },
+    Enum {
+        name: String,
+        variants: Vec<EnumVariant>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructField {
     pub field_type: Type,
     pub name: String,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnumVariant {
+    pub name: String,
+    pub types: Vec<Type>,
     pub span: Span,
 }
 
@@ -212,6 +224,12 @@ pub enum Expr {
     Ninguno {
         span: Span,
     },
+    EnumCtor {
+        enum_name: String,
+        variant: String,
+        args: Vec<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -278,7 +296,8 @@ impl Expr {
             | Expr::Error { span, .. }
             | Expr::Intentar { span, .. }
             | Expr::Algun { span, .. }
-            | Expr::Ninguno { span, .. } => *span,
+            | Expr::Ninguno { span, .. }
+            | Expr::EnumCtor { span, .. } => *span,
         }
     }
 }

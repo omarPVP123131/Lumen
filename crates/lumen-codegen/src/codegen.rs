@@ -316,6 +316,24 @@ impl Codegen {
                     .instructions
                     .push(Instruction::Simple(Opcode::OptionNone));
             }
+            Instr::EnumCtor {
+                enum_name,
+                variant,
+                argc,
+            } => {
+                let name_idx = self.intern_string(enum_name);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::EnumCtor, name_idx));
+                let var_idx = self.intern_string(variant);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::Nop, var_idx));
+                let num_idx = self.intern_num(*argc as f64);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::Nop, num_idx));
+            }
         }
     }
 }
@@ -326,6 +344,7 @@ fn instr_count(instr: &Instr) -> usize {
         Instr::Call(_, _) => 2,
         Instr::ArrayNew(_) => 1,
         Instr::StructNew(_, _) => 2,
+        Instr::EnumCtor { .. } => 3,
         _ => 1,
     }
 }

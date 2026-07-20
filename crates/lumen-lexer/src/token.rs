@@ -79,6 +79,7 @@ pub enum TokenKind {
     ErrKeyword,
     Intentar,
     En,
+    Enum,
     Opcion,
     Algun,
     Ninguno,
@@ -149,6 +150,7 @@ pub enum TokenKind {
     Comma,        // ,
     Dot,          // .
     Colon,        // :
+    DoubleColon,  // ::
 
     // Special
     Comment(String),
@@ -217,6 +219,7 @@ impl TokenKind {
             "try" => Some(TokenKind::Try),
             "en" => Some(TokenKind::En),
             "in" => Some(TokenKind::In),
+            "enum" => Some(TokenKind::Enum),
             "opcion" => Some(TokenKind::Opcion),
             "option" => Some(TokenKind::Option),
             "algun" => Some(TokenKind::Algun),

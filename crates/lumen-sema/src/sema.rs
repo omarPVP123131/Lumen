@@ -25,6 +25,7 @@ pub enum TypeInfo {
         err: Box<TypeInfo>,
     },
     Opcion(Box<TypeInfo>),
+    Enum(String),
 }
 
 #[derive(Clone)]
@@ -78,6 +79,7 @@ pub struct SemanticAnalyzer {
     scopes: Vec<Scope>,
     functions: HashMap<String, (TypeInfo, Vec<TypeInfo>, usize)>,
     structs: HashMap<String, Vec<(String, TypeInfo)>>,
+    enums: HashMap<String, Vec<(String, Vec<TypeInfo>)>>,
     errors: Vec<SemError>,
     loop_depth: usize,
 }
@@ -94,6 +96,7 @@ impl SemanticAnalyzer {
             scopes: vec![Scope::new()],
             functions: HashMap::new(),
             structs: HashMap::new(),
+            enums: HashMap::new(),
             errors: Vec::new(),
             loop_depth: 0,
         }
@@ -102,6 +105,7 @@ impl SemanticAnalyzer {
     pub fn analyze(mut self, program: &mut Program) -> Vec<SemError> {
         self.collect_functions(program);
         self.collect_structs(program);
+        self.collect_enums(program);
         self.analyze_program(program);
         self.errors
     }
@@ -123,6 +127,25 @@ impl SemanticAnalyzer {
                 let default_count = params.iter().filter(|p| p.default.is_some()).count();
                 self.functions
                     .insert(name.clone(), (ret, params_t, default_count));
+            }
+        }
+    }
+
+    fn collect_enums(&mut self, program: &Program) {
+        for node in program {
+            if let DeclOrStmt::Decl(Decl::Enum { name, variants, .. }) = node {
+                let enum_variants: Vec<(String, Vec<TypeInfo>)> = variants
+                    .iter()
+                    .map(|v| {
+                        let types: Vec<TypeInfo> = v
+                            .types
+                            .iter()
+                            .map(|t| self.type_to_info(t.clone()))
+                            .collect();
+                        (v.name.clone(), types)
+                    })
+                    .collect();
+                self.enums.insert(name.clone(), enum_variants);
             }
         }
     }
@@ -229,6 +252,11 @@ impl SemanticAnalyzer {
                     fields: struct_fields,
                 }
             }
+            Decl::Enum {
+                name,
+                variants: _,
+                span: _,
+            } => TypeInfo::Enum(name.clone()),
         }
     }
 
@@ -1155,6 +1183,70 @@ impl SemanticAnalyzer {
                 TypeInfo::Opcion(Box::new(inner))
             }
             Expr::Ninguno { .. } => TypeInfo::Opcion(Box::new(TypeInfo::Void)),
+            Expr::EnumCtor {
+                enum_name,
+                variant,
+                args,
+                span,
+            } => {
+                let enum_variants = self.enums.get(enum_name).cloned();
+                match enum_variants {
+                    Some(variants) => {
+                        let var_info = variants.iter().find(|(name, _)| name == variant);
+                        match var_info {
+                            Some((_, expected_types)) => {
+                                for (i, arg) in args.iter().enumerate() {
+                                    let arg_type = self.analyze_expr(arg);
+                                    if i < expected_types.len() {
+                                        if !can_assign(&expected_types[i], &arg_type) {
+                                            self.errors.push(SemError {
+                                                code: "E031".to_string(),
+                                                message: format!(
+                                                    "El argumento {} de la variante '{}' espera un tipo '{:?}', no '{:?}'",
+                                                    i + 1, variant, expected_types[i], arg_type
+                                                ),
+                                                span: *span,
+                                                suggestion: format!(
+                                                    "Usa un valor de tipo '{:?}' en el argumento {}",
+                                                    expected_types[i], i + 1
+                                                ),
+                                            });
+                                        }
+                                    }
+                                }
+                                TypeInfo::Enum(enum_name.clone())
+                            }
+                            None => {
+                                self.errors.push(SemError {
+                                    code: "E066".to_string(),
+                                    message: format!(
+                                        "La enumeración '{}' no tiene una variante llamada '{}'",
+                                        enum_name, variant
+                                    ),
+                                    span: *span,
+                                    suggestion: format!(
+                                        "Revisa las variantes de '{}', '{}' no existe",
+                                        enum_name, variant
+                                    ),
+                                });
+                                TypeInfo::Void
+                            }
+                        }
+                    }
+                    None => {
+                        self.errors.push(SemError {
+                            code: "E062".to_string(),
+                            message: format!("La enumeración '{}' no está definida", enum_name),
+                            span: *span,
+                            suggestion: format!(
+                                "Define la enumeración '{}' antes de usarla",
+                                enum_name
+                            ),
+                        });
+                        TypeInfo::Void
+                    }
+                }
+            }
         }
     }
 
@@ -1192,8 +1284,12 @@ impl SemanticAnalyzer {
                 return_type: Box::new(self.type_to_info(*return_type)),
             },
             Type::Struct(name) => {
-                let fields = self.structs.get(&name).cloned().unwrap_or_default();
-                TypeInfo::Struct { name, fields }
+                if self.enums.contains_key(&name) {
+                    TypeInfo::Enum(name)
+                } else {
+                    let fields = self.structs.get(&name).cloned().unwrap_or_default();
+                    TypeInfo::Struct { name, fields }
+                }
             }
             Type::Resultado { ok, err } => TypeInfo::Resultado {
                 ok: Box::new(self.type_to_info(*ok)),
@@ -1260,6 +1356,9 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
             return true;
         }
         return can_assign(target_inner, value_inner);
+    }
+    if let (TypeInfo::Enum(a), TypeInfo::Enum(b)) = (target, value) {
+        return a == b;
     }
     false
 }
