@@ -47,7 +47,8 @@ mod tests {
     #[test]
     fn test_disassemble_halt() {
         let mut bc = Bytecode::new();
-        bc.instructions.push(Instruction::Simple(crate::bytecode::Opcode::Halt));
+        bc.instructions
+            .push(Instruction::Simple(crate::bytecode::Opcode::Halt));
         let output = disassemble(&bc);
         assert!(output.contains("Halt"));
     }
@@ -55,7 +56,8 @@ mod tests {
     #[test]
     fn test_disassemble_with_num() {
         let mut bc = Bytecode::new();
-        bc.instructions.push(Instruction::WithNum(crate::bytecode::Opcode::PushNum, 42.0));
+        bc.instructions
+            .push(Instruction::WithNum(crate::bytecode::Opcode::PushNum, 42.0));
         let output = disassemble(&bc);
         assert!(output.contains("PushNum 42"));
     }
@@ -63,7 +65,10 @@ mod tests {
     #[test]
     fn test_disassemble_with_str() {
         let mut bc = Bytecode::new();
-        bc.instructions.push(Instruction::WithStr(crate::bytecode::Opcode::PushStr, "hola".to_string()));
+        bc.instructions.push(Instruction::WithStr(
+            crate::bytecode::Opcode::PushStr,
+            "hola".to_string(),
+        ));
         let output = disassemble(&bc);
         assert!(output.contains("PushStr"));
         assert!(output.contains("hola"));
@@ -72,7 +77,10 @@ mod tests {
     #[test]
     fn test_disassemble_with_bool() {
         let mut bc = Bytecode::new();
-        bc.instructions.push(Instruction::WithBool(crate::bytecode::Opcode::PushBool, true));
+        bc.instructions.push(Instruction::WithBool(
+            crate::bytecode::Opcode::PushBool,
+            true,
+        ));
         let output = disassemble(&bc);
         assert!(output.contains("PushBool true"));
     }
@@ -80,7 +88,8 @@ mod tests {
     #[test]
     fn test_disassemble_with_idx() {
         let mut bc = Bytecode::new();
-        bc.instructions.push(Instruction::WithIdx(crate::bytecode::Opcode::Call, 3));
+        bc.instructions
+            .push(Instruction::WithIdx(crate::bytecode::Opcode::Call, 3));
         let output = disassemble(&bc);
         assert!(output.contains("Call @3"));
     }
@@ -88,9 +97,14 @@ mod tests {
     #[test]
     fn test_disassemble_multiple_instructions() {
         let mut bc = Bytecode::new();
-        bc.instructions.push(Instruction::Simple(crate::bytecode::Opcode::Halt));
-        bc.instructions.push(Instruction::WithIdx(crate::bytecode::Opcode::PushNum, 0));
-        bc.instructions.push(Instruction::WithBool(crate::bytecode::Opcode::PushBool, false));
+        bc.instructions
+            .push(Instruction::Simple(crate::bytecode::Opcode::Halt));
+        bc.instructions
+            .push(Instruction::WithIdx(crate::bytecode::Opcode::PushNum, 0));
+        bc.instructions.push(Instruction::WithBool(
+            crate::bytecode::Opcode::PushBool,
+            false,
+        ));
         let output = disassemble(&bc);
         assert!(output.contains("0000: Halt"));
         assert!(output.contains("0001: PushNum @0"));

@@ -1,6 +1,6 @@
-use lumen_lexer::token::{Span, Token, TokenKind};
 use crate::ast::*;
 use crate::error::ParseError;
+use lumen_lexer::token::{Span, Token, TokenKind};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -11,13 +11,20 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0, errors: Vec::new(), no_struct_init: false }
+        Self {
+            tokens,
+            pos: 0,
+            errors: Vec::new(),
+            no_struct_init: false,
+        }
     }
 
     pub fn parse(mut self) -> (Program, Vec<ParseError>) {
         let mut program = Vec::new();
         while !self.is_at_end() {
-            if self.check(&[TokenKind::Eof]) { break; }
+            if self.check(&[TokenKind::Eof]) {
+                break;
+            }
             match self.parse_decl_or_stmt() {
                 Some(node) => program.push(node),
                 None => {
@@ -31,24 +38,45 @@ impl Parser {
     }
 
     fn parse_decl_or_stmt(&mut self) -> Option<DeclOrStmt> {
-        if self.check(&[TokenKind::Numero, TokenKind::Entero, TokenKind::Decimal,
-                         TokenKind::Texto, TokenKind::Booleano,
-                         TokenKind::Lista, TokenKind::Array,
-                         TokenKind::Resultado, TokenKind::Result,
-                         TokenKind::Opcion, TokenKind::Option,
-                         TokenKind::Number, TokenKind::Integer, TokenKind::Float,
-                         TokenKind::String, TokenKind::Boolean]) {
-            self.parse_declaration().map(DeclOrStmt::Decl)
-        } else if self.check_ident() && self.check_ident_next() {
+        if self.check(&[
+            TokenKind::Numero,
+            TokenKind::Entero,
+            TokenKind::Decimal,
+            TokenKind::Texto,
+            TokenKind::Booleano,
+            TokenKind::Lista,
+            TokenKind::Array,
+            TokenKind::Resultado,
+            TokenKind::Result,
+            TokenKind::Opcion,
+            TokenKind::Option,
+            TokenKind::Number,
+            TokenKind::Integer,
+            TokenKind::Float,
+            TokenKind::String,
+            TokenKind::Boolean,
+        ]) || (self.check_ident() && self.check_ident_next())
+        {
             self.parse_declaration().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
-            if self.check_next(&[TokenKind::Numero, TokenKind::Entero, TokenKind::Decimal,
-                                   TokenKind::Texto, TokenKind::Booleano,
-                                   TokenKind::Lista, TokenKind::Array,
-                                   TokenKind::Resultado, TokenKind::Result,
-                                   TokenKind::Opcion, TokenKind::Option,
-                                   TokenKind::Number, TokenKind::Integer, TokenKind::Float,
-                                   TokenKind::String, TokenKind::Boolean]) {
+            if self.check_next(&[
+                TokenKind::Numero,
+                TokenKind::Entero,
+                TokenKind::Decimal,
+                TokenKind::Texto,
+                TokenKind::Booleano,
+                TokenKind::Lista,
+                TokenKind::Array,
+                TokenKind::Resultado,
+                TokenKind::Result,
+                TokenKind::Opcion,
+                TokenKind::Option,
+                TokenKind::Number,
+                TokenKind::Integer,
+                TokenKind::Float,
+                TokenKind::String,
+                TokenKind::Boolean,
+            ]) {
                 self.parse_function().map(DeclOrStmt::Decl)
             } else if self.check_next(&[TokenKind::LeftParen]) {
                 self.parse_expr_or_assign().map(DeclOrStmt::Stmt)
@@ -96,7 +124,9 @@ impl Parser {
         };
         self.expect_semicolon();
         Some(Decl::Variable {
-            var_type, name, init,
+            var_type,
+            name,
+            init,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -108,7 +138,12 @@ impl Parser {
         let name = self.expect_ident()?;
 
         if !self.check(&[TokenKind::LeftParen]) {
-            self.error("E014", "Se esperaba '('", start, "Agrega '(' para iniciar la lista de parámetros");
+            self.error(
+                "E014",
+                "Se esperaba '('",
+                start,
+                "Agrega '(' para iniciar la lista de parámetros",
+            );
             return None;
         }
         self.advance();
@@ -122,14 +157,22 @@ impl Parser {
             }
         }
         if !self.check(&[TokenKind::RightParen]) {
-            self.error("E015", "Se esperaba ')'", start, "Agrega ')' para cerrar la lista de parámetros");
+            self.error(
+                "E015",
+                "Se esperaba ')'",
+                start,
+                "Agrega ')' para cerrar la lista de parámetros",
+            );
             return None;
         }
         self.advance();
 
         let body = self.parse_block()?;
         Some(Decl::Function {
-            return_type, name, params, body,
+            return_type,
+            name,
+            params,
+            body,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -140,20 +183,32 @@ impl Parser {
         let name = self.expect_ident()?;
 
         if !self.check(&[TokenKind::LeftBrace]) {
-            self.error("E017", "Se esperaba '{' para la estructura", start, "Agrega '{' para definir los campos");
+            self.error(
+                "E017",
+                "Se esperaba '{' para la estructura",
+                start,
+                "Agrega '{' para definir los campos",
+            );
             return None;
         }
         self.advance();
 
         let mut fields = Vec::new();
         while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
-            if self.check(&[TokenKind::Eof]) { break; }
+            if self.check(&[TokenKind::Eof]) {
+                break;
+            }
 
             let field_start = self.peek().span;
             let field_name = self.expect_field_name()?;
 
             if !self.check(&[TokenKind::Colon]) {
-                self.error("E052", "Se esperaba ':' después del nombre del campo", self.peek().span, "Agrega ':' después del nombre del campo");
+                self.error(
+                    "E052",
+                    "Se esperaba ':' después del nombre del campo",
+                    self.peek().span,
+                    "Agrega ':' después del nombre del campo",
+                );
                 return None;
             }
             self.advance();
@@ -169,13 +224,23 @@ impl Parser {
             if self.check(&[TokenKind::Comma]) {
                 self.advance();
             } else if !self.check(&[TokenKind::RightBrace]) {
-                self.error("E012", "Se esperaba ',' o '}' para cerrar la estructura", self.peek().span, "Agrega ',' entre campos o '}' para cerrar");
+                self.error(
+                    "E012",
+                    "Se esperaba ',' o '}' para cerrar la estructura",
+                    self.peek().span,
+                    "Agrega ',' entre campos o '}' para cerrar",
+                );
                 return None;
             }
         }
 
         if !self.check(&[TokenKind::RightBrace]) {
-            self.error("E017", "Se esperaba '}' para cerrar la estructura", start, "Agrega '}' al final de la estructura");
+            self.error(
+                "E017",
+                "Se esperaba '}' para cerrar la estructura",
+                start,
+                "Agrega '}' al final de la estructura",
+            );
             return None;
         }
         self.advance();
@@ -201,7 +266,12 @@ impl Parser {
                 _ => unreachable!(),
             }
         } else {
-            self.error("E011", "Se esperaba una ruta de archivo o nombre de módulo", self.peek().span, "Escribe \"archivo.nv\" o nombre_del_modulo");
+            self.error(
+                "E011",
+                "Se esperaba una ruta de archivo o nombre de módulo",
+                self.peek().span,
+                "Escribe \"archivo.nv\" o nombre_del_modulo",
+            );
             return None;
         };
         let alias = if self.check(&[TokenKind::Como, TokenKind::As]) {
@@ -213,7 +283,12 @@ impl Parser {
                     _ => unreachable!(),
                 }
             } else {
-                self.error("E011", "Se esperaba un nombre de alias", self.peek().span, "Escribe un identificador como alias");
+                self.error(
+                    "E011",
+                    "Se esperaba un nombre de alias",
+                    self.peek().span,
+                    "Escribe un identificador como alias",
+                );
                 None
             }
         } else {
@@ -221,7 +296,8 @@ impl Parser {
         };
         self.expect_semicolon();
         Some(Stmt::Import {
-            path, alias,
+            path,
+            alias,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -237,24 +313,37 @@ impl Parser {
             None
         };
         Some(Param {
-            param_type, name, default,
+            param_type,
+            name,
+            default,
             span: Span::merge(&start, &self.previous().span),
         })
     }
 
     fn parse_block(&mut self) -> Option<Vec<DeclOrStmt>> {
         let mut stmts = Vec::new();
-        if !self.check(&[TokenKind::LeftBrace]) { return None; }
+        if !self.check(&[TokenKind::LeftBrace]) {
+            return None;
+        }
         self.advance();
         while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
-            if self.check(&[TokenKind::Eof]) { break; }
+            if self.check(&[TokenKind::Eof]) {
+                break;
+            }
             match self.parse_decl_or_stmt() {
                 Some(node) => stmts.push(node),
-                None => { self.synchronize(); }
+                None => {
+                    self.synchronize();
+                }
             }
         }
         if !self.check(&[TokenKind::RightBrace]) {
-            self.error("E017", "Se esperaba '}'", self.previous().span, "Agrega '}' para cerrar el bloque");
+            self.error(
+                "E017",
+                "Se esperaba '}'",
+                self.previous().span,
+                "Agrega '}' para cerrar el bloque",
+            );
             return Some(stmts);
         }
         self.advance();
@@ -274,13 +363,23 @@ impl Parser {
         let start = self.peek().span;
         self.advance();
         if !self.check(&[TokenKind::LeftParen]) {
-            self.error("E018", "Se esperaba '('", start, "Agrega '(' antes de la condición");
+            self.error(
+                "E018",
+                "Se esperaba '('",
+                start,
+                "Agrega '(' antes de la condición",
+            );
             return None;
         }
         self.advance();
         let condition = Box::new(self.parse_expression()?);
         if !self.check(&[TokenKind::RightParen]) {
-            self.error("E019", "Se esperaba ')'", start, "Agrega ')' después de la condición");
+            self.error(
+                "E019",
+                "Se esperaba ')'",
+                start,
+                "Agrega ')' después de la condición",
+            );
             return None;
         }
         self.advance();
@@ -288,9 +387,13 @@ impl Parser {
         let else_body = if self.check(&[TokenKind::Sino, TokenKind::Else]) {
             self.advance();
             Some(self.parse_block()?)
-        } else { None };
+        } else {
+            None
+        };
         Some(Stmt::If {
-            condition, then_body, else_body,
+            condition,
+            then_body,
+            else_body,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -298,14 +401,19 @@ impl Parser {
     fn parse_while(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
         self.advance();
-        if !self.check(&[TokenKind::LeftParen]) { return None; }
+        if !self.check(&[TokenKind::LeftParen]) {
+            return None;
+        }
         self.advance();
         let condition = Box::new(self.parse_expression()?);
-        if !self.check(&[TokenKind::RightParen]) { return None; }
+        if !self.check(&[TokenKind::RightParen]) {
+            return None;
+        }
         self.advance();
         let body = self.parse_block()?;
         Some(Stmt::While {
-            condition, body,
+            condition,
+            body,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -313,18 +421,27 @@ impl Parser {
     fn parse_for(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
         self.advance();
-        if !self.check(&[TokenKind::LeftParen]) { return None; }
+        if !self.check(&[TokenKind::LeftParen]) {
+            return None;
+        }
         self.advance();
         let init = Box::new(self.parse_declaration()?);
         let condition = Box::new(self.parse_expression()?);
-        if !self.check(&[TokenKind::Semicolon]) { return None; }
+        if !self.check(&[TokenKind::Semicolon]) {
+            return None;
+        }
         self.advance();
         let update = Box::new(self.parse_assignment()?);
-        if !self.check(&[TokenKind::RightParen]) { return None; }
+        if !self.check(&[TokenKind::RightParen]) {
+            return None;
+        }
         self.advance();
         let body = self.parse_block()?;
         Some(Stmt::For {
-            init, condition, update, body,
+            init,
+            condition,
+            update,
+            body,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -334,7 +451,12 @@ impl Parser {
         self.advance();
         let var_name = self.expect_ident()?;
         if !self.check(&[TokenKind::En, TokenKind::In]) {
-            self.error("E025", "Se esperaba 'en'/'in' después del nombre de variable en el ciclo para-cada", self.peek().span, "Agrega 'en' después del nombre de la variable");
+            self.error(
+                "E025",
+                "Se esperaba 'en'/'in' después del nombre de variable en el ciclo para-cada",
+                self.peek().span,
+                "Agrega 'en' después del nombre de la variable",
+            );
             return None;
         }
         self.advance();
@@ -356,7 +478,9 @@ impl Parser {
         self.advance();
         let value = if !self.check(&[TokenKind::Semicolon]) {
             Some(Box::new(self.parse_expression()?))
-        } else { None };
+        } else {
+            None
+        };
         self.expect_semicolon();
         Some(Stmt::Return {
             value,
@@ -383,7 +507,12 @@ impl Parser {
         self.advance();
 
         if !self.check(&[TokenKind::LeftParen]) {
-            self.error("E051", "Se esperaba '(' después de 'elegir'", start, "Agrega '(' para iniciar la expresión");
+            self.error(
+                "E051",
+                "Se esperaba '(' después de 'elegir'",
+                start,
+                "Agrega '(' para iniciar la expresión",
+            );
             return None;
         }
         self.advance();
@@ -391,13 +520,23 @@ impl Parser {
         let expr = self.parse_expression()?;
 
         if !self.check(&[TokenKind::RightParen]) {
-            self.error("E015", "Se esperaba ')'", start, "Agrega ')' después de la expresión");
+            self.error(
+                "E015",
+                "Se esperaba ')'",
+                start,
+                "Agrega ')' después de la expresión",
+            );
             return None;
         }
         self.advance();
 
         if !self.check(&[TokenKind::LeftBrace]) {
-            self.error("E017", "Se esperaba '{' para el bloque de elegir", start, "Agrega '{' para iniciar los casos");
+            self.error(
+                "E017",
+                "Se esperaba '{' para el bloque de elegir",
+                start,
+                "Agrega '{' para iniciar los casos",
+            );
             return None;
         }
         self.advance();
@@ -406,25 +545,47 @@ impl Parser {
         let mut default = None;
 
         while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
-            if self.check(&[TokenKind::Eof]) { break; }
+            if self.check(&[TokenKind::Eof]) {
+                break;
+            }
 
             if self.check(&[TokenKind::Defecto, TokenKind::Default]) {
                 let def_start = self.peek().span;
                 self.advance();
 
                 if !self.check(&[TokenKind::Colon]) {
-                    self.error("E052", "Se esperaba ':' después de 'defecto'", def_start, "Agrega ':' después de 'defecto'");
-                    return Some(Stmt::Match { expr: Box::new(expr), arms, default, span: Span::merge(&start, &def_start) });
+                    self.error(
+                        "E052",
+                        "Se esperaba ':' después de 'defecto'",
+                        def_start,
+                        "Agrega ':' después de 'defecto'",
+                    );
+                    return Some(Stmt::Match {
+                        expr: Box::new(expr),
+                        arms,
+                        default,
+                        span: Span::merge(&start, &def_start),
+                    });
                 }
                 self.advance();
 
                 let mut body = Vec::new();
-                while !self.check(&[TokenKind::RightBrace, TokenKind::Caso, TokenKind::Case, TokenKind::Defecto, TokenKind::Default])
-                      && !self.is_at_end() {
-                    if self.check(&[TokenKind::Eof]) { break; }
+                while !self.check(&[
+                    TokenKind::RightBrace,
+                    TokenKind::Caso,
+                    TokenKind::Case,
+                    TokenKind::Defecto,
+                    TokenKind::Default,
+                ]) && !self.is_at_end()
+                {
+                    if self.check(&[TokenKind::Eof]) {
+                        break;
+                    }
                     match self.parse_decl_or_stmt() {
                         Some(node) => body.push(node),
-                        None => { self.synchronize(); }
+                        None => {
+                            self.synchronize();
+                        }
                     }
                 }
                 default = Some(body);
@@ -436,18 +597,38 @@ impl Parser {
                 let value = self.parse_expression()?;
 
                 if !self.check(&[TokenKind::Colon]) {
-                    self.error("E052", "Se esperaba ':' después del valor del caso", arm_start, "Agrega ':' después del valor");
-                    return Some(Stmt::Match { expr: Box::new(expr), arms, default, span: Span::merge(&start, &arm_start) });
+                    self.error(
+                        "E052",
+                        "Se esperaba ':' después del valor del caso",
+                        arm_start,
+                        "Agrega ':' después del valor",
+                    );
+                    return Some(Stmt::Match {
+                        expr: Box::new(expr),
+                        arms,
+                        default,
+                        span: Span::merge(&start, &arm_start),
+                    });
                 }
                 self.advance();
 
                 let mut body = Vec::new();
-                while !self.check(&[TokenKind::RightBrace, TokenKind::Caso, TokenKind::Case, TokenKind::Defecto, TokenKind::Default])
-                      && !self.is_at_end() {
-                    if self.check(&[TokenKind::Eof]) { break; }
+                while !self.check(&[
+                    TokenKind::RightBrace,
+                    TokenKind::Caso,
+                    TokenKind::Case,
+                    TokenKind::Defecto,
+                    TokenKind::Default,
+                ]) && !self.is_at_end()
+                {
+                    if self.check(&[TokenKind::Eof]) {
+                        break;
+                    }
                     match self.parse_decl_or_stmt() {
                         Some(node) => body.push(node),
-                        None => { self.synchronize(); }
+                        None => {
+                            self.synchronize();
+                        }
                     }
                 }
                 arms.push(MatchArm {
@@ -456,14 +637,29 @@ impl Parser {
                     span: Span::merge(&arm_start, &self.previous().span),
                 });
             } else {
-                self.error("E053", "Se esperaba 'caso' o 'defecto' dentro de elegir", self.peek().span, "Usa 'caso' seguido de un valor y ':'");
+                self.error(
+                    "E053",
+                    "Se esperaba 'caso' o 'defecto' dentro de elegir",
+                    self.peek().span,
+                    "Usa 'caso' seguido de un valor y ':'",
+                );
                 self.advance();
             }
         }
 
         if !self.check(&[TokenKind::RightBrace]) {
-            self.error("E017", "Se esperaba '}' para cerrar elegir", start, "Agrega '}' al final");
-            return Some(Stmt::Match { expr: Box::new(expr), arms, default, span: Span::merge(&start, &self.previous().span) });
+            self.error(
+                "E017",
+                "Se esperaba '}' para cerrar elegir",
+                start,
+                "Agrega '}' al final",
+            );
+            return Some(Stmt::Match {
+                expr: Box::new(expr),
+                arms,
+                default,
+                span: Span::merge(&start, &self.previous().span),
+            });
         }
         self.advance();
 
@@ -482,11 +678,14 @@ impl Parser {
             _ => return None,
         };
         self.advance();
-        if !self.check(&[TokenKind::Equal]) { return None; }
+        if !self.check(&[TokenKind::Equal]) {
+            return None;
+        }
         self.advance();
         let value = Box::new(self.parse_expression()?);
         Some(Stmt::Assignment {
-            name, value,
+            name,
+            value,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -495,14 +694,18 @@ impl Parser {
         let start = self.peek().span;
         if self.check_ident() && self.check_next(&[TokenKind::Equal]) {
             let name = match self.advance() {
-                Some(t) => match t.kind { TokenKind::Ident(s) => s, _ => unreachable!() },
+                Some(t) => match t.kind {
+                    TokenKind::Ident(s) => s,
+                    _ => unreachable!(),
+                },
                 None => return None,
             };
             self.advance();
             let value = Box::new(self.parse_expression()?);
             self.expect_semicolon();
             Some(Stmt::Assignment {
-                name, value,
+                name,
+                value,
                 span: Span::merge(&start, &self.previous().span),
             })
         } else if self.check_ident() && self.check_next(&[TokenKind::Dot]) {
@@ -512,16 +715,23 @@ impl Parser {
                 let value = Box::new(self.parse_expression()?);
                 self.expect_semicolon();
                 match expr {
-                    Expr::FieldAccess { expr: target, field, .. } => {
-                        Some(Stmt::FieldAssign {
-                            expr: target,
-                            field,
-                            value,
-                            span: Span::merge(&start, &self.previous().span),
-                        })
-                    }
+                    Expr::FieldAccess {
+                        expr: target,
+                        field,
+                        ..
+                    } => Some(Stmt::FieldAssign {
+                        expr: target,
+                        field,
+                        value,
+                        span: Span::merge(&start, &self.previous().span),
+                    }),
                     _ => {
-                        self.error("E024", "No se puede asignar a esta expresión", start, "Solo se puede asignar a campos de struct");
+                        self.error(
+                            "E024",
+                            "No se puede asignar a esta expresión",
+                            start,
+                            "Solo se puede asignar a campos de struct",
+                        );
                         None
                     }
                 }
@@ -582,9 +792,14 @@ impl Parser {
 
     fn parse_comparison(&mut self) -> Option<Expr> {
         let mut left = self.parse_addition()?;
-        while self.check(&[TokenKind::EqualEqual, TokenKind::BangEqual,
-                           TokenKind::Less, TokenKind::LessEqual,
-                           TokenKind::Greater, TokenKind::GreaterEqual]) {
+        while self.check(&[
+            TokenKind::EqualEqual,
+            TokenKind::BangEqual,
+            TokenKind::Less,
+            TokenKind::LessEqual,
+            TokenKind::Greater,
+            TokenKind::GreaterEqual,
+        ]) {
             let op = match self.peek().kind {
                 TokenKind::EqualEqual => BinOp::Equal,
                 TokenKind::BangEqual => BinOp::NotEqual,
@@ -678,7 +893,12 @@ impl Parser {
                 self.advance();
                 let index = self.parse_expression()?;
                 if !self.check(&[TokenKind::RightBracket]) {
-                    self.error("E023", "Se esperaba ']' para cerrar el índice", start, "Agrega ']' después del índice");
+                    self.error(
+                        "E023",
+                        "Se esperaba ']' para cerrar el índice",
+                        start,
+                        "Agrega ']' después del índice",
+                    );
                     return Some(expr);
                 }
                 self.advance();
@@ -695,7 +915,12 @@ impl Parser {
                     Some(t) => match t.kind {
                         TokenKind::Ident(s) => s,
                         _ => {
-                            self.error("E024", "Se esperaba un nombre de campo después de '.'", t.span, "Escribe el nombre del campo");
+                            self.error(
+                                "E024",
+                                "Se esperaba un nombre de campo después de '.'",
+                                t.span,
+                                "Escribe el nombre del campo",
+                            );
                             return Some(expr);
                         }
                     },
@@ -712,7 +937,12 @@ impl Parser {
                         }
                     }
                     if !self.check(&[TokenKind::RightParen]) {
-                        self.error("E015", "Se esperaba ')'", start, "Agrega ')' para cerrar la llamada al método");
+                        self.error(
+                            "E015",
+                            "Se esperaba ')'",
+                            start,
+                            "Agrega ')' para cerrar la llamada al método",
+                        );
                         return Some(expr);
                     }
                     self.advance();
@@ -743,7 +973,12 @@ impl Parser {
                     }
                 }
                 if !self.check(&[TokenKind::RightParen]) {
-                    self.error("E015", "Se esperaba ')'", start, "Agrega ')' para cerrar la llamada");
+                    self.error(
+                        "E015",
+                        "Se esperaba ')'",
+                        start,
+                        "Agrega ')' para cerrar la llamada",
+                    );
                     return Some(expr);
                 }
                 self.advance();
@@ -773,22 +1008,17 @@ impl Parser {
                     Some(Expr::Int { value, span })
                 }
             }
-            TokenKind::StrLiteral(s) => {
-                Some(Expr::Str { value: s.clone(), span })
-            }
-            TokenKind::Verdadero | TokenKind::True => {
-                Some(Expr::Bool { value: true, span })
-            }
-            TokenKind::Falso | TokenKind::False => {
-                Some(Expr::Bool { value: false, span })
-            }
+            TokenKind::StrLiteral(s) => Some(Expr::Str {
+                value: s.clone(),
+                span,
+            }),
+            TokenKind::Verdadero | TokenKind::True => Some(Expr::Bool { value: true, span }),
+            TokenKind::Falso | TokenKind::False => Some(Expr::Bool { value: false, span }),
             TokenKind::Ident(name) => {
                 let name = name.clone();
                 self.parse_call_or_ident(name, span)
             }
-            TokenKind::Funcion | TokenKind::Function => {
-                self.parse_lambda(span)
-            }
+            TokenKind::Funcion | TokenKind::Function => self.parse_lambda(span),
             TokenKind::Imprimir | TokenKind::Print | TokenKind::Leer | TokenKind::Read => {
                 let name = match token.kind {
                     TokenKind::Imprimir => "imprimir",
@@ -801,13 +1031,23 @@ impl Parser {
             }
             TokenKind::Exito | TokenKind::Ok => {
                 if !self.check(&[TokenKind::LeftParen]) {
-                    self.error("E014", "Se esperaba '(' después de 'exito'", span, "Agrega '(expr)' para el valor de éxito");
+                    self.error(
+                        "E014",
+                        "Se esperaba '(' después de 'exito'",
+                        span,
+                        "Agrega '(expr)' para el valor de éxito",
+                    );
                     return None;
                 }
                 self.advance();
                 let expr = self.parse_expression()?;
                 if !self.check(&[TokenKind::RightParen]) {
-                    self.error("E015", "Se esperaba ')'", span, "Agrega ')' para cerrar el valor de éxito");
+                    self.error(
+                        "E015",
+                        "Se esperaba ')'",
+                        span,
+                        "Agrega ')' para cerrar el valor de éxito",
+                    );
                     return None;
                 }
                 self.advance();
@@ -818,13 +1058,23 @@ impl Parser {
             }
             TokenKind::ErrKeyword | TokenKind::Err => {
                 if !self.check(&[TokenKind::LeftParen]) {
-                    self.error("E014", "Se esperaba '(' después de 'error'", span, "Agrega '(expr)' para el valor de error");
+                    self.error(
+                        "E014",
+                        "Se esperaba '(' después de 'error'",
+                        span,
+                        "Agrega '(expr)' para el valor de error",
+                    );
                     return None;
                 }
                 self.advance();
                 let expr = self.parse_expression()?;
                 if !self.check(&[TokenKind::RightParen]) {
-                    self.error("E015", "Se esperaba ')'", span, "Agrega ')' para cerrar el valor de error");
+                    self.error(
+                        "E015",
+                        "Se esperaba ')'",
+                        span,
+                        "Agrega ')' para cerrar el valor de error",
+                    );
                     return None;
                 }
                 self.advance();
@@ -843,7 +1093,12 @@ impl Parser {
             }
             TokenKind::Algun | TokenKind::Some => {
                 if !self.check(&[TokenKind::LeftParen]) {
-                    self.error("E014", "Se esperaba '(' después de 'algun'", span, "Agrega '(expr)' para el valor");
+                    self.error(
+                        "E014",
+                        "Se esperaba '(' después de 'algun'",
+                        span,
+                        "Agrega '(expr)' para el valor",
+                    );
                     return None;
                 }
                 self.advance();
@@ -858,13 +1113,16 @@ impl Parser {
                     span: Span::merge(&span, &self.previous().span),
                 })
             }
-            TokenKind::Ninguno | TokenKind::None => {
-                Some(Expr::Ninguno { span })
-            }
+            TokenKind::Ninguno | TokenKind::None => Some(Expr::Ninguno { span }),
             TokenKind::LeftParen => {
                 let expr = self.parse_expression()?;
                 if !self.check(&[TokenKind::RightParen]) {
-                    self.error("E015", "Se esperaba ')'", span, "Agrega ')' para cerrar el paréntesis");
+                    self.error(
+                        "E015",
+                        "Se esperaba ')'",
+                        span,
+                        "Agrega ')' para cerrar el paréntesis",
+                    );
                     return None;
                 }
                 self.advance();
@@ -883,7 +1141,12 @@ impl Parser {
                     }
                 }
                 if !self.check(&[TokenKind::RightBracket]) {
-                    self.error("E022", "Se esperaba ']' para cerrar la lista", span, "Agrega ']' al final de la lista");
+                    self.error(
+                        "E022",
+                        "Se esperaba ']' para cerrar la lista",
+                        span,
+                        "Agrega ']' al final de la lista",
+                    );
                     return None;
                 }
                 self.advance();
@@ -893,7 +1156,12 @@ impl Parser {
                 })
             }
             _ => {
-                self.error("E020", format!("Expresión inesperada: {:?}", token.kind), span, "Revisa la sintaxis de la expresión");
+                self.error(
+                    "E020",
+                    format!("Expresión inesperada: {:?}", token.kind),
+                    span,
+                    "Revisa la sintaxis de la expresión",
+                );
                 None
             }
         }
@@ -901,7 +1169,12 @@ impl Parser {
 
     fn parse_lambda(&mut self, span: Span) -> Option<Expr> {
         if !self.check(&[TokenKind::LeftParen]) {
-            self.error("E014", "Se esperaba '(' en la función anónima", span, "Agrega '(' para iniciar los parámetros");
+            self.error(
+                "E014",
+                "Se esperaba '(' en la función anónima",
+                span,
+                "Agrega '(' para iniciar los parámetros",
+            );
             return None;
         }
         self.advance();
@@ -914,7 +1187,12 @@ impl Parser {
             }
         }
         if !self.check(&[TokenKind::RightParen]) {
-            self.error("E015", "Se esperaba ')'", span, "Agrega ')' para cerrar los parámetros");
+            self.error(
+                "E015",
+                "Se esperaba ')'",
+                span,
+                "Agrega ')' para cerrar los parámetros",
+            );
             return None;
         }
         self.advance();
@@ -938,7 +1216,12 @@ impl Parser {
                 }
             }
             if !self.check(&[TokenKind::RightParen]) {
-                self.error("E015", "Se esperaba ')'", span, "Agrega ')' para cerrar la llamada");
+                self.error(
+                    "E015",
+                    "Se esperaba ')'",
+                    span,
+                    "Agrega ')' para cerrar la llamada",
+                );
                 return None;
             }
             self.advance();
@@ -951,11 +1234,18 @@ impl Parser {
             self.advance();
             let mut fields = Vec::new();
             while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
-                if self.check(&[TokenKind::Eof]) { break; }
+                if self.check(&[TokenKind::Eof]) {
+                    break;
+                }
                 let field_name = self.expect_field_name()?;
 
                 if !self.check(&[TokenKind::Colon]) {
-                    self.error("E052", "Se esperaba ':' después del nombre del campo", self.peek().span, "Agrega ':' después del nombre del campo");
+                    self.error(
+                        "E052",
+                        "Se esperaba ':' después del nombre del campo",
+                        self.peek().span,
+                        "Agrega ':' después del nombre del campo",
+                    );
                     return None;
                 }
                 self.advance();
@@ -966,13 +1256,23 @@ impl Parser {
                 if self.check(&[TokenKind::Comma]) {
                     self.advance();
                 } else if !self.check(&[TokenKind::RightBrace]) {
-                    self.error("E012", "Se esperaba ',' o '}'", self.peek().span, "Agrega ',' entre campos o '}' para cerrar");
+                    self.error(
+                        "E012",
+                        "Se esperaba ',' o '}'",
+                        self.peek().span,
+                        "Agrega ',' entre campos o '}' para cerrar",
+                    );
                     return None;
                 }
             }
 
             if !self.check(&[TokenKind::RightBrace]) {
-                self.error("E022", "Se esperaba '}' para cerrar la estructura", span, "Agrega '}' al final");
+                self.error(
+                    "E022",
+                    "Se esperaba '}' para cerrar la estructura",
+                    span,
+                    "Agrega '}' al final",
+                );
                 return None;
             }
             self.advance();
@@ -1000,7 +1300,12 @@ impl Parser {
                     self.advance();
                     let inner = self.parse_type()?;
                     if !self.check(&[TokenKind::Greater]) {
-                        self.error("E021", "Se esperaba '>' para cerrar el tipo lista", token.span, "Agrega '>' después del tipo interno");
+                        self.error(
+                            "E021",
+                            "Se esperaba '>' para cerrar el tipo lista",
+                            token.span,
+                            "Agrega '>' después del tipo interno",
+                        );
                         return None;
                     }
                     self.advance();
@@ -1009,24 +1314,37 @@ impl Parser {
                     Some(Type::Lista(Box::new(Type::Decimal)))
                 }
             }
-            TokenKind::Ident(name) => {
-                Some(Type::Struct(name))
-            }
+            TokenKind::Ident(name) => Some(Type::Struct(name)),
             TokenKind::Resultado | TokenKind::Result => {
                 if !self.check(&[TokenKind::Less]) {
-                    self.error("E021", "Se esperaba '<' para el tipo resultado", token.span, "Agrega '<tipo_ok, tipo_err>' después de 'resultado'");
+                    self.error(
+                        "E021",
+                        "Se esperaba '<' para el tipo resultado",
+                        token.span,
+                        "Agrega '<tipo_ok, tipo_err>' después de 'resultado'",
+                    );
                     return None;
                 }
                 self.advance();
                 let ok = self.parse_type()?;
                 if !self.check(&[TokenKind::Comma]) {
-                    self.error("E012", "Se esperaba ',' entre tipos de resultado", token.span, "Agrega ',' para separar el tipo de éxito y error");
+                    self.error(
+                        "E012",
+                        "Se esperaba ',' entre tipos de resultado",
+                        token.span,
+                        "Agrega ',' para separar el tipo de éxito y error",
+                    );
                     return None;
                 }
                 self.advance();
                 let err = self.parse_type()?;
                 if !self.check(&[TokenKind::Greater]) {
-                    self.error("E021", "Se esperaba '>' para cerrar el tipo resultado", token.span, "Agrega '>' después del tipo de error");
+                    self.error(
+                        "E021",
+                        "Se esperaba '>' para cerrar el tipo resultado",
+                        token.span,
+                        "Agrega '>' después del tipo de error",
+                    );
                     return None;
                 }
                 self.advance();
@@ -1037,13 +1355,23 @@ impl Parser {
             }
             TokenKind::Opcion | TokenKind::Option => {
                 if !self.check(&[TokenKind::Less]) {
-                    self.error("E021", "Se esperaba '<' para el tipo opcional", token.span, "Agrega '<tipo>' después de 'opcion'");
+                    self.error(
+                        "E021",
+                        "Se esperaba '<' para el tipo opcional",
+                        token.span,
+                        "Agrega '<tipo>' después de 'opcion'",
+                    );
                     return None;
                 }
                 self.advance();
                 let inner = self.parse_type()?;
                 if !self.check(&[TokenKind::Greater]) {
-                    self.error("E021", "Se esperaba '>' para cerrar el tipo opcional", token.span, "Agrega '>' después del tipo interno");
+                    self.error(
+                        "E021",
+                        "Se esperaba '>' para cerrar el tipo opcional",
+                        token.span,
+                        "Agrega '>' después del tipo interno",
+                    );
                     return None;
                 }
                 self.advance();
@@ -1079,24 +1407,33 @@ impl Parser {
     }
 
     fn check(&self, kinds: &[TokenKind]) -> bool {
-        if self.is_at_end() { return false; }
+        if self.is_at_end() {
+            return false;
+        }
         let kind = &self.peek().kind;
         kinds.iter().any(|k| token_matches(kind, k))
     }
 
     fn check_ident(&self) -> bool {
-        if self.is_at_end() { return false; }
+        if self.is_at_end() {
+            return false;
+        }
         matches!(self.peek().kind, TokenKind::Ident(_))
     }
 
     fn check_ident_next(&self) -> bool {
-        if self.is_at_end() { return false; }
-        matches!(self.peek().kind, TokenKind::Ident(_)) && self.pos + 1 < self.tokens.len()
+        if self.is_at_end() {
+            return false;
+        }
+        matches!(self.peek().kind, TokenKind::Ident(_))
+            && self.pos + 1 < self.tokens.len()
             && matches!(self.tokens[self.pos + 1].kind, TokenKind::Ident(_))
     }
 
     fn check_next(&self, kinds: &[TokenKind]) -> bool {
-        if self.pos + 1 >= self.tokens.len() { return false; }
+        if self.pos + 1 >= self.tokens.len() {
+            return false;
+        }
         let kind = &self.tokens[self.pos + 1].kind;
         kinds.iter().any(|k| token_matches(kind, k))
     }
@@ -1113,33 +1450,113 @@ impl Parser {
                 self.advance();
                 Some(s)
             }
-            TokenKind::Numero | TokenKind::Number => { self.advance(); Some("numero".to_string()) }
-            TokenKind::Entero | TokenKind::Integer => { self.advance(); Some("entero".to_string()) }
-            TokenKind::Decimal | TokenKind::Float => { self.advance(); Some("decimal".to_string()) }
-            TokenKind::Texto | TokenKind::String => { self.advance(); Some("texto".to_string()) }
-            TokenKind::Booleano | TokenKind::Boolean => { self.advance(); Some("booleano".to_string()) }
-            TokenKind::Lista | TokenKind::Array => { self.advance(); Some("lista".to_string()) }
-            TokenKind::Verdadero | TokenKind::True => { self.advance(); Some("verdadero".to_string()) }
-            TokenKind::Falso | TokenKind::False => { self.advance(); Some("falso".to_string()) }
-            TokenKind::Funcion | TokenKind::Function => { self.advance(); Some("funcion".to_string()) }
-            TokenKind::Retornar | TokenKind::Return => { self.advance(); Some("retornar".to_string()) }
-            TokenKind::Si | TokenKind::If => { self.advance(); Some("si".to_string()) }
-            TokenKind::Sino | TokenKind::Else => { self.advance(); Some("sino".to_string()) }
-            TokenKind::Mientras | TokenKind::While => { self.advance(); Some("mientras".to_string()) }
-            TokenKind::Para | TokenKind::For => { self.advance(); Some("para".to_string()) }
-            TokenKind::Imprimir | TokenKind::Print => { self.advance(); Some("imprimir".to_string()) }
-            TokenKind::Leer | TokenKind::Read => { self.advance(); Some("leer".to_string()) }
-            TokenKind::Romper | TokenKind::Break => { self.advance(); Some("romper".to_string()) }
-            TokenKind::Continuar | TokenKind::Continue => { self.advance(); Some("continuar".to_string()) }
-            TokenKind::Elegir | TokenKind::Match => { self.advance(); Some("elegir".to_string()) }
-            TokenKind::Caso | TokenKind::Case => { self.advance(); Some("caso".to_string()) }
-            TokenKind::Defecto | TokenKind::Default => { self.advance(); Some("defecto".to_string()) }
-            TokenKind::Estructura | TokenKind::Struct => { self.advance(); Some("estructura".to_string()) }
-            TokenKind::Importar | TokenKind::Import => { self.advance(); Some("importar".to_string()) }
-            TokenKind::Como | TokenKind::As => { self.advance(); Some("como".to_string()) }
-            TokenKind::En | TokenKind::In => { self.advance(); Some("en".to_string()) }
+            TokenKind::Numero | TokenKind::Number => {
+                self.advance();
+                Some("numero".to_string())
+            }
+            TokenKind::Entero | TokenKind::Integer => {
+                self.advance();
+                Some("entero".to_string())
+            }
+            TokenKind::Decimal | TokenKind::Float => {
+                self.advance();
+                Some("decimal".to_string())
+            }
+            TokenKind::Texto | TokenKind::String => {
+                self.advance();
+                Some("texto".to_string())
+            }
+            TokenKind::Booleano | TokenKind::Boolean => {
+                self.advance();
+                Some("booleano".to_string())
+            }
+            TokenKind::Lista | TokenKind::Array => {
+                self.advance();
+                Some("lista".to_string())
+            }
+            TokenKind::Verdadero | TokenKind::True => {
+                self.advance();
+                Some("verdadero".to_string())
+            }
+            TokenKind::Falso | TokenKind::False => {
+                self.advance();
+                Some("falso".to_string())
+            }
+            TokenKind::Funcion | TokenKind::Function => {
+                self.advance();
+                Some("funcion".to_string())
+            }
+            TokenKind::Retornar | TokenKind::Return => {
+                self.advance();
+                Some("retornar".to_string())
+            }
+            TokenKind::Si | TokenKind::If => {
+                self.advance();
+                Some("si".to_string())
+            }
+            TokenKind::Sino | TokenKind::Else => {
+                self.advance();
+                Some("sino".to_string())
+            }
+            TokenKind::Mientras | TokenKind::While => {
+                self.advance();
+                Some("mientras".to_string())
+            }
+            TokenKind::Para | TokenKind::For => {
+                self.advance();
+                Some("para".to_string())
+            }
+            TokenKind::Imprimir | TokenKind::Print => {
+                self.advance();
+                Some("imprimir".to_string())
+            }
+            TokenKind::Leer | TokenKind::Read => {
+                self.advance();
+                Some("leer".to_string())
+            }
+            TokenKind::Romper | TokenKind::Break => {
+                self.advance();
+                Some("romper".to_string())
+            }
+            TokenKind::Continuar | TokenKind::Continue => {
+                self.advance();
+                Some("continuar".to_string())
+            }
+            TokenKind::Elegir | TokenKind::Match => {
+                self.advance();
+                Some("elegir".to_string())
+            }
+            TokenKind::Caso | TokenKind::Case => {
+                self.advance();
+                Some("caso".to_string())
+            }
+            TokenKind::Defecto | TokenKind::Default => {
+                self.advance();
+                Some("defecto".to_string())
+            }
+            TokenKind::Estructura | TokenKind::Struct => {
+                self.advance();
+                Some("estructura".to_string())
+            }
+            TokenKind::Importar | TokenKind::Import => {
+                self.advance();
+                Some("importar".to_string())
+            }
+            TokenKind::Como | TokenKind::As => {
+                self.advance();
+                Some("como".to_string())
+            }
+            TokenKind::En | TokenKind::In => {
+                self.advance();
+                Some("en".to_string())
+            }
             _ => {
-                self.error("E011", "Se esperaba un nombre de campo", token.span, "Escribe un identificador");
+                self.error(
+                    "E011",
+                    "Se esperaba un nombre de campo",
+                    token.span,
+                    "Escribe un identificador",
+                );
                 None
             }
         }
@@ -1150,7 +1567,12 @@ impl Parser {
         match token.kind {
             TokenKind::Ident(s) => Some(s),
             _ => {
-                self.error("E011", "Se esperaba un nombre de variable", token.span, "Escribe un identificador");
+                self.error(
+                    "E011",
+                    "Se esperaba un nombre de variable",
+                    token.span,
+                    "Escribe un identificador",
+                );
                 None
             }
         }
@@ -1158,13 +1580,24 @@ impl Parser {
 
     fn expect_semicolon(&mut self) {
         if !self.check(&[TokenKind::Semicolon]) {
-            self.error("E012", "Se esperaba ';'", self.previous().span, "Agrega ';' al final de la declaración");
+            self.error(
+                "E012",
+                "Se esperaba ';'",
+                self.previous().span,
+                "Agrega ';' al final de la declaración",
+            );
         } else {
             self.advance();
         }
     }
 
-    fn error(&mut self, code: &str, message: impl Into<String>, span: Span, suggestion: impl Into<String>) {
+    fn error(
+        &mut self,
+        code: &str,
+        message: impl Into<String>,
+        span: Span,
+        suggestion: impl Into<String>,
+    ) {
         self.errors.push(ParseError {
             code: code.to_string(),
             message: message.into(),
@@ -1176,27 +1609,47 @@ impl Parser {
     fn synchronize(&mut self) {
         self.advance();
         while !self.is_at_end() {
-            if self.previous().kind == TokenKind::Semicolon { return; }
+            if self.previous().kind == TokenKind::Semicolon {
+                return;
+            }
             match self.peek().kind {
-                TokenKind::Funcion | TokenKind::Function
-                | TokenKind::Numero | TokenKind::Number
-                | TokenKind::Entero | TokenKind::Integer
-                | TokenKind::Decimal | TokenKind::Float
-                | TokenKind::Texto | TokenKind::String
-                | TokenKind::Booleano | TokenKind::Boolean
-                | TokenKind::Lista | TokenKind::Array
-                | TokenKind::Si | TokenKind::If
-                | TokenKind::Mientras | TokenKind::While
-                | TokenKind::Para | TokenKind::For
-                | TokenKind::Retornar | TokenKind::Return
-                | TokenKind::Romper | TokenKind::Break
-                | TokenKind::Continuar | TokenKind::Continue
-                | TokenKind::Elegir | TokenKind::Match
+                TokenKind::Funcion
+                | TokenKind::Function
+                | TokenKind::Numero
+                | TokenKind::Number
+                | TokenKind::Entero
+                | TokenKind::Integer
+                | TokenKind::Decimal
+                | TokenKind::Float
+                | TokenKind::Texto
+                | TokenKind::String
+                | TokenKind::Booleano
+                | TokenKind::Boolean
+                | TokenKind::Lista
+                | TokenKind::Array
+                | TokenKind::Si
+                | TokenKind::If
+                | TokenKind::Mientras
+                | TokenKind::While
+                | TokenKind::Para
+                | TokenKind::For
+                | TokenKind::Retornar
+                | TokenKind::Return
+                | TokenKind::Romper
+                | TokenKind::Break
+                | TokenKind::Continuar
+                | TokenKind::Continue
+                | TokenKind::Elegir
+                | TokenKind::Match
                 | TokenKind::LeftBrace
                 | TokenKind::LeftBracket
-                | TokenKind::Importar | TokenKind::Import
-                | TokenKind::Resultado | TokenKind::Result => return,
-                _ => { self.advance(); }
+                | TokenKind::Importar
+                | TokenKind::Import
+                | TokenKind::Resultado
+                | TokenKind::Result => return,
+                _ => {
+                    self.advance();
+                }
             }
         }
     }
@@ -1204,36 +1657,66 @@ impl Parser {
 
 fn token_matches(kind: &TokenKind, expected: &TokenKind) -> bool {
     std::mem::discriminant(kind) == std::mem::discriminant(expected)
-        || matches!((kind, expected),
-            (TokenKind::Numero, TokenKind::Number) | (TokenKind::Number, TokenKind::Numero)
-            | (TokenKind::Entero, TokenKind::Integer) | (TokenKind::Integer, TokenKind::Entero)
-            | (TokenKind::Decimal, TokenKind::Float) | (TokenKind::Float, TokenKind::Decimal)
-            | (TokenKind::Texto, TokenKind::String) | (TokenKind::String, TokenKind::Texto)
-            | (TokenKind::Booleano, TokenKind::Boolean) | (TokenKind::Boolean, TokenKind::Booleano)
-            | (TokenKind::Si, TokenKind::If) | (TokenKind::If, TokenKind::Si)
-            | (TokenKind::Sino, TokenKind::Else) | (TokenKind::Else, TokenKind::Sino)
-            | (TokenKind::Mientras, TokenKind::While) | (TokenKind::While, TokenKind::Mientras)
-            | (TokenKind::Para, TokenKind::For) | (TokenKind::For, TokenKind::Para)
-            | (TokenKind::Funcion, TokenKind::Function) | (TokenKind::Function, TokenKind::Funcion)
-            | (TokenKind::Retornar, TokenKind::Return) | (TokenKind::Return, TokenKind::Retornar)
-            | (TokenKind::Verdadero, TokenKind::True) | (TokenKind::True, TokenKind::Verdadero)
-            | (TokenKind::Falso, TokenKind::False) | (TokenKind::False, TokenKind::Falso)
-            | (TokenKind::Imprimir, TokenKind::Print) | (TokenKind::Print, TokenKind::Imprimir)
-            | (TokenKind::Leer, TokenKind::Read) | (TokenKind::Read, TokenKind::Leer)
-        | (TokenKind::Lista, TokenKind::Array) | (TokenKind::Array, TokenKind::Lista)
-            | (TokenKind::Romper, TokenKind::Break) | (TokenKind::Break, TokenKind::Romper)
-            | (TokenKind::Continuar, TokenKind::Continue) | (TokenKind::Continue, TokenKind::Continuar)
-            | (TokenKind::Elegir, TokenKind::Match) | (TokenKind::Match, TokenKind::Elegir)
-            | (TokenKind::Caso, TokenKind::Case) | (TokenKind::Case, TokenKind::Caso)
-            | (TokenKind::Defecto, TokenKind::Default) | (TokenKind::Default, TokenKind::Defecto)
-            | (TokenKind::Estructura, TokenKind::Struct) | (TokenKind::Struct, TokenKind::Estructura)
-            | (TokenKind::Importar, TokenKind::Import) | (TokenKind::Import, TokenKind::Importar)
-            | (TokenKind::Como, TokenKind::As) | (TokenKind::As, TokenKind::Como)
-            | (TokenKind::Resultado, TokenKind::Result) | (TokenKind::Result, TokenKind::Resultado)
-            | (TokenKind::Exito, TokenKind::Ok) | (TokenKind::Ok, TokenKind::Exito)
-            | (TokenKind::ErrKeyword, TokenKind::Err) | (TokenKind::Err, TokenKind::ErrKeyword)
-            | (TokenKind::Intentar, TokenKind::Try) | (TokenKind::Try, TokenKind::Intentar)
-            | (TokenKind::En, TokenKind::In) | (TokenKind::In, TokenKind::En)
+        || matches!(
+            (kind, expected),
+            (TokenKind::Numero, TokenKind::Number)
+                | (TokenKind::Number, TokenKind::Numero)
+                | (TokenKind::Entero, TokenKind::Integer)
+                | (TokenKind::Integer, TokenKind::Entero)
+                | (TokenKind::Decimal, TokenKind::Float)
+                | (TokenKind::Float, TokenKind::Decimal)
+                | (TokenKind::Texto, TokenKind::String)
+                | (TokenKind::String, TokenKind::Texto)
+                | (TokenKind::Booleano, TokenKind::Boolean)
+                | (TokenKind::Boolean, TokenKind::Booleano)
+                | (TokenKind::Si, TokenKind::If)
+                | (TokenKind::If, TokenKind::Si)
+                | (TokenKind::Sino, TokenKind::Else)
+                | (TokenKind::Else, TokenKind::Sino)
+                | (TokenKind::Mientras, TokenKind::While)
+                | (TokenKind::While, TokenKind::Mientras)
+                | (TokenKind::Para, TokenKind::For)
+                | (TokenKind::For, TokenKind::Para)
+                | (TokenKind::Funcion, TokenKind::Function)
+                | (TokenKind::Function, TokenKind::Funcion)
+                | (TokenKind::Retornar, TokenKind::Return)
+                | (TokenKind::Return, TokenKind::Retornar)
+                | (TokenKind::Verdadero, TokenKind::True)
+                | (TokenKind::True, TokenKind::Verdadero)
+                | (TokenKind::Falso, TokenKind::False)
+                | (TokenKind::False, TokenKind::Falso)
+                | (TokenKind::Imprimir, TokenKind::Print)
+                | (TokenKind::Print, TokenKind::Imprimir)
+                | (TokenKind::Leer, TokenKind::Read)
+                | (TokenKind::Read, TokenKind::Leer)
+                | (TokenKind::Lista, TokenKind::Array)
+                | (TokenKind::Array, TokenKind::Lista)
+                | (TokenKind::Romper, TokenKind::Break)
+                | (TokenKind::Break, TokenKind::Romper)
+                | (TokenKind::Continuar, TokenKind::Continue)
+                | (TokenKind::Continue, TokenKind::Continuar)
+                | (TokenKind::Elegir, TokenKind::Match)
+                | (TokenKind::Match, TokenKind::Elegir)
+                | (TokenKind::Caso, TokenKind::Case)
+                | (TokenKind::Case, TokenKind::Caso)
+                | (TokenKind::Defecto, TokenKind::Default)
+                | (TokenKind::Default, TokenKind::Defecto)
+                | (TokenKind::Estructura, TokenKind::Struct)
+                | (TokenKind::Struct, TokenKind::Estructura)
+                | (TokenKind::Importar, TokenKind::Import)
+                | (TokenKind::Import, TokenKind::Importar)
+                | (TokenKind::Como, TokenKind::As)
+                | (TokenKind::As, TokenKind::Como)
+                | (TokenKind::Resultado, TokenKind::Result)
+                | (TokenKind::Result, TokenKind::Resultado)
+                | (TokenKind::Exito, TokenKind::Ok)
+                | (TokenKind::Ok, TokenKind::Exito)
+                | (TokenKind::ErrKeyword, TokenKind::Err)
+                | (TokenKind::Err, TokenKind::ErrKeyword)
+                | (TokenKind::Intentar, TokenKind::Try)
+                | (TokenKind::Try, TokenKind::Intentar)
+                | (TokenKind::En, TokenKind::In)
+                | (TokenKind::In, TokenKind::En)
         )
 }
 
@@ -1246,12 +1729,18 @@ trait Spannable {
 impl Spannable for Expr {
     fn span(&self) -> Span {
         match self {
-            Expr::Int { span, .. } | Expr::Float { span, .. }
-            | Expr::Str { span, .. } | Expr::Bool { span, .. }
-            | Expr::Ident { span, .. } | Expr::Binary { span, .. }
-            | Expr::Unary { span, .. } | Expr::Call { span, .. }
-            | Expr::Grouping { span, .. } | Expr::List { span, .. }
-            | Expr::Index { span, .. } | Expr::MethodCall { span, .. }
+            Expr::Int { span, .. }
+            | Expr::Float { span, .. }
+            | Expr::Str { span, .. }
+            | Expr::Bool { span, .. }
+            | Expr::Ident { span, .. }
+            | Expr::Binary { span, .. }
+            | Expr::Unary { span, .. }
+            | Expr::Call { span, .. }
+            | Expr::Grouping { span, .. }
+            | Expr::List { span, .. }
+            | Expr::Index { span, .. }
+            | Expr::MethodCall { span, .. }
             | Expr::Lambda { span, .. }
             | Expr::StructInit { span, .. }
             | Expr::FieldAccess { span, .. }
@@ -1513,7 +2002,10 @@ imprimir(res);";
         let p = |l: usize, c: usize| Pos { line: l, col: c };
         let t = |kind: TokenKind, l: usize, c: usize| Token {
             kind,
-            span: Span { start: p(l, c), end: p(l, c + 1) },
+            span: Span {
+                start: p(l, c),
+                end: p(l, c + 1),
+            },
         };
         let tokens = vec![
             t(TokenKind::Numero, 1, 1),

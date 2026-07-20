@@ -1,8 +1,8 @@
+use lumen_codegen::Codegen;
+use lumen_ir::IRBuilder;
 use lumen_lexer::Lexer;
 use lumen_parser::Parser;
 use lumen_sema::SemanticAnalyzer;
-use lumen_ir::IRBuilder;
-use lumen_codegen::Codegen;
 use lumen_vm::VM;
 
 fn run_source(source: &str) -> Result<Vec<String>, String> {
@@ -700,7 +700,12 @@ para n en x {
     let result = run_source(src);
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.contains("SemError") || err.contains("E044") || err.contains("lista") || err.contains("array"));
+    assert!(
+        err.contains("SemError")
+            || err.contains("E044")
+            || err.contains("lista")
+            || err.contains("array")
+    );
 }
 
 #[test]
@@ -755,7 +760,10 @@ fn test_opcion_type_error() {
     let src = "opcion<texto> x = algun(42);";
     let result = run_source(src);
     assert!(result.is_err());
-    assert!(result.as_ref().unwrap_err().contains("SemError") || result.as_ref().unwrap_err().contains("E031"));
+    assert!(
+        result.as_ref().unwrap_err().contains("SemError")
+            || result.as_ref().unwrap_err().contains("E031")
+    );
 }
 
 #[test]

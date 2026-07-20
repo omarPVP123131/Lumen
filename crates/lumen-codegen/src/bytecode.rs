@@ -83,17 +83,17 @@ impl Opcode {
             29 => Some(Opcode::ArrayGet),
             30 => Some(Opcode::ArraySet),
             31 => Some(Opcode::ArrayLen),
-              32 => Some(Opcode::ArrayPush),
-              33 => Some(Opcode::FuncRef),
-              34 => Some(Opcode::CallValue),
-              35 => Some(Opcode::StructNew),
-              36 => Some(Opcode::StructGet),
-              37 => Some(Opcode::StructSet),
-              38 => Some(Opcode::ResultOk),
-              39 => Some(Opcode::ResultErr),
-              40 => Some(Opcode::TryUnwrap),
-              41 => Some(Opcode::OptionSome),
-              42 => Some(Opcode::OptionNone),
+            32 => Some(Opcode::ArrayPush),
+            33 => Some(Opcode::FuncRef),
+            34 => Some(Opcode::CallValue),
+            35 => Some(Opcode::StructNew),
+            36 => Some(Opcode::StructGet),
+            37 => Some(Opcode::StructSet),
+            38 => Some(Opcode::ResultOk),
+            39 => Some(Opcode::ResultErr),
+            40 => Some(Opcode::TryUnwrap),
+            41 => Some(Opcode::OptionSome),
+            42 => Some(Opcode::OptionNone),
             _ => None,
         }
     }
@@ -190,7 +190,11 @@ impl Bytecode {
                 Instruction::WithNum(op, n) => {
                     buf.push(1);
                     buf.push(op.to_u8());
-                    let idx = self.nums.iter().position(|x| (x - n).abs() < f64::EPSILON).unwrap_or(0);
+                    let idx = self
+                        .nums
+                        .iter()
+                        .position(|x| (x - n).abs() < f64::EPSILON)
+                        .unwrap_or(0);
                     buf.extend_from_slice(&(idx as u32).to_le_bytes());
                 }
                 Instruction::WithStr(op, s) => {
@@ -207,7 +211,7 @@ impl Bytecode {
                 Instruction::WithIdx(op, idx) => {
                     buf.push(4);
                     buf.push(op.to_u8());
-                    buf.extend_from_slice(&(idx.clone() as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*idx as u32).to_le_bytes());
                 }
             }
         }
@@ -223,24 +227,25 @@ impl Bytecode {
         }
         let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
         if version != CHUNK_VERSION {
-            return Err(format!("Versión {} de bytecode no soportada (esperada {})", version, CHUNK_VERSION));
+            return Err(format!(
+                "Versión {} de bytecode no soportada (esperada {})",
+                version, CHUNK_VERSION
+            ));
         }
 
         let mut pos = 8;
         let mut warnings = Vec::new();
 
-        let num_strings = u32::from_le_bytes([
-            data[pos], data[pos + 1], data[pos + 2], data[pos + 3]
-        ]) as usize;
+        let num_strings =
+            u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         pos += 4;
         let mut strings = Vec::with_capacity(num_strings);
         for _ in 0..num_strings {
             if pos + 4 > data.len() {
                 return Err("Datos corruptos: se esperaban más strings".to_string());
             }
-            let len = u32::from_le_bytes([
-                data[pos], data[pos + 1], data[pos + 2], data[pos + 3]
-            ]) as usize;
+            let len = u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]])
+                as usize;
             pos += 4;
             if pos + len > data.len() {
                 warnings.push((pos, format!("String de longitud {} excede el buffer", len)));
@@ -251,9 +256,8 @@ impl Bytecode {
             pos += len;
         }
 
-        let num_ints = u32::from_le_bytes([
-            data[pos], data[pos + 1], data[pos + 2], data[pos + 3]
-        ]) as usize;
+        let num_ints =
+            u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         pos += 4;
         let mut ints = Vec::with_capacity(num_ints);
         for _ in 0..num_ints {
@@ -261,16 +265,21 @@ impl Bytecode {
                 return Err("Datos corruptos: se esperaban más enteros".to_string());
             }
             let n = i64::from_le_bytes([
-                data[pos], data[pos + 1], data[pos + 2], data[pos + 3],
-                data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7],
+                data[pos],
+                data[pos + 1],
+                data[pos + 2],
+                data[pos + 3],
+                data[pos + 4],
+                data[pos + 5],
+                data[pos + 6],
+                data[pos + 7],
             ]);
             ints.push(n);
             pos += 8;
         }
 
-        let num_nums = u32::from_le_bytes([
-            data[pos], data[pos + 1], data[pos + 2], data[pos + 3]
-        ]) as usize;
+        let num_nums =
+            u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         pos += 4;
         let mut nums = Vec::with_capacity(num_nums);
         for _ in 0..num_nums {
@@ -278,25 +287,29 @@ impl Bytecode {
                 return Err("Datos corruptos: se esperaban más números".to_string());
             }
             let n = f64::from_le_bytes([
-                data[pos], data[pos + 1], data[pos + 2], data[pos + 3],
-                data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7],
+                data[pos],
+                data[pos + 1],
+                data[pos + 2],
+                data[pos + 3],
+                data[pos + 4],
+                data[pos + 5],
+                data[pos + 6],
+                data[pos + 7],
             ]);
             nums.push(n);
             pos += 8;
         }
 
-        let num_names = u32::from_le_bytes([
-            data[pos], data[pos + 1], data[pos + 2], data[pos + 3]
-        ]) as usize;
+        let num_names =
+            u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         pos += 4;
         let mut names = Vec::with_capacity(num_names);
         for _ in 0..num_names {
             if pos + 4 > data.len() {
                 return Err("Datos corruptos: se esperaban más nombres".to_string());
             }
-            let len = u32::from_le_bytes([
-                data[pos], data[pos + 1], data[pos + 2], data[pos + 3]
-            ]) as usize;
+            let len = u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]])
+                as usize;
             pos += 4;
             if pos + len > data.len() {
                 break;
@@ -306,43 +319,69 @@ impl Bytecode {
             pos += len;
         }
 
-        let num_funcs = u32::from_le_bytes([
-            data[pos], data[pos + 1], data[pos + 2], data[pos + 3]
-        ]) as usize;
+        let num_funcs =
+            u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         pos += 4;
         let mut funcs = Vec::with_capacity(num_funcs);
         for _ in 0..num_funcs {
-            if pos + 4 > data.len() { break; }
-            let name_len = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+            if pos + 4 > data.len() {
+                break;
+            }
+            let name_len =
+                u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]])
+                    as usize;
             pos += 4;
-            if pos + name_len > data.len() { break; }
+            if pos + name_len > data.len() {
+                break;
+            }
             let name = String::from_utf8_lossy(&data[pos..pos + name_len]).to_string();
             pos += name_len;
-            if pos + 4 > data.len() { break; }
-            let num_params = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+            if pos + 4 > data.len() {
+                break;
+            }
+            let num_params =
+                u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]])
+                    as usize;
             pos += 4;
             let mut params = Vec::with_capacity(num_params);
             for _ in 0..num_params {
-                if pos + 4 > data.len() { break; }
-                let plen = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+                if pos + 4 > data.len() {
+                    break;
+                }
+                let plen =
+                    u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]])
+                        as usize;
                 pos += 4;
-                if pos + plen > data.len() { break; }
+                if pos + plen > data.len() {
+                    break;
+                }
                 let p = String::from_utf8_lossy(&data[pos..pos + plen]).to_string();
                 params.push(p);
                 pos += plen;
             }
-            if pos + 8 > data.len() { break; }
+            if pos + 8 > data.len() {
+                break;
+            }
             let start = u64::from_le_bytes([
-                data[pos], data[pos+1], data[pos+2], data[pos+3],
-                data[pos+4], data[pos+5], data[pos+6], data[pos+7],
+                data[pos],
+                data[pos + 1],
+                data[pos + 2],
+                data[pos + 3],
+                data[pos + 4],
+                data[pos + 5],
+                data[pos + 6],
+                data[pos + 7],
             ]) as usize;
             pos += 8;
-            funcs.push(FuncMeta { name, params, start });
+            funcs.push(FuncMeta {
+                name,
+                params,
+                start,
+            });
         }
 
-        let num_instrs = u32::from_le_bytes([
-            data[pos], data[pos + 1], data[pos + 2], data[pos + 3]
-        ]) as usize;
+        let num_instrs =
+            u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         pos += 4;
         let mut instructions = Vec::with_capacity(num_instrs);
         for _ in 0..num_instrs {
@@ -360,28 +399,51 @@ impl Bytecode {
             match tag {
                 0 => instructions.push(Instruction::Simple(op)),
                 1 => {
-                    if pos + 4 > data.len() { break; }
-                    let idx = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+                    if pos + 4 > data.len() {
+                        break;
+                    }
+                    let idx = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
                     pos += 4;
                     let n = nums.get(idx).copied().unwrap_or(0.0);
                     instructions.push(Instruction::WithNum(op, n));
                 }
                 2 => {
-                    if pos + 4 > data.len() { break; }
-                    let idx = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+                    if pos + 4 > data.len() {
+                        break;
+                    }
+                    let idx = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
                     pos += 4;
                     let s = strings.get(idx).cloned().unwrap_or_default();
                     instructions.push(Instruction::WithStr(op, s));
                 }
                 3 => {
-                    if pos >= data.len() { break; }
+                    if pos >= data.len() {
+                        break;
+                    }
                     let b = data[pos] != 0;
                     pos += 1;
                     instructions.push(Instruction::WithBool(op, b));
                 }
                 4 => {
-                    if pos + 4 > data.len() { break; }
-                    let idx = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+                    if pos + 4 > data.len() {
+                        break;
+                    }
+                    let idx = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
                     pos += 4;
                     instructions.push(Instruction::WithIdx(op, idx));
                 }
@@ -390,7 +452,17 @@ impl Bytecode {
                 }
             }
         }
-        Ok((Bytecode { instructions, strings, ints, nums, names, funcs }, warnings))
+        Ok((
+            Bytecode {
+                instructions,
+                strings,
+                ints,
+                nums,
+                names,
+                funcs,
+            },
+            warnings,
+        ))
     }
 }
 

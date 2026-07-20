@@ -64,9 +64,9 @@ jobs:
           fail_ci_if_error: false
 
   msrv:
-    name: MSRV (1.70)
+    name: MSRV (1.82)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.70
+      - uses: dtolnay/rust-toolchain@1.82
       - run: cargo build --all-targets

@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
-use lumen_parser::ast::{DeclOrStmt, Decl, Stmt, Expr, BinOp, UnOp, Param};
 use crate::ir::*;
+use lumen_parser::ast::{BinOp, Decl, DeclOrStmt, Expr, Param, Stmt, UnOp};
+use std::collections::{HashMap, HashSet};
 
 struct LoopLabels {
     break_label: usize,
@@ -17,6 +17,12 @@ pub struct IRBuilder {
     loop_labels: Vec<LoopLabels>,
     default_params: HashMap<String, Vec<Option<Expr>>>,
     fn_names: HashSet<String>,
+}
+
+impl Default for IRBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl IRBuilder {
@@ -36,11 +42,10 @@ impl IRBuilder {
 
     pub fn build(mut self, program: &[DeclOrStmt]) -> crate::ir::Program {
         let has_toplevel_code = program.iter().any(|node| {
-            match node {
-                DeclOrStmt::Decl(Decl::Function { .. }) => false,
-                DeclOrStmt::Decl(Decl::Struct { .. }) => false,
-                _ => true,
-            }
+            !matches!(
+                node,
+                DeclOrStmt::Decl(Decl::Function { .. }) | DeclOrStmt::Decl(Decl::Struct { .. })
+            )
         });
 
         for node in program {
@@ -58,9 +63,10 @@ impl IRBuilder {
 
         for node in program {
             if let DeclOrStmt::Decl(Decl::Function { name, params, .. }) = node {
-                let defaults: Vec<Option<Expr>> = params.iter().map(|p| {
-                    p.default.clone().map(|boxed| *boxed)
-                }).collect();
+                let defaults: Vec<Option<Expr>> = params
+                    .iter()
+                    .map(|p| p.default.clone().map(|boxed| *boxed))
+                    .collect();
                 self.default_params.insert(name.clone(), defaults);
             }
         }
@@ -81,7 +87,11 @@ impl IRBuilder {
             self.gen_decl_or_stmt(node);
         }
 
-        if self.current_instrs.last().map_or(true, |i| !matches!(i, Instr::Halt)) {
+        if self
+            .current_instrs
+            .last()
+            .is_none_or(|i| !matches!(i, Instr::Halt))
+        {
             self.emit(Instr::Halt);
         }
 
@@ -117,7 +127,11 @@ impl IRBuilder {
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
-                if !self.current_instrs.iter().any(|i| matches!(i, Instr::Return)) {
+                if !self
+                    .current_instrs
+                    .iter()
+                    .any(|i| matches!(i, Instr::Return))
+                {
                     self.emit(Instr::Return);
                 }
                 self.finalize_func();
@@ -141,7 +155,12 @@ impl IRBuilder {
                 self.gen_expr(value);
                 self.emit(Instr::Store(name.clone()));
             }
-            Stmt::If { condition, then_body, else_body, .. } => {
+            Stmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
                 let else_label = self.new_label();
                 let end_label = self.new_label();
                 self.gen_expr(condition);
@@ -158,7 +177,9 @@ impl IRBuilder {
                 }
                 self.emit(Instr::Label(end_label));
             }
-            Stmt::While { condition, body, .. } => {
+            Stmt::While {
+                condition, body, ..
+            } => {
                 let start_label = self.new_label();
                 let end_label = self.new_label();
                 self.emit(Instr::Label(start_label));
@@ -175,7 +196,13 @@ impl IRBuilder {
                 self.emit(Instr::Jmp(start_label));
                 self.emit(Instr::Label(end_label));
             }
-            Stmt::For { init, condition, update, body, .. } => {
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 let start_label = self.new_label();
                 let end_label = self.new_label();
                 let continue_label = self.new_label();
@@ -202,7 +229,9 @@ impl IRBuilder {
                 }
                 self.emit(Instr::Return);
             }
-            Stmt::FieldAssign { expr, field, value, .. } => {
+            Stmt::FieldAssign {
+                expr, field, value, ..
+            } => {
                 let var_name = match expr.as_ref() {
                     Expr::Ident { name, .. } => Some(name.clone()),
                     _ => None,
@@ -228,7 +257,12 @@ impl IRBuilder {
                     self.emit(Instr::Jmp(labels.continue_label));
                 }
             }
-            Stmt::Match { expr, arms, default, .. } => {
+            Stmt::Match {
+                expr,
+                arms,
+                default,
+                ..
+            } => {
                 let end_label = self.new_label();
                 let mut next_label = self.new_label();
                 for arm in arms {
@@ -256,7 +290,12 @@ impl IRBuilder {
                     self.gen_decl_or_stmt(node);
                 }
             }
-            Stmt::ForEach { var_name, expr, body, .. } => {
+            Stmt::ForEach {
+                var_name,
+                expr,
+                body,
+                ..
+            } => {
                 let start_label = self.new_label();
                 let end_label = self.new_label();
                 let arr_temp = format!("__for_arr_{}", self.temp_counter);
@@ -313,7 +352,9 @@ impl IRBuilder {
             Expr::Ident { name, .. } => {
                 self.emit(Instr::Load(name.clone()));
             }
-            Expr::Binary { op, left, right, .. } => {
+            Expr::Binary {
+                op, left, right, ..
+            } => {
                 self.gen_expr(left);
                 self.gen_expr(right);
                 self.emit(Instr::Binary(match op {
@@ -354,11 +395,9 @@ impl IRBuilder {
                             let defaults = self.default_params.get(name).cloned();
                             let argc = if let Some(defaults) = defaults {
                                 let mut count = args.len();
-                                for i in args.len()..defaults.len() {
-                                    if let Some(default_expr) = &defaults[i] {
-                                        self.gen_expr(default_expr);
-                                        count += 1;
-                                    }
+                                for default_expr in defaults.iter().skip(args.len()).flatten() {
+                                    self.gen_expr(default_expr);
+                                    count += 1;
                                 }
                                 count
                             } else {
@@ -400,7 +439,9 @@ impl IRBuilder {
                 self.gen_expr(index);
                 self.emit(Instr::ArrayGet);
             }
-            Expr::MethodCall { expr, method, args, .. } => {
+            Expr::MethodCall {
+                expr, method, args, ..
+            } => {
                 let var_name = match expr.as_ref() {
                     Expr::Ident { name, .. } => Some(name.clone()),
                     _ => None,
@@ -425,7 +466,11 @@ impl IRBuilder {
             Expr::Grouping { expr, .. } => {
                 self.gen_expr(expr);
             }
-            Expr::StructInit { struct_name, fields, .. } => {
+            Expr::StructInit {
+                struct_name,
+                fields,
+                ..
+            } => {
                 for (_, val) in fields {
                     self.gen_expr(val);
                 }
@@ -488,7 +533,11 @@ impl IRBuilder {
         for node in body {
             self.gen_decl_or_stmt(node);
         }
-        if !self.current_instrs.iter().any(|i| matches!(i, Instr::Return)) {
+        if !self
+            .current_instrs
+            .iter()
+            .any(|i| matches!(i, Instr::Return))
+        {
             self.emit(Instr::Return);
         }
         self.finalize_func();
@@ -525,7 +574,9 @@ impl IRBuilder {
         while i < instrs.len() {
             // Binary folding: ConstX(a), ConstY(b), Binary(op)
             if i + 2 < instrs.len() {
-                if let Some(folded) = Self::try_fold_binary(&instrs[i], &instrs[i + 1], &instrs[i + 2]) {
+                if let Some(folded) =
+                    Self::try_fold_binary(&instrs[i], &instrs[i + 1], &instrs[i + 2])
+                {
                     result.push(folded);
                     i += 3;
                     continue;
@@ -564,7 +615,9 @@ impl IRBuilder {
                     } else {
                         Some(Instr::ConstFloat(*a as f64 / *b as f64))
                     }
-                } else { None }
+                } else {
+                    None
+                }
             }
             // Float +-*/ Float
             (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Add)) => {
@@ -577,7 +630,11 @@ impl IRBuilder {
                 Some(Instr::ConstFloat(a * b))
             }
             (Instr::ConstFloat(a), Instr::ConstFloat(b), Instr::Binary(Op::Div)) => {
-                if *b != 0.0 { Some(Instr::ConstFloat(a / b)) } else { None }
+                if *b != 0.0 {
+                    Some(Instr::ConstFloat(a / b))
+                } else {
+                    None
+                }
             }
             // Mixed Int/Float arithmetic
             (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Add)) => {
@@ -590,7 +647,11 @@ impl IRBuilder {
                 Some(Instr::ConstFloat(*a as f64 * b))
             }
             (Instr::ConstInt(a), Instr::ConstFloat(b), Instr::Binary(Op::Div)) => {
-                if *b != 0.0 { Some(Instr::ConstFloat(*a as f64 / b)) } else { None }
+                if *b != 0.0 {
+                    Some(Instr::ConstFloat(*a as f64 / b))
+                } else {
+                    None
+                }
             }
             (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Add)) => {
                 Some(Instr::ConstFloat(a + *b as f64))
@@ -602,7 +663,11 @@ impl IRBuilder {
                 Some(Instr::ConstFloat(a * *b as f64))
             }
             (Instr::ConstFloat(a), Instr::ConstInt(b), Instr::Binary(Op::Div)) => {
-                if *b != 0 { Some(Instr::ConstFloat(a / *b as f64)) } else { None }
+                if *b != 0 {
+                    Some(Instr::ConstFloat(a / *b as f64))
+                } else {
+                    None
+                }
             }
             // Int comparisons
             (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Equal)) => {
@@ -693,18 +758,10 @@ impl IRBuilder {
             (Instr::ConstInt(n), Instr::Unary(Op::Negate)) => {
                 Some(Instr::ConstInt(n.overflowing_neg().0))
             }
-            (Instr::ConstFloat(n), Instr::Unary(Op::Negate)) => {
-                Some(Instr::ConstFloat(-n))
-            }
-            (Instr::ConstBool(b), Instr::Unary(Op::Not)) => {
-                Some(Instr::ConstBool(!b))
-            }
-            (Instr::ConstInt(n), Instr::Unary(Op::Not)) => {
-                Some(Instr::ConstBool(*n == 0))
-            }
-            (Instr::ConstFloat(n), Instr::Unary(Op::Not)) => {
-                Some(Instr::ConstBool(*n == 0.0))
-            }
+            (Instr::ConstFloat(n), Instr::Unary(Op::Negate)) => Some(Instr::ConstFloat(-n)),
+            (Instr::ConstBool(b), Instr::Unary(Op::Not)) => Some(Instr::ConstBool(!b)),
+            (Instr::ConstInt(n), Instr::Unary(Op::Not)) => Some(Instr::ConstBool(*n == 0)),
+            (Instr::ConstFloat(n), Instr::Unary(Op::Not)) => Some(Instr::ConstBool(*n == 0.0)),
             _ => None,
         }
     }
@@ -774,7 +831,8 @@ mod tests {
 
     #[test]
     fn test_if_else() {
-        let source = "booleano flag = verdadero; si (flag) { numero x = 1; } sino { numero y = 2; }";
+        let source =
+            "booleano flag = verdadero; si (flag) { numero x = 1; } sino { numero y = 2; }";
         let program = build_ir(source);
         assert!(!program.funcs.is_empty());
     }
@@ -905,10 +963,7 @@ imprimir(x);";
 
     #[test]
     fn test_constant_folding_unary_negate_int() {
-        let instrs = vec![
-            Instr::ConstInt(5),
-            Instr::Unary(Op::Negate),
-        ];
+        let instrs = vec![Instr::ConstInt(5), Instr::Unary(Op::Negate)];
         let folded = IRBuilder::fold_constants_pass(&instrs);
         assert_eq!(folded.len(), 1);
         assert!(matches!(folded[0], Instr::ConstInt(-5)));
@@ -916,10 +971,7 @@ imprimir(x);";
 
     #[test]
     fn test_constant_folding_unary_negate_float() {
-        let instrs = vec![
-            Instr::ConstFloat(3.14),
-            Instr::Unary(Op::Negate),
-        ];
+        let instrs = vec![Instr::ConstFloat(3.14), Instr::Unary(Op::Negate)];
         let folded = IRBuilder::fold_constants_pass(&instrs);
         assert_eq!(folded.len(), 1);
         assert!(matches!(folded[0], Instr::ConstFloat(v) if (v - (-3.14)).abs() < f64::EPSILON));
@@ -927,10 +979,7 @@ imprimir(x);";
 
     #[test]
     fn test_constant_folding_unary_not_bool() {
-        let instrs = vec![
-            Instr::ConstBool(true),
-            Instr::Unary(Op::Not),
-        ];
+        let instrs = vec![Instr::ConstBool(true), Instr::Unary(Op::Not)];
         let folded = IRBuilder::fold_constants_pass(&instrs);
         assert_eq!(folded.len(), 1);
         assert!(matches!(folded[0], Instr::ConstBool(false)));

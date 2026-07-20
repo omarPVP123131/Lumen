@@ -1,7 +1,7 @@
-pub mod sema;
 pub mod error;
 pub mod loader;
+pub mod sema;
 
-pub use sema::{SemanticAnalyzer, TypeInfo};
 pub use error::SemError;
-pub use loader::{ModuleLoader, ModuleError};
+pub use loader::{ModuleError, ModuleLoader};
+pub use sema::{SemanticAnalyzer, TypeInfo};

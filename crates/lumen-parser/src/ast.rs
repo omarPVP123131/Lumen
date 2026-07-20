@@ -123,7 +123,6 @@ pub enum Stmt {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Expr {
-
     Int {
         value: i64,
         span: Span,
@@ -260,12 +259,18 @@ pub enum Type {
 impl Expr {
     pub fn span(&self) -> Span {
         match self {
-            Expr::Int { span, .. } | Expr::Float { span, .. }
-            | Expr::Str { span, .. } | Expr::Bool { span, .. }
-            | Expr::Ident { span, .. } | Expr::Binary { span, .. }
-            | Expr::Unary { span, .. } | Expr::Call { span, .. }
-            | Expr::Grouping { span, .. } | Expr::List { span, .. }
-            | Expr::Index { span, .. } | Expr::MethodCall { span, .. }
+            Expr::Int { span, .. }
+            | Expr::Float { span, .. }
+            | Expr::Str { span, .. }
+            | Expr::Bool { span, .. }
+            | Expr::Ident { span, .. }
+            | Expr::Binary { span, .. }
+            | Expr::Unary { span, .. }
+            | Expr::Call { span, .. }
+            | Expr::Grouping { span, .. }
+            | Expr::List { span, .. }
+            | Expr::Index { span, .. }
+            | Expr::MethodCall { span, .. }
             | Expr::Lambda { span, .. }
             | Expr::StructInit { span, .. }
             | Expr::FieldAccess { span, .. }

@@ -1,26 +1,20 @@
+use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
 use proptest::prelude::*;
-use lumen_codegen::bytecode::{Bytecode, Instruction, Opcode, FuncMeta};
 
 fn valid_opcode() -> impl Strategy<Value = u8> {
     0u8..=27
 }
 
 fn arbitrary_instruction() -> impl Strategy<Value = Instruction> {
-    let simple = valid_opcode().prop_map(|op| {
-        Instruction::Simple(int_to_opcode(op))
-    });
-    let with_num = (valid_opcode(), any::<f64>()).prop_map(|(op, n)| {
-        Instruction::WithNum(int_to_opcode(op), n)
-    });
-    let with_str = (valid_opcode(), ".{0,10}").prop_map(|(op, s): (u8, String)| {
-        Instruction::WithStr(int_to_opcode(op), s)
-    });
-    let with_bool = (valid_opcode(), any::<bool>()).prop_map(|(op, b)| {
-        Instruction::WithBool(int_to_opcode(op), b)
-    });
-    let with_idx = (valid_opcode(), 0usize..100).prop_map(|(op, idx)| {
-        Instruction::WithIdx(int_to_opcode(op), idx)
-    });
+    let simple = valid_opcode().prop_map(|op| Instruction::Simple(int_to_opcode(op)));
+    let with_num = (valid_opcode(), any::<f64>())
+        .prop_map(|(op, n)| Instruction::WithNum(int_to_opcode(op), n));
+    let with_str = (valid_opcode(), ".{0,10}")
+        .prop_map(|(op, s): (u8, String)| Instruction::WithStr(int_to_opcode(op), s));
+    let with_bool = (valid_opcode(), any::<bool>())
+        .prop_map(|(op, b)| Instruction::WithBool(int_to_opcode(op), b));
+    let with_idx = (valid_opcode(), 0usize..100)
+        .prop_map(|(op, idx)| Instruction::WithIdx(int_to_opcode(op), idx));
     prop::strategy::Union::new_weighted(vec![
         (1, simple.boxed()),
         (1, with_num.boxed()),

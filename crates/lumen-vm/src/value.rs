@@ -89,7 +89,10 @@ impl fmt::Display for Value {
             }
             Value::Func(s) => write!(f, "<funcion {}>", s),
             Value::Struct { name: _, fields } => {
-                let items: Vec<String> = fields.iter().map(|(k, v)| format!("{}: {}", k, v)).collect();
+                let items: Vec<String> = fields
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, v))
+                    .collect();
                 write!(f, "{{ {} }}", items.join(", "))
             }
             Value::Exito(v) => write!(f, "exito({})", v),

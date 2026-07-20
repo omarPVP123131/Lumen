@@ -3,10 +3,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 
-use lumen_parser::ast::DeclOrStmt;
-use lumen_sema::{SemanticAnalyzer, ModuleLoader};
+use lumen_codegen::{disassemble, Bytecode, Codegen};
 use lumen_ir::IRBuilder;
-use lumen_codegen::{Codegen, disassemble, Bytecode};
+use lumen_parser::ast::DeclOrStmt;
+use lumen_sema::{ModuleLoader, SemanticAnalyzer};
 use lumen_vm::VM;
 
 struct Config {
@@ -46,7 +46,11 @@ fn parse_args(args: &[String]) -> Config {
         i += 1;
     }
 
-    Config { command, file, lib_dirs }
+    Config {
+        command,
+        file,
+        lib_dirs,
+    }
 }
 
 fn main() {
@@ -115,7 +119,12 @@ fn resolve_or_exit(mut loader: ModuleLoader, source: &str, base_dir: &Path) -> V
         Err(e) => {
             match &e {
                 lumen_sema::ModuleError::Circular { path, span } => {
-                    eprintln!("Error E063 [{}:{}]: Import circular detectado: '{}'", span.start.line, span.start.col, path.display());
+                    eprintln!(
+                        "Error E063 [{}:{}]: Import circular detectado: '{}'",
+                        span.start.line,
+                        span.start.col,
+                        path.display()
+                    );
                     eprintln!("  Sugerencia: Revisa las dependencias entre módulos para eliminar la circularidad");
                 }
                 lumen_sema::ModuleError::Io { path, message } => {
@@ -157,7 +166,10 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         for err in &sem_errors {
-            eprintln!("Error {} [{}:{}]: {}", err.code, err.span.start.line, err.span.start.col, err.message);
+            eprintln!(
+                "Error {} [{}:{}]: {}",
+                err.code, err.span.start.line, err.span.start.col, err.message
+            );
             eprintln!("  Sugerencia: {}", err.suggestion);
         }
         process::exit(1);

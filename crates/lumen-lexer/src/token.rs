@@ -123,20 +123,20 @@ pub enum TokenKind {
     StrLiteral(String),
 
     // Operators
-    Plus,       // +
-    Minus,      // -
-    Star,       // *
-    Slash,      // /
-    Equal,      // =
-    EqualEqual, // ==
-    Bang,       // !
-    BangEqual,  // !=
-    Less,       // <
-    LessEqual,  // <=
-    Greater,    // >
+    Plus,         // +
+    Minus,        // -
+    Star,         // *
+    Slash,        // /
+    Equal,        // =
+    EqualEqual,   // ==
+    Bang,         // !
+    BangEqual,    // !=
+    Less,         // <
+    LessEqual,    // <=
+    Greater,      // >
     GreaterEqual, // >=
-    AndAnd,     // &&
-    OrOr,       // ||
+    AndAnd,       // &&
+    OrOr,         // ||
 
     // Delimiters
     LeftParen,    // (

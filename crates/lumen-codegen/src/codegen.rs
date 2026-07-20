@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use lumen_ir::ir::*;
 use crate::bytecode::*;
+use lumen_ir::ir::*;
+use std::collections::HashMap;
 
 pub struct Codegen {
     bytecode: Bytecode,
@@ -10,6 +10,12 @@ pub struct Codegen {
     int_cache: HashMap<i64, usize>,
     num_cache: HashMap<usize, usize>,
     name_cache: HashMap<String, usize>,
+}
+
+impl Default for Codegen {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Codegen {
@@ -95,12 +101,16 @@ impl Codegen {
         }
 
         // Populate bytecode.funcs sorted by start position
-        let mut func_list: Vec<(String, usize)> = self.func_starts.iter()
+        let mut func_list: Vec<(String, usize)> = self
+            .func_starts
+            .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect();
         func_list.sort_by(|a, b| a.1.cmp(&b.1));
         for (name, start) in &func_list {
-            let params = program.funcs.get(name)
+            let params = program
+                .funcs
+                .get(name)
                 .map(|f| f.params.clone())
                 .unwrap_or_default();
             self.bytecode.funcs.push(FuncMeta {
@@ -117,26 +127,38 @@ impl Codegen {
         match instr {
             Instr::ConstInt(n) => {
                 let idx = self.intern_int(*n);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::PushInt, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::PushInt, idx));
             }
             Instr::ConstFloat(n) => {
                 let idx = self.intern_num(*n);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::PushNum, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::PushNum, idx));
             }
             Instr::ConstStr(s) => {
                 let idx = self.intern_string(s);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::PushStr, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::PushStr, idx));
             }
             Instr::ConstBool(b) => {
-                self.bytecode.instructions.push(Instruction::WithBool(Opcode::PushBool, *b));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithBool(Opcode::PushBool, *b));
             }
             Instr::Load(name) => {
                 let idx = self.intern_name(name);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::Load, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::Load, idx));
             }
             Instr::Store(name) => {
                 let idx = self.intern_name(name);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::Store, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::Store, idx));
             }
             Instr::Binary(op) => {
                 let opcode = match op {
@@ -166,89 +188,136 @@ impl Codegen {
             }
             Instr::Call(name, argc) => {
                 let idx = self.intern_name(name);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::Call, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::Call, idx));
                 let num_idx = self.intern_num(*argc as f64);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::Nop, num_idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::Nop, num_idx));
             }
             Instr::FuncRef(name) => {
                 let idx = self.intern_string(name);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::FuncRef, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::FuncRef, idx));
             }
             Instr::CallValue(argc) => {
                 let idx = self.intern_num(*argc as f64);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::CallValue, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::CallValue, idx));
             }
             Instr::Return => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::Ret));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::Ret));
             }
             Instr::Print => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::Print));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::Print));
             }
             Instr::Jmp(label) => {
                 let offset = self.label_map.get(label).copied().unwrap_or(0);
                 let idx = self.intern_num(offset as f64);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::Jmp, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::Jmp, idx));
             }
             Instr::JmpIf(label) => {
                 let offset = self.label_map.get(label).copied().unwrap_or(0);
                 let idx = self.intern_num(offset as f64);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::JmpIf, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::JmpIf, idx));
             }
             Instr::Halt => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::Halt));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::Halt));
             }
             Instr::Label(_) => {}
             Instr::Phi(_, _) => {}
             Instr::Read => {}
             Instr::Nop => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::Nop));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::Nop));
             }
             Instr::ArrayNew(n) => {
                 let idx = self.intern_num(*n as f64);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::ArrayNew, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::ArrayNew, idx));
             }
             Instr::ArrayGet => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::ArrayGet));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::ArrayGet));
             }
             Instr::ArraySet => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::ArraySet));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::ArraySet));
             }
             Instr::ArrayLen => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::ArrayLen));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::ArrayLen));
             }
             Instr::ArrayPush => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::ArrayPush));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::ArrayPush));
             }
             Instr::StructNew(name, count) => {
                 let idx = self.intern_string(name);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::StructNew, idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::StructNew, idx));
                 let num_idx = self.intern_num(*count as f64);
-                self.bytecode.instructions.push(Instruction::WithIdx(Opcode::Nop, num_idx));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::Nop, num_idx));
             }
             Instr::StructGet => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::StructGet));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::StructGet));
             }
             Instr::StructSet => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::StructSet));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::StructSet));
             }
             Instr::ResultOk => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::ResultOk));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::ResultOk));
             }
             Instr::ResultErr => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::ResultErr));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::ResultErr));
             }
             Instr::TryUnwrap => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::TryUnwrap));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::TryUnwrap));
             }
             Instr::OptionSome => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::OptionSome));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::OptionSome));
             }
             Instr::OptionNone => {
-                self.bytecode.instructions.push(Instruction::Simple(Opcode::OptionNone));
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::OptionNone));
             }
         }
     }
-
 }
 
 fn instr_count(instr: &Instr) -> usize {

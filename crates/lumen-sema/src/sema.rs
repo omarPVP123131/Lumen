@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use crate::error::SemError;
 use lumen_lexer::token::Span;
 use lumen_parser::ast::*;
-use crate::error::SemError;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeInfo {
@@ -52,14 +52,20 @@ impl Scope {
                 code: "E032".to_string(),
                 message: format!("La variable '{}' ya está declarada en este ámbito", name),
                 span,
-                suggestion: format!("Usa un nombre diferente o elimina la declaración anterior de '{}'", name),
+                suggestion: format!(
+                    "Usa un nombre diferente o elimina la declaración anterior de '{}'",
+                    name
+                ),
             });
         }
-        self.symbols.insert(name.to_string(), Symbol {
-            var_type,
-            name: name.to_string(),
-            declared: span,
-        });
+        self.symbols.insert(
+            name.to_string(),
+            Symbol {
+                var_type,
+                name: name.to_string(),
+                declared: span,
+            },
+        );
         Ok(())
     }
 
@@ -74,6 +80,12 @@ pub struct SemanticAnalyzer {
     structs: HashMap<String, Vec<(String, TypeInfo)>>,
     errors: Vec<SemError>,
     loop_depth: usize,
+}
+
+impl Default for SemanticAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SemanticAnalyzer {
@@ -96,11 +108,21 @@ impl SemanticAnalyzer {
 
     fn collect_functions(&mut self, program: &Program) {
         for node in program {
-            if let DeclOrStmt::Decl(Decl::Function { return_type, name, params, .. }) = node {
+            if let DeclOrStmt::Decl(Decl::Function {
+                return_type,
+                name,
+                params,
+                ..
+            }) = node
+            {
                 let ret = self.type_to_info(return_type.clone());
-                let params_t: Vec<TypeInfo> = params.iter().map(|p| self.type_to_info(p.param_type.clone())).collect();
+                let params_t: Vec<TypeInfo> = params
+                    .iter()
+                    .map(|p| self.type_to_info(p.param_type.clone()))
+                    .collect();
                 let default_count = params.iter().filter(|p| p.default.is_some()).count();
-                self.functions.insert(name.clone(), (ret, params_t, default_count));
+                self.functions
+                    .insert(name.clone(), (ret, params_t, default_count));
             }
         }
     }
@@ -108,9 +130,10 @@ impl SemanticAnalyzer {
     fn collect_structs(&mut self, program: &Program) {
         for node in program {
             if let DeclOrStmt::Decl(Decl::Struct { name, fields, .. }) = node {
-                let struct_fields: Vec<(String, TypeInfo)> = fields.iter().map(|f| {
-                    (f.name.clone(), self.type_to_info(f.field_type.clone()))
-                }).collect();
+                let struct_fields: Vec<(String, TypeInfo)> = fields
+                    .iter()
+                    .map(|f| (f.name.clone(), self.type_to_info(f.field_type.clone())))
+                    .collect();
                 self.structs.insert(name.clone(), struct_fields);
             }
         }
@@ -131,9 +154,17 @@ impl SemanticAnalyzer {
 
     fn analyze_decl(&mut self, decl: &Decl) -> TypeInfo {
         match decl {
-            Decl::Variable { var_type, name, init, span } => {
+            Decl::Variable {
+                var_type,
+                name,
+                init,
+                span,
+            } => {
                 let declared_type = self.type_to_info(var_type.clone());
-                let _init_type = init.as_ref().map(|e| self.analyze_expr(e)).unwrap_or(declared_type.clone());
+                let _init_type = init
+                    .as_ref()
+                    .map(|e| self.analyze_expr(e))
+                    .unwrap_or(declared_type.clone());
                 if let Some(ref init_expr) = init {
                     let init_type = self.analyze_expr(init_expr);
                     if !can_assign(&declared_type, &init_type) {
@@ -145,12 +176,21 @@ impl SemanticAnalyzer {
                         });
                     }
                 }
-                if let Err(e) = self.current_scope().define(name, declared_type.clone(), *span) {
+                if let Err(e) = self
+                    .current_scope()
+                    .define(name, declared_type.clone(), *span)
+                {
                     self.errors.push(e);
                 }
                 declared_type
             }
-            Decl::Function { return_type, name: _, params, body, span: _ } => {
+            Decl::Function {
+                return_type,
+                name: _,
+                params,
+                body,
+                span: _,
+            } => {
                 self.scopes.push(Scope::new());
                 let mut seen_default = false;
                 for p in params {
@@ -175,11 +215,19 @@ impl SemanticAnalyzer {
                 self.scopes.pop();
                 self.type_to_info(return_type.clone())
             }
-            Decl::Struct { name, fields, span: _ } => {
-                let struct_fields: Vec<(String, TypeInfo)> = fields.iter().map(|f| {
-                    (f.name.clone(), self.type_to_info(f.field_type.clone()))
-                }).collect();
-                TypeInfo::Struct { name: name.clone(), fields: struct_fields }
+            Decl::Struct {
+                name,
+                fields,
+                span: _,
+            } => {
+                let struct_fields: Vec<(String, TypeInfo)> = fields
+                    .iter()
+                    .map(|f| (f.name.clone(), self.type_to_info(f.field_type.clone())))
+                    .collect();
+                TypeInfo::Struct {
+                    name: name.clone(),
+                    fields: struct_fields,
+                }
             }
         }
     }
@@ -211,51 +259,79 @@ impl SemanticAnalyzer {
                 }
                 value_type
             }
-            Stmt::If { condition, then_body, else_body, .. } => {
+            Stmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
                 let cond_type = self.analyze_expr(condition);
                 if cond_type != TypeInfo::Booleano {
                     self.errors.push(SemError {
                         code: "E034".to_string(),
-                        message: format!("La condición del 'si' debe ser booleano, no '{:?}'", cond_type),
+                        message: format!(
+                            "La condición del 'si' debe ser booleano, no '{:?}'",
+                            cond_type
+                        ),
                         span: condition.span(),
                         suggestion: "Usa una expresión booleana como condición".to_string(),
                     });
                 }
                 self.scopes.push(Scope::new());
-                for node in then_body { self.analyze_decl_or_stmt(node); }
+                for node in then_body {
+                    self.analyze_decl_or_stmt(node);
+                }
                 self.scopes.pop();
                 if let Some(else_body) = else_body {
                     self.scopes.push(Scope::new());
-                    for node in else_body { self.analyze_decl_or_stmt(node); }
+                    for node in else_body {
+                        self.analyze_decl_or_stmt(node);
+                    }
                     self.scopes.pop();
                 }
                 TypeInfo::Void
             }
-            Stmt::While { condition, body, .. } => {
+            Stmt::While {
+                condition, body, ..
+            } => {
                 let cond_type = self.analyze_expr(condition);
                 if cond_type != TypeInfo::Booleano {
                     self.errors.push(SemError {
                         code: "E034".to_string(),
-                        message: format!("La condición del 'mientras' debe ser booleano, no '{:?}'", cond_type),
+                        message: format!(
+                            "La condición del 'mientras' debe ser booleano, no '{:?}'",
+                            cond_type
+                        ),
                         span: condition.span(),
                         suggestion: "Usa una expresión booleana como condición".to_string(),
                     });
                 }
                 self.loop_depth += 1;
                 self.scopes.push(Scope::new());
-                for node in body { self.analyze_decl_or_stmt(node); }
+                for node in body {
+                    self.analyze_decl_or_stmt(node);
+                }
                 self.scopes.pop();
                 self.loop_depth -= 1;
                 TypeInfo::Void
             }
-            Stmt::For { init, condition, update, body, .. } => {
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 self.scopes.push(Scope::new());
                 self.analyze_decl(init);
                 let cond_type = self.analyze_expr(condition);
                 if cond_type != TypeInfo::Booleano {
                     self.errors.push(SemError {
                         code: "E034".to_string(),
-                        message: format!("La condición del 'para' debe ser booleano, no '{:?}'", cond_type),
+                        message: format!(
+                            "La condición del 'para' debe ser booleano, no '{:?}'",
+                            cond_type
+                        ),
                         span: condition.span(),
                         suggestion: "Usa una expresión booleana como condición".to_string(),
                     });
@@ -263,15 +339,18 @@ impl SemanticAnalyzer {
                 self.analyze_stmt(update);
                 self.loop_depth += 1;
                 self.scopes.push(Scope::new());
-                for node in body { self.analyze_decl_or_stmt(node); }
+                for node in body {
+                    self.analyze_decl_or_stmt(node);
+                }
                 self.scopes.pop();
                 self.loop_depth -= 1;
                 self.scopes.pop();
                 TypeInfo::Void
             }
-            Stmt::Return { value, .. } => {
-                value.as_ref().map(|e| self.analyze_expr(e)).unwrap_or(TypeInfo::Void)
-            }
+            Stmt::Return { value, .. } => value
+                .as_ref()
+                .map(|e| self.analyze_expr(e))
+                .unwrap_or(TypeInfo::Void),
             Stmt::Break { span } => {
                 if self.loop_depth == 0 {
                     self.errors.push(SemError {
@@ -294,19 +373,31 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
-            Stmt::Match { expr, arms, default, span: _ } => {
+            Stmt::Match {
+                expr,
+                arms,
+                default,
+                span: _,
+            } => {
                 let expr_type = self.analyze_expr(expr);
                 for arm in arms {
                     let arm_val_type = self.analyze_expr(&arm.value);
-                    if arm_val_type != expr_type {
-                        if !can_assign(&expr_type, &arm_val_type) && !(expr_type == TypeInfo::Decimal && arm_val_type == TypeInfo::Entero) {
-                            self.errors.push(SemError {
-                                code: "E056".to_string(),
-                                message: format!("El valor del caso debe ser '{:?}', no '{:?}'", expr_type, arm_val_type),
-                                span: arm.span,
-                                suggestion: format!("Usa un valor de tipo '{:?}' en este caso", expr_type),
-                            });
-                        }
+                    if arm_val_type != expr_type
+                        && !(can_assign(&expr_type, &arm_val_type)
+                            || (expr_type == TypeInfo::Decimal && arm_val_type == TypeInfo::Entero))
+                    {
+                        self.errors.push(SemError {
+                            code: "E056".to_string(),
+                            message: format!(
+                                "El valor del caso debe ser '{:?}', no '{:?}'",
+                                expr_type, arm_val_type
+                            ),
+                            span: arm.span,
+                            suggestion: format!(
+                                "Usa un valor de tipo '{:?}' en este caso",
+                                expr_type
+                            ),
+                        });
                     }
                     self.scopes.push(Scope::new());
                     for node in &arm.body {
@@ -323,7 +414,12 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
-            Stmt::FieldAssign { expr, field, value, span } => {
+            Stmt::FieldAssign {
+                expr,
+                field,
+                value,
+                span,
+            } => {
                 let expr_type = self.analyze_expr(expr);
                 let value_type = self.analyze_expr(value);
                 match &expr_type {
@@ -343,9 +439,15 @@ impl SemanticAnalyzer {
                             None => {
                                 self.errors.push(SemError {
                                     code: "E059".to_string(),
-                                    message: format!("El struct no tiene un campo llamado '{}'", field),
+                                    message: format!(
+                                        "El struct no tiene un campo llamado '{}'",
+                                        field
+                                    ),
                                     span: *span,
-                                    suggestion: format!("Revisa los campos del struct, '{}' no existe", field),
+                                    suggestion: format!(
+                                        "Revisa los campos del struct, '{}' no existe",
+                                        field
+                                    ),
                                 });
                             }
                         }
@@ -353,7 +455,10 @@ impl SemanticAnalyzer {
                     _ => {
                         self.errors.push(SemError {
                             code: "E060".to_string(),
-                            message: format!("No puedes asignar un campo a un valor de tipo '{:?}'", expr_type),
+                            message: format!(
+                                "No puedes asignar un campo a un valor de tipo '{:?}'",
+                                expr_type
+                            ),
                             span: *span,
                             suggestion: "Solo los structs tienen campos asignables".to_string(),
                         });
@@ -361,23 +466,31 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
-            Stmt::Expr { expr, .. } => {
-                self.analyze_expr(expr)
-            }
+            Stmt::Expr { expr, .. } => self.analyze_expr(expr),
             Stmt::Block { stmts, .. } => {
                 self.scopes.push(Scope::new());
-                for node in stmts { self.analyze_decl_or_stmt(node); }
+                for node in stmts {
+                    self.analyze_decl_or_stmt(node);
+                }
                 self.scopes.pop();
                 TypeInfo::Void
             }
-            Stmt::ForEach { var_name, expr, body, span } => {
+            Stmt::ForEach {
+                var_name,
+                expr,
+                body,
+                span,
+            } => {
                 let expr_type = self.analyze_expr(expr);
                 let item_type = match &expr_type {
                     TypeInfo::Lista(inner) => *inner.clone(),
                     _ => {
                         self.errors.push(SemError {
                             code: "E044".to_string(),
-                            message: format!("'para-cada' requiere una lista, no '{:?}'", expr_type),
+                            message: format!(
+                                "'para-cada' requiere una lista, no '{:?}'",
+                                expr_type
+                            ),
                             span: *span,
                             suggestion: "Usa una lista en el ciclo 'para-cada'".to_string(),
                         });
@@ -404,26 +517,32 @@ impl SemanticAnalyzer {
             Expr::Float { .. } => TypeInfo::Decimal,
             Expr::Str { .. } => TypeInfo::Texto,
             Expr::Bool { .. } => TypeInfo::Booleano,
-            Expr::Ident { name, span } => {
-                match self.lookup(name) {
-                    Some(sym) => sym.var_type.clone(),
-                    None => {
-                        self.errors.push(SemError {
-                            code: "E033".to_string(),
-                            message: format!("La variable '{}' no está declarada", name),
-                            span: *span,
-                            suggestion: format!("Declara '{}' antes de usarla", name),
-                        });
-                        TypeInfo::Numero
-                    }
+            Expr::Ident { name, span } => match self.lookup(name) {
+                Some(sym) => sym.var_type.clone(),
+                None => {
+                    self.errors.push(SemError {
+                        code: "E033".to_string(),
+                        message: format!("La variable '{}' no está declarada", name),
+                        span: *span,
+                        suggestion: format!("Declara '{}' antes de usarla", name),
+                    });
+                    TypeInfo::Numero
                 }
-            }
-            Expr::Binary { op, left, right, span } => {
+            },
+            Expr::Binary {
+                op,
+                left,
+                right,
+                span,
+            } => {
                 let lt = self.analyze_expr(left);
                 let rt = self.analyze_expr(right);
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
-                        if matches!(op, BinOp::Add) && lt == TypeInfo::Texto && rt == TypeInfo::Texto {
+                        if matches!(op, BinOp::Add)
+                            && lt == TypeInfo::Texto
+                            && rt == TypeInfo::Texto
+                        {
                             TypeInfo::Texto
                         } else if lt == TypeInfo::Entero && rt == TypeInfo::Entero {
                             TypeInfo::Entero
@@ -440,8 +559,11 @@ impl SemanticAnalyzer {
                         }
                     }
                     BinOp::Equal | BinOp::NotEqual => {
-                        if lt == rt || (is_numeric(&lt) && is_numeric(&rt))
-                            || can_assign(&lt, &rt) || can_assign(&rt, &lt) {
+                        if lt == rt
+                            || (is_numeric(&lt) && is_numeric(&rt))
+                            || can_assign(&lt, &rt)
+                            || can_assign(&rt, &lt)
+                        {
                             TypeInfo::Booleano
                         } else {
                             self.errors.push(SemError {
@@ -459,7 +581,10 @@ impl SemanticAnalyzer {
                         } else {
                             self.errors.push(SemError {
                                 code: "E035".to_string(),
-                                message: format!("Comparación requiere números, no '{:?}' y '{:?}'", lt, rt),
+                                message: format!(
+                                    "Comparación requiere números, no '{:?}' y '{:?}'",
+                                    lt, rt
+                                ),
                                 span: *span,
                                 suggestion: "Ambos operandos deben ser numéricos".to_string(),
                             });
@@ -470,9 +595,13 @@ impl SemanticAnalyzer {
                         if lt != TypeInfo::Booleano || rt != TypeInfo::Booleano {
                             self.errors.push(SemError {
                                 code: "E037".to_string(),
-                                message: format!("Operador lógico requiere booleanos, no '{:?}' y '{:?}'", lt, rt),
+                                message: format!(
+                                    "Operador lógico requiere booleanos, no '{:?}' y '{:?}'",
+                                    lt, rt
+                                ),
                                 span: *span,
-                                suggestion: "Ambos operandos deben ser de tipo 'booleano'".to_string(),
+                                suggestion: "Ambos operandos deben ser de tipo 'booleano'"
+                                    .to_string(),
                             });
                         }
                         TypeInfo::Booleano
@@ -497,7 +626,10 @@ impl SemanticAnalyzer {
                         if ot != TypeInfo::Booleano {
                             self.errors.push(SemError {
                                 code: "E039".to_string(),
-                                message: format!("No puedes aplicar '!' a un valor de tipo '{:?}'", ot),
+                                message: format!(
+                                    "No puedes aplicar '!' a un valor de tipo '{:?}'",
+                                    ot
+                                ),
                                 span: *span,
                                 suggestion: "El operador '!' solo aplica a booleanos".to_string(),
                             });
@@ -539,7 +671,9 @@ impl SemanticAnalyzer {
                                     });
                                     return ret_type.clone();
                                 }
-                                for (i, (got, expected)) in arg_types.iter().zip(param_types.iter()).enumerate() {
+                                for (i, (got, expected)) in
+                                    arg_types.iter().zip(param_types.iter()).enumerate()
+                                {
                                     if !can_assign(expected, got) {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
@@ -552,12 +686,19 @@ impl SemanticAnalyzer {
                                 ret_type.clone()
                             }
                             None => {
-                                if callee == "imprimir" || callee == "print" || callee == "leer" || callee == "read" {
+                                if callee == "imprimir"
+                                    || callee == "print"
+                                    || callee == "leer"
+                                    || callee == "read"
+                                {
                                     TypeInfo::Void
                                 } else {
                                     let var_type = self.lookup(&callee).map(|s| s.var_type.clone());
                                     match var_type {
-                                        Some(TypeInfo::Func { param_types, return_type }) => {
+                                        Some(TypeInfo::Func {
+                                            param_types,
+                                            return_type,
+                                        }) => {
                                             if args.len() != param_types.len() {
                                                 self.errors.push(SemError {
                                                     code: "E040".to_string(),
@@ -566,7 +707,11 @@ impl SemanticAnalyzer {
                                                     suggestion: format!("Pasa {} argumentos a '{}'", param_types.len(), callee),
                                                 });
                                             } else {
-                                                for (i, (got, expected)) in arg_types.iter().zip(param_types.iter()).enumerate() {
+                                                for (i, (got, expected)) in arg_types
+                                                    .iter()
+                                                    .zip(param_types.iter())
+                                                    .enumerate()
+                                                {
                                                     if !can_assign(expected, got) {
                                                         self.errors.push(SemError {
                                                             code: "E041".to_string(),
@@ -591,9 +736,15 @@ impl SemanticAnalyzer {
                                         None => {
                                             self.errors.push(SemError {
                                                 code: "E042".to_string(),
-                                                message: format!("La función '{}' no está definida", callee),
+                                                message: format!(
+                                                    "La función '{}' no está definida",
+                                                    callee
+                                                ),
                                                 span: *span,
-                                                suggestion: format!("Define la función '{}' antes de llamarla", callee),
+                                                suggestion: format!(
+                                                    "Define la función '{}' antes de llamarla",
+                                                    callee
+                                                ),
                                             });
                                             TypeInfo::Void
                                         }
@@ -605,7 +756,7 @@ impl SemanticAnalyzer {
                     Expr::Lambda { params, body, .. } => {
                         self.scopes.push(Scope::new());
                         for p in params {
-                    let pt = self.type_to_info(p.param_type.clone());
+                            let pt = self.type_to_info(p.param_type.clone());
                             if let Err(e) = self.current_scope().define(&p.name, pt, p.span) {
                                 self.errors.push(e);
                             }
@@ -623,16 +774,28 @@ impl SemanticAnalyzer {
                     _ => {
                         let callee_type = self.analyze_expr(callee);
                         match callee_type {
-                            TypeInfo::Func { param_types, return_type } => {
+                            TypeInfo::Func {
+                                param_types,
+                                return_type,
+                            } => {
                                 if args.len() != param_types.len() {
                                     self.errors.push(SemError {
                                         code: "E040".to_string(),
-                                        message: format!("La función espera {} argumentos, pero se pasaron {}", param_types.len(), args.len()),
+                                        message: format!(
+                                            "La función espera {} argumentos, pero se pasaron {}",
+                                            param_types.len(),
+                                            args.len()
+                                        ),
                                         span: *span,
-                                        suggestion: format!("Pasa {} argumentos", param_types.len()),
+                                        suggestion: format!(
+                                            "Pasa {} argumentos",
+                                            param_types.len()
+                                        ),
                                     });
                                 } else {
-                                    for (i, (got, expected)) in arg_types.iter().zip(param_types.iter()).enumerate() {
+                                    for (i, (got, expected)) in
+                                        arg_types.iter().zip(param_types.iter()).enumerate()
+                                    {
                                         if !can_assign(expected, got) {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
@@ -648,7 +811,10 @@ impl SemanticAnalyzer {
                             _ => {
                                 self.errors.push(SemError {
                                     code: "E058".to_string(),
-                                    message: format!("Solo puedes llamar funciones, no valores de tipo '{:?}'", callee_type),
+                                    message: format!(
+                                        "Solo puedes llamar funciones, no valores de tipo '{:?}'",
+                                        callee_type
+                                    ),
                                     span: *span,
                                     suggestion: "Usa un identificador de función".to_string(),
                                 });
@@ -665,11 +831,10 @@ impl SemanticAnalyzer {
                     let item_type = self.analyze_expr(&items[0]);
                     for item in items[1..].iter() {
                         let t = self.analyze_expr(item);
-                        if t != item_type {
-                            if !(item_type == TypeInfo::Decimal && t == TypeInfo::Entero)
-                                && !(item_type == TypeInfo::Entero && t == TypeInfo::Decimal)
-                            {
-                            }
+                        if t != item_type
+                            && !(item_type == TypeInfo::Decimal && t == TypeInfo::Entero
+                                || item_type == TypeInfo::Entero && t == TypeInfo::Decimal)
+                        {
                         }
                     }
                     TypeInfo::Lista(Box::new(item_type))
@@ -691,7 +856,10 @@ impl SemanticAnalyzer {
                     _ => {
                         self.errors.push(SemError {
                             code: "E044".to_string(),
-                            message: format!("No puedes indexar un valor de tipo '{:?}'", expr_type),
+                            message: format!(
+                                "No puedes indexar un valor de tipo '{:?}'",
+                                expr_type
+                            ),
                             span: *span,
                             suggestion: "La indexación solo funciona con listas".to_string(),
                         });
@@ -699,64 +867,89 @@ impl SemanticAnalyzer {
                     }
                 }
             }
-            Expr::MethodCall { expr, method, args, span } => {
+            Expr::MethodCall {
+                expr,
+                method,
+                args,
+                span,
+            } => {
                 let expr_type = self.analyze_expr(expr);
                 let mut arg_types = Vec::new();
                 for arg in args {
                     arg_types.push(self.analyze_expr(arg));
                 }
                 match method.as_str() {
-                    "agregar" | "push" => {
-                        match expr_type {
-                            TypeInfo::Lista(inner) => {
-                                if args.len() != 1 {
-                                    self.errors.push(SemError {
-                                        code: "E045".to_string(),
-                                        message: format!("'{}' requiere 1 argumento, se pasaron {}", method, args.len()),
-                                        span: *span,
-                                        suggestion: format!("Pasa exactamente 1 argumento a '{}'", method),
-                                    });
-                                } else if arg_types.len() == 1 && *inner != arg_types[0] {
-                                    if !(arg_types[0] == TypeInfo::Entero && *inner == TypeInfo::Decimal) {
-                                        self.errors.push(SemError {
-                                            code: "E046".to_string(),
-                                            message: format!("'{}' espera un valor de tipo '{:?}', no '{:?}'", method, inner, arg_types[0]),
-                                            span: *span,
-                                            suggestion: format!("Pasa un valor de tipo '{:?}' a '{}'", inner, method),
-                                        });
-                                    }
-                                }
-                                TypeInfo::Void
-                            }
-                            _ => {
+                    "agregar" | "push" => match expr_type {
+                        TypeInfo::Lista(inner) => {
+                            if args.len() != 1 {
                                 self.errors.push(SemError {
-                                    code: "E047".to_string(),
-                                    message: format!("No puedes llamar '{}' en un valor de tipo '{:?}'", method, expr_type),
+                                    code: "E045".to_string(),
+                                    message: format!(
+                                        "'{}' requiere 1 argumento, se pasaron {}",
+                                        method,
+                                        args.len()
+                                    ),
                                     span: *span,
-                                    suggestion: "'agregar' solo se puede llamar en listas".to_string(),
+                                    suggestion: format!(
+                                        "Pasa exactamente 1 argumento a '{}'",
+                                        method
+                                    ),
                                 });
-                                TypeInfo::Void
-                            }
-                        }
-                    }
-                    "largo" | "len" | "length" => {
-                        match expr_type {
-                            TypeInfo::Lista(_) => TypeInfo::Entero,
-                            _ => {
+                            } else if arg_types.len() == 1
+                                && *inner != arg_types[0]
+                                && !(arg_types[0] == TypeInfo::Entero
+                                    && *inner == TypeInfo::Decimal)
+                            {
                                 self.errors.push(SemError {
-                                    code: "E047".to_string(),
-                                    message: format!("No puedes llamar '{}' en un valor de tipo '{:?}'", method, expr_type),
+                                    code: "E046".to_string(),
+                                    message: format!(
+                                        "'{}' espera un valor de tipo '{:?}', no '{:?}'",
+                                        method, inner, arg_types[0]
+                                    ),
                                     span: *span,
-                                    suggestion: "'largo' solo se puede llamar en listas".to_string(),
+                                    suggestion: format!(
+                                        "Pasa un valor de tipo '{:?}' a '{}'",
+                                        inner, method
+                                    ),
                                 });
-                                TypeInfo::Entero
                             }
+                            TypeInfo::Void
                         }
-                    }
+                        _ => {
+                            self.errors.push(SemError {
+                                code: "E047".to_string(),
+                                message: format!(
+                                    "No puedes llamar '{}' en un valor de tipo '{:?}'",
+                                    method, expr_type
+                                ),
+                                span: *span,
+                                suggestion: "'agregar' solo se puede llamar en listas".to_string(),
+                            });
+                            TypeInfo::Void
+                        }
+                    },
+                    "largo" | "len" | "length" => match expr_type {
+                        TypeInfo::Lista(_) => TypeInfo::Entero,
+                        _ => {
+                            self.errors.push(SemError {
+                                code: "E047".to_string(),
+                                message: format!(
+                                    "No puedes llamar '{}' en un valor de tipo '{:?}'",
+                                    method, expr_type
+                                ),
+                                span: *span,
+                                suggestion: "'largo' solo se puede llamar en listas".to_string(),
+                            });
+                            TypeInfo::Entero
+                        }
+                    },
                     _ => {
                         self.errors.push(SemError {
                             code: "E050".to_string(),
-                            message: format!("El método '{}' no existe para el tipo '{:?}'", method, expr_type),
+                            message: format!(
+                                "El método '{}' no existe para el tipo '{:?}'",
+                                method, expr_type
+                            ),
                             span: *span,
                             suggestion: format!("Revisa si el método '{}' está disponible", method),
                         });
@@ -780,13 +973,20 @@ impl SemanticAnalyzer {
                     }
                 }
                 self.scopes.pop();
-                let param_types = params.iter().map(|p| self.type_to_info(p.param_type.clone())).collect();
+                let param_types = params
+                    .iter()
+                    .map(|p| self.type_to_info(p.param_type.clone()))
+                    .collect();
                 TypeInfo::Func {
                     param_types,
                     return_type: Box::new(ret_type),
                 }
             }
-            Expr::StructInit { struct_name, fields, span } => {
+            Expr::StructInit {
+                struct_name,
+                fields,
+                span,
+            } => {
                 let struct_type = self.structs.get(struct_name).cloned();
                 match struct_type {
                     Some(expected_fields) => {
@@ -807,9 +1007,15 @@ impl SemanticAnalyzer {
                                 None => {
                                     self.errors.push(SemError {
                                         code: "E059".to_string(),
-                                        message: format!("El struct '{}' no tiene un campo llamado '{}'", struct_name, fname),
+                                        message: format!(
+                                            "El struct '{}' no tiene un campo llamado '{}'",
+                                            struct_name, fname
+                                        ),
                                         span: *span,
-                                        suggestion: format!("Revisa los campos de '{}', '{}' no existe", struct_name, fname),
+                                        suggestion: format!(
+                                            "Revisa los campos de '{}', '{}' no existe",
+                                            struct_name, fname
+                                        ),
                                     });
                                 }
                             }
@@ -819,20 +1025,32 @@ impl SemanticAnalyzer {
                             if !fields.iter().any(|(name, _)| name == expected_name) {
                                 self.errors.push(SemError {
                                     code: "E061".to_string(),
-                                    message: format!("Falta el campo '{}' en la inicialización de '{}'", expected_name, struct_name),
+                                    message: format!(
+                                        "Falta el campo '{}' en la inicialización de '{}'",
+                                        expected_name, struct_name
+                                    ),
                                     span: *span,
-                                    suggestion: format!("Agrega el campo '{}' al inicializar '{}'", expected_name, struct_name),
+                                    suggestion: format!(
+                                        "Agrega el campo '{}' al inicializar '{}'",
+                                        expected_name, struct_name
+                                    ),
                                 });
                             }
                         }
-                        TypeInfo::Struct { name: struct_name.clone(), fields: expected_fields }
+                        TypeInfo::Struct {
+                            name: struct_name.clone(),
+                            fields: expected_fields,
+                        }
                     }
                     None => {
                         self.errors.push(SemError {
                             code: "E062".to_string(),
                             message: format!("El struct '{}' no está definido", struct_name),
                             span: *span,
-                            suggestion: format!("Define el struct '{}' antes de usarlo", struct_name),
+                            suggestion: format!(
+                                "Define el struct '{}' antes de usarlo",
+                                struct_name
+                            ),
                         });
                         TypeInfo::Void
                     }
@@ -848,9 +1066,15 @@ impl SemanticAnalyzer {
                             None => {
                                 self.errors.push(SemError {
                                     code: "E059".to_string(),
-                                    message: format!("El struct no tiene un campo llamado '{}'", field),
+                                    message: format!(
+                                        "El struct no tiene un campo llamado '{}'",
+                                        field
+                                    ),
                                     span: *span,
-                                    suggestion: format!("Revisa los campos del struct, '{}' no existe", field),
+                                    suggestion: format!(
+                                        "Revisa los campos del struct, '{}' no existe",
+                                        field
+                                    ),
                                 });
                                 TypeInfo::Void
                             }
@@ -859,7 +1083,10 @@ impl SemanticAnalyzer {
                     _ => {
                         self.errors.push(SemError {
                             code: "E060".to_string(),
-                            message: format!("No puedes acceder a un campo de un valor de tipo '{:?}'", expr_type),
+                            message: format!(
+                                "No puedes acceder a un campo de un valor de tipo '{:?}'",
+                                expr_type
+                            ),
                             span: *span,
                             suggestion: "Solo los structs tienen campos".to_string(),
                         });
@@ -873,7 +1100,8 @@ impl SemanticAnalyzer {
                 if inner == TypeInfo::Void {
                     self.errors.push(SemError {
                         code: "E064".to_string(),
-                        message: "No puedes crear un resultado exitoso con un valor vacío".to_string(),
+                        message: "No puedes crear un resultado exitoso con un valor vacío"
+                            .to_string(),
                         span: *span,
                         suggestion: "Pasa un valor válido a 'exito()'.".to_string(),
                     });
@@ -888,7 +1116,8 @@ impl SemanticAnalyzer {
                 if inner == TypeInfo::Void {
                     self.errors.push(SemError {
                         code: "E064".to_string(),
-                        message: "No puedes crear un resultado de error con un valor vacío".to_string(),
+                        message: "No puedes crear un resultado de error con un valor vacío"
+                            .to_string(),
                         span: *span,
                         suggestion: "Pasa un valor válido a 'error()'.".to_string(),
                     });
@@ -925,9 +1154,7 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Opcion(Box::new(inner))
             }
-            Expr::Ninguno { .. } => {
-                TypeInfo::Opcion(Box::new(TypeInfo::Void))
-            }
+            Expr::Ninguno { .. } => TypeInfo::Opcion(Box::new(TypeInfo::Void)),
         }
     }
 
@@ -954,8 +1181,14 @@ impl SemanticAnalyzer {
             Type::Texto => TypeInfo::Texto,
             Type::Booleano => TypeInfo::Booleano,
             Type::Lista(inner) => TypeInfo::Lista(Box::new(self.type_to_info(*inner))),
-            Type::Func { param_types, return_type } => TypeInfo::Func {
-                param_types: param_types.into_iter().map(|t| self.type_to_info(t)).collect(),
+            Type::Func {
+                param_types,
+                return_type,
+            } => TypeInfo::Func {
+                param_types: param_types
+                    .into_iter()
+                    .map(|t| self.type_to_info(t))
+                    .collect(),
                 return_type: Box::new(self.type_to_info(*return_type)),
             },
             Type::Struct(name) => {
@@ -976,29 +1209,56 @@ fn is_numeric(t: &TypeInfo) -> bool {
 }
 
 fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
-    if target == value { return true; }
-    if *target == TypeInfo::Decimal && *value == TypeInfo::Entero { return true; }
+    if target == value {
+        return true;
+    }
+    if *target == TypeInfo::Decimal && *value == TypeInfo::Entero {
+        return true;
+    }
     if let (TypeInfo::Lista(t_inner), TypeInfo::Lista(v_inner)) = (target, value) {
-        if **v_inner == TypeInfo::Void { return true; }
+        if **v_inner == TypeInfo::Void {
+            return true;
+        }
         return can_assign(t_inner, v_inner);
     }
-    if let (TypeInfo::Func { param_types: tp, return_type: tr },
-            TypeInfo::Func { param_types: vp, return_type: vr }) = (target, value) {
-        if tp.len() != vp.len() { return false; }
-        if !can_assign(tr, vr) { return false; }
+    if let (
+        TypeInfo::Func {
+            param_types: tp,
+            return_type: tr,
+        },
+        TypeInfo::Func {
+            param_types: vp,
+            return_type: vr,
+        },
+    ) = (target, value)
+    {
+        if tp.len() != vp.len() {
+            return false;
+        }
+        if !can_assign(tr, vr) {
+            return false;
+        }
         for (t, v) in tp.iter().zip(vp.iter()) {
-            if !can_assign(t, v) { return false; }
+            if !can_assign(t, v) {
+                return false;
+            }
         }
         return true;
     }
-    if let (TypeInfo::Resultado { ok: tok, err: terr },
-            TypeInfo::Resultado { ok: vok, err: verr }) = (target, value) {
+    if let (
+        TypeInfo::Resultado { ok: tok, err: terr },
+        TypeInfo::Resultado { ok: vok, err: verr },
+    ) = (target, value)
+    {
         let ok_compat = can_assign(tok, vok) || **vok == TypeInfo::Void || **tok == TypeInfo::Void;
-        let err_compat = can_assign(terr, verr) || **verr == TypeInfo::Void || **terr == TypeInfo::Void;
+        let err_compat =
+            can_assign(terr, verr) || **verr == TypeInfo::Void || **terr == TypeInfo::Void;
         return ok_compat && err_compat;
     }
     if let (TypeInfo::Opcion(target_inner), TypeInfo::Opcion(value_inner)) = (target, value) {
-        if **value_inner == TypeInfo::Void { return true; }
+        if **value_inner == TypeInfo::Void {
+            return true;
+        }
         return can_assign(target_inner, value_inner);
     }
     false
@@ -1134,7 +1394,8 @@ mod tests {
 
     #[test]
     fn test_function_call_arg_type() {
-        let source = r#"funcion numero suma(numero a, numero b) { retornar a + b; } suma(1, "hola");"#;
+        let source =
+            r#"funcion numero suma(numero a, numero b) { retornar a + b; } suma(1, "hola");"#;
         let errors = analyze(source);
         assert!(!errors.is_empty());
         assert_eq!(errors[0].code, "E041");

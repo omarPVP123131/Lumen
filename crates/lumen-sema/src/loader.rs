@@ -1,6 +1,6 @@
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use lumen_lexer::token::Span;
 use lumen_lexer::Lexer;
@@ -22,14 +22,21 @@ pub struct ModuleLoader {
 
 impl ModuleLoader {
     pub fn new(search_paths: Vec<PathBuf>) -> Self {
-        Self { search_paths, visited: HashSet::new() }
+        Self {
+            search_paths,
+            visited: HashSet::new(),
+        }
     }
 
     pub fn with_default_search_paths() -> Self {
         Self::new(Vec::new())
     }
 
-    pub fn resolve_imports(&mut self, source: &str, base_path: &Path) -> Result<Program, ModuleError> {
+    pub fn resolve_imports(
+        &mut self,
+        source: &str,
+        base_path: &Path,
+    ) -> Result<Program, ModuleError> {
         self.visited.clear();
         let program = parse_source(source, base_path)?;
         self.flatten(program, base_path)
@@ -42,19 +49,22 @@ impl ModuleLoader {
                 DeclOrStmt::Stmt(Stmt::Import { path, alias, span }) => {
                     let resolved = self.resolve_path(&path, current_dir)?;
                     if !self.visited.insert(resolved.clone()) {
-                        return Err(ModuleError::Circular { path: resolved, span });
+                        return Err(ModuleError::Circular {
+                            path: resolved,
+                            span,
+                        });
                     }
-                    let source = fs::read_to_string(&resolved)
-                        .map_err(|e| ModuleError::Io {
-                            path: resolved.clone(),
-                            message: format!("No se pudo leer '{}': {}", resolved.display(), e),
-                        })?;
+                    let source = fs::read_to_string(&resolved).map_err(|e| ModuleError::Io {
+                        path: resolved.clone(),
+                        message: format!("No se pudo leer '{}': {}", resolved.display(), e),
+                    })?;
                     let imported_program = parse_source(&source, &resolved)?;
                     let parent = resolved.parent().unwrap_or(Path::new("."));
                     let flat = self.flatten(imported_program, parent)?;
                     self.visited.remove(&resolved);
                     let prefix = alias.unwrap_or_else(|| {
-                        resolved.file_stem()
+                        resolved
+                            .file_stem()
                             .and_then(|s| s.to_str())
                             .unwrap_or("module")
                             .to_string()
@@ -115,7 +125,15 @@ fn parse_source(source: &str, path: &Path) -> Result<Program, ModuleError> {
     if !lex_errors.is_empty() {
         return Err(ModuleError::Lex {
             path: path.to_path_buf(),
-            details: lex_errors.iter().map(|e| format!("{} [{}:{}]: {} ({})", e.code, e.pos.line, e.pos.col, e.message, e.suggestion)).collect(),
+            details: lex_errors
+                .iter()
+                .map(|e| {
+                    format!(
+                        "{} [{}:{}]: {} ({})",
+                        e.code, e.pos.line, e.pos.col, e.message, e.suggestion
+                    )
+                })
+                .collect(),
         });
     }
     let parser = Parser::new(tokens);
@@ -123,7 +141,15 @@ fn parse_source(source: &str, path: &Path) -> Result<Program, ModuleError> {
     if !parse_errors.is_empty() {
         return Err(ModuleError::Parse {
             path: path.to_path_buf(),
-            details: parse_errors.iter().map(|e| format!("{} [{}:{}]: {} ({})", e.code, e.span.start.line, e.span.start.col, e.message, e.suggestion)).collect(),
+            details: parse_errors
+                .iter()
+                .map(|e| {
+                    format!(
+                        "{} [{}:{}]: {} ({})",
+                        e.code, e.span.start.line, e.span.start.col, e.message, e.suggestion
+                    )
+                })
+                .collect(),
         });
     }
     Ok(program)
@@ -145,7 +171,12 @@ fn prefix_node(node: &mut DeclOrStmt, prefix: &str, locals: &mut HashSet<String>
 
 fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_level: bool) {
     match decl {
-        Decl::Variable { var_type, name, init, .. } => {
+        Decl::Variable {
+            var_type,
+            name,
+            init,
+            ..
+        } => {
             prefix_type(var_type, prefix);
             if top_level {
                 *name = format!("{}_{}", prefix, name);
@@ -156,7 +187,13 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
                 prefix_expr(expr, prefix, locals);
             }
         }
-        Decl::Function { return_type, name, params, body, .. } => {
+        Decl::Function {
+            return_type,
+            name,
+            params,
+            body,
+            ..
+        } => {
             prefix_type(return_type, prefix);
             if top_level {
                 *name = format!("{}_{}", prefix, name);
@@ -194,7 +231,12 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
             }
             prefix_expr(value, prefix, locals);
         }
-        Stmt::If { condition, then_body, else_body, .. } => {
+        Stmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
             prefix_expr(condition, prefix, locals);
             let mut if_locals = locals.clone();
             for node in then_body.iter_mut() {
@@ -207,19 +249,27 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
                 }
             }
         }
-        Stmt::While { condition, body, .. } => {
+        Stmt::While {
+            condition, body, ..
+        } => {
             prefix_expr(condition, prefix, locals);
             let mut while_locals = locals.clone();
             for node in body.iter_mut() {
                 prefix_node(node, prefix, &mut while_locals, false);
             }
         }
-        Stmt::For { init, condition, update, body, .. } => {
+        Stmt::For {
+            init,
+            condition,
+            update,
+            body,
+            ..
+        } => {
             let mut for_locals = locals.clone();
             if let Decl::Variable { name, .. } = init.as_mut() {
                 for_locals.insert(name.clone());
             }
-            prefix_expr(condition, prefix, &mut for_locals);
+            prefix_expr(condition, prefix, &for_locals);
             prefix_stmt(update, prefix, &mut for_locals, false);
             for node in body.iter_mut() {
                 prefix_node(node, prefix, &mut for_locals, false);
@@ -230,16 +280,26 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
                 prefix_expr(expr, prefix, locals);
             }
         }
-                Stmt::ForEach { var_name, expr, body, .. } => {
-                    let mut foreach_locals = locals.clone();
-                    foreach_locals.insert(var_name.clone());
-                    prefix_expr(expr, prefix, &mut foreach_locals);
-                    for node in body.iter_mut() {
-                        prefix_node(node, prefix, &mut foreach_locals, false);
-                    }
-                }
-                Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
-        Stmt::Match { expr, arms, default, .. } => {
+        Stmt::ForEach {
+            var_name,
+            expr,
+            body,
+            ..
+        } => {
+            let mut foreach_locals = locals.clone();
+            foreach_locals.insert(var_name.clone());
+            prefix_expr(expr, prefix, &foreach_locals);
+            for node in body.iter_mut() {
+                prefix_node(node, prefix, &mut foreach_locals, false);
+            }
+        }
+        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
+        Stmt::Match {
+            expr,
+            arms,
+            default,
+            ..
+        } => {
             prefix_expr(expr, prefix, locals);
             for arm in arms.iter_mut() {
                 prefix_expr(&mut arm.value, prefix, locals);
@@ -300,11 +360,17 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
                 prefix_expr(item, prefix, locals);
             }
         }
-        Expr::Index { expr: target, index, .. } => {
+        Expr::Index {
+            expr: target,
+            index,
+            ..
+        } => {
             prefix_expr(target, prefix, locals);
             prefix_expr(index, prefix, locals);
         }
-        Expr::MethodCall { expr: target, args, .. } => {
+        Expr::MethodCall {
+            expr: target, args, ..
+        } => {
             prefix_expr(target, prefix, locals);
             for arg in args.iter_mut() {
                 prefix_expr(arg, prefix, locals);
@@ -320,7 +386,11 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
                 prefix_node(node, prefix, &mut lambda_locals, false);
             }
         }
-        Expr::StructInit { struct_name, fields, .. } => {
+        Expr::StructInit {
+            struct_name,
+            fields,
+            ..
+        } => {
             *struct_name = format!("{}_{}", prefix, struct_name);
             for (_, value) in fields.iter_mut() {
                 prefix_expr(value, prefix, locals);
@@ -348,7 +418,10 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
 fn prefix_type(t: &mut Type, prefix: &str) {
     match t {
         Type::Lista(inner) => prefix_type(inner, prefix),
-        Type::Func { param_types, return_type } => {
+        Type::Func {
+            param_types,
+            return_type,
+        } => {
             for p in param_types.iter_mut() {
                 prefix_type(p, prefix);
             }

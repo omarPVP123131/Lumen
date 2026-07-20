@@ -71,32 +71,30 @@ impl Lexer {
                     loop {
                         match self.advance() {
                             Some('"') => break,
-                            Some('\\') => {
-                                match self.advance() {
-                                    Some('n') => s.push('\n'),
-                                    Some('t') => s.push('\t'),
-                                    Some('"') => s.push('"'),
-                                    Some('\\') => s.push('\\'),
-                                    Some(ch) => s.push(ch),
-                                    None => {
-                                        self.errors.push(LexError {
-                                            code: "E004".to_string(),
-                                            message: "Secuencia de escape incompleta".to_string(),
-                                            pos: self.current_pos(),
-                                            suggestion: "Usa \\n, \\t, \\\" o \\\\".to_string(),
-                                        });
-                                        break;
-                                    }
+                            Some('\\') => match self.advance() {
+                                Some('n') => s.push('\n'),
+                                Some('t') => s.push('\t'),
+                                Some('"') => s.push('"'),
+                                Some('\\') => s.push('\\'),
+                                Some(ch) => s.push(ch),
+                                None => {
+                                    self.errors.push(LexError {
+                                        code: "E004".to_string(),
+                                        message: "Secuencia de escape incompleta".to_string(),
+                                        pos: self.current_pos(),
+                                        suggestion: "Usa \\n, \\t, \\\" o \\\\".to_string(),
+                                    });
+                                    break;
                                 }
-                            }
+                            },
                             Some(ch) => s.push(ch),
                             None => {
                                 self.errors.push(LexError {
                                     code: "E002".to_string(),
                                     message: "String literal sin cerrar".to_string(),
                                     pos: start_pos,
-                                    suggestion:
-                                        "Agrega una comilla doble '\"' al final del texto".to_string(),
+                                    suggestion: "Agrega una comilla doble '\"' al final del texto"
+                                        .to_string(),
                                 });
                                 break;
                             }
@@ -344,7 +342,9 @@ mod tests {
 
     #[test]
     fn test_keywords_english() {
-        let kinds = tokenize("if else while for function return true false number string boolean print read");
+        let kinds = tokenize(
+            "if else while for function return true false number string boolean print read",
+        );
         assert_eq!(
             kinds,
             vec![

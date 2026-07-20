@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use lumen_codegen::bytecode::{Bytecode, Instruction, Opcode, FuncMeta};
 use crate::value::Value;
+use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum VmError {
@@ -24,7 +24,9 @@ pub struct VM {
 
 impl VM {
     pub fn new(bytecode: Bytecode) -> Self {
-        let ip = bytecode.funcs.iter()
+        let ip = bytecode
+            .funcs
+            .iter()
             .find(|f| f.name == "__main__")
             .or_else(|| bytecode.funcs.iter().find(|f| f.name == "main"))
             .or_else(|| bytecode.funcs.first())
@@ -46,7 +48,8 @@ impl VM {
     }
 
     fn find_func(&self, name: &str) -> Option<&FuncMeta> {
-        self.func_index_cache.get(name)
+        self.func_index_cache
+            .get(name)
             .and_then(|&idx| self.bytecode.funcs.get(idx))
     }
 
@@ -87,7 +90,11 @@ impl VM {
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Float(a + *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Float(a + b)),
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Str(format!("{}{}", a, b))),
-                    _ => return Err(VmError::TypeError("Add requires numbers or strings".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "Add requires numbers or strings".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Sub => {
@@ -125,15 +132,21 @@ impl VM {
                         }
                     }
                     (Value::Int(a), Value::Float(b)) => {
-                        if *b == 0.0 { return Err(VmError::DivisionByZero); }
+                        if *b == 0.0 {
+                            return Err(VmError::DivisionByZero);
+                        }
                         self.push(Value::Float(*a as f64 / b))
                     }
                     (Value::Float(a), Value::Int(b)) => {
-                        if *b == 0 { return Err(VmError::DivisionByZero); }
+                        if *b == 0 {
+                            return Err(VmError::DivisionByZero);
+                        }
                         self.push(Value::Float(a / *b as f64))
                     }
                     (Value::Float(a), Value::Float(b)) => {
-                        if *b == 0.0 { return Err(VmError::DivisionByZero); }
+                        if *b == 0.0 {
+                            return Err(VmError::DivisionByZero);
+                        }
                         self.push(Value::Float(a / b))
                     }
                     _ => return Err(VmError::TypeError("Div requires numbers".to_string())),
@@ -149,9 +162,16 @@ impl VM {
                     (Value::Float(a), Value::Float(b)) => (a - b).abs() < f64::EPSILON,
                     (Value::Str(a), Value::Str(b)) => a == b,
                     (Value::Bool(a), Value::Bool(b)) => a == b,
-                    (Value::Struct { name: an, fields: af }, Value::Struct { name: bn, fields: bf }) => {
-                        an == bn && af == bf
-                    }
+                    (
+                        Value::Struct {
+                            name: an,
+                            fields: af,
+                        },
+                        Value::Struct {
+                            name: bn,
+                            fields: bf,
+                        },
+                    ) => an == bn && af == bf,
                     (Value::Opcion(a), Value::Opcion(b)) => a == b,
                     _ => false,
                 };
@@ -167,9 +187,16 @@ impl VM {
                     (Value::Float(a), Value::Float(b)) => (a - b).abs() >= f64::EPSILON,
                     (Value::Str(a), Value::Str(b)) => a != b,
                     (Value::Bool(a), Value::Bool(b)) => a != b,
-                    (Value::Struct { name: an, fields: af }, Value::Struct { name: bn, fields: bf }) => {
-                        an != bn || af != bf
-                    }
+                    (
+                        Value::Struct {
+                            name: an,
+                            fields: af,
+                        },
+                        Value::Struct {
+                            name: bn,
+                            fields: bf,
+                        },
+                    ) => an != bn || af != bf,
                     (Value::Opcion(a), Value::Opcion(b)) => a != b,
                     _ => true,
                 };
@@ -265,17 +292,30 @@ impl VM {
                 let struct_val = self.pop()?;
                 let field = match &field_name {
                     Value::Str(s) => s.clone(),
-                    _ => return Err(VmError::TypeError("StructGet requires string field name".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "StructGet requires string field name".to_string(),
+                        ))
+                    }
                 };
                 match struct_val {
                     Value::Struct { fields, .. } => {
                         let val = fields.iter().find(|(name, _)| name == &field);
                         match val {
                             Some((_, v)) => self.push(v.clone()),
-                            None => return Err(VmError::Runtime(format!("Campo '{}' no encontrado en struct", field))),
+                            None => {
+                                return Err(VmError::Runtime(format!(
+                                    "Campo '{}' no encontrado en struct",
+                                    field
+                                )))
+                            }
                         }
                     }
-                    _ => return Err(VmError::TypeError("StructGet requires struct value".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "StructGet requires struct value".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::StructSet => {
@@ -284,7 +324,11 @@ impl VM {
                 let struct_val = self.pop()?;
                 let field = match &field_name {
                     Value::Str(s) => s.clone(),
-                    _ => return Err(VmError::TypeError("StructSet requires string field name".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "StructSet requires string field name".to_string(),
+                        ))
+                    }
                 };
                 match struct_val {
                     Value::Struct { name, mut fields } => {
@@ -294,10 +338,19 @@ impl VM {
                                 fields[i] = (field, new_val);
                                 self.push(Value::Struct { name, fields });
                             }
-                            None => return Err(VmError::Runtime(format!("Campo '{}' no encontrado en struct", field))),
+                            None => {
+                                return Err(VmError::Runtime(format!(
+                                    "Campo '{}' no encontrado en struct",
+                                    field
+                                )))
+                            }
                         }
                     }
-                    _ => return Err(VmError::TypeError("StructSet requires struct value".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "StructSet requires struct value".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::FuncRef => {
@@ -315,11 +368,19 @@ impl VM {
                 match (array, index) {
                     (Value::Array(arr), Value::Int(idx)) => {
                         if idx < 0 || idx as usize >= arr.len() {
-                            return Err(VmError::Runtime(format!("Índice {} fuera de rango (largo: {})", idx, arr.len())));
+                            return Err(VmError::Runtime(format!(
+                                "Índice {} fuera de rango (largo: {})",
+                                idx,
+                                arr.len()
+                            )));
                         }
                         self.push(arr[idx as usize].clone());
                     }
-                    _ => return Err(VmError::TypeError("ArrayGet requires array and integer index".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "ArrayGet requires array and integer index".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::ArraySet => {
@@ -329,12 +390,20 @@ impl VM {
                 match (array, index, value) {
                     (Value::Array(mut arr), Value::Int(idx), val) => {
                         if idx < 0 || idx as usize >= arr.len() {
-                            return Err(VmError::Runtime(format!("Índice {} fuera de rango (largo: {})", idx, arr.len())));
+                            return Err(VmError::Runtime(format!(
+                                "Índice {} fuera de rango (largo: {})",
+                                idx,
+                                arr.len()
+                            )));
                         }
                         arr[idx as usize] = val;
                         self.push(Value::Array(arr));
                     }
-                    _ => return Err(VmError::TypeError("ArraySet requires array, integer index, and value".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "ArraySet requires array, integer index, and value".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::ArrayLen => {
@@ -355,7 +424,9 @@ impl VM {
                     other => {
                         self.push(other);
                         self.push(value);
-                        return Err(VmError::TypeError("ArrayPush requires array as receiver".to_string()));
+                        return Err(VmError::TypeError(
+                            "ArrayPush requires array as receiver".to_string(),
+                        ));
                     }
                 }
             }
@@ -381,7 +452,11 @@ impl VM {
                         }
                         self.push(err_wrapper);
                     }
-                    _ => return Err(VmError::TypeError("TryUnwrap requires a result value".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "TryUnwrap requires a result value".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::OptionSome => {
@@ -398,21 +473,30 @@ impl VM {
 
     fn execute_with_num(&mut self, op: Opcode, n: f64) -> Result<(), VmError> {
         match op {
-            Opcode::PushNum => { self.push(Value::Float(n)); Ok(()) }
+            Opcode::PushNum => {
+                self.push(Value::Float(n));
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
 
     fn execute_with_str(&mut self, op: Opcode, s: &str) -> Result<(), VmError> {
         match op {
-            Opcode::PushStr => { self.push(Value::Str(s.to_string())); Ok(()) }
+            Opcode::PushStr => {
+                self.push(Value::Str(s.to_string()));
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
 
     fn execute_with_bool(&mut self, op: Opcode, b: bool) -> Result<(), VmError> {
         match op {
-            Opcode::PushBool => { self.push(Value::Bool(b)); Ok(()) }
+            Opcode::PushBool => {
+                self.push(Value::Bool(b));
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -451,8 +535,12 @@ impl VM {
                 let argc = if argc_idx < self.bytecode.instructions.len() {
                     if let Instruction::WithIdx(_, nidx) = &self.bytecode.instructions[argc_idx] {
                         self.bytecode.nums.get(*nidx).copied().unwrap_or(0.0) as usize
-                    } else { 0 }
-                } else { 0 };
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
                 let mut args = Vec::new();
                 for _ in 0..argc {
                     args.push(self.pop()?);
@@ -496,7 +584,11 @@ impl VM {
                 let callee = self.pop()?;
                 let name = match &callee {
                     Value::Func(n) => n.clone(),
-                    _ => return Err(VmError::TypeError("Se esperaba una función para llamar".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "Se esperaba una función para llamar".to_string(),
+                        ))
+                    }
                 };
                 if name == "imprimir" || name == "print" {
                     for arg in args {
@@ -538,8 +630,12 @@ impl VM {
                 let count = if argc_idx < self.bytecode.instructions.len() {
                     if let Instruction::WithIdx(_, nidx) = &self.bytecode.instructions[argc_idx] {
                         self.bytecode.nums.get(*nidx).copied().unwrap_or(0.0) as usize
-                    } else { 0 }
-                } else { 0 };
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
                 let mut field_names = Vec::with_capacity(count);
                 for _ in 0..count {
                     field_names.push(self.pop()?);
@@ -550,7 +646,9 @@ impl VM {
                     field_values.push(self.pop()?);
                 }
                 field_values.reverse();
-                let fields: Vec<(String, Value)> = field_names.into_iter().zip(field_values.into_iter())
+                let fields: Vec<(String, Value)> = field_names
+                    .into_iter()
+                    .zip(field_values)
                     .map(|(name, val)| {
                         let n = match name {
                             Value::Str(s) => s,
@@ -559,7 +657,10 @@ impl VM {
                         (n, val)
                     })
                     .collect();
-                self.push(Value::Struct { name: struct_name, fields });
+                self.push(Value::Struct {
+                    name: struct_name,
+                    fields,
+                });
             }
             Opcode::Jmp => {
                 let target = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
@@ -900,8 +1001,16 @@ mod tests {
             nums: vec![3.0, 2.0],
             names: vec!["sum".to_string(), "a".to_string(), "b".to_string()],
             funcs: vec![
-                FuncMeta { name: "__main__".to_string(), params: vec![], start: 0 },
-                FuncMeta { name: "sum".to_string(), params: vec!["a".to_string(), "b".to_string()], start: 6 },
+                FuncMeta {
+                    name: "__main__".to_string(),
+                    params: vec![],
+                    start: 0,
+                },
+                FuncMeta {
+                    name: "sum".to_string(),
+                    params: vec!["a".to_string(), "b".to_string()],
+                    start: 6,
+                },
             ],
         };
         let mut vm = VM::new(bc);
@@ -921,9 +1030,11 @@ mod tests {
             ints: vec![],
             nums: vec![0.0],
             names: vec!["nonexistent".to_string()],
-            funcs: vec![
-                FuncMeta { name: "__main__".to_string(), params: vec![], start: 0 },
-            ],
+            funcs: vec![FuncMeta {
+                name: "__main__".to_string(),
+                params: vec![],
+                start: 0,
+            }],
         };
         let mut vm = VM::new(bc);
         let result = vm.run();
@@ -947,9 +1058,11 @@ mod tests {
             ints: vec![],
             nums: vec![42.0],
             names: vec![],
-            funcs: vec![
-                FuncMeta { name: "__main__".to_string(), params: vec![], start: 0 },
-            ],
+            funcs: vec![FuncMeta {
+                name: "__main__".to_string(),
+                params: vec![],
+                start: 0,
+            }],
         };
         let mut vm = VM::new(bc);
         // Ret without call should just push the value and continue (no call_stack to pop)
@@ -1265,5 +1378,3 @@ mod tests {
         assert_eq!(vm.output(), &["-4"]);
     }
 }
-
-
