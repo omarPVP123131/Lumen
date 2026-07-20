@@ -68,7 +68,7 @@ Camino hacia **v1.0 estable**, dividido en 40 fases. Las fases 0-20 están compl
 
 ---
 
-### Fase 23 — Enums / Tipos Suma
+### Fase 23 — Enums / Tipos Suma ✅
 **Objetivo**: Tipos suma con variantes nombradas.
 
 ```lumen
@@ -84,36 +84,36 @@ enum Color {
 - Type checking exhaustivo (opcional en v1.0)
 
 **Criterio de aceptación**:
-- [ ] Parseo de declaración `enum`
-- [ ] Constructores de variantes como expresiones
-- [ ] `elegir` con variantes de enum (pattern matching)
-- [ ] VM: `Value::Enum { name, variant, fields }`
-- [ ] Tests: enum simple, con datos, match exhaustivo
+- [x] Parseo de declaración `enum`
+- [x] Constructores de variantes como expresiones
+- [x] `elegir` con variantes de enum (pattern matching)
+- [x] VM: `Value::Enum { name, variant, fields }`
+- [x] Tests: enum simple, con datos, match exhaustivo
 
 ---
 
-### Fase 24 — Tuplas
+### Fase 24 — Tuplas ✅
 **Objetivo**: Tuplas como tipo nativo para agrupar valores heterogéneos.
 
 ```lumen
 entero, texto par = (1, "hola");
-imprimir(par[0]); // 1
+imprimir(par.0); // 1
 ```
 
 - Sintaxis de tipo: `(tipo, tipo, ...)`
-- Indexación por posición: `tupla[0]`, `tupla[1]`
+- Indexación por posición: `tupla.0`, `tupla.1`
 - Soporte en IR y VM como valor compuesto
 
 **Criterio de aceptación**:
-- [ ] Parseo de tipo tupla y expresión tupla
-- [ ] Type checking: número de elementos y tipos deben coincidir
-- [ ] VM: `Value::Tuple(Vec<Value>)`
-- [ ] Acceso por índice con validación de rango
-- [ ] Tests: 5+ casos
+- [x] Parseo de tipo tupla y expresión tupla
+- [x] Type checking: número de elementos y tipos deben coincidir
+- [x] VM: `Value::Tuple(Vec<Value>)`
+- [x] Acceso por índice con validación de rango
+- [x] Tests: 5+ casos
 
 ---
 
-### Fase 25 — Destructuring
+### Fase 25 — Destructuring ✅
 **Objetivo**: Desempaquetar tuplas, structs y enums en asignaciones y parámetros.
 
 ```lumen
@@ -127,15 +127,15 @@ funcion(entero a, texto b) { ... }     // parámetros con destructuring
 - Anidación permitida
 
 **Criterio de aceptación**:
-- [ ] Parseo de asignación con múltiples targets
-- [ ] Parsing de parámetros con destructuring
-- [ ] Type checking: número de targets vs valor
-- [ ] VM: lógica de desempaquetado
-- [ ] Tests: tupla, struct, anidado, error en mismatch
+- [x] Parseo de asignación con múltiples targets
+- [x] Parsing de parámetros con destructuring
+- [x] Type checking: número de targets vs valor
+- [x] VM: lógica de desempaquetado
+- [x] Tests: tupla, struct, anidado, error en mismatch
 
 ---
 
-### Fase 26 — Genéricos Básicos
+### Fase 26 — Genéricos Básicos ✅
 **Objetivo**: Funciones y tipos genéricos.
 
 ```lumen
@@ -148,10 +148,10 @@ estructura Par<T, U> { primero: T, segundo: U }
 - Monomorfización o type erasure (decidir)
 
 **Criterio de aceptación**:
-- [ ] Parseo de parámetros de tipo `<T, U>`
-- [ ] Type checking: sustitución de tipos
-- [ ] IR/codegen/VM: funcionamiento correcto
-- [ ] Tests: identidad, par, struct genérico
+- [x] Parseo de parámetros de tipo `<T, U>`
+- [x] Type checking: sustitución de tipos
+- [x] IR/codegen/VM: funcionamiento correcto
+- [x] Tests: identidad, par, struct genérico
 
 ---
 
