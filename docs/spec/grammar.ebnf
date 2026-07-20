@@ -19,6 +19,7 @@ statement = variable_decl
           | if_stmt
           | while_stmt
           | for_stmt
+          | foreach_stmt
           | return_stmt
           | expr_stmt
           | block ;
@@ -30,6 +31,7 @@ if_stmt = "si" , "(" , expression , ")" , block , [ "sino" , block ] ;
 while_stmt = "mientras" , "(" , expression , ")" , block ;
 
 for_stmt = "para" , "(" , variable_decl , expression , ";" , assignment , ")" , block ;
+foreach_stmt = ("para" | "for") , identifier , ("en" | "in") , expression , block ;
 
 return_stmt = "retornar" , [ expression ] , ";" ;
 

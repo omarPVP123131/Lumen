@@ -74,14 +74,14 @@ impl Codegen {
         let warnings = Vec::new();
 
         // First pass: compute label positions (instruction indices)
+        let mut running_offset = 0;
         for (func_name, func) in &program.funcs {
-            let mut offset = self.bytecode.instructions.len();
-            self.func_starts.insert(func_name.clone(), offset);
+            self.func_starts.insert(func_name.clone(), running_offset);
             for instr in &func.instrs {
                 if let Instr::Label(l) = instr {
-                    self.label_map.entry(*l).or_insert(offset);
+                    self.label_map.entry(*l).or_insert(running_offset);
                 }
-                offset += instr_count(instr);
+                running_offset += instr_count(instr);
             }
         }
 
@@ -230,6 +230,15 @@ impl Codegen {
             }
             Instr::StructSet => {
                 self.bytecode.instructions.push(Instruction::Simple(Opcode::StructSet));
+            }
+            Instr::ResultOk => {
+                self.bytecode.instructions.push(Instruction::Simple(Opcode::ResultOk));
+            }
+            Instr::ResultErr => {
+                self.bytecode.instructions.push(Instruction::Simple(Opcode::ResultErr));
+            }
+            Instr::TryUnwrap => {
+                self.bytecode.instructions.push(Instruction::Simple(Opcode::TryUnwrap));
             }
         }
     }

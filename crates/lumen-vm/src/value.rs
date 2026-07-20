@@ -12,10 +12,30 @@ pub enum Value {
         name: String,
         fields: Vec<(String, Value)>,
     },
+    Exito(Box<Value>),
+    Error(Box<Value>),
     Void,
 }
 
 impl Value {
+    pub fn is_ok(&self) -> bool {
+        matches!(self, Value::Exito(_))
+    }
+
+    pub fn unwrap_ok(self) -> Option<Value> {
+        match self {
+            Value::Exito(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    pub fn unwrap_err(self) -> Option<Value> {
+        match self {
+            Value::Error(v) => Some(*v),
+            _ => None,
+        }
+    }
+
     pub fn as_num(&self) -> Option<f64> {
         match self {
             Value::Int(n) => Some(*n as f64),
@@ -40,6 +60,8 @@ impl Value {
             Value::Array(v) => !v.is_empty(),
             Value::Func(_) => true,
             Value::Struct { .. } => true,
+            Value::Exito(_) => true,
+            Value::Error(_) => true,
             Value::Void => false,
         }
     }
@@ -67,6 +89,8 @@ impl fmt::Display for Value {
                 let items: Vec<String> = fields.iter().map(|(k, v)| format!("{}: {}", k, v)).collect();
                 write!(f, "{{ {} }}", items.join(", "))
             }
+            Value::Exito(v) => write!(f, "exito({})", v),
+            Value::Error(v) => write!(f, "error({})", v),
             Value::Void => write!(f, "void"),
         }
     }

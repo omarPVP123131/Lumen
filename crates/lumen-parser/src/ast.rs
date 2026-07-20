@@ -113,6 +113,12 @@ pub enum Stmt {
         alias: Option<String>,
         span: Span,
     },
+    ForEach {
+        var_name: String,
+        expr: Box<Expr>,
+        body: Vec<DeclOrStmt>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,6 +194,18 @@ pub enum Expr {
         field: String,
         span: Span,
     },
+    Exito {
+        expr: Box<Expr>,
+        span: Span,
+    },
+    Error {
+        expr: Box<Expr>,
+        span: Span,
+    },
+    Intentar {
+        expr: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -225,6 +243,10 @@ pub enum Type {
         return_type: Box<Type>,
     },
     Struct(String),
+    Resultado {
+        ok: Box<Type>,
+        err: Box<Type>,
+    },
 }
 
 impl Expr {
@@ -238,7 +260,10 @@ impl Expr {
             | Expr::Index { span, .. } | Expr::MethodCall { span, .. }
             | Expr::Lambda { span, .. }
             | Expr::StructInit { span, .. }
-            | Expr::FieldAccess { span, .. } => *span,
+            | Expr::FieldAccess { span, .. }
+            | Expr::Exito { span, .. }
+            | Expr::Error { span, .. }
+            | Expr::Intentar { span, .. } => *span,
         }
     }
 }

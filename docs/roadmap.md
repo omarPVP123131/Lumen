@@ -29,12 +29,13 @@ Camino hacia **v1.0 estable**, dividido en 40 fases. Las fases 0-20 están compl
 | 18 | Módulos | `importar`, ModuleLoader, detección circular, flag `-L` |
 | 19 | Optimizaciones | Constant folding, DCE, shared pools, func cache |
 | 20 | Release interno | README landing, docs/ separados, SemVer 1.0.0 |
+| 21 | `resultado<T, E>` | Manejo de errores seguro con `exito`, `error` e `intentar` |
 
 ---
 
-## Fases pendientes → v1.0 final (21-40)
+## Fases pendientes → v1.0 final (22-40)
 
-### Fase 21 — `resultado<T, E>` (Result Type)
+### Fase 21 — `resultado<T, E>` ✅
 **Objetivo**: Manejo de errores sin panics mediante tipo `resultado`.
 
 - Sintaxis: `resultado<entero, texto>` como tipo
@@ -43,11 +44,11 @@ Camino hacia **v1.0 estable**, dividido en 40 fases. Las fases 0-20 están compl
 - Función `?`/`intentar` para propagación automática
 
 **Criterio de aceptación**:
-- [ ] Parseo de sintaxis `resultado<T, E>`
-- [ ] Type checking: el tipo debe coincidir en asignaciones y retornos
-- [ ] Ejecución en VM: `exito(5)` produce `Value::Result(Ok(5))`
-- [ ] Propagación: `intentar` extrae el valor o retorna el error
-- [ ] Tests: caso de éxito, caso de error, propagación anidada
+- [x] Parseo de sintaxis `resultado<T, E>`
+- [x] Type checking: el tipo debe coincidir en asignaciones y retornos
+- [x] Ejecución en VM: `exito(5)` produce `Value::Result(Ok(5))`
+- [x] Propagación: `intentar` extrae el valor o retorna el error
+- [x] Tests: caso de éxito, caso de error, propagación anidada
 
 ---
 

@@ -6,11 +6,12 @@ pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     errors: Vec<ParseError>,
+    no_struct_init: bool,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0, errors: Vec::new() }
+        Self { tokens, pos: 0, errors: Vec::new(), no_struct_init: false }
     }
 
     pub fn parse(mut self) -> (Program, Vec<ParseError>) {
@@ -33,6 +34,7 @@ impl Parser {
         if self.check(&[TokenKind::Numero, TokenKind::Entero, TokenKind::Decimal,
                          TokenKind::Texto, TokenKind::Booleano,
                          TokenKind::Lista, TokenKind::Array,
+                         TokenKind::Resultado, TokenKind::Result,
                          TokenKind::Number, TokenKind::Integer, TokenKind::Float,
                          TokenKind::String, TokenKind::Boolean]) {
             self.parse_declaration().map(DeclOrStmt::Decl)
@@ -42,6 +44,7 @@ impl Parser {
             if self.check_next(&[TokenKind::Numero, TokenKind::Entero, TokenKind::Decimal,
                                   TokenKind::Texto, TokenKind::Booleano,
                                   TokenKind::Lista, TokenKind::Array,
+                                  TokenKind::Resultado, TokenKind::Result,
                                   TokenKind::Number, TokenKind::Integer, TokenKind::Float,
                                   TokenKind::String, TokenKind::Boolean]) {
                 self.parse_function().map(DeclOrStmt::Decl)
@@ -55,7 +58,11 @@ impl Parser {
         } else if self.check(&[TokenKind::Mientras, TokenKind::While]) {
             self.parse_while().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::Para, TokenKind::For]) {
-            self.parse_for().map(DeclOrStmt::Stmt)
+            if self.check_next(&[TokenKind::LeftParen]) {
+                self.parse_for().map(DeclOrStmt::Stmt)
+            } else {
+                self.parse_foreach().map(DeclOrStmt::Stmt)
+            }
         } else if self.check(&[TokenKind::Retornar, TokenKind::Return]) {
             self.parse_return().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::Romper, TokenKind::Break]) {
@@ -316,6 +323,28 @@ impl Parser {
         let body = self.parse_block()?;
         Some(Stmt::For {
             init, condition, update, body,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_foreach(&mut self) -> Option<Stmt> {
+        let start = self.peek().span;
+        self.advance();
+        let var_name = self.expect_ident()?;
+        if !self.check(&[TokenKind::En, TokenKind::In]) {
+            self.error("E025", "Se esperaba 'en'/'in' después del nombre de variable en el ciclo para-cada", self.peek().span, "Agrega 'en' después del nombre de la variable");
+            return None;
+        }
+        self.advance();
+        let saved = self.no_struct_init;
+        self.no_struct_init = true;
+        let expr = Box::new(self.parse_expression()?);
+        self.no_struct_init = saved;
+        let body = self.parse_block()?;
+        Some(Stmt::ForEach {
+            var_name,
+            expr,
+            body,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -768,6 +797,48 @@ impl Parser {
                 };
                 self.parse_call_or_ident(name.to_string(), span)
             }
+            TokenKind::Exito | TokenKind::Ok => {
+                if !self.check(&[TokenKind::LeftParen]) {
+                    self.error("E014", "Se esperaba '(' después de 'exito'", span, "Agrega '(expr)' para el valor de éxito");
+                    return None;
+                }
+                self.advance();
+                let expr = self.parse_expression()?;
+                if !self.check(&[TokenKind::RightParen]) {
+                    self.error("E015", "Se esperaba ')'", span, "Agrega ')' para cerrar el valor de éxito");
+                    return None;
+                }
+                self.advance();
+                Some(Expr::Exito {
+                    expr: Box::new(expr),
+                    span: Span::merge(&span, &self.previous().span),
+                })
+            }
+            TokenKind::ErrKeyword | TokenKind::Err => {
+                if !self.check(&[TokenKind::LeftParen]) {
+                    self.error("E014", "Se esperaba '(' después de 'error'", span, "Agrega '(expr)' para el valor de error");
+                    return None;
+                }
+                self.advance();
+                let expr = self.parse_expression()?;
+                if !self.check(&[TokenKind::RightParen]) {
+                    self.error("E015", "Se esperaba ')'", span, "Agrega ')' para cerrar el valor de error");
+                    return None;
+                }
+                self.advance();
+                Some(Expr::Error {
+                    expr: Box::new(expr),
+                    span: Span::merge(&span, &self.previous().span),
+                })
+            }
+            TokenKind::Intentar | TokenKind::Try => {
+                let expr_val = self.parse_expression()?;
+                let end_span = expr_val.span();
+                Some(Expr::Intentar {
+                    expr: Box::new(expr_val),
+                    span: Span::merge(&span, &end_span),
+                })
+            }
             TokenKind::LeftParen => {
                 let expr = self.parse_expression()?;
                 if !self.check(&[TokenKind::RightParen]) {
@@ -854,7 +925,7 @@ impl Parser {
                 args,
                 span: Span::merge(&span, &self.previous().span),
             })
-        } else if self.check(&[TokenKind::LeftBrace]) {
+        } else if self.check(&[TokenKind::LeftBrace]) && !self.no_struct_init {
             self.advance();
             let mut fields = Vec::new();
             while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
@@ -918,6 +989,29 @@ impl Parser {
             }
             TokenKind::Ident(name) => {
                 Some(Type::Struct(name))
+            }
+            TokenKind::Resultado | TokenKind::Result => {
+                if !self.check(&[TokenKind::Less]) {
+                    self.error("E021", "Se esperaba '<' para el tipo resultado", token.span, "Agrega '<tipo_ok, tipo_err>' después de 'resultado'");
+                    return None;
+                }
+                self.advance();
+                let ok = self.parse_type()?;
+                if !self.check(&[TokenKind::Comma]) {
+                    self.error("E012", "Se esperaba ',' entre tipos de resultado", token.span, "Agrega ',' para separar el tipo de éxito y error");
+                    return None;
+                }
+                self.advance();
+                let err = self.parse_type()?;
+                if !self.check(&[TokenKind::Greater]) {
+                    self.error("E021", "Se esperaba '>' para cerrar el tipo resultado", token.span, "Agrega '>' después del tipo de error");
+                    return None;
+                }
+                self.advance();
+                Some(Type::Resultado {
+                    ok: Box::new(ok),
+                    err: Box::new(err),
+                })
             }
             _ => None,
         }
@@ -1007,6 +1101,7 @@ impl Parser {
             TokenKind::Estructura | TokenKind::Struct => { self.advance(); Some("estructura".to_string()) }
             TokenKind::Importar | TokenKind::Import => { self.advance(); Some("importar".to_string()) }
             TokenKind::Como | TokenKind::As => { self.advance(); Some("como".to_string()) }
+            TokenKind::En | TokenKind::In => { self.advance(); Some("en".to_string()) }
             _ => {
                 self.error("E011", "Se esperaba un nombre de campo", token.span, "Escribe un identificador");
                 None
@@ -1063,7 +1158,8 @@ impl Parser {
                 | TokenKind::Elegir | TokenKind::Match
                 | TokenKind::LeftBrace
                 | TokenKind::LeftBracket
-                | TokenKind::Importar | TokenKind::Import => return,
+                | TokenKind::Importar | TokenKind::Import
+                | TokenKind::Resultado | TokenKind::Result => return,
                 _ => { self.advance(); }
             }
         }
@@ -1097,6 +1193,11 @@ fn token_matches(kind: &TokenKind, expected: &TokenKind) -> bool {
             | (TokenKind::Estructura, TokenKind::Struct) | (TokenKind::Struct, TokenKind::Estructura)
             | (TokenKind::Importar, TokenKind::Import) | (TokenKind::Import, TokenKind::Importar)
             | (TokenKind::Como, TokenKind::As) | (TokenKind::As, TokenKind::Como)
+            | (TokenKind::Resultado, TokenKind::Result) | (TokenKind::Result, TokenKind::Resultado)
+            | (TokenKind::Exito, TokenKind::Ok) | (TokenKind::Ok, TokenKind::Exito)
+            | (TokenKind::ErrKeyword, TokenKind::Err) | (TokenKind::Err, TokenKind::ErrKeyword)
+            | (TokenKind::Intentar, TokenKind::Try) | (TokenKind::Try, TokenKind::Intentar)
+            | (TokenKind::En, TokenKind::In) | (TokenKind::In, TokenKind::En)
         )
 }
 
@@ -1117,7 +1218,10 @@ impl Spannable for Expr {
             | Expr::Index { span, .. } | Expr::MethodCall { span, .. }
             | Expr::Lambda { span, .. }
             | Expr::StructInit { span, .. }
-            | Expr::FieldAccess { span, .. } => *span,
+            | Expr::FieldAccess { span, .. }
+            | Expr::Exito { span, .. }
+            | Expr::Error { span, .. }
+            | Expr::Intentar { span, .. } => *span,
         }
     }
 }
@@ -1214,8 +1318,8 @@ mientras (contador < 5) {
     #[test]
     fn test_func_program() {
         let source = "funcion numero suma(numero a, numero b) { retornar a + b; }
-numero resultado = suma(3, 7);
-imprimir(resultado);";
+numero res = suma(3, 7);
+imprimir(res);";
         let (program, errors) = parse(source);
         assert!(errors.is_empty());
         assert_eq!(program.len(), 3);
@@ -1388,5 +1492,96 @@ imprimir(resultado);";
         assert!(!errors.is_empty());
         // Synchronize skips to statement boundary, valid code may be consumed
         assert_eq!(errors[0].code, "E011");
+    }
+
+    #[test]
+    fn test_parse_resultado_type() {
+        let source = "resultado<entero, texto> r = exito(42);";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_resultado_error() {
+        let source = r#"resultado<entero, texto> r = error("falló");"#;
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_intentar() {
+        let source = r#"funcion entero foo() {
+    resultado<entero, texto> r = exito(42);
+    retornar intentar r;
+}"#;
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_resultado_func_return() {
+        let source = "funcion resultado<entero, texto> dividir(entero a, entero b) { }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_foreach_spanish() {
+        let source = "lista<entero> nums = [1, 2, 3];
+para n en nums {
+    imprimir(n);
+}";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 2);
+        if let DeclOrStmt::Stmt(Stmt::ForEach { var_name, .. }) = &program[1] {
+            assert_eq!(var_name, "n");
+        } else {
+            panic!("Expected ForEach statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_foreach_english() {
+        let source = "array<integer> nums = [1, 2, 3];
+for n in nums {
+    print(n);
+}";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 2);
+        if let DeclOrStmt::Stmt(Stmt::ForEach { var_name, .. }) = &program[1] {
+            assert_eq!(var_name, "n");
+        } else {
+            panic!("Expected ForEach statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_foreach_nested() {
+        let source = "lista<entero> nums = [1, 2];
+para a en nums {
+    para b en nums {
+        imprimir(a * b);
+    }
+}";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 2);
+    }
+
+    #[test]
+    fn test_cstyle_for_still_works() {
+        let source = "para (entero i = 0; i < 5; i = i + 1) {
+    imprimir(i);
+}";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+        assert!(matches!(&program[0], DeclOrStmt::Stmt(Stmt::For { .. })));
     }
 }

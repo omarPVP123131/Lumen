@@ -100,7 +100,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "lumen-cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "lumen-codegen",
  "lumen-ir",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-codegen"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "lumen-ir",
  "proptest",
@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-ir"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-lexer"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -142,7 +142,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-parser"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "lumen-lexer",
  "serde",
@@ -152,7 +152,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-sema"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -162,7 +162,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-vm"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "lumen-codegen",
  "lumen-ir",

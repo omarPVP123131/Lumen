@@ -57,8 +57,8 @@ fn test_func() {
     let src = "funcion numero suma(numero a, numero b) {
     retornar a + b;
 }
-numero resultado = suma(3, 7);
-imprimir(resultado);";
+numero res = suma(3, 7);
+imprimir(res);";
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["10"]);
 }
@@ -511,4 +511,205 @@ imprimir(p.nombre);
 imprimir(p.direccion);";
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["Ana", "Calle 123"]);
+}
+
+#[test]
+fn test_result_exito() {
+    let src = r#"resultado<entero, texto> r = exito(42);
+imprimir(r);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["exito(42)"]);
+}
+
+#[test]
+fn test_result_error() {
+    let src = r#"resultado<entero, texto> r = error("falló");
+imprimir(r);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["error(falló)"]);
+}
+
+#[test]
+fn test_result_type_declaration() {
+    let src = r#"resultado<texto, entero> r = exito("ok");
+imprimir(r);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["exito(ok)"]);
+}
+
+#[test]
+fn test_try_unwrap_ok() {
+    let src = r#"funcion entero probar() {
+    resultado<entero, texto> r = exito(42);
+    retornar intentar r;
+}
+entero x = probar();
+imprimir(x);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["42"]);
+}
+
+#[test]
+fn test_try_unwrap_error_propagates() {
+    let src = r#"funcion resultado<entero, texto> fallar() {
+    resultado<entero, texto> r = error("fracaso");
+    retornar r;
+}
+resultado<entero, texto> res = fallar();
+imprimir(res);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["error(fracaso)"]);
+}
+
+#[test]
+fn test_result_in_function_return() {
+    let src = r#"funcion resultado<entero, texto> dividir(entero a, entero b) {
+    si (b == 0) {
+        retornar error("división por cero");
+    }
+    retornar exito(a / b);
+}
+resultado<entero, texto> r = dividir(10, 0);
+imprimir(r);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["error(división por cero)"]);
+}
+
+#[test]
+fn test_result_success_division() {
+    let src = r#"funcion resultado<entero, texto> dividir(entero a, entero b) {
+    si (b == 0) {
+        retornar error("división por cero");
+    }
+    retornar exito(a / b);
+}
+resultado<entero, texto> r = dividir(10, 2);
+imprimir(r);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["exito(5)"]);
+}
+
+#[test]
+fn test_try_unwrap_in_nested_function() {
+    let src = r#"funcion resultado<entero, texto> validar(entero x) {
+    si (x < 0) {
+        retornar error("negativo");
+    }
+    retornar exito(x);
+}
+funcion resultado<entero, texto> procesar(entero x) {
+    entero val = intentar validar(x);
+    retornar exito(val * 2);
+}
+resultado<entero, texto> r1 = procesar(5);
+resultado<entero, texto> r2 = procesar(-1);
+imprimir(r1);
+imprimir(r2);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["exito(10)", "error(negativo)"]);
+}
+
+// --- For-Each Loop Tests ---
+
+#[test]
+fn test_foreach_basic() {
+    let src = "lista<entero> nums = [1, 2, 3];
+para n en nums {
+    imprimir(n);
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "2", "3"]);
+}
+
+#[test]
+fn test_foreach_empty() {
+    let src = "lista<entero> nums = [];
+para n en nums {
+    imprimir(n);
+}
+imprimir(\"fin\");";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["fin"]);
+}
+
+#[test]
+fn test_foreach_english_keywords() {
+    let src = "array<integer> nums = [10, 20, 30];
+for n in nums {
+    print(n);
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["10", "20", "30"]);
+}
+
+#[test]
+fn test_foreach_with_strings() {
+    let src = "lista<texto> nombres = [\"Ana\", \"Luis\", \"Pedro\"];
+para nombre en nombres {
+    imprimir(nombre);
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["Ana", "Luis", "Pedro"]);
+}
+
+#[test]
+fn test_foreach_in_function() {
+    let src = "funcion texto unir(lista<texto> palabras) {
+    texto res = \"\";
+    para p en palabras {
+        res = res + p;
+    }
+    retornar res;
+}
+texto r = unir([\"a\", \"b\", \"c\"]);
+imprimir(r);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["abc"]);
+}
+
+#[test]
+fn test_foreach_nested() {
+    let src = "lista<entero> nums = [1, 2];
+para a en nums {
+    para b en nums {
+        imprimir(a * b);
+    }
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "2", "2", "4"]);
+}
+
+#[test]
+fn test_foreach_with_condition() {
+    let src = "lista<entero> nums = [1, 2, 3, 4, 5];
+para n en nums {
+    si (n > 2) {
+        imprimir(n);
+    }
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["3", "4", "5"]);
+}
+
+#[test]
+fn test_foreach_type_error() {
+    let src = "entero x = 42;
+para n en x {
+    imprimir(n);
+}";
+    let result = run_source(src);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.contains("SemError") || err.contains("E044") || err.contains("lista") || err.contains("array"));
+}
+
+#[test]
+fn test_foreach_var_scope() {
+    let src = "lista<entero> nums = [10, 20];
+para n en nums {
+    imprimir(n);
+}
+imprimir(99);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["10", "20", "99"]);
 }

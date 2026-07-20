@@ -559,8 +559,8 @@ mod tests {
         let source = r#"funcion numero suma(numero a, numero b) {
     retornar a + b
 }
-numero resultado = suma(3, 7)
-imprimir(resultado)"#;
+numero res = suma(3, 7)
+imprimir(res)"#;
         let kinds = tokenize(source);
         assert_eq!(kinds[0], TokenKind::Funcion);
         assert_eq!(kinds[1], TokenKind::Numero);
@@ -579,7 +579,7 @@ imprimir(resultado)"#;
         assert_eq!(kinds[14], TokenKind::Ident("b".to_string()));
         assert_eq!(kinds[15], TokenKind::RightBrace);
         assert_eq!(kinds[16], TokenKind::Numero);
-        assert_eq!(kinds[17], TokenKind::Ident("resultado".to_string()));
+        assert_eq!(kinds[17], TokenKind::Ident("res".to_string()));
         assert_eq!(kinds[18], TokenKind::Equal);
         assert_eq!(kinds[19], TokenKind::Ident("suma".to_string()));
         assert_eq!(kinds[20], TokenKind::LeftParen);
@@ -589,7 +589,7 @@ imprimir(resultado)"#;
         assert_eq!(kinds[24], TokenKind::RightParen);
         assert_eq!(kinds[25], TokenKind::Imprimir);
         assert_eq!(kinds[26], TokenKind::LeftParen);
-        assert_eq!(kinds[27], TokenKind::Ident("resultado".to_string()));
+        assert_eq!(kinds[27], TokenKind::Ident("res".to_string()));
         assert_eq!(kinds[28], TokenKind::RightParen);
         assert_eq!(kinds[29], TokenKind::Eof);
     }

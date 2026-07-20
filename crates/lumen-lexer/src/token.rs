@@ -74,6 +74,11 @@ pub enum TokenKind {
     Estructura,
     Importar,
     Como,
+    Resultado,
+    Exito,
+    ErrKeyword,
+    Intentar,
+    En,
 
     // English equivalents
     If,
@@ -100,6 +105,11 @@ pub enum TokenKind {
     Struct,
     Import,
     As,
+    Result,
+    Ok,
+    Err,
+    Try,
+    In,
 
     // Identifiers & Literals
     Ident(String),
@@ -191,6 +201,16 @@ impl TokenKind {
             "import" => Some(TokenKind::Import),
             "como" => Some(TokenKind::Como),
             "as" => Some(TokenKind::As),
+            "resultado" => Some(TokenKind::Resultado),
+            "result" => Some(TokenKind::Result),
+            "exito" => Some(TokenKind::Exito),
+            "ok" => Some(TokenKind::Ok),
+            "error" => Some(TokenKind::ErrKeyword),
+            "err" => Some(TokenKind::Err),
+            "intentar" => Some(TokenKind::Intentar),
+            "try" => Some(TokenKind::Try),
+            "en" => Some(TokenKind::En),
+            "in" => Some(TokenKind::In),
             _ => None,
         }
     }
@@ -221,6 +241,11 @@ impl TokenKind {
             TokenKind::Estructura | TokenKind::Struct => "estructura",
             TokenKind::Importar | TokenKind::Import => "importar",
             TokenKind::Como | TokenKind::As => "como",
+            TokenKind::Resultado | TokenKind::Result => "resultado",
+            TokenKind::Exito | TokenKind::Ok => "exito",
+            TokenKind::ErrKeyword | TokenKind::Err => "error",
+            TokenKind::Intentar | TokenKind::Try => "intentar",
+            TokenKind::En | TokenKind::In => "en",
             _ => "",
         }
     }

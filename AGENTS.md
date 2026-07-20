@@ -1,6 +1,6 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v1.0.0 — Release: Julio 2026**
+**v1.0.1 — Release: Julio 2026**
 
 ---
 
@@ -9,17 +9,16 @@
 | Crate | Tests | Type |
 |-------|-------|------|
 | lumen-lexer | 24 | unit |
-| lumen-parser | 28 | unit |
-| lumen-sema | 27 | unit |
-| lumen-ir | 20 | unit |
-| lumen-ir | 15 | folding |
+| lumen-parser | 36 | unit |
+| lumen-sema | 33 | unit |
+| lumen-ir | 20 | unit + folding |
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 51 | e2e |
-| **Total** | **213** | |
+| lumen-vm | 68 | e2e |
+| **Total** | **244** | |
 
-**0 warnings, 213 tests passing.**
+**0 warnings, 244 tests passing.**
 
 ---
 
@@ -63,6 +62,17 @@ Lexer, parser, sema, IR, bytecode, VM, CLI, arrays, control de flujo avanzado.
 - 213 tests, 0 warnings
 - Pendiente: crates.io, GitHub Release con binarios
 
+### Fase 21: For-Each ✅
+- Sintaxis: `para x en expr` / `for x in expr`
+- Token: `En`/`In` en lexer
+- AST: `Stmt::ForEach { var_name, expr, body }`
+- Parser: `parse_foreach()` con flag `no_struct_init` para evitar ambigüedad con struct init
+- Sema: verifica que `expr` sea `Lista`, define variable del ciclo en nuevo scope
+- IR: desugaring a while-loop con `ArrayLen`/`ArrayGet`/`Store`
+- Sin cambios en bytecode o VM (reutiliza opcodes existentes)
+- Tests: 4 parser, 6 sema, 9 e2e
+- Ejemplo: `examples/foreach.nv`
+
 ---
 
 ## Comandos CLI
@@ -101,6 +111,6 @@ crates/
   lumen-vm/       → vm.rs, value.rs
   lumen-cli/      → main.rs
 docs/spec/        → grammar.ebnf, bytecode-format.md, error-codes.md, vm-spec.md
-examples/         → *.nv (20+ ejemplos funcionales)
+examples/         → *.nv (21+ ejemplos funcionales)
 tests/            → integration_test.rs
 ```

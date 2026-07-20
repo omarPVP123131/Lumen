@@ -20,6 +20,10 @@ pub enum TypeInfo {
         name: String,
         fields: Vec<(String, TypeInfo)>,
     },
+    Resultado {
+        ok: Box<TypeInfo>,
+        err: Box<TypeInfo>,
+    },
 }
 
 #[derive(Clone)]
@@ -362,6 +366,30 @@ impl SemanticAnalyzer {
             Stmt::Block { stmts, .. } => {
                 self.scopes.push(Scope::new());
                 for node in stmts { self.analyze_decl_or_stmt(node); }
+                self.scopes.pop();
+                TypeInfo::Void
+            }
+            Stmt::ForEach { var_name, expr, body, span } => {
+                let expr_type = self.analyze_expr(expr);
+                let item_type = match &expr_type {
+                    TypeInfo::Lista(inner) => *inner.clone(),
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E044".to_string(),
+                            message: format!("'para-cada' requiere una lista, no '{:?}'", expr_type),
+                            span: *span,
+                            suggestion: "Usa una lista en el ciclo 'para-cada'".to_string(),
+                        });
+                        TypeInfo::Void
+                    }
+                };
+                self.scopes.push(Scope::new());
+                if let Err(e) = self.current_scope().define(var_name, item_type, *span) {
+                    self.errors.push(e);
+                }
+                for node in body {
+                    self.analyze_decl_or_stmt(node);
+                }
                 self.scopes.pop();
                 TypeInfo::Void
             }
@@ -838,6 +866,51 @@ impl SemanticAnalyzer {
                 }
             }
             Expr::Grouping { expr, .. } => self.analyze_expr(expr),
+            Expr::Exito { expr, span } => {
+                let inner = self.analyze_expr(expr);
+                if inner == TypeInfo::Void {
+                    self.errors.push(SemError {
+                        code: "E064".to_string(),
+                        message: "No puedes crear un resultado exitoso con un valor vacío".to_string(),
+                        span: *span,
+                        suggestion: "Pasa un valor válido a 'exito()'.".to_string(),
+                    });
+                }
+                TypeInfo::Resultado {
+                    ok: Box::new(inner),
+                    err: Box::new(TypeInfo::Void),
+                }
+            }
+            Expr::Error { expr, span } => {
+                let inner = self.analyze_expr(expr);
+                if inner == TypeInfo::Void {
+                    self.errors.push(SemError {
+                        code: "E064".to_string(),
+                        message: "No puedes crear un resultado de error con un valor vacío".to_string(),
+                        span: *span,
+                        suggestion: "Pasa un valor válido a 'error()'.".to_string(),
+                    });
+                }
+                TypeInfo::Resultado {
+                    ok: Box::new(TypeInfo::Void),
+                    err: Box::new(inner),
+                }
+            }
+            Expr::Intentar { expr, span } => {
+                let inner = self.analyze_expr(expr);
+                match inner {
+                    TypeInfo::Resultado { ok, err: _ } => *ok,
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E065".to_string(),
+                            message: format!("'intentar' solo funciona con expresiones de tipo 'resultado', no '{:?}'", inner),
+                            span: *span,
+                            suggestion: "Usa 'intentar' solo con valores de tipo 'resultado'.".to_string(),
+                        });
+                        TypeInfo::Void
+                    }
+                }
+            }
         }
     }
 
@@ -872,6 +945,10 @@ impl SemanticAnalyzer {
                 let fields = self.structs.get(&name).cloned().unwrap_or_default();
                 TypeInfo::Struct { name, fields }
             }
+            Type::Resultado { ok, err } => TypeInfo::Resultado {
+                ok: Box::new(self.type_to_info(*ok)),
+                err: Box::new(self.type_to_info(*err)),
+            },
         }
     }
 }
@@ -895,6 +972,12 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
             if !can_assign(t, v) { return false; }
         }
         return true;
+    }
+    if let (TypeInfo::Resultado { ok: tok, err: terr },
+            TypeInfo::Resultado { ok: vok, err: verr }) = (target, value) {
+        let ok_compat = can_assign(tok, vok) || **vok == TypeInfo::Void || **tok == TypeInfo::Void;
+        let err_compat = can_assign(terr, verr) || **verr == TypeInfo::Void || **terr == TypeInfo::Void;
+        return ok_compat && err_compat;
     }
     false
 }
@@ -1104,6 +1187,72 @@ si (flag) {
     #[test]
     fn test_while_loop() {
         let source = "numero i = 0; mientras (i < 10) { i = i + 1; }";
+        let errors = analyze(source);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_foreach_valid() {
+        let source = "lista<entero> nums = [1, 2, 3];
+para n en nums {
+    imprimir(n);
+}";
+        let errors = analyze(source);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_foreach_type_error() {
+        let source = "entero x = 42;
+para n en x {
+    imprimir(n);
+}";
+        let errors = analyze(source);
+        assert!(!errors.is_empty());
+    }
+
+    #[test]
+    fn test_foreach_strings() {
+        let source = r#"lista<texto> nombres = ["Ana", "Luis"];
+para nombre en nombres {
+    imprimir(nombre);
+}"#;
+        let errors = analyze(source);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_foreach_english() {
+        let source = "array<integer> nums = [1, 2, 3];
+for n in nums {
+    print(n);
+}";
+        let errors = analyze(source);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_foreach_nested() {
+        let source = "lista<entero> nums = [1, 2];
+para a en nums {
+    para b en nums {
+        imprimir(a * b);
+    }
+}";
+        let errors = analyze(source);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_foreach_in_function() {
+        let source = "funcion texto unir(lista<texto> palabras) {
+    texto res = \"\";
+    para p en palabras {
+        res = res + p;
+    }
+    retornar res;
+}
+imprimir(unir([\"a\", \"b\"]));";
         let errors = analyze(source);
         assert!(errors.is_empty());
     }

@@ -357,6 +357,31 @@ impl VM {
                     }
                 }
             }
+            Opcode::ResultOk => {
+                let val = self.pop()?;
+                self.push(Value::Exito(Box::new(val)));
+            }
+            Opcode::ResultErr => {
+                let val = self.pop()?;
+                self.push(Value::Error(Box::new(val)));
+            }
+            Opcode::TryUnwrap => {
+                let val = self.pop()?;
+                match val {
+                    Value::Exito(inner) => {
+                        self.push(*inner);
+                    }
+                    Value::Error(inner) => {
+                        let err_wrapper = Value::Error(inner);
+                        if let Some(return_ip) = self.call_stack.pop() {
+                            self.locals.pop();
+                            self.ip = return_ip;
+                        }
+                        self.push(err_wrapper);
+                    }
+                    _ => return Err(VmError::TypeError("TryUnwrap requires a result value".to_string())),
+                }
+            }
             _ => {}
         }
         Ok(())

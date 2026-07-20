@@ -256,6 +256,42 @@ impl IRBuilder {
                     self.gen_decl_or_stmt(node);
                 }
             }
+            Stmt::ForEach { var_name, expr, body, .. } => {
+                let start_label = self.new_label();
+                let end_label = self.new_label();
+                let arr_temp = format!("__for_arr_{}", self.temp_counter);
+                self.temp_counter += 1;
+                let idx_temp = format!("__for_i_{}", self.temp_counter);
+                self.temp_counter += 1;
+                let len_temp = format!("__for_len_{}", self.temp_counter);
+                self.temp_counter += 1;
+
+                self.gen_expr(expr);
+                self.emit(Instr::Store(arr_temp.clone()));
+                self.emit(Instr::ConstInt(0));
+                self.emit(Instr::Store(idx_temp.clone()));
+                self.emit(Instr::Load(arr_temp.clone()));
+                self.emit(Instr::ArrayLen);
+                self.emit(Instr::Store(len_temp.clone()));
+                self.emit(Instr::Label(start_label));
+                self.emit(Instr::Load(idx_temp.clone()));
+                self.emit(Instr::Load(len_temp.clone()));
+                self.emit(Instr::Binary(Op::Less));
+                self.emit(Instr::JmpIf(end_label));
+                self.emit(Instr::Load(arr_temp.clone()));
+                self.emit(Instr::Load(idx_temp.clone()));
+                self.emit(Instr::ArrayGet);
+                self.emit(Instr::Store(var_name.clone()));
+                for node in body {
+                    self.gen_decl_or_stmt(node);
+                }
+                self.emit(Instr::Load(idx_temp.clone()));
+                self.emit(Instr::ConstInt(1));
+                self.emit(Instr::Binary(Op::Add));
+                self.emit(Instr::Store(idx_temp.clone()));
+                self.emit(Instr::Jmp(start_label));
+                self.emit(Instr::Label(end_label));
+            }
             Stmt::Import { .. } => {}
         }
     }
@@ -406,6 +442,18 @@ impl IRBuilder {
             Expr::Lambda { params, body, .. } => {
                 let lambda_name = self.compile_lambda(params, body);
                 self.emit(Instr::FuncRef(lambda_name));
+            }
+            Expr::Exito { expr, .. } => {
+                self.gen_expr(expr);
+                self.emit(Instr::ResultOk);
+            }
+            Expr::Error { expr, .. } => {
+                self.gen_expr(expr);
+                self.emit(Instr::ResultErr);
+            }
+            Expr::Intentar { expr, .. } => {
+                self.gen_expr(expr);
+                self.emit(Instr::TryUnwrap);
             }
         }
     }

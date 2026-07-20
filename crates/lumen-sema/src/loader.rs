@@ -230,7 +230,15 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
                 prefix_expr(expr, prefix, locals);
             }
         }
-        Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
+                Stmt::ForEach { var_name, expr, body, .. } => {
+                    let mut foreach_locals = locals.clone();
+                    foreach_locals.insert(var_name.clone());
+                    prefix_expr(expr, prefix, &mut foreach_locals);
+                    for node in body.iter_mut() {
+                        prefix_node(node, prefix, &mut foreach_locals, false);
+                    }
+                }
+                Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
         Stmt::Match { expr, arms, default, .. } => {
             prefix_expr(expr, prefix, locals);
             for arm in arms.iter_mut() {
@@ -321,6 +329,15 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
         Expr::FieldAccess { expr: target, .. } => {
             prefix_expr(target, prefix, locals);
         }
+        Expr::Exito { expr: inner, .. } => {
+            prefix_expr(inner, prefix, locals);
+        }
+        Expr::Error { expr: inner, .. } => {
+            prefix_expr(inner, prefix, locals);
+        }
+        Expr::Intentar { expr: inner, .. } => {
+            prefix_expr(inner, prefix, locals);
+        }
     }
 }
 
@@ -335,6 +352,10 @@ fn prefix_type(t: &mut Type, prefix: &str) {
         }
         Type::Struct(name) => {
             *name = format!("{}_{}", prefix, name);
+        }
+        Type::Resultado { ok, err } => {
+            prefix_type(ok, prefix);
+            prefix_type(err, prefix);
         }
         _ => {}
     }

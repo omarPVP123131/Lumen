@@ -16,61 +16,74 @@ enum Value {
     Array(Vec<Value>),                          // Lista dinámica
     Func(String),                               // Referencia a función
     Struct { name: String, fields: Vec<(String, Value)> },  // Estructura
+    Exito(Box<Value>),                          // Resultado exitoso
+    Error(Box<Value>),                          // Resultado de error
     Void,                                       // Ausencia de valor
 }
 ```
 
-## Opcodes (37 total)
+## Opcodes (41 total)
 
 ### Core (0-27)
 | Code | Name | Operands | Stack Effect | Description |
 |------|------|----------|-------------|-------------|
 | 0 | Halt | — | — | Stop execution |
-| 1 | PushStr | u16 index | → Str | Push string from pool |
-| 2 | PushInt | u16 index | → Int | Push int from pool |
-| 3 | PushNum | u16 index | → Float | Push float from pool |
-| 4 | PushBool | u8 value | → Bool | Push true(1)/false(0) |
-| 5 | PushVoid | — | → Void | Push void |
-| 6 | Pop | — | Value → | Pop and discard |
-| 7 | Dup | — | V → V V | Duplicate top |
-| 8 | Add | — | A B → A+B | Addition |
-| 9 | Sub | — | A B → A-B | Subtraction |
-| 10 | Mul | — | A B → A*B | Multiplication |
-| 11 | Div | — | A B → A/B | Division |
-| 12 | Eq | — | A B → A==B | Equality |
-| 13 | Neq | — | A B → A≠B | Not equal |
-| 14 | Lt | — | A B → A<B | Less than |
-| 15 | Lte | — | A B → A≤B | Less or equal |
-| 16 | Gt | — | A B → A>B | Greater than |
-| 17 | Gte | — | A B → A≥B | Greater or equal |
-| 18 | And | — | A B → A∧B | Logical AND |
-| 19 | Or | — | A B → A∨B | Logical OR |
+| 1 | PushInt | idx | → Int | Push int from pool |
+| 2 | PushNum | idx | → Float | Push float from pool |
+| 3 | PushStr | idx | → Str | Push string from pool |
+| 4 | PushBool | u8 | → Bool | Push true(1)/false(0) |
+| 5 | Load | idx | → Value | Load local by name |
+| 6 | Store | idx | Value → | Store local by name |
+| 7 | Add | — | A B → A+B | Addition/Concat |
+| 8 | Sub | — | A B → A-B | Subtraction |
+| 9 | Mul | — | A B → A*B | Multiplication |
+| 10 | Div | — | A B → A/B | Division |
+| 11 | Eq | — | A B → A==B | Equality |
+| 12 | Neq | — | A B → A≠B | Not equal |
+| 13 | Lt | — | A B → A<B | Less than |
+| 14 | Le | — | A B → A≤B | Less or equal |
+| 15 | Gt | — | A B → A>B | Greater than |
+| 16 | Ge | — | A B → A≥B | Greater or equal |
+| 17 | And | — | A B → A∧B | Logical AND |
+| 18 | Or | — | A B → A∨B | Logical OR |
+| 19 | Neg | — | A → -A | Arithmetic negate |
 | 20 | Not | — | A → ¬A | Logical NOT |
-| 21 | Neg | — | A → -A | Arithmetic negate |
-| 22 | Load | u16 index | → Value | Load local by index |
-| 23 | Store | u16 index | Value → | Store local by index |
-| 24 | Jmp | i16 offset | — | Unconditional jump |
-| 25 | JmpIfFalse | i16 offset | Bool → | Jump if false |
-| 26 | Print | — | Value → | Print value to stdout |
-| 27 | Ret | — | Value → | Return to caller |
+| 21 | Call | idx | Args → Ret | Call named function |
+| 22 | Ret | — | V → | Return V to caller |
+| 23 | Print | — | V → | Print V to output |
+| 24 | Read | — | → Str | Read from stdin |
+| 25 | Jmp | idx | — | Jump to instruction |
+| 26 | JmpIf | idx | Bool → | Jump if false |
+| 27 | Nop | — | — | No operation |
 
-### Call & Functions (28-34)
+### Arrays (28-32)
 | Code | Name | Operands | Description |
 |------|------|----------|-------------|
-| 28 | Call | u8 argc | Call function by name from pool |
-| 29 | FuncRef | u16 str_idx | Push function reference |
-| 30 | CallValue | u8 argc | Call function from Value::Func |
-| 31 | EnterScope | u16 num_locals | Allocate locals for new scope |
-| 32 | ExitScope | u16 num_locals | Deallocate locals |
+| 28 | ArrayNew | u8 count | Create array from N stack values |
+| 29 | ArrayGet | — | Get element at index |
+| 30 | ArraySet | — | Set element at index |
+| 31 | ArrayLen | — | Get array length |
+| 32 | ArrayPush | — | Push element to array |
 
-### Arrays (33-37 earlier now shifted — adjust numbering)
+### Closures (33-34)
+| Code | Name | Operands | Description |
+|------|------|----------|-------------|
+| 33 | FuncRef | str_idx | Push function reference |
+| 34 | CallValue | u8 argc | Call function from Value::Func |
 
-Actually the current opcode assignments in bytecode.rs are:
-- 0-27: Core (as above)
-- 28-29: ArrayNew, ArrayGet
-- 30-32: ArraySet, ArrayLen, ArrayPush
-- 33-34: FuncRef, CallValue
-- 35-37: StructNew, StructGet, StructSet
+### Structs (35-37)
+| Code | Name | Operands | Description |
+|------|------|----------|-------------|
+| 35 | StructNew | str_idx | Create struct N fields from stack |
+| 36 | StructGet | — | Get field by name |
+| 37 | StructSet | — | Set field by name |
+
+### Result (38-40)
+| Code | Name | Operands | Description |
+|------|------|----------|-------------|
+| 38 | ResultOk | — | V → Exito(V) |
+| 39 | ResultErr | — | V → Error(V) |
+| 40 | TryUnwrap | — | Exito(V)→V, Error(V)→Ret(V) |
 
 ## Execution Model
 1. Fetch next instruction from bytecode stream
@@ -93,6 +106,6 @@ Each function call creates a frame with:
 
 ## Bytecode Format (.nvc)
 - **Magic**: `LUMN` (4 bytes)
-- **Version**: 5 (uint8)
+- **Version**: 6 (uint8)
 - **Sections**: strings pool, ints pool, floats pool, names pool, function metadata, instruction chunks
 - See `docs/spec/bytecode-format.md` for full byte-level specification
