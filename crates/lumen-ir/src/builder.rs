@@ -513,6 +513,16 @@ impl IRBuilder {
             Expr::Ninguno { .. } => {
                 self.emit(Instr::OptionNone);
             }
+            Expr::Tuple { items, .. } => {
+                for item in items {
+                    self.gen_expr(item);
+                }
+                self.emit(Instr::TupleNew(items.len()));
+            }
+            Expr::TupleAccess { expr, index, .. } => {
+                self.gen_expr(expr);
+                self.emit(Instr::TupleAccess(*index));
+            }
             Expr::EnumCtor {
                 enum_name,
                 variant,

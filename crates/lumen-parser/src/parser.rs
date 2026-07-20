@@ -56,6 +56,7 @@ impl Parser {
             TokenKind::String,
             TokenKind::Boolean,
         ]) || (self.check_ident() && self.check_ident_next())
+            || self.check_next_is_tuple_type()
         {
             self.parse_declaration().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
@@ -994,55 +995,82 @@ impl Parser {
             } else if self.check(&[TokenKind::Dot]) {
                 let start = expr.span();
                 self.advance();
-                let field = match self.advance() {
-                    Some(t) => match t.kind {
-                        TokenKind::Ident(s) => s,
-                        _ => {
-                            self.error(
-                                "E024",
-                                "Se esperaba un nombre de campo después de '.'",
-                                t.span,
-                                "Escribe el nombre del campo",
-                            );
-                            return Some(expr);
+                let token = self.advance();
+                match token {
+                    Some(t) => {
+                        match t.kind {
+                            TokenKind::Ident(s) => {
+                                if self.check(&[TokenKind::LeftParen]) {
+                                    self.advance();
+                                    let mut args = Vec::new();
+                                    if !self.check(&[TokenKind::RightParen]) {
+                                        args.push(self.parse_expression()?);
+                                        while self.check(&[TokenKind::Comma]) {
+                                            self.advance();
+                                            args.push(self.parse_expression()?);
+                                        }
+                                    }
+                                    if !self.check(&[TokenKind::RightParen]) {
+                                        self.error(
+                                            "E015",
+                                            "Se esperaba ')'",
+                                            start,
+                                            "Agrega ')' para cerrar la llamada al método",
+                                        );
+                                        return Some(expr);
+                                    }
+                                    self.advance();
+                                    let span = Span::merge(&start, &self.previous().span);
+                                    expr = Expr::MethodCall {
+                                        expr: Box::new(expr),
+                                        method: s,
+                                        args,
+                                        span,
+                                    };
+                                } else {
+                                    let span = Span::merge(&start, &self.previous().span);
+                                    expr = Expr::FieldAccess {
+                                        expr: Box::new(expr),
+                                        field: s,
+                                        span,
+                                    };
+                                }
+                            }
+                            TokenKind::NumLiteral(n) => {
+                                let span = Span::merge(&start, &self.previous().span);
+                                if let Some(dot_pos) = n.find('.') {
+                                    let int_part: usize = n[..dot_pos].parse().unwrap_or(0);
+                                    let frac_str = &n[dot_pos + 1..];
+                                    expr = Expr::TupleAccess {
+                                        expr: Box::new(expr),
+                                        index: int_part,
+                                        span,
+                                    };
+                                    if !frac_str.is_empty() {
+                                        let frac_val: usize = frac_str.parse().unwrap_or(0);
+                                        let frac_span = Span::merge(&span, &span);
+                                        expr = Expr::TupleAccess {
+                                            expr: Box::new(expr),
+                                            index: frac_val,
+                                            span: frac_span,
+                                        };
+                                    }
+                                } else {
+                                    let index: usize = n.parse().unwrap_or(0);
+                                    expr = Expr::TupleAccess {
+                                        expr: Box::new(expr),
+                                        index,
+                                        span,
+                                    };
+                                }
+                            }
+                            _ => {
+                                self.error("E024", "Se esperaba un nombre de campo o índice numérico después de '.'", t.span, "Escribe el nombre del campo o un número");
+                                return Some(expr);
+                            }
                         }
-                    },
+                    }
                     None => return Some(expr),
-                };
-                if self.check(&[TokenKind::LeftParen]) {
-                    self.advance();
-                    let mut args = Vec::new();
-                    if !self.check(&[TokenKind::RightParen]) {
-                        args.push(self.parse_expression()?);
-                        while self.check(&[TokenKind::Comma]) {
-                            self.advance();
-                            args.push(self.parse_expression()?);
-                        }
-                    }
-                    if !self.check(&[TokenKind::RightParen]) {
-                        self.error(
-                            "E015",
-                            "Se esperaba ')'",
-                            start,
-                            "Agrega ')' para cerrar la llamada al método",
-                        );
-                        return Some(expr);
-                    }
-                    self.advance();
-                    let span = Span::merge(&start, &self.previous().span);
-                    expr = Expr::MethodCall {
-                        expr: Box::new(expr),
-                        method: field,
-                        args,
-                        span,
-                    };
-                } else {
-                    let span = Span::merge(&start, &self.previous().span);
-                    expr = Expr::FieldAccess {
-                        expr: Box::new(expr),
-                        field,
-                        span,
-                    };
                 }
             } else if self.check(&[TokenKind::LeftParen]) {
                 let start = expr.span();
@@ -1198,21 +1226,46 @@ impl Parser {
             }
             TokenKind::Ninguno | TokenKind::None => Some(Expr::Ninguno { span }),
             TokenKind::LeftParen => {
-                let expr = self.parse_expression()?;
-                if !self.check(&[TokenKind::RightParen]) {
-                    self.error(
-                        "E015",
-                        "Se esperaba ')'",
-                        span,
-                        "Agrega ')' para cerrar el paréntesis",
-                    );
-                    return None;
+                let first = self.parse_expression()?;
+                if self.check(&[TokenKind::Comma]) {
+                    let mut items = vec![first];
+                    while self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                        if self.check(&[TokenKind::RightParen]) {
+                            break;
+                        }
+                        items.push(self.parse_expression()?);
+                    }
+                    if !self.check(&[TokenKind::RightParen]) {
+                        self.error(
+                            "E015",
+                            "Se esperaba ')' para cerrar la tupla",
+                            span,
+                            "Agrega ')' después de los elementos",
+                        );
+                        return None;
+                    }
+                    self.advance();
+                    Some(Expr::Tuple {
+                        items,
+                        span: Span::merge(&span, &self.previous().span),
+                    })
+                } else {
+                    if !self.check(&[TokenKind::RightParen]) {
+                        self.error(
+                            "E015",
+                            "Se esperaba ')'",
+                            span,
+                            "Agrega ')' para cerrar el paréntesis",
+                        );
+                        return None;
+                    }
+                    self.advance();
+                    Some(Expr::Grouping {
+                        expr: Box::new(first),
+                        span: Span::merge(&span, &self.previous().span),
+                    })
                 }
-                self.advance();
-                Some(Expr::Grouping {
-                    expr: Box::new(expr),
-                    span: Span::merge(&span, &self.previous().span),
-                })
             }
             TokenKind::LeftBracket => {
                 let mut items = Vec::new();
@@ -1469,6 +1522,35 @@ impl Parser {
                     err: Box::new(err),
                 })
             }
+            TokenKind::LeftParen => {
+                let start = token.span;
+                let mut types = Vec::new();
+                if !self.check(&[TokenKind::RightParen]) {
+                    types.push(self.parse_type()?);
+                    while self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                        if self.check(&[TokenKind::RightParen]) {
+                            break;
+                        }
+                        types.push(self.parse_type()?);
+                    }
+                }
+                if !self.check(&[TokenKind::RightParen]) {
+                    self.error(
+                        "E015",
+                        "Se esperaba ')' para cerrar el tipo tupla",
+                        start,
+                        "Agrega ')' después de los tipos",
+                    );
+                    return None;
+                }
+                self.advance();
+                if types.len() == 1 {
+                    Some(types.into_iter().next().unwrap())
+                } else {
+                    Some(Type::Tuple(types))
+                }
+            }
             TokenKind::Opcion | TokenKind::Option => {
                 if !self.check(&[TokenKind::Less]) {
                     self.error(
@@ -1495,6 +1577,36 @@ impl Parser {
             }
             _ => None,
         }
+    }
+
+    fn check_next_is_tuple_type(&self) -> bool {
+        if !self.check(&[TokenKind::LeftParen]) {
+            return false;
+        }
+        if self.pos + 1 >= self.tokens.len() {
+            return false;
+        }
+        let next = &self.tokens[self.pos + 1].kind;
+        matches!(
+            next,
+            TokenKind::Numero
+                | TokenKind::Entero
+                | TokenKind::Decimal
+                | TokenKind::Texto
+                | TokenKind::Booleano
+                | TokenKind::Lista
+                | TokenKind::Array
+                | TokenKind::Resultado
+                | TokenKind::Result
+                | TokenKind::Opcion
+                | TokenKind::Option
+                | TokenKind::Number
+                | TokenKind::Integer
+                | TokenKind::Float
+                | TokenKind::String
+                | TokenKind::Boolean
+                | TokenKind::LeftParen
+        )
     }
 
     // --- Helpers ---
@@ -1865,7 +1977,9 @@ impl Spannable for Expr {
             | Expr::Intentar { span, .. }
             | Expr::Algun { span, .. }
             | Expr::Ninguno { span, .. }
-            | Expr::EnumCtor { span, .. } => *span,
+            | Expr::EnumCtor { span, .. }
+            | Expr::Tuple { span, .. }
+            | Expr::TupleAccess { span, .. } => *span,
         }
     }
 }

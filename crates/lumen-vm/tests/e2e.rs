@@ -823,3 +823,38 @@ imprimir(r2);";
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["algun(5)", "ninguno"]);
 }
+
+// --- Tuple Tests ---
+
+#[test]
+fn test_tuple_basic() {
+    let src = "imprimir((42, \"hola\", 3.0));";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["(42, hola, 3)"]);
+}
+
+#[test]
+fn test_tuple_access() {
+    let src = "imprimir((10, 20, 30).0);
+imprimir((10, 20, 30).1);
+imprimir((10, 20, 30).2);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["10", "20", "30"]);
+}
+
+#[test]
+fn test_tuple_nested() {
+    let src = "(entero, (texto, entero)) t = (1, (\"a\", 2));
+imprimir(t.0);
+imprimir(t.1.0);
+imprimir(t.1.1);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "a", "2"]);
+}
+
+#[test]
+fn test_tuple_type_error() {
+    let result = run_source("entero x = (1, 2);");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}

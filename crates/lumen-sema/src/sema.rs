@@ -26,6 +26,7 @@ pub enum TypeInfo {
     },
     Opcion(Box<TypeInfo>),
     Enum(String),
+    Tuple(Vec<TypeInfo>),
 }
 
 #[derive(Clone)]
@@ -1183,6 +1184,48 @@ impl SemanticAnalyzer {
                 TypeInfo::Opcion(Box::new(inner))
             }
             Expr::Ninguno { .. } => TypeInfo::Opcion(Box::new(TypeInfo::Void)),
+            Expr::Tuple { items, span: _ } => {
+                let mut types = Vec::new();
+                for item in items {
+                    types.push(self.analyze_expr(item));
+                }
+                TypeInfo::Tuple(types)
+            }
+            Expr::TupleAccess { expr, index, span } => {
+                let expr_type = self.analyze_expr(expr);
+                match &expr_type {
+                    TypeInfo::Tuple(types) => {
+                        if *index >= types.len() {
+                            self.errors.push(SemError {
+                                code: "E067".to_string(),
+                                message: format!(
+                                    "Índice {} fuera de rango para tupla de {} elementos",
+                                    index,
+                                    types.len()
+                                ),
+                                span: *span,
+                                suggestion: format!("Usa un índice entre 0 y {}", types.len() - 1),
+                            });
+                            TypeInfo::Void
+                        } else {
+                            types[*index].clone()
+                        }
+                    }
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E060".to_string(),
+                            message: format!(
+                                "No puedes acceder por índice a un valor de tipo '{:?}'",
+                                expr_type
+                            ),
+                            span: *span,
+                            suggestion: "El acceso por índice numérico solo funciona con tuplas"
+                                .to_string(),
+                        });
+                        TypeInfo::Void
+                    }
+                }
+            }
             Expr::EnumCtor {
                 enum_name,
                 variant,
@@ -1296,6 +1339,9 @@ impl SemanticAnalyzer {
                 err: Box::new(self.type_to_info(*err)),
             },
             Type::Opcion(inner) => TypeInfo::Opcion(Box::new(self.type_to_info(*inner))),
+            Type::Tuple(types) => {
+                TypeInfo::Tuple(types.into_iter().map(|t| self.type_to_info(t)).collect())
+            }
         }
     }
 }
@@ -1359,6 +1405,17 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
     }
     if let (TypeInfo::Enum(a), TypeInfo::Enum(b)) = (target, value) {
         return a == b;
+    }
+    if let (TypeInfo::Tuple(t), TypeInfo::Tuple(v)) = (target, value) {
+        if t.len() != v.len() {
+            return false;
+        }
+        for (ta, va) in t.iter().zip(v.iter()) {
+            if !can_assign(ta, va) {
+                return false;
+            }
+        }
+        return true;
     }
     false
 }

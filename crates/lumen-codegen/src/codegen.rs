@@ -316,6 +316,18 @@ impl Codegen {
                     .instructions
                     .push(Instruction::Simple(Opcode::OptionNone));
             }
+            Instr::TupleNew(count) => {
+                let idx = self.intern_num(*count as f64);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::TupleNew, idx));
+            }
+            Instr::TupleAccess(index) => {
+                let idx = self.intern_num(*index as f64);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::TupleAccess, idx));
+            }
             Instr::EnumCtor {
                 enum_name,
                 variant,
@@ -343,6 +355,8 @@ fn instr_count(instr: &Instr) -> usize {
         Instr::Label(_) | Instr::Phi(_, _) | Instr::Read | Instr::Nop => 0,
         Instr::Call(_, _) => 2,
         Instr::ArrayNew(_) => 1,
+        Instr::TupleNew(_) => 1,
+        Instr::TupleAccess(_) => 1,
         Instr::StructNew(_, _) => 2,
         Instr::EnumCtor { .. } => 3,
         _ => 1,

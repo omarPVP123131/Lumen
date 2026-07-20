@@ -422,6 +422,14 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             prefix_expr(inner, prefix, locals);
         }
         Expr::Ninguno { .. } => {}
+        Expr::Tuple { items, .. } => {
+            for item in items.iter_mut() {
+                prefix_expr(item, prefix, locals);
+            }
+        }
+        Expr::TupleAccess { expr: target, .. } => {
+            prefix_expr(target, prefix, locals);
+        }
         Expr::EnumCtor {
             enum_name, args, ..
         } => {
@@ -456,6 +464,11 @@ fn prefix_type(t: &mut Type, prefix: &str) {
         }
         Type::Opcion(inner) => {
             prefix_type(inner, prefix);
+        }
+        Type::Tuple(types) => {
+            for t in types.iter_mut() {
+                prefix_type(t, prefix);
+            }
         }
         _ => {}
     }

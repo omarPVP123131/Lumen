@@ -47,6 +47,8 @@ pub enum Opcode {
     OptionSome = 41,
     OptionNone = 42,
     EnumCtor = 43,
+    TupleNew = 44,
+    TupleAccess = 45,
 }
 
 impl Opcode {
@@ -96,6 +98,8 @@ impl Opcode {
             41 => Some(Opcode::OptionSome),
             42 => Some(Opcode::OptionNone),
             43 => Some(Opcode::EnumCtor),
+            44 => Some(Opcode::TupleNew),
+            45 => Some(Opcode::TupleAccess),
             _ => None,
         }
     }

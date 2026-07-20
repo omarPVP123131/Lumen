@@ -490,6 +490,12 @@ impl VM {
             Opcode::OptionNone => {
                 self.push(Value::Opcion(None));
             }
+            Opcode::TupleNew => {
+                // handled in execute_with_idx
+            }
+            Opcode::TupleAccess => {
+                // handled in execute_with_idx
+            }
             Opcode::EnumCtor => {
                 // handled in execute_with_idx
             }
@@ -698,6 +704,36 @@ impl VM {
                 if !val.is_truthy() {
                     let target = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
                     self.ip = target;
+                }
+            }
+            Opcode::TupleNew => {
+                let n = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
+                let mut items = Vec::with_capacity(n);
+                for _ in 0..n {
+                    items.push(self.pop()?);
+                }
+                items.reverse();
+                self.push(Value::Tuple(items));
+            }
+            Opcode::TupleAccess => {
+                let index = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
+                let tuple_val = self.pop()?;
+                match tuple_val {
+                    Value::Tuple(items) => {
+                        if index >= items.len() {
+                            return Err(VmError::Runtime(format!(
+                                "Índice {} fuera de rango para tupla de {} elementos",
+                                index,
+                                items.len()
+                            )));
+                        }
+                        self.push(items[index].clone());
+                    }
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "TupleAccess requires a tuple value".to_string(),
+                        ));
+                    }
                 }
             }
             Opcode::EnumCtor => {

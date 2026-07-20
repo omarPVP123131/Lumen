@@ -57,6 +57,8 @@ pub enum Instr {
     TryUnwrap,
     OptionSome,
     OptionNone,
+    TupleNew(usize),
+    TupleAccess(usize),
     EnumCtor {
         enum_name: String,
         variant: String,

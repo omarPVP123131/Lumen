@@ -230,6 +230,15 @@ pub enum Expr {
         args: Vec<Expr>,
         span: Span,
     },
+    Tuple {
+        items: Vec<Expr>,
+        span: Span,
+    },
+    TupleAccess {
+        expr: Box<Expr>,
+        index: usize,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -272,6 +281,7 @@ pub enum Type {
         err: Box<Type>,
     },
     Opcion(Box<Type>),
+    Tuple(Vec<Type>),
 }
 
 impl Expr {
@@ -297,7 +307,9 @@ impl Expr {
             | Expr::Intentar { span, .. }
             | Expr::Algun { span, .. }
             | Expr::Ninguno { span, .. }
-            | Expr::EnumCtor { span, .. } => *span,
+            | Expr::EnumCtor { span, .. }
+            | Expr::Tuple { span, .. }
+            | Expr::TupleAccess { span, .. } => *span,
         }
     }
 }

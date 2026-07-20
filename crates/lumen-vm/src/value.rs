@@ -20,6 +20,7 @@ pub enum Value {
     Exito(Box<Value>),
     Error(Box<Value>),
     Opcion(Option<Box<Value>>),
+    Tuple(Vec<Value>),
     Void,
 }
 
@@ -71,6 +72,7 @@ impl Value {
             Value::Error(_) => true,
             Value::Opcion(Some(_)) => true,
             Value::Opcion(None) => false,
+            Value::Tuple(_) => true,
             Value::Void => false,
         }
     }
@@ -117,6 +119,10 @@ impl fmt::Display for Value {
             Value::Error(v) => write!(f, "error({})", v),
             Value::Opcion(Some(v)) => write!(f, "algun({})", v),
             Value::Opcion(None) => write!(f, "ninguno"),
+            Value::Tuple(v) => {
+                let items: Vec<String> = v.iter().map(|x| format!("{}", x)).collect();
+                write!(f, "({})", items.join(", "))
+            }
             Value::Void => write!(f, "void"),
         }
     }
