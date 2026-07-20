@@ -79,6 +79,9 @@ pub enum TokenKind {
     ErrKeyword,
     Intentar,
     En,
+    Opcion,
+    Algun,
+    Ninguno,
 
     // English equivalents
     If,
@@ -110,6 +113,9 @@ pub enum TokenKind {
     Err,
     Try,
     In,
+    Option,
+    Some,
+    None,
 
     // Identifiers & Literals
     Ident(String),
@@ -211,6 +217,12 @@ impl TokenKind {
             "try" => Some(TokenKind::Try),
             "en" => Some(TokenKind::En),
             "in" => Some(TokenKind::In),
+            "opcion" => Some(TokenKind::Opcion),
+            "option" => Some(TokenKind::Option),
+            "algun" => Some(TokenKind::Algun),
+            "some" => Some(TokenKind::Some),
+            "ninguno" => Some(TokenKind::Ninguno),
+            "none" => Some(TokenKind::None),
             _ => None,
         }
     }
@@ -246,6 +258,9 @@ impl TokenKind {
             TokenKind::ErrKeyword | TokenKind::Err => "error",
             TokenKind::Intentar | TokenKind::Try => "intentar",
             TokenKind::En | TokenKind::In => "en",
+            TokenKind::Opcion | TokenKind::Option => "opcion",
+            TokenKind::Algun | TokenKind::Some => "algun",
+            TokenKind::Ninguno | TokenKind::None => "ninguno",
             _ => "",
         }
     }

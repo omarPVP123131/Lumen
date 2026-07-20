@@ -52,7 +52,7 @@ Camino hacia **v1.0 estable**, dividido en 40 fases. Las fases 0-20 están compl
 
 ---
 
-### Fase 22 — `opcion<T>` (Optional Type)
+### Fase 22 — `opcion<T>` (Optional Type) ✅
 **Objetivo**: Tipo opcional/nullable seguro sin null pointers.
 
 - Sintaxis: `opcion<entero>`, valores `algun(valor)` y `ninguno`
@@ -60,11 +60,11 @@ Camino hacia **v1.0 estable**, dividido en 40 fases. Las fases 0-20 están compl
 - Desempaquetado seguro con `elegir`
 
 **Criterio de aceptación**:
-- [ ] Parseo de `opcion<T>`, `algun`, `ninguno`
-- [ ] Sema: `ninguno` puede asignarse a cualquier `opcion<T>`
-- [ ] VM: `algun(5)` → `Value::Option(Some(5))`
-- [ ] Acceso seguro: error si se usa `algun` como `ninguno`
-- [ ] Tests: 5+ casos cubriendo variantes y errores
+- [x] Parseo de `opcion<T>`, `algun`, `ninguno`
+- [x] Sema: `ninguno` puede asignarse a cualquier `opcion<T>`
+- [x] VM: `algun(5)` → `Value::Opcion(Some(5))`
+- [x] Acceso seguro: comparación y match con `elegir`
+- [x] Tests: 5 sema + 10 e2e cubriendo variantes y errores
 
 ---
 

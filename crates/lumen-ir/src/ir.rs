@@ -55,6 +55,8 @@ pub enum Instr {
     ResultOk,
     ResultErr,
     TryUnwrap,
+    OptionSome,
+    OptionNone,
     Jmp(usize),
     JmpIf(usize),
     Label(usize),

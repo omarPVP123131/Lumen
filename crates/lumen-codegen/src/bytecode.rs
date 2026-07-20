@@ -44,6 +44,8 @@ pub enum Opcode {
     ResultOk = 38,
     ResultErr = 39,
     TryUnwrap = 40,
+    OptionSome = 41,
+    OptionNone = 42,
 }
 
 impl Opcode {
@@ -81,15 +83,17 @@ impl Opcode {
             29 => Some(Opcode::ArrayGet),
             30 => Some(Opcode::ArraySet),
             31 => Some(Opcode::ArrayLen),
-             32 => Some(Opcode::ArrayPush),
-             33 => Some(Opcode::FuncRef),
-             34 => Some(Opcode::CallValue),
+              32 => Some(Opcode::ArrayPush),
+              33 => Some(Opcode::FuncRef),
+              34 => Some(Opcode::CallValue),
               35 => Some(Opcode::StructNew),
               36 => Some(Opcode::StructGet),
               37 => Some(Opcode::StructSet),
               38 => Some(Opcode::ResultOk),
               39 => Some(Opcode::ResultErr),
               40 => Some(Opcode::TryUnwrap),
+              41 => Some(Opcode::OptionSome),
+              42 => Some(Opcode::OptionNone),
             _ => None,
         }
     }

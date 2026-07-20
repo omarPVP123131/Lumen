@@ -24,6 +24,7 @@ pub enum TypeInfo {
         ok: Box<TypeInfo>,
         err: Box<TypeInfo>,
     },
+    Opcion(Box<TypeInfo>),
 }
 
 #[derive(Clone)]
@@ -298,7 +299,7 @@ impl SemanticAnalyzer {
                 for arm in arms {
                     let arm_val_type = self.analyze_expr(&arm.value);
                     if arm_val_type != expr_type {
-                        if !(expr_type == TypeInfo::Decimal && arm_val_type == TypeInfo::Entero) {
+                        if !can_assign(&expr_type, &arm_val_type) && !(expr_type == TypeInfo::Decimal && arm_val_type == TypeInfo::Entero) {
                             self.errors.push(SemError {
                                 code: "E056".to_string(),
                                 message: format!("El valor del caso debe ser '{:?}', no '{:?}'", expr_type, arm_val_type),
@@ -439,7 +440,8 @@ impl SemanticAnalyzer {
                         }
                     }
                     BinOp::Equal | BinOp::NotEqual => {
-                        if lt == rt || (is_numeric(&lt) && is_numeric(&rt)) {
+                        if lt == rt || (is_numeric(&lt) && is_numeric(&rt))
+                            || can_assign(&lt, &rt) || can_assign(&rt, &lt) {
                             TypeInfo::Booleano
                         } else {
                             self.errors.push(SemError {
@@ -911,6 +913,21 @@ impl SemanticAnalyzer {
                     }
                 }
             }
+            Expr::Algun { expr, span: _ } => {
+                let inner = self.analyze_expr(expr);
+                if inner == TypeInfo::Void {
+                    self.errors.push(SemError {
+                        code: "E064".to_string(),
+                        message: "No puedes crear un valor opcional con un valor vacío".to_string(),
+                        span: expr.span(),
+                        suggestion: "Pasa un valor válido a 'algun()'.".to_string(),
+                    });
+                }
+                TypeInfo::Opcion(Box::new(inner))
+            }
+            Expr::Ninguno { .. } => {
+                TypeInfo::Opcion(Box::new(TypeInfo::Void))
+            }
         }
     }
 
@@ -949,6 +966,7 @@ impl SemanticAnalyzer {
                 ok: Box::new(self.type_to_info(*ok)),
                 err: Box::new(self.type_to_info(*err)),
             },
+            Type::Opcion(inner) => TypeInfo::Opcion(Box::new(self.type_to_info(*inner))),
         }
     }
 }
@@ -978,6 +996,10 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
         let ok_compat = can_assign(tok, vok) || **vok == TypeInfo::Void || **tok == TypeInfo::Void;
         let err_compat = can_assign(terr, verr) || **verr == TypeInfo::Void || **terr == TypeInfo::Void;
         return ok_compat && err_compat;
+    }
+    if let (TypeInfo::Opcion(target_inner), TypeInfo::Opcion(value_inner)) = (target, value) {
+        if **value_inner == TypeInfo::Void { return true; }
+        return can_assign(target_inner, value_inner);
     }
     false
 }
@@ -1254,6 +1276,37 @@ para a en nums {
 }
 imprimir(unir([\"a\", \"b\"]));";
         let errors = analyze(source);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_opcion_valid_algun() {
+        let errors = analyze("opcion<entero> x = algun(42);");
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_opcion_valid_ninguno() {
+        let errors = analyze("opcion<entero> x = ninguno;");
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_opcion_assign_ninguno_to_any() {
+        let errors = analyze("opcion<texto> x = ninguno;");
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_opcion_type_mismatch() {
+        let errors = analyze("opcion<texto> x = algun(42);");
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E031");
+    }
+
+    #[test]
+    fn test_opcion_english_keywords() {
+        let errors = analyze("option<integer> x = some(42); option<string> y = none;");
         assert!(errors.is_empty());
     }
 }

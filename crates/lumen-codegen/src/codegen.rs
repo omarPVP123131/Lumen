@@ -240,6 +240,12 @@ impl Codegen {
             Instr::TryUnwrap => {
                 self.bytecode.instructions.push(Instruction::Simple(Opcode::TryUnwrap));
             }
+            Instr::OptionSome => {
+                self.bytecode.instructions.push(Instruction::Simple(Opcode::OptionSome));
+            }
+            Instr::OptionNone => {
+                self.bytecode.instructions.push(Instruction::Simple(Opcode::OptionNone));
+            }
         }
     }
 

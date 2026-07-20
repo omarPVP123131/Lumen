@@ -152,6 +152,7 @@ impl VM {
                     (Value::Struct { name: an, fields: af }, Value::Struct { name: bn, fields: bf }) => {
                         an == bn && af == bf
                     }
+                    (Value::Opcion(a), Value::Opcion(b)) => a == b,
                     _ => false,
                 };
                 self.push(Value::Bool(result));
@@ -169,6 +170,7 @@ impl VM {
                     (Value::Struct { name: an, fields: af }, Value::Struct { name: bn, fields: bf }) => {
                         an != bn || af != bf
                     }
+                    (Value::Opcion(a), Value::Opcion(b)) => a != b,
                     _ => true,
                 };
                 self.push(Value::Bool(result));
@@ -381,6 +383,13 @@ impl VM {
                     }
                     _ => return Err(VmError::TypeError("TryUnwrap requires a result value".to_string())),
                 }
+            }
+            Opcode::OptionSome => {
+                let val = self.pop()?;
+                self.push(Value::Opcion(Some(Box::new(val))));
+            }
+            Opcode::OptionNone => {
+                self.push(Value::Opcion(None));
             }
             _ => {}
         }

@@ -713,3 +713,105 @@ imprimir(99);";
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["10", "20", "99"]);
 }
+
+// --- Opcion/Optional Type Tests ---
+
+#[test]
+fn test_opcion_algun() {
+    let src = "opcion<entero> x = algun(42);
+imprimir(x);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["algun(42)"]);
+}
+
+#[test]
+fn test_opcion_ninguno() {
+    let src = "opcion<entero> x = ninguno;
+imprimir(x);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["ninguno"]);
+}
+
+#[test]
+fn test_opcion_english_keywords() {
+    let src = "option<integer> x = some(42);
+option<string> y = none;
+imprimir(x);
+imprimir(y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["algun(42)", "ninguno"]);
+}
+
+#[test]
+fn test_opcion_assign_ninguno_to_any() {
+    let src = "opcion<texto> x = ninguno;
+imprimir(x);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["ninguno"]);
+}
+
+#[test]
+fn test_opcion_type_error() {
+    let src = "opcion<texto> x = algun(42);";
+    let result = run_source(src);
+    assert!(result.is_err());
+    assert!(result.as_ref().unwrap_err().contains("SemError") || result.as_ref().unwrap_err().contains("E031"));
+}
+
+#[test]
+fn test_opcion_eq_algun() {
+    let src = "opcion<entero> x = algun(5);
+opcion<entero> y = algun(5);
+booleano eq = x == y;
+imprimir(eq);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["true"]);
+}
+
+#[test]
+fn test_opcion_neq_algun_ninguno() {
+    let src = "opcion<entero> x = algun(5);
+opcion<entero> y = ninguno;
+booleano neq = x != y;
+imprimir(neq);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["true"]);
+}
+
+#[test]
+fn test_opcion_match_algun() {
+    let src = "opcion<entero> x = algun(10);
+elegir (x) {
+    caso algun(10): { imprimir(1); }
+    caso ninguno: { imprimir(2); }
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1"]);
+}
+
+#[test]
+fn test_opcion_match_ninguno() {
+    let src = "opcion<entero> x = ninguno;
+elegir (x) {
+    caso algun(10): { imprimir(1); }
+    caso ninguno: { imprimir(2); }
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["2"]);
+}
+
+#[test]
+fn test_opcion_in_function() {
+    let src = "funcion opcion<entero> buscar(entero x) {
+    si (x > 0) {
+        retornar algun(x);
+    }
+    retornar ninguno;
+}
+opcion<entero> r1 = buscar(5);
+opcion<entero> r2 = buscar(-1);
+imprimir(r1);
+imprimir(r2);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["algun(5)", "ninguno"]);
+}

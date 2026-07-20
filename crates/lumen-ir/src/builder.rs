@@ -455,6 +455,13 @@ impl IRBuilder {
                 self.gen_expr(expr);
                 self.emit(Instr::TryUnwrap);
             }
+            Expr::Algun { expr, .. } => {
+                self.gen_expr(expr);
+                self.emit(Instr::OptionSome);
+            }
+            Expr::Ninguno { .. } => {
+                self.emit(Instr::OptionNone);
+            }
         }
     }
 

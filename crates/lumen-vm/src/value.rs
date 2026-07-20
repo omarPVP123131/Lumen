@@ -14,6 +14,7 @@ pub enum Value {
     },
     Exito(Box<Value>),
     Error(Box<Value>),
+    Opcion(Option<Box<Value>>),
     Void,
 }
 
@@ -62,6 +63,8 @@ impl Value {
             Value::Struct { .. } => true,
             Value::Exito(_) => true,
             Value::Error(_) => true,
+            Value::Opcion(Some(_)) => true,
+            Value::Opcion(None) => false,
             Value::Void => false,
         }
     }
@@ -91,6 +94,8 @@ impl fmt::Display for Value {
             }
             Value::Exito(v) => write!(f, "exito({})", v),
             Value::Error(v) => write!(f, "error({})", v),
+            Value::Opcion(Some(v)) => write!(f, "algun({})", v),
+            Value::Opcion(None) => write!(f, "ninguno"),
             Value::Void => write!(f, "void"),
         }
     }

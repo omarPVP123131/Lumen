@@ -338,6 +338,10 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
         Expr::Intentar { expr: inner, .. } => {
             prefix_expr(inner, prefix, locals);
         }
+        Expr::Algun { expr: inner, .. } => {
+            prefix_expr(inner, prefix, locals);
+        }
+        Expr::Ninguno { .. } => {}
     }
 }
 
@@ -356,6 +360,9 @@ fn prefix_type(t: &mut Type, prefix: &str) {
         Type::Resultado { ok, err } => {
             prefix_type(ok, prefix);
             prefix_type(err, prefix);
+        }
+        Type::Opcion(inner) => {
+            prefix_type(inner, prefix);
         }
         _ => {}
     }

@@ -206,6 +206,13 @@ pub enum Expr {
         expr: Box<Expr>,
         span: Span,
     },
+    Algun {
+        expr: Box<Expr>,
+        span: Span,
+    },
+    Ninguno {
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -247,6 +254,7 @@ pub enum Type {
         ok: Box<Type>,
         err: Box<Type>,
     },
+    Opcion(Box<Type>),
 }
 
 impl Expr {
@@ -263,7 +271,9 @@ impl Expr {
             | Expr::FieldAccess { span, .. }
             | Expr::Exito { span, .. }
             | Expr::Error { span, .. }
-            | Expr::Intentar { span, .. } => *span,
+            | Expr::Intentar { span, .. }
+            | Expr::Algun { span, .. }
+            | Expr::Ninguno { span, .. } => *span,
         }
     }
 }

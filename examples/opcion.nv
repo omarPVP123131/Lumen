@@ -1,0 +1,39 @@
+// Ejemplo de tipo opcional (opcion<T>) en LÚMEN
+
+// Función que retorna opcion<T>
+funcion opcion<entero> encontrar(entero n) {
+    si (n > 0) {
+        retornar algun(n * 2);
+    }
+    retornar ninguno;
+}
+
+// Valor presente con algun()
+opcion<entero> x = algun(42);
+imprimir(x);
+
+// Valor ausente con ninguno
+opcion<entero> y = ninguno;
+imprimir(y);
+
+// ninguno asignable a cualquier opcion<T>
+opcion<texto> z = ninguno;
+imprimir(z);
+
+// Uso de función que retorna opcion
+opcion<entero> a = encontrar(5);
+opcion<entero> b = encontrar(-1);
+imprimir(a);
+imprimir(b);
+
+// Comparación
+booleano iguales = x == algun(42);
+booleano distintos = x != ninguno;
+imprimir(iguales);
+imprimir(distintos);
+
+// Match con elegir
+elegir (a) {
+    caso algun(10): { imprimir(10); }
+    caso ninguno: { imprimir(0); }
+}

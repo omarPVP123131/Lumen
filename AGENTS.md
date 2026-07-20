@@ -10,15 +10,15 @@
 |-------|-------|------|
 | lumen-lexer | 24 | unit |
 | lumen-parser | 36 | unit |
-| lumen-sema | 33 | unit |
+| lumen-sema | 38 | unit |
 | lumen-ir | 20 | unit + folding |
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 68 | e2e |
-| **Total** | **244** | |
+| lumen-vm | 78 | e2e |
+| **Total** | **259** | |
 
-**0 warnings, 244 tests passing.**
+**0 warnings, 259 tests passing.**
 
 ---
 
@@ -72,6 +72,17 @@ Lexer, parser, sema, IR, bytecode, VM, CLI, arrays, control de flujo avanzado.
 - Sin cambios en bytecode o VM (reutiliza opcodes existentes)
 - Tests: 4 parser, 6 sema, 9 e2e
 - Ejemplo: `examples/foreach.nv`
+
+### Fase 22: Opcion/Optional Type ✅
+- Sintaxis: `opcion<T>`, valores `algun(valor)` y `ninguno`
+- Token: `Opcion`/`Option`, `Algun`/`Some`, `Ninguno`/`None`
+- AST: `Type::Opcion(Box<Type>)`, `Expr::Algun { expr }`, `Expr::Ninguno`
+- Parser: parseo de tipo `opcion<T>`, expresión `algun(expr)`, keyword `ninguno`
+- Sema: `TypeInfo::Opcion(Box<TypeInfo>)`, `ninguno` asignable a cualquier `Opcion<T>`
+- IR: `Instr::OptionSome`, `Instr::OptionNone`
+- Bytecode: `OptionSome(41)`, `OptionNone(42)`
+- VM: `Value::Opcion(Option<Box<Value>>)`, comparación por igualdad
+- Tests: 5 sema, 10 e2e
 
 ---
 

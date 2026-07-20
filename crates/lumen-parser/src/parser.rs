@@ -35,6 +35,7 @@ impl Parser {
                          TokenKind::Texto, TokenKind::Booleano,
                          TokenKind::Lista, TokenKind::Array,
                          TokenKind::Resultado, TokenKind::Result,
+                         TokenKind::Opcion, TokenKind::Option,
                          TokenKind::Number, TokenKind::Integer, TokenKind::Float,
                          TokenKind::String, TokenKind::Boolean]) {
             self.parse_declaration().map(DeclOrStmt::Decl)
@@ -42,11 +43,12 @@ impl Parser {
             self.parse_declaration().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
             if self.check_next(&[TokenKind::Numero, TokenKind::Entero, TokenKind::Decimal,
-                                  TokenKind::Texto, TokenKind::Booleano,
-                                  TokenKind::Lista, TokenKind::Array,
-                                  TokenKind::Resultado, TokenKind::Result,
-                                  TokenKind::Number, TokenKind::Integer, TokenKind::Float,
-                                  TokenKind::String, TokenKind::Boolean]) {
+                                   TokenKind::Texto, TokenKind::Booleano,
+                                   TokenKind::Lista, TokenKind::Array,
+                                   TokenKind::Resultado, TokenKind::Result,
+                                   TokenKind::Opcion, TokenKind::Option,
+                                   TokenKind::Number, TokenKind::Integer, TokenKind::Float,
+                                   TokenKind::String, TokenKind::Boolean]) {
                 self.parse_function().map(DeclOrStmt::Decl)
             } else if self.check_next(&[TokenKind::LeftParen]) {
                 self.parse_expr_or_assign().map(DeclOrStmt::Stmt)
@@ -839,6 +841,26 @@ impl Parser {
                     span: Span::merge(&span, &end_span),
                 })
             }
+            TokenKind::Algun | TokenKind::Some => {
+                if !self.check(&[TokenKind::LeftParen]) {
+                    self.error("E014", "Se esperaba '(' después de 'algun'", span, "Agrega '(expr)' para el valor");
+                    return None;
+                }
+                self.advance();
+                let expr = self.parse_expression()?;
+                if !self.check(&[TokenKind::RightParen]) {
+                    self.error("E015", "Se esperaba ')'", span, "Agrega ')' para cerrar");
+                    return None;
+                }
+                self.advance();
+                Some(Expr::Algun {
+                    expr: Box::new(expr),
+                    span: Span::merge(&span, &self.previous().span),
+                })
+            }
+            TokenKind::Ninguno | TokenKind::None => {
+                Some(Expr::Ninguno { span })
+            }
             TokenKind::LeftParen => {
                 let expr = self.parse_expression()?;
                 if !self.check(&[TokenKind::RightParen]) {
@@ -1012,6 +1034,20 @@ impl Parser {
                     ok: Box::new(ok),
                     err: Box::new(err),
                 })
+            }
+            TokenKind::Opcion | TokenKind::Option => {
+                if !self.check(&[TokenKind::Less]) {
+                    self.error("E021", "Se esperaba '<' para el tipo opcional", token.span, "Agrega '<tipo>' después de 'opcion'");
+                    return None;
+                }
+                self.advance();
+                let inner = self.parse_type()?;
+                if !self.check(&[TokenKind::Greater]) {
+                    self.error("E021", "Se esperaba '>' para cerrar el tipo opcional", token.span, "Agrega '>' después del tipo interno");
+                    return None;
+                }
+                self.advance();
+                Some(Type::Opcion(Box::new(inner)))
             }
             _ => None,
         }
@@ -1221,7 +1257,9 @@ impl Spannable for Expr {
             | Expr::FieldAccess { span, .. }
             | Expr::Exito { span, .. }
             | Expr::Error { span, .. }
-            | Expr::Intentar { span, .. } => *span,
+            | Expr::Intentar { span, .. }
+            | Expr::Algun { span, .. }
+            | Expr::Ninguno { span, .. } => *span,
         }
     }
 }

@@ -63,6 +63,8 @@ unary = [ ("-" | "!") ] , primary ;
 
 (* Level 7: Primary *)
 primary = literal
+        | "algun" , "(" , expression , ")"
+        | "ninguno"
         | identifier , [ "(" , [ argument_list ] , ")" ]
         | "(" , expression , ")"
         ;
@@ -70,7 +72,8 @@ primary = literal
 (* --- Auxiliary --- *)
 argument_list = expression , { "," , expression } ;
 
-type_annotation = "numero" | "entero" | "decimal" | "texto" | "booleano" ;
+type_annotation = "numero" | "entero" | "decimal" | "texto" | "booleano"
+               | "opcion" , "<" , type_annotation , ">" ;
 
 literal = numeric_literal | string_literal | boolean_literal ;
 
