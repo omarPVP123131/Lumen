@@ -77,10 +77,13 @@ impl Scope {
     }
 }
 
+type FuncSig = (TypeInfo, Vec<TypeInfo>, usize, Vec<String>);
+type StructDef = (Vec<(String, TypeInfo)>, Vec<String>);
+
 pub struct SemanticAnalyzer {
     scopes: Vec<Scope>,
-    functions: HashMap<String, (TypeInfo, Vec<TypeInfo>, usize, Vec<String>)>,
-    structs: HashMap<String, (Vec<(String, TypeInfo)>, Vec<String>)>,
+    functions: HashMap<String, FuncSig>,
+    structs: HashMap<String, StructDef>,
     enums: HashMap<String, Vec<(String, Vec<TypeInfo>)>>,
     errors: Vec<SemError>,
     loop_depth: usize,
@@ -128,8 +131,10 @@ impl SemanticAnalyzer {
                     .map(|p| self.resolve_type(p.param_type.clone(), type_params))
                     .collect();
                 let default_count = params.iter().filter(|p| p.default.is_some()).count();
-                self.functions
-                    .insert(name.clone(), (ret, params_t, default_count, type_params.clone()));
+                self.functions.insert(
+                    name.clone(),
+                    (ret, params_t, default_count, type_params.clone()),
+                );
             }
         }
     }
@@ -155,12 +160,24 @@ impl SemanticAnalyzer {
 
     fn collect_structs(&mut self, program: &Program) {
         for node in program {
-            if let DeclOrStmt::Decl(Decl::Struct { name, fields, type_params, .. }) = node {
+            if let DeclOrStmt::Decl(Decl::Struct {
+                name,
+                fields,
+                type_params,
+                ..
+            }) = node
+            {
                 let struct_fields: Vec<(String, TypeInfo)> = fields
                     .iter()
-                    .map(|f| (f.name.clone(), self.resolve_type(f.field_type.clone(), type_params)))
+                    .map(|f| {
+                        (
+                            f.name.clone(),
+                            self.resolve_type(f.field_type.clone(), type_params),
+                        )
+                    })
                     .collect();
-                self.structs.insert(name.clone(), (struct_fields, type_params.clone()));
+                self.structs
+                    .insert(name.clone(), (struct_fields, type_params.clone()));
             }
         }
     }
@@ -323,7 +340,12 @@ impl SemanticAnalyzer {
             } => {
                 let struct_fields: Vec<(String, TypeInfo)> = fields
                     .iter()
-                    .map(|f| (f.name.clone(), self.resolve_type(f.field_type.clone(), type_params)))
+                    .map(|f| {
+                        (
+                            f.name.clone(),
+                            self.resolve_type(f.field_type.clone(), type_params),
+                        )
+                    })
                     .collect();
                 TypeInfo::Struct {
                     name: name.clone(),
@@ -832,7 +854,10 @@ impl SemanticAnalyzer {
                                 };
                                 // Substitute types
                                 let subst_param_types: Vec<TypeInfo> = if let Some(ref s) = subst {
-                                    param_types.iter().map(|pt| substitute_typevars(pt, s)).collect()
+                                    param_types
+                                        .iter()
+                                        .map(|pt| substitute_typevars(pt, s))
+                                        .collect()
                                 } else {
                                     param_types.clone()
                                 };
@@ -1191,7 +1216,8 @@ impl SemanticAnalyzer {
                             None
                         };
                         let resolved_fields: Vec<(String, TypeInfo)> = if let Some(ref s) = subst {
-                            expected_fields.iter()
+                            expected_fields
+                                .iter()
                                 .map(|(name, ft)| (name.clone(), substitute_typevars(ft, s)))
                                 .collect()
                         } else {
@@ -1418,9 +1444,10 @@ impl SemanticAnalyzer {
                             Some((_, expected_types)) => {
                                 for (i, arg) in args.iter().enumerate() {
                                     let arg_type = self.analyze_expr(arg);
-                                    if i < expected_types.len() {
-                                        if !can_assign(&expected_types[i], &arg_type) {
-                                            self.errors.push(SemError {
+                                    if i < expected_types.len()
+                                        && !can_assign(&expected_types[i], &arg_type)
+                                    {
+                                        self.errors.push(SemError {
                                                 code: "E031".to_string(),
                                                 message: format!(
                                                     "El argumento {} de la variante '{}' espera un tipo '{:?}', no '{:?}'",
@@ -1432,7 +1459,6 @@ impl SemanticAnalyzer {
                                                     expected_types[i], i + 1
                                                 ),
                                             });
-                                        }
                                     }
                                 }
                                 TypeInfo::Enum(enum_name.clone())
@@ -1488,9 +1514,7 @@ impl SemanticAnalyzer {
 impl SemanticAnalyzer {
     fn resolve_type(&self, t: Type, type_params: &[String]) -> TypeInfo {
         match t {
-            Type::Struct(ref name) if type_params.contains(name) => {
-                TypeInfo::TypeVar(name.clone())
-            }
+            Type::Struct(ref name) if type_params.contains(name) => TypeInfo::TypeVar(name.clone()),
             Type::GenericStruct { name, args } => {
                 // Resolve type args too
                 let resolved_args: Vec<TypeInfo> = args
@@ -1568,7 +1592,11 @@ impl SemanticAnalyzer {
                 if self.enums.contains_key(&name) {
                     TypeInfo::Enum(name)
                 } else {
-                    let fields = self.structs.get(&name).map(|(f, _)| f.clone()).unwrap_or_default();
+                    let fields = self
+                        .structs
+                        .get(&name)
+                        .map(|(f, _)| f.clone())
+                        .unwrap_or_default();
                     TypeInfo::Struct { name, fields }
                 }
             }
@@ -1592,7 +1620,10 @@ fn substitute_typevars(typ: &TypeInfo, subst: &HashMap<String, TypeInfo>) -> Typ
             param_types,
             return_type,
         } => TypeInfo::Func {
-            param_types: param_types.iter().map(|p| substitute_typevars(p, subst)).collect(),
+            param_types: param_types
+                .iter()
+                .map(|p| substitute_typevars(p, subst))
+                .collect(),
             return_type: Box::new(substitute_typevars(return_type, subst)),
         },
         TypeInfo::Resultado { ok, err } => TypeInfo::Resultado {
@@ -1600,12 +1631,18 @@ fn substitute_typevars(typ: &TypeInfo, subst: &HashMap<String, TypeInfo>) -> Typ
             err: Box::new(substitute_typevars(err, subst)),
         },
         TypeInfo::Opcion(inner) => TypeInfo::Opcion(Box::new(substitute_typevars(inner, subst))),
-        TypeInfo::Tuple(types) => {
-            TypeInfo::Tuple(types.iter().map(|t| substitute_typevars(t, subst)).collect())
-        }
+        TypeInfo::Tuple(types) => TypeInfo::Tuple(
+            types
+                .iter()
+                .map(|t| substitute_typevars(t, subst))
+                .collect(),
+        ),
         TypeInfo::Struct { name, fields } => TypeInfo::Struct {
             name: name.clone(),
-            fields: fields.iter().map(|(n, t)| (n.clone(), substitute_typevars(t, subst))).collect(),
+            fields: fields
+                .iter()
+                .map(|(n, t)| (n.clone(), substitute_typevars(t, subst)))
+                .collect(),
         },
         _ => typ.clone(),
     }

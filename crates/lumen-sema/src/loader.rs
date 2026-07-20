@@ -363,10 +363,8 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
         }
         Stmt::Destructure { targets, value, .. } => {
             for target in targets.iter_mut() {
-                if target.name != "_" {
-                    if !locals.contains(target.name.as_str()) {
-                        target.name = format!("{}_{}", prefix, target.name);
-                    }
+                if target.name != "_" && !locals.contains(target.name.as_str()) {
+                    target.name = format!("{}_{}", prefix, target.name);
                 }
             }
             prefix_expr(value, prefix, locals);

@@ -64,9 +64,7 @@ impl IRBuilder {
         }
 
         for node in program {
-            if let DeclOrStmt::Decl(Decl::Function {
-                name, params, ..
-            }) = node {
+            if let DeclOrStmt::Decl(Decl::Function { name, params, .. }) = node {
                 let defaults: Vec<Option<Expr>> = params
                     .iter()
                     .map(|p| p.default.clone().map(|boxed| *boxed))

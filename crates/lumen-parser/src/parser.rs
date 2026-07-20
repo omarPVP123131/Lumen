@@ -1760,9 +1760,10 @@ impl Parser {
         }
         let next = &self.tokens[self.pos + 1];
         match &next.kind {
-            TokenKind::Ident(name) => {
-                self.type_params_stack.iter().any(|params| params.contains(name))
-            }
+            TokenKind::Ident(name) => self
+                .type_params_stack
+                .iter()
+                .any(|params| params.contains(name)),
             _ => false,
         }
     }
@@ -1821,7 +1822,10 @@ impl Parser {
             return true;
         }
         if let TokenKind::Ident(name) = kind {
-            return self.type_params_stack.iter().any(|params| params.contains(name));
+            return self
+                .type_params_stack
+                .iter()
+                .any(|params| params.contains(name));
         }
         false
     }
@@ -2793,7 +2797,10 @@ para a en nums {
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         assert_eq!(program.len(), 1);
-        if let DeclOrStmt::Decl(Decl::Function { name, type_params, .. }) = &program[0] {
+        if let DeclOrStmt::Decl(Decl::Function {
+            name, type_params, ..
+        }) = &program[0]
+        {
             assert_eq!(name, "identidad");
             assert_eq!(type_params, &vec!["T".to_string()]);
         } else {
@@ -2818,7 +2825,10 @@ para a en nums {
         let source = "estructura Par<T, U> { primero: T, segundo: U }";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Struct { name, type_params, .. }) = &program[0] {
+        if let DeclOrStmt::Decl(Decl::Struct {
+            name, type_params, ..
+        }) = &program[0]
+        {
             assert_eq!(name, "Par");
             assert_eq!(type_params, &vec!["T".to_string(), "U".to_string()]);
         } else {
@@ -2866,10 +2876,15 @@ para a en nums {
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         assert_eq!(program.len(), 1);
         if let DeclOrStmt::Stmt(Stmt::Expr { expr, .. }) = &program[0] {
-            assert!(matches!(expr.as_ref(), Expr::Binary { op: BinOp::Less, .. }));
+            assert!(matches!(
+                expr.as_ref(),
+                Expr::Binary {
+                    op: BinOp::Less,
+                    ..
+                }
+            ));
         } else {
             panic!("Expected Expr statement");
         }
     }
 }
-
