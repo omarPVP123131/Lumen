@@ -415,7 +415,6 @@ impl IRBuilder {
             Expr::Call {
                 callee,
                 args,
-                type_args: _,
                 ..
             } => {
                 let callee_inner = match callee.as_ref() {
@@ -541,7 +540,6 @@ impl IRBuilder {
             Expr::StructInit {
                 struct_name,
                 fields,
-                type_args: _,
                 ..
             } => {
                 for (_, val) in fields {
