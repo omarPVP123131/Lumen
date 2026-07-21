@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.0 — Julio 2026
+
+### Added
+- **Stdlib (matematicas, texto, coleccion, fecha)** — Módulos estándar nativos en español.
+- **E/S de Archivos** — Builtins `leer_archivo`, `escribir_archivo`, `existe_archivo`.
+- **Stack Traces** — Pila de llamadas completa en errores en tiempo de ejecución.
+- **Mensajes de Error Mejorados** — Subrayado exacto con caret (`^^^^`) y colores ANSI en terminal.
+
+### Fixed
+- Corrección de advertencias de Clippy (`approx_constant`, `question_mark`, `unneeded_wildcard_pattern`, `unnecessary_sort_by`) en integración continua.
+
 ## v1.1.0 — Julio 2026
 
 ### Added

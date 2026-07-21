@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.1.0-orange)
+![Version](https://img.shields.io/badge/version-1.2.0-orange)
 ![Tests](https://img.shields.io/badge/tests-294-brightgreen)
 
 LÚMEN es un lenguaje de programación educativo de alto rendimiento con sintaxis nativa en español (y soporte completo para inglés). Cuenta con un pipeline de compilación completo escrito desde cero en Rust: Lexer → Parser → IR → Optimizador → Bytecode → VM.
