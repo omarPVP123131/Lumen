@@ -2,6 +2,12 @@ use crate::value::Value;
 use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone)]
+pub struct CallFrame {
+    pub func_name: String,
+    pub return_ip: usize,
+}
+
 #[derive(Debug)]
 pub enum VmError {
     Runtime(String),
@@ -12,13 +18,35 @@ pub enum VmError {
     TypeError(String),
 }
 
+impl VmError {
+    pub fn with_stack(self, stack: &[CallFrame]) -> String {
+        let msg = match &self {
+            VmError::Runtime(s) => format!("Error: {}", s),
+            VmError::StackUnderflow => "Error: Stack underflow".to_string(),
+            VmError::UndefinedVariable(s) => format!("Error: Variable '{}' no definida", s),
+            VmError::UndefinedFunction(s) => format!("Error: Función '{}' no definida", s),
+            VmError::DivisionByZero => "Error: División por cero".to_string(),
+            VmError::TypeError(s) => format!("Error de tipo: {}", s),
+        };
+        if stack.is_empty() {
+            msg
+        } else {
+            let trace: Vec<String> = stack
+                .iter()
+                .map(|f| format!("  · {}", f.func_name))
+                .collect();
+            format!("{}\n\nPila de llamadas:\n{}", msg, trace.join("\n"))
+        }
+    }
+}
+
 pub struct VM {
     stack: Vec<Value>,
     locals: Vec<HashMap<String, Value>>,
     ip: usize,
     bytecode: Bytecode,
     output: Vec<String>,
-    call_stack: Vec<usize>,
+    call_stack: Vec<CallFrame>,
     func_index_cache: HashMap<String, usize>,
 }
 
@@ -67,6 +95,10 @@ impl VM {
 
     pub fn output(&self) -> &[String] {
         &self.output
+    }
+
+    pub fn call_stack(&self) -> &[CallFrame] {
+        &self.call_stack
     }
 
     fn execute(&mut self, instr: &Instruction) -> Result<(), VmError> {
@@ -294,9 +326,9 @@ impl VM {
             }
             Opcode::Ret => {
                 let ret_val = self.pop().unwrap_or(Value::Void);
-                if let Some(return_ip) = self.call_stack.pop() {
+                if let Some(frame) = self.call_stack.pop() {
                     self.locals.pop();
-                    self.ip = return_ip;
+                    self.ip = frame.return_ip;
                 }
                 self.push(ret_val);
             }
@@ -470,9 +502,9 @@ impl VM {
                     }
                     Value::Error(inner) => {
                         let err_wrapper = Value::Error(inner);
-                        if let Some(return_ip) = self.call_stack.pop() {
+                        if let Some(frame) = self.call_stack.pop() {
                             self.locals.pop();
-                            self.ip = return_ip;
+                            self.ip = frame.return_ip;
                         }
                         self.push(err_wrapper);
                     }
@@ -587,10 +619,119 @@ impl VM {
                     self.push(Value::Void);
                 } else if name == "leer" || name == "read" {
                     self.push(Value::Str(String::new()));
+                } else if name == "largo" || name == "len" {
+                    if let Some(Value::Array(v)) = args.into_iter().next() {
+                        self.push(Value::Int(v.len() as i64));
+                    } else {
+                        return Err(VmError::TypeError("'largo' espera una lista".to_string()));
+                    }
+                } else if name == "agregar" || name == "push" {
+                    let mut iter = args.into_iter();
+                    let list = iter.next().unwrap_or(Value::Array(vec![]));
+                    let item = iter.next().unwrap_or(Value::Void);
+                    match list {
+                        Value::Array(mut v) => {
+                            v.push(item);
+                            self.push(Value::Array(v));
+                        }
+                        _ => {
+                            return Err(VmError::TypeError(
+                                "'agregar' espera una lista".to_string(),
+                            ))
+                        }
+                    }
+                } else if name == "__str_len" || name == "__str_longitud" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Int(s.len() as i64));
+                } else if name == "__str_upper" || name == "__str_mayusculas" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.to_uppercase()));
+                } else if name == "__str_lower" || name == "__str_minusculas" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.to_lowercase()));
+                } else if name == "__str_trim" || name == "__str_recortar" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.trim().to_string()));
+                } else if name == "__str_contains" || name == "__str_contiene" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let sub = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Bool(s.contains(&sub)));
+                } else if name == "__str_split" || name == "__str_dividir" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let delim = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let parts: Vec<Value> = if delim.is_empty() {
+                        s.chars().map(|c| Value::Str(c.to_string())).collect()
+                    } else {
+                        s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
+                    };
+                    self.push(Value::Array(parts));
+                } else if name == "__file_read" || name == "__leer_archivo" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::fs::read_to_string(&path) {
+                        Ok(content) => self.push(Value::Exito(Box::new(Value::Str(content)))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                } else if name == "__file_write" || name == "__escribir_archivo" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::fs::write(&path, &content) {
+                        Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                } else if name == "__file_exists" || name == "__existe_archivo" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Bool(std::path::Path::new(&path).exists()));
+                } else if name == "__time_now" || name == "__tiempo_ahora" {
+                    use std::time::{SystemTime, UNIX_EPOCH};
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default();
+                    self.push(Value::Str(format!("{}", now.as_secs())));
+                } else if name == "__list_reverse" || name == "__lista_invertir" {
+                    let mut arr = match args.into_iter().next() {
+                        Some(Value::Array(v)) => v,
+                        Some(other) => {
+                            return Err(VmError::TypeError(format!(
+                                "__list_reverse espera una lista, no {:?}",
+                                other
+                            )))
+                        }
+                        None => {
+                            return Err(VmError::TypeError(
+                                "__list_reverse espera 1 argumento".to_string(),
+                            ))
+                        }
+                    };
+                    arr.reverse();
+                    self.push(Value::Array(arr));
+                } else if name == "__list_sort" || name == "__lista_ordenar" {
+                    let mut arr = match args.into_iter().next() {
+                        Some(Value::Array(v)) => v,
+                        Some(other) => {
+                            return Err(VmError::TypeError(format!(
+                                "__list_sort espera una lista, no {:?}",
+                                other
+                            )))
+                        }
+                        None => {
+                            return Err(VmError::TypeError(
+                                "__list_sort espera 1 argumento".to_string(),
+                            ))
+                        }
+                    };
+                    arr.sort_by(|a, b| {
+                        let an = a.as_num().unwrap_or(f64::MAX);
+                        let bn = b.as_num().unwrap_or(f64::MAX);
+                        an.partial_cmp(&bn).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    self.push(Value::Array(arr));
                 } else if let Some(func) = self.find_func(&name) {
                     let func_start = func.start;
                     let func_params = func.params.clone();
-                    self.call_stack.push(self.ip);
+                    self.call_stack.push(CallFrame {
+                        func_name: name.clone(),
+                        return_ip: self.ip,
+                    });
                     let mut scope = HashMap::new();
                     for (i, param_name) in func_params.iter().enumerate() {
                         if let Some(arg) = args.get(i) {
@@ -631,10 +772,38 @@ impl VM {
                     self.push(Value::Void);
                 } else if name == "leer" || name == "read" {
                     self.push(Value::Str(String::new()));
+                } else if name == "__str_len" || name == "__str_longitud" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Int(s.len() as i64));
+                } else if name == "__str_upper" || name == "__str_mayusculas" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.to_uppercase()));
+                } else if name == "__str_lower" || name == "__str_minusculas" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.to_lowercase()));
+                } else if name == "__str_trim" || name == "__str_recortar" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.trim().to_string()));
+                } else if name == "__str_contains" || name == "__str_contiene" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let sub = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Bool(s.contains(&sub)));
+                } else if name == "__str_split" || name == "__str_dividir" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let delim = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let parts: Vec<Value> = if delim.is_empty() {
+                        s.chars().map(|c| Value::Str(c.to_string())).collect()
+                    } else {
+                        s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
+                    };
+                    self.push(Value::Array(parts));
                 } else if let Some(func) = self.find_func(&name) {
                     let func_start = func.start;
                     let func_params = func.params.clone();
-                    self.call_stack.push(self.ip);
+                    self.call_stack.push(CallFrame {
+                        func_name: name.clone(),
+                        return_ip: self.ip,
+                    });
                     let mut scope = HashMap::new();
                     for (i, param_name) in func_params.iter().enumerate() {
                         if let Some(arg) = args.get(i) {

@@ -1,0 +1,29 @@
+// Ejemplo de Destructuring en LÚMEN
+
+// Destructuring en declaración
+entero x, texto y = (1, "hola");
+imprimir(x);
+imprimir(y);
+
+// Destructuring con wildcard _
+entero a, _, entero c = (1, 2, 3);
+imprimir(a);
+imprimir(c);
+
+// Destructuring en asignación
+entero p = 0;
+texto q = "";
+p, q = (42, "mundo");
+imprimir(p);
+imprimir(q);
+
+// Tres elementos
+entero i, texto j, decimal k = (10, "x", 3.5);
+imprimir(i);
+imprimir(j);
+imprimir(k);
+
+// Con expresiones
+entero m, entero n = (1 + 2, 3 * 4);
+imprimir(m);
+imprimir(n);

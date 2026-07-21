@@ -1,0 +1,27 @@
+// S09: Structs Avanzados (Senior)
+// Ingeniero: Estructuras complejas
+
+estructura Punto {
+    x: entero,
+    y: entero
+}
+
+estructura Rectangulo {
+    origen: Punto,
+    ancho: entero,
+    alto: entero
+}
+
+Punto p = Punto { x: 3, y: 4 };
+Rectangulo rect = Rectangulo { origen: p, ancho: 10, alto: 5 };
+
+imprimir(rect.origen.x);
+imprimir(rect.origen.y);
+
+// Calcular área inline (la función con struct anidado en parámetro tiene bug conocido)
+entero area = rect.ancho * rect.alto;
+imprimir(area);
+
+// Asignación de campo anidado
+rect.origen.x = 7;
+imprimir(rect.origen.x);

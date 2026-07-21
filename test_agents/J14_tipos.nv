@@ -1,0 +1,11 @@
+// J14: Anotaciones de Tipo (Junior)
+// Novato: Declara variables con tipos explícitos
+entero ent_val = 42;
+decimal dec_val = 3.14159;
+texto txt_val = "LÚMEN lenguaje";
+booleano bool_val = verdadero;
+
+imprimir(ent_val);
+imprimir(dec_val);
+imprimir(txt_val);
+imprimir(bool_val);

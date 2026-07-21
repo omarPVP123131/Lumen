@@ -1,0 +1,17 @@
+// S06: Tuplas (Senior)
+// Ingeniero: Valores compuestos
+
+// Tuplas básicas
+(entero, texto, decimal) t1 = (1, "hola", 3.14);
+imprimir(t1.0);
+imprimir(t1.1);
+imprimir(t1.2);
+
+// Tuplas anidadas
+(entero, (texto, booleano)) t2 = (42, ("mundo", verdadero));
+imprimir(t2.0);
+imprimir(t2.1.0);
+imprimir(t2.1.1);
+
+// Tupla en expresión
+imprimir((10 * 2, "concatenado " + "texto", 5 / 2).1);

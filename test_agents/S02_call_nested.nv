@@ -1,0 +1,19 @@
+// S02: Llamadas Anidadas (Senior)
+// Ingeniero: Expresiones complejas
+
+funcion entero suma(entero a, entero b) {
+    retornar a + b;
+}
+
+funcion entero mult(entero a, entero b) {
+    retornar a * b;
+}
+
+funcion entero resta(entero a, entero b) {
+    retornar a - b;
+}
+
+// Llamadas anidadas profundas
+imprimir(suma(mult(2, 3), resta(10, 4)));
+imprimir(mult(suma(5, 5), resta(20, 15)));
+imprimir(suma(suma(suma(1, 2), 3), 4));

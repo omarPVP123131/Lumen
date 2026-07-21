@@ -906,6 +906,310 @@ impl SemanticAnalyzer {
                                     || callee == "read"
                                 {
                                     TypeInfo::Void
+                                } else if callee == "__str_len" || callee == "__str_longitud" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento de tipo texto"
+                                                .to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!(
+                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    callee, got
+                                                ),
+                                                span: *span,
+                                                suggestion: "Pasa un valor de tipo texto"
+                                                    .to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Entero
+                                } else if callee == "__str_upper"
+                                    || callee == "__str_mayusculas"
+                                    || callee == "__str_lower"
+                                    || callee == "__str_minusculas"
+                                    || callee == "__str_trim"
+                                    || callee == "__str_recortar"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento de tipo texto"
+                                                .to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!(
+                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    callee, got
+                                                ),
+                                                span: *span,
+                                                suggestion: "Pasa un valor de tipo texto"
+                                                    .to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Texto
+                                } else if callee == "__str_contains" || callee == "__str_contiene" {
+                                    if args.len() != 2 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 2 argumentos, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 2 argumentos de tipo texto"
+                                                .to_string(),
+                                        });
+                                    }
+                                    for (i, got) in arg_types.iter().enumerate() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{:?}'", i + 1, callee, got),
+                                                span: *span,
+                                                suggestion: "Pasa valores de tipo texto".to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Booleano
+                                } else if callee == "__str_split" || callee == "__str_dividir" {
+                                    if args.len() != 2 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 2 argumentos, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 2 argumentos de tipo texto"
+                                                .to_string(),
+                                        });
+                                    }
+                                    for (i, got) in arg_types.iter().enumerate() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{:?}'", i + 1, callee, got),
+                                                span: *span,
+                                                suggestion: "Pasa valores de tipo texto".to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Lista(Box::new(TypeInfo::Texto))
+                                } else if callee == "__file_read" || callee == "__leer_archivo" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento de tipo texto (ruta)"
+                                                .to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!(
+                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    callee, got
+                                                ),
+                                                span: *span,
+                                                suggestion: "Pasa una ruta de tipo texto"
+                                                    .to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Resultado {
+                                        ok: Box::new(TypeInfo::Texto),
+                                        err: Box::new(TypeInfo::Texto),
+                                    }
+                                } else if callee == "__file_write" || callee == "__escribir_archivo"
+                                {
+                                    if args.len() != 2 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 2 argumentos, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 2 argumentos: ruta y contenido"
+                                                .to_string(),
+                                        });
+                                    }
+                                    for (i, got) in arg_types.iter().enumerate() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{:?}'", i + 1, callee, got),
+                                                span: *span,
+                                                suggestion: "Pasa valores de tipo texto".to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Resultado {
+                                        ok: Box::new(TypeInfo::Booleano),
+                                        err: Box::new(TypeInfo::Texto),
+                                    }
+                                } else if callee == "__file_exists" || callee == "__existe_archivo"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento de tipo texto"
+                                                .to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!(
+                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    callee, got
+                                                ),
+                                                span: *span,
+                                                suggestion: "Pasa un valor de tipo texto"
+                                                    .to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Booleano
+                                } else if callee == "__time_now" || callee == "__tiempo_ahora" {
+                                    if !args.is_empty() {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' no espera argumentos, pero se pasaron {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "No pases argumentos a esta función"
+                                                .to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Texto
+                                } else if callee == "__list_reverse"
+                                    || callee == "__lista_invertir"
+                                    || callee == "__list_sort"
+                                    || callee == "__lista_ordenar"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento de tipo lista"
+                                                .to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        match got {
+                                            TypeInfo::Lista(_) => {}
+                                            _ => {
+                                                self.errors.push(SemError {
+                                                    code: "E041".to_string(),
+                                                    message: format!(
+                                                        "'{}' espera 'lista', no '{:?}'",
+                                                        callee, got
+                                                    ),
+                                                    span: *span,
+                                                    suggestion: "Pasa una lista".to_string(),
+                                                });
+                                            }
+                                        }
+                                    }
+                                    arg_types
+                                        .first()
+                                        .cloned()
+                                        .unwrap_or(TypeInfo::Lista(Box::new(TypeInfo::Void)))
+                                } else if callee == "largo" || callee == "len" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento de tipo lista"
+                                                .to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        match got {
+                                            TypeInfo::Lista(_) => {}
+                                            _ => {
+                                                self.errors.push(SemError {
+                                                    code: "E041".to_string(),
+                                                    message: format!(
+                                                        "'{}' espera 'lista', no '{:?}'",
+                                                        callee, got
+                                                    ),
+                                                    span: *span,
+                                                    suggestion: "Pasa una lista".to_string(),
+                                                });
+                                            }
+                                        }
+                                    }
+                                    TypeInfo::Entero
+                                } else if callee == "agregar" || callee == "push" {
+                                    if args.len() != 2 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 2 argumentos, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa lista y elemento para agregar"
+                                                .to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Void
                                 } else {
                                     let var_type = self.lookup(&callee).map(|s| s.var_type.clone());
                                     match var_type {

@@ -1,0 +1,27 @@
+// Ejemplo de Genéricos en LÚMEN
+
+// Función genérica identidad<T>
+funcion T identidad<T>(T valor) {
+    retornar valor;
+}
+
+entero x = identidad<entero>(42);
+texto s = identidad<texto>("hola");
+decimal d = identidad<decimal>(3.14);
+imprimir(x);
+imprimir(s);
+imprimir(d);
+
+// Struct genérico Par<T, U>
+estructura Par<T, U> {
+    primero: T,
+    segundo: U
+}
+
+Par<entero, texto> p = Par<entero, texto> { primero: 1, segundo: "hola" };
+imprimir(p.primero);
+imprimir(p.segundo);
+
+Par<entero, decimal> q = Par<entero, decimal> { primero: 42, segundo: 3.5 };
+imprimir(q.primero);
+imprimir(q.segundo);

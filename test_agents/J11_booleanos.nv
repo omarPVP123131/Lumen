@@ -1,0 +1,18 @@
+// J11: Booleanos (Junior)
+// Novato: Lógica booleana
+booleano a = verdadero;
+booleano b = falso;
+
+imprimir(a && b);
+imprimir(a || b);
+imprimir(!a);
+
+// Comparaciones
+entero x = 5;
+entero y = 10;
+imprimir(x < y);
+imprimir(x > y);
+imprimir(x <= 5);
+imprimir(y >= 10);
+imprimir(x == 5);
+imprimir(x != y);

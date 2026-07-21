@@ -1,0 +1,24 @@
+// S04: Opcion<T> (Senior)
+// Ingeniero: Valores opcionales
+
+funcion opcion<entero> buscar(entero n, lista<entero> valores) {
+    para elemento en valores {
+        si (elemento == n) {
+            retornar algun(elemento);
+        }
+    }
+    retornar ninguno;
+}
+
+lista<entero> numeros = [5, 10, 15, 20];
+opcion<entero> encontrado = buscar(10, numeros);
+opcion<entero> no_encontrado = buscar(99, numeros);
+
+imprimir(encontrado);
+imprimir(no_encontrado);
+
+// Comparación con algun y ninguno
+booleano igual = encontrado == algun(10);
+booleano es_nada = no_encontrado == ninguno;
+imprimir(igual);
+imprimir(es_nada);

@@ -1,0 +1,21 @@
+// J15: Múltiples Funciones (Junior)
+// Novato: Varias funciones en un archivo
+
+funcion entero doble(entero n) {
+    retornar n * 2;
+}
+
+funcion entero triple(entero n) {
+    retornar n * 3;
+}
+
+funcion entero cuadrado(entero n) {
+    retornar n * n;
+}
+
+imprimir(doble(5));
+imprimir(triple(5));
+imprimir(cuadrado(5));
+
+// Composición
+imprimir(doble(cuadrado(3)));

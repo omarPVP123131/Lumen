@@ -1,0 +1,20 @@
+// S01: Recursión (Senior)
+// Ingeniero: Algoritmos recursivos
+
+funcion entero factorial(entero n) {
+    si (n <= 1) {
+        retornar 1;
+    }
+    retornar n * factorial(n - 1);
+}
+
+funcion entero fibonacci(entero n) {
+    si (n <= 1) {
+        retornar n;
+    }
+    retornar fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+imprimir(factorial(5));
+imprimir(factorial(7));
+imprimir(fibonacci(10));

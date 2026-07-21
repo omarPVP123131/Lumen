@@ -1,0 +1,20 @@
+// J13: Bloques Anidados (Junior)
+// Novato: Anida estructuras de control
+entero i = 1;
+mientras (i <= 3) {
+    entero j = 1;
+    mientras (j <= 3) {
+        imprimir(i * j);
+        j = j + 1;
+    }
+    i = i + 1;
+}
+
+// If dentro de while (filtrar > 5)
+entero n = 1;
+mientras (n <= 10) {
+    si (n > 5) {
+        imprimir(n);
+    }
+    n = n + 1;
+}

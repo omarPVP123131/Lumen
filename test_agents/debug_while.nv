@@ -1,0 +1,5 @@
+entero i = 0;
+mientras i < 3 {
+    imprimir(i);
+    i = i + 1;
+}

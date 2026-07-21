@@ -1,0 +1,15 @@
+// J05: While Loop (Junior)
+// Novato: Cuenta del 1 al 5
+entero i = 1;
+mientras (i <= 5) {
+    imprimir(i);
+    i = i + 1;
+}
+
+// Cuenta regresiva
+entero j = 5;
+mientras (j > 0) {
+    imprimir(j);
+    j = j - 1;
+}
+imprimir("Despegue!");

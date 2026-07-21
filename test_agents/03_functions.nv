@@ -1,0 +1,10 @@
+// Sub-agent 3: Funciones
+// Definir y llamar funciones
+funcion entero suma(entero a, entero b) {
+    retornar a + b;
+}
+funcion texto saludar(texto nombre) {
+    retornar "Hola " + nombre;
+}
+imprimir(suma(3, 4));
+imprimir(saludar("Mundo"));

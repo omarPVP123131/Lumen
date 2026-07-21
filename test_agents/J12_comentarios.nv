@@ -1,0 +1,14 @@
+// J12: Comentarios (Junior)
+// Novato: Usa comentarios en su código
+
+// Esto es un comentario de línea
+entero x = 10;  // Comentario al final
+
+/*
+Esto es un comentario
+multilínea
+*/
+texto nombre = "LÚMEN";
+
+imprimir(x);
+imprimir(nombre);

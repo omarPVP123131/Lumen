@@ -1,0 +1,12 @@
+funcion numero potencia(numero base, entero exp) {
+    si (exp == 0) {
+        retornar 1;
+    }
+    numero res = 1;
+    entero i = 0;
+    mientras (i < exp) {
+        res = res * base;
+        i = i + 1;
+    }
+    retornar res;
+}

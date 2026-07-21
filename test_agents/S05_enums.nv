@@ -1,0 +1,28 @@
+// S05: Enums (Senior)
+// Ingeniero: Tipos suma con variantes
+
+enum Color {
+    Rojo,
+    Verde,
+    Azul,
+    Personalizado(entero, entero, entero)
+}
+
+Color c1 = Color::Rojo;
+Color c2 = Color::Azul;
+Color c3 = Color::Personalizado(255, 128, 0);
+
+imprimir(c1);
+imprimir(c2);
+imprimir(c3);
+
+enum Estado {
+    Activo,
+    Inactivo,
+    Pendiente(texto)
+}
+
+Estado e1 = Estado::Activo;
+Estado e2 = Estado::Pendiente("esperando revisión");
+imprimir(e1);
+imprimir(e2);

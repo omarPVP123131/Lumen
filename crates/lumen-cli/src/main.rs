@@ -5,6 +5,7 @@ use std::process;
 
 use lumen_codegen::{disassemble, Bytecode, Codegen};
 use lumen_ir::IRBuilder;
+use lumen_lexer::token::Span;
 use lumen_parser::ast::DeclOrStmt;
 use lumen_sema::{ModuleLoader, SemanticAnalyzer};
 use lumen_vm::VM;
@@ -46,6 +47,16 @@ fn parse_args(args: &[String]) -> Config {
         i += 1;
     }
 
+    // Add stdlib/ as default search path if it exists
+    let stdlib_path = PathBuf::from("stdlib");
+    if stdlib_path.is_dir() && !lib_dirs.iter().any(|p| p == &stdlib_path) {
+        lib_dirs.push(stdlib_path);
+    }
+    let stdlib_alt = PathBuf::from("../stdlib");
+    if stdlib_alt.is_dir() && !lib_dirs.iter().any(|p| p == &stdlib_alt) {
+        lib_dirs.push(stdlib_alt);
+    }
+
     Config {
         command,
         file,
@@ -55,17 +66,46 @@ fn parse_args(args: &[String]) -> Config {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("LÚMEN v{}", env!("CARGO_PKG_VERSION"));
-        eprintln!("Uso: lumen [opciones] <comando> [archivo]");
-        eprintln!("Opciones:");
-        eprintln!("  -L, --lib-dir <dir>  Agrega un directorio de búsqueda para módulos");
-        eprintln!("Comandos:");
-        eprintln!("  run <archivo>      Ejecuta un programa fuente o bytecode");
-        eprintln!("  build <archivo>    Compila a bytecode (.nvc)");
-        eprintln!("  check <archivo>    Verifica sintaxis y semántica");
-        eprintln!("  disasm <archivo>   Desensambla bytecode .nvc");
-        process::exit(1);
+    if args.len() < 2
+        || matches!(
+            args.get(1).map(|s| s.as_str()),
+            Some("--help" | "-h" | "help")
+        )
+    {
+        eprintln!(
+            "LÚMEN v{} — Lenguaje de programación educativo bilingüe",
+            env!("CARGO_PKG_VERSION")
+        );
+        eprintln!();
+        eprintln!("USO:");
+        eprintln!("  lumen [opciones] <comando> <archivo>");
+        eprintln!();
+        eprintln!("COMANDOS:");
+        eprintln!("  run <archivo>       Ejecuta un programa .nv o bytecode .nvc");
+        eprintln!("  build <archivo>     Compila a bytecode (.nvc)");
+        eprintln!("  check <archivo>     Verifica sintaxis y semántica");
+        eprintln!("  disasm <archivo>    Desensambla bytecode .nvc");
+        eprintln!();
+        eprintln!("OPCIONES:");
+        eprintln!("  -L, --lib-dir <dir>  Directorio de búsqueda para módulos (stdlib)");
+        eprintln!("  -v, --version        Muestra la versión");
+        eprintln!("  -h, --help           Muestra esta ayuda");
+        eprintln!();
+        eprintln!("EJEMPLOS:");
+        eprintln!("  lumen run hello.nv          Ejecutar un programa");
+        eprintln!("  lumen build programa.nv     Compilar a .nvc");
+        eprintln!("  lumen run -L stdlib/ test.nv  Ejecutar con stdlib");
+        eprintln!();
+        eprintln!("SINTAXIS BÁSICA:");
+        eprintln!("  imprimir(\"Hola\");           // Mostrar en pantalla");
+        eprintln!("  entero x = 42;              // Declarar variable");
+        eprintln!("  si (x > 0) {{ ... }}          // Condicional");
+        eprintln!("  mientras (x < 10) {{ ... }}   // Bucle");
+        eprintln!("  funcion entero f(a) {{ ... }} // Función");
+        eprintln!("  lista<entero> v = [1,2,3];  // Lista/Array");
+        eprintln!("  largo(v)                    // Longitud de lista");
+        eprintln!("  agregar(v, 4)               // Agregar elemento");
+        process::exit(if args.len() == 1 { 1 } else { 0 });
     }
 
     let config = parse_args(&args);
@@ -119,33 +159,87 @@ fn resolve_or_exit(mut loader: ModuleLoader, source: &str, base_dir: &Path) -> V
         Err(e) => {
             match &e {
                 lumen_sema::ModuleError::Circular { path, span } => {
+                    eprintln!();
+                    eprintln!("  \x1b[1;31mE063\x1b[0m \x1b[1mImport circular detectado\x1b[0m");
                     eprintln!(
-                        "Error E063 [{}:{}]: Import circular detectado: '{}'",
+                        "  \x1b[1;34m-->\x1b[0m {}:{}:{}",
+                        path.display(),
                         span.start.line,
-                        span.start.col,
-                        path.display()
+                        span.start.col
                     );
-                    eprintln!("  Sugerencia: Revisa las dependencias entre módulos para eliminar la circularidad");
+                    eprintln!("   \x1b[1;33mAyuda:\x1b[0m Revisa las dependencias entre módulos");
+                    eprintln!();
                 }
                 lumen_sema::ModuleError::Io { path, message } => {
-                    eprintln!("Error de E/S al cargar '{}': {}", path.display(), message);
+                    eprintln!(
+                        "  \x1b[1;31mError\x1b[0m al cargar '{}': {}",
+                        path.display(),
+                        message
+                    );
                 }
                 lumen_sema::ModuleError::Lex { path, details } => {
-                    eprintln!("Error léxico en '{}':", path.display());
                     for d in details {
-                        eprintln!("  {}", d);
+                        eprintln!(
+                            "  \x1b[1;31mError léxico\x1b[0m en '{}': {}",
+                            path.display(),
+                            d
+                        );
                     }
                 }
                 lumen_sema::ModuleError::Parse { path, details } => {
-                    eprintln!("Error sintáctico en '{}':", path.display());
                     for d in details {
-                        eprintln!("  {}", d);
+                        eprintln!(
+                            "  \x1b[1;31mError sintáctico\x1b[0m en '{}': {}",
+                            path.display(),
+                            d
+                        );
                     }
                 }
             }
             process::exit(1);
         }
     }
+}
+
+fn show_error(source: &str, path: &str, code: &str, message: &str, span: &Span, suggestion: &str) {
+    let line = span.start.line;
+    let col = span.start.col;
+    let line_str = source.lines().nth(line - 1).unwrap_or("");
+    eprintln!();
+    eprintln!("  \x1b[1;31m{}\x1b[0m \x1b[1m{}\x1b[0m", code, message);
+    eprintln!("  \x1b[1;34m-->\x1b[0m {}:{}:{}", path, line, col);
+    eprintln!("   \x1b[1;34m|\x1b[0m");
+    eprintln!("  \x1b[1;34m{}\x1b[0m \x1b[1m|\x1b[0m {}", line, line_str);
+    let underline = format!(
+        "{}{}",
+        " ".repeat(line.to_string().len() + 2 + col),
+        "^".repeat(span.end.col.saturating_sub(col).max(1))
+    );
+    eprintln!(
+        "  {} \x1b[1;32m{}\x1b[0m",
+        " ".repeat(line.to_string().len() + 1),
+        underline
+    );
+    eprintln!("   \x1b[1;34m|\x1b[0m");
+    eprintln!("   \x1b[1;33mAyuda:\x1b[0m {}", suggestion);
+    eprintln!();
+}
+
+fn show_sema_errors(errors: &[lumen_sema::SemError], source: &str, path: &str) -> bool {
+    if errors.is_empty() {
+        return false;
+    }
+    for err in errors {
+        show_error(
+            source,
+            path,
+            &err.code,
+            &err.message,
+            &err.span,
+            &err.suggestion,
+        );
+    }
+    true
 }
 
 fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
@@ -165,13 +259,7 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
     let sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
-        for err in &sem_errors {
-            eprintln!(
-                "Error {} [{}:{}]: {}",
-                err.code, err.span.start.line, err.span.start.col, err.message
-            );
-            eprintln!("  Sugerencia: {}", err.suggestion);
-        }
+        show_sema_errors(&sem_errors, &source, path);
         process::exit(1);
     }
 
@@ -193,7 +281,7 @@ fn run_source(path: &str, lib_dirs: &[PathBuf]) {
             }
         }
         Err(e) => {
-            eprintln!("Error de ejecución: {:?}", e);
+            eprintln!("{}", e.with_stack(vm.call_stack()));
             process::exit(1);
         }
     }
@@ -221,7 +309,7 @@ fn run_bytecode(path: &str) {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error de ejecución: {:?}", e);
+                    eprintln!("{}", e.with_stack(vm.call_stack()));
                     process::exit(1);
                 }
             }

@@ -1,0 +1,25 @@
+// S10: Closures y Lambdas (Senior)
+// Ingeniero: Funciones como valor
+
+// Lambda asignada y llamada (Sin palabra clave 'funcion' al inicio)
+dup = funcion(entero x) {
+    retornar x * 2;
+};
+imprimir(dup(5));
+imprimir(dup(10));
+
+// IIFE - lambda inmediata
+entero res_val = funcion(entero x) {
+    retornar x * x;
+}(7);
+imprimir(res_val);
+
+// Múltiples lambdas
+sumar_lambda = funcion(entero a, entero b) {
+    retornar a + b;
+};
+mult_lambda = funcion(entero a, entero b) {
+    retornar a * b;
+};
+imprimir(sumar_lambda(3, 4));
+imprimir(mult_lambda(3, 4));

@@ -1,0 +1,11 @@
+// J10: Arrays/Listas (Junior)
+// Novato: Crea y manipula listas
+lista<entero> numeros = [10, 20, 30];
+imprimir(numeros[0]);
+imprimir(numeros[1]);
+imprimir(numeros[2]);
+
+imprimir(numeros.largo());
+numeros.agregar(40);
+imprimir(numeros.largo());
+imprimir(numeros[3]);

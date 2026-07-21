@@ -566,5 +566,35 @@ fn prefix_type(t: &mut Type, prefix: &str) {
 }
 
 fn is_builtin(name: &str) -> bool {
-    matches!(name, "imprimir" | "print" | "leer" | "read")
+    matches!(
+        name,
+        "imprimir"
+            | "print"
+            | "leer"
+            | "read"
+            | "__str_len"
+            | "__str_longitud"
+            | "__str_upper"
+            | "__str_mayusculas"
+            | "__str_lower"
+            | "__str_minusculas"
+            | "__str_trim"
+            | "__str_recortar"
+            | "__str_contains"
+            | "__str_contiene"
+            | "__str_split"
+            | "__str_dividir"
+            | "__file_read"
+            | "__leer_archivo"
+            | "__file_write"
+            | "__escribir_archivo"
+            | "__file_exists"
+            | "__existe_archivo"
+            | "__time_now"
+            | "__tiempo_ahora"
+            | "__list_reverse"
+            | "__lista_invertir"
+            | "__list_sort"
+            | "__lista_ordenar"
+    )
 }

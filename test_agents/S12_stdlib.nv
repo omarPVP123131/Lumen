@@ -1,0 +1,19 @@
+// S12: Stdlib Integración (Senior)
+// Ingeniero: Usa módulos de la stdlib
+
+importar matematicas;
+importar texto;
+
+// matematicas
+imprimir(matematicas_abs(-42));
+imprimir(matematicas_max(10, 20));
+imprimir(matematicas_min(10, 20));
+imprimir(matematicas_potencia(2, 10));
+
+// texto
+texto t = "  Hola Mundo  ";
+imprimir(texto_longitud(t));
+imprimir(texto_mayusculas(t));
+imprimir(texto_minusculas(t));
+imprimir(texto_recortar(t));
+imprimir(texto_contiene(t, "Mundo"));

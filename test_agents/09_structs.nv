@@ -1,0 +1,8 @@
+// Sub-agent 9: Structs y Tuplas
+estructura Persona {
+    nombre: texto,
+    edad: entero
+}
+Persona p = Persona { nombre: "Ana", edad: 25 };
+imprimir(p.nombre);
+imprimir(p.edad);

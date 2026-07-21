@@ -1,0 +1,37 @@
+// S03: Resultado<T,E> (Senior)
+// Ingeniero: Manejo de errores funcional
+
+funcion resultado<entero, texto> dividir(entero a, entero b) {
+    si (b == 0) {
+        retornar error("No se puede dividir por cero");
+    }
+    retornar exito(a / b);
+}
+
+funcion resultado<entero, texto> raiz_entera(entero n) {
+    si (n < 0) {
+        retornar error("Raíz de número negativo");
+    }
+    entero i = 0;
+    mientras (i * i <= n) {
+        si (i * i == n) {
+            retornar exito(i);
+        }
+        i = i + 1;
+    }
+    retornar error("No es cuadrado perfecto");
+}
+
+// Cadena de intentar (propagación)
+funcion resultado<entero, texto> calcular(entero a, entero b) {
+    entero cociente = intentar dividir(a, b);
+    entero raiz = intentar raiz_entera(cociente);
+    retornar exito(raiz);
+}
+
+imprimir(dividir(10, 2));
+imprimir(dividir(10, 0));
+imprimir(raiz_entera(16));
+imprimir(raiz_entera(-4));
+imprimir(calcular(16, 2));
+imprimir(calcular(10, 0));

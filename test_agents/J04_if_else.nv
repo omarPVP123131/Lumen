@@ -1,0 +1,18 @@
+// J04: If/Else (Junior)
+// Novato: Condicionales básicos
+entero edad = 18;
+
+si (edad >= 18) {
+    imprimir("Mayor de edad");
+} sino {
+    imprimir("Menor de edad");
+}
+
+entero nota = 85;
+texto res = "";
+si (nota >= 70) {
+    res = "Notable";
+} sino {
+    res = "Necesita mejorar";
+}
+imprimir(res);

@@ -1,0 +1,15 @@
+// S11: Parámetros Default (Senior)
+// Ingeniero: Funciones con valores por defecto
+
+funcion entero incrementar(entero x, entero delta = 1) {
+    retornar x + delta;
+}
+
+funcion texto unir(texto a, texto b = " mundo", texto c = "!") {
+    retornar a + b + c;
+}
+
+imprimir(incrementar(5));
+imprimir(incrementar(5, 3));
+imprimir(unir("Hola"));
+imprimir(unir("Adiós", " amigos"));

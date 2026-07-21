@@ -1,0 +1,18 @@
+// J09: Strings (Junior)
+// Novato: Operaciones con texto
+importar texto;
+
+texto a = "Hola ";
+texto b = "Mundo";
+texto c = a + b;
+imprimir(c);
+
+// Comparación
+booleano igual = c == "Hola Mundo";
+imprimir(igual);
+
+booleano distinto = c != "Adiós";
+imprimir(distinto);
+
+// Longitud con stdlib
+imprimir(texto_longitud(c));

@@ -139,7 +139,6 @@ impl IRBuilder {
                 self.current_func = Some(name.clone());
                 self.current_instrs = Vec::new();
                 self.temp_counter = 0;
-                self.label_counter = 0;
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
@@ -426,7 +425,41 @@ impl IRBuilder {
                 match callee_inner {
                     Expr::Ident { name, .. } => {
                         if self.fn_names.contains(name)
-                            || matches!(name.as_str(), "imprimir" | "print" | "leer" | "read")
+                            || matches!(
+                                name.as_str(),
+                                "imprimir"
+                                    | "print"
+                                    | "leer"
+                                    | "read"
+                                    | "largo"
+                                    | "len"
+                                    | "agregar"
+                                    | "push"
+                                    | "__str_len"
+                                    | "__str_longitud"
+                                    | "__str_upper"
+                                    | "__str_mayusculas"
+                                    | "__str_lower"
+                                    | "__str_minusculas"
+                                    | "__str_trim"
+                                    | "__str_recortar"
+                                    | "__str_contains"
+                                    | "__str_contiene"
+                                    | "__str_split"
+                                    | "__str_dividir"
+                                    | "__file_read"
+                                    | "__leer_archivo"
+                                    | "__file_write"
+                                    | "__escribir_archivo"
+                                    | "__file_exists"
+                                    | "__existe_archivo"
+                                    | "__time_now"
+                                    | "__tiempo_ahora"
+                                    | "__list_reverse"
+                                    | "__lista_invertir"
+                                    | "__list_sort"
+                                    | "__lista_ordenar"
+                            )
                         {
                             for arg in args {
                                 self.gen_expr(arg);

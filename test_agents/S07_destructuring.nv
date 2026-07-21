@@ -1,0 +1,24 @@
+// S07: Destructuring (Senior)
+// Ingeniero: Desestructuración
+
+// Declaración con destructuring
+entero a, texto b = (1, "hola");
+imprimir(a);
+imprimir(b);
+
+// Wildcard
+entero x, _, entero z = (10, 20, 30);
+imprimir(x);
+imprimir(z);
+
+// Asignación con destructuring
+entero p = 0;
+texto q = "";
+p, q = (42, "mundo");
+imprimir(p);
+imprimir(q);
+
+// Multiples wildcards
+entero i, _, texto k, _ = (1, 2, "tres", 4);
+imprimir(i);
+imprimir(k);

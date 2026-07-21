@@ -1,0 +1,8 @@
+// Módulo fecha — funciones para tiempo y fechas
+// Uso: importar "fecha.nv"
+// Las funciones se importan con prefijo fecha_
+
+// Obtener timestamp actual (segundos desde Unix epoch)
+funcion texto ahora() {
+    retornar __tiempo_ahora();
+}

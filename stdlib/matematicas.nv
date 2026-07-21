@@ -1,0 +1,128 @@
+// Módulo matematicas — funciones matemáticas básicas
+// Uso: importar "matematicas.nv"
+// Las funciones se importan con prefijo matematicas_
+
+// Valor absoluto
+funcion numero abs(numero x) {
+    si (x < 0) {
+        retornar -x;
+    }
+    retornar x;
+}
+
+// Máximo de dos números
+funcion numero max(numero a, numero b) {
+    si (a > b) {
+        retornar a;
+    }
+    retornar b;
+}
+
+// Mínimo de dos números
+funcion numero min(numero a, numero b) {
+    si (a < b) {
+        retornar a;
+    }
+    retornar b;
+}
+
+// Potencia: base^exp (exponente entero)
+funcion numero potencia(numero base, entero exp) {
+    si (exp == 0) {
+        retornar 1;
+    }
+    numero res = 1;
+    entero i = 0;
+    entero e = exp;
+    si (e < 0) {
+        e = -e;
+    }
+    mientras (i < e) {
+        res = res * base;
+        i = i + 1;
+    }
+    si (exp < 0) {
+        retornar 1 / res;
+    }
+    retornar res;
+}
+
+// Raíz cuadrada (método de Newton)
+funcion numero raiz(numero x) {
+    si (x < 0) {
+        retornar -1;
+    }
+    si (x == 0) {
+        retornar 0;
+    }
+    numero aproximacion = x / 2;
+    entero i = 0;
+    mientras (i < 20) {
+        aproximacion = (aproximacion + x / aproximacion) / 2;
+        i = i + 1;
+    }
+    retornar aproximacion;
+}
+
+// factorial interno para series de Taylor
+funcion numero __factorial(entero n) {
+    si (n <= 1) {
+        retornar 1;
+    }
+    numero res = 1;
+    entero i = 2;
+    mientras (i <= n) {
+        res = res * i;
+        i = i + 1;
+    }
+    retornar res;
+}
+
+// Seno (serie de Taylor)
+funcion numero seno(numero x) {
+    numero res = 0;
+    entero n = 0;
+    mientras (n < 10) {
+        entero signo = 1;
+        // signo = (-1)^n usando n par/impar
+        entero s = n;
+        entero acc = 1;
+        mientras (s > 0) {
+            acc = acc * -1;
+            s = s - 1;
+        }
+        signo = acc;
+        numero termino = potencia(x, 2 * n + 1) / __factorial(2 * n + 1);
+        si (signo == 1) {
+            res = res + termino;
+        } sino {
+            res = res - termino;
+        }
+        n = n + 1;
+    }
+    retornar res;
+}
+
+// Coseno (serie de Taylor)
+funcion numero coseno(numero x) {
+    numero res = 0;
+    entero n = 0;
+    mientras (n < 10) {
+        entero signo = 1;
+        entero s = n;
+        entero acc = 1;
+        mientras (s > 0) {
+            acc = acc * -1;
+            s = s - 1;
+        }
+        signo = acc;
+        numero termino = potencia(x, 2 * n) / __factorial(2 * n);
+        si (signo == 1) {
+            res = res + termino;
+        } sino {
+            res = res - termino;
+        }
+        n = n + 1;
+    }
+    retornar res;
+}

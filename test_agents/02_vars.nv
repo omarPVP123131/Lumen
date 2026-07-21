@@ -1,0 +1,10 @@
+// Sub-agent 2: Variables y tipos
+// Declarar variables y operar con ellas
+entero x = 42;
+decimal y = 3.14;
+texto nombre = "LUMEN";
+booleano activo = verdadero;
+imprimir(x);
+imprimir(y);
+imprimir(nombre);
+imprimir(activo);

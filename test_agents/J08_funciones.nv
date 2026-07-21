@@ -1,0 +1,22 @@
+// J08: Funciones (Junior)
+// Novato: Define y llama funciones
+
+funcion entero sumar(entero a, entero b) {
+    retornar a + b;
+}
+
+funcion texto saludar(texto nombre) {
+    retornar "Hola " + nombre;
+}
+
+funcion void mostrar(entero n) {
+    imprimir(n);
+}
+
+entero suma_res = sumar(3, 4);
+imprimir(suma_res);
+
+texto saludo = saludar("Carlos");
+imprimir(saludo);
+
+mostrar(100);

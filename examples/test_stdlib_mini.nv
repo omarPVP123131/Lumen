@@ -1,0 +1,3 @@
+importar "coleccion.nv";
+lista<numero> nums = [3, 1, 4, 1, 5];
+imprimir("coleccion_contar: ", coleccion_contar(nums, 1));

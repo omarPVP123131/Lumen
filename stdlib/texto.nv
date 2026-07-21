@@ -1,0 +1,33 @@
+// Módulo texto — funciones para manipulación de strings
+// Uso: importar "texto.nv"
+// Las funciones se importan con prefijo texto_
+
+// Longitud de una cadena
+funcion entero longitud(texto s) {
+    retornar __str_longitud(s);
+}
+
+// Convertir a mayúsculas
+funcion texto mayusculas(texto s) {
+    retornar __str_mayusculas(s);
+}
+
+// Convertir a minúsculas
+funcion texto minusculas(texto s) {
+    retornar __str_minusculas(s);
+}
+
+// Eliminar espacios al inicio y final
+funcion texto recortar(texto s) {
+    retornar __str_recortar(s);
+}
+
+// Dividir una cadena por un delimitador
+funcion lista<texto> dividir(texto s, texto delimitador) {
+    retornar __str_dividir(s, delimitador);
+}
+
+// Verificar si una cadena contiene un substring
+funcion booleano contiene(texto s, texto subcadena) {
+    retornar __str_contiene(s, subcadena);
+}

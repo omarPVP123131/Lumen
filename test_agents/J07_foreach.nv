@@ -1,0 +1,11 @@
+// J07: For-Each (Junior)
+// Novato: Itera sobre listas
+lista<entero> nums = [1, 2, 3, 4, 5];
+para n en nums {
+    imprimir(n);
+}
+
+lista<texto> frutas = ["manzana", "pera", "uva"];
+para f en frutas {
+    imprimir(f);
+}

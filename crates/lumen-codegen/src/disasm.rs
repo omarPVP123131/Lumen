@@ -6,6 +6,19 @@ pub fn disassemble(bc: &Bytecode) -> String {
     output.push_str(&format!("; Strings: {} entries\n", bc.strings.len()));
     output.push_str(&format!("; Numbers: {} entries\n", bc.nums.len()));
     output.push_str(&format!("; Names: {} entries\n", bc.names.len()));
+    for (i, n) in bc.names.iter().enumerate() {
+        output.push_str(&format!(";   name[{}]=\"{}\"\n", i, n));
+    }
+    output.push_str(&format!("; Funcs: {} entries\n", bc.funcs.len()));
+    for (i, f) in bc.funcs.iter().enumerate() {
+        output.push_str(&format!(
+            ";   func[{}]: name={}, params=[{}], start={}\n",
+            i,
+            f.name,
+            f.params.join(","),
+            f.start
+        ));
+    }
     output.push_str("; ---\n");
 
     for (i, instr) in bc.instructions.iter().enumerate() {

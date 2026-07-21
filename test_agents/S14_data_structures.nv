@@ -1,0 +1,38 @@
+// S14: Estructuras de Datos Complejas (Senior)
+// Ingeniero: Combinación de tipos compuestos
+
+// Lista de structs
+estructura Persona {
+    nombre: texto,
+    edad: entero
+}
+
+lista<Persona> personas = [
+    Persona { nombre: "Ana", edad: 25 },
+    Persona { nombre: "Luis", edad: 30 },
+    Persona { nombre: "Eva", edad: 22 }
+];
+
+para p en personas {
+    imprimir(p.nombre);
+    imprimir(p.edad);
+}
+
+// Lista de tuplas
+lista<(entero, texto)> pares = [(1, "uno"), (2, "dos"), (3, "tres")];
+para par en pares {
+    imprimir(par);
+}
+
+// Struct con lista
+estructura Grupo {
+    nombre: texto,
+    miembros: lista<texto>
+}
+
+Grupo grupo = Grupo {
+    nombre: "Desarrolladores",
+    miembros: ["Ana", "Luis", "Eva"]
+};
+imprimir(grupo.nombre);
+imprimir(largo(grupo.miembros));

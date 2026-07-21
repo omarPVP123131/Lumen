@@ -1,0 +1,6 @@
+// Sub-agent 8: For-Each
+// Iterar sobre listas
+lista<entero> nums = [10, 20, 30];
+para n en nums {
+    imprimir(n);
+}

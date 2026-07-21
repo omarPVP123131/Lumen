@@ -1,0 +1,49 @@
+// S15: Casos Borde (Senior)
+// Ingeniero: Pruebas de límites y errores
+
+importar texto;
+
+// 1. División por cero (debe atraparse con resultado)
+funcion resultado<entero, texto> div_segura(entero a, entero b) {
+    si (b == 0) {
+        retornar error("div/0");
+    }
+    retornar exito(a / b);
+}
+imprimir(div_segura(10, 0));
+
+// 2. Recursión profunda
+funcion entero suma_hasta(entero n) {
+    si (n <= 0) {
+        retornar 0;
+    }
+    retornar n + suma_hasta(n - 1);
+}
+imprimir(suma_hasta(100));
+
+// 3. Listas vacías y grandes
+lista<entero> vacia = [];
+imprimir(vacia.largo());
+
+lista<entero> grande = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+imprimir(grande.largo());
+imprimir(grande[0]);
+imprimir(grande[9]);
+
+// 4. Condiciones complejas
+entero a = 5;
+entero b = 10;
+entero c = 15;
+booleano complejo = (a < b) && (b < c) || (a == c);
+imprimir(complejo);
+
+// 5. Strings vacíos y especiales
+texto vacio = "";
+texto espacios = "   ";
+imprimir(texto_longitud(vacio));
+imprimir(texto_longitud(espacios));
+imprimir(vacio + "algo");
+
+// 6. Operaciones mixtas
+decimal resultado_mixto = 10 / 3;
+imprimir(resultado_mixto);

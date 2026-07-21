@@ -1,0 +1,3 @@
+importar "matematicas.nv";
+imprimir("potencia(2,8) = ", matematicas_potencia(2, 8));
+imprimir("--- OK ---");

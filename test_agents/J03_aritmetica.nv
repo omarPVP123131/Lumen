@@ -1,0 +1,22 @@
+// J03: Aritmética Básica (Junior)
+// Novato: Suma, resta, multiplica, divide
+entero a = 10;
+entero b = 3;
+
+entero suma = a + b;
+entero resta = a - b;
+entero mult = a * b;
+entero div = a / b;
+
+imprimir(suma);
+imprimir(resta);
+imprimir(mult);
+imprimir(div);
+
+// Decimales
+decimal x = 7.5;
+decimal y = 2.0;
+imprimir(x + y);
+imprimir(x - y);
+imprimir(x * y);
+imprimir(x / y);

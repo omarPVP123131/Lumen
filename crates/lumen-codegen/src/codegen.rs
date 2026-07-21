@@ -85,7 +85,7 @@ impl Codegen {
             self.func_starts.insert(func_name.clone(), running_offset);
             for instr in &func.instrs {
                 if let Instr::Label(l) = instr {
-                    self.label_map.entry(*l).or_insert(running_offset);
+                    self.label_map.insert(*l, running_offset);
                 }
                 running_offset += instr_count(instr);
             }

@@ -1,0 +1,24 @@
+// S08: Genéricos (Senior)
+// Ingeniero: Polimorfismo paramétrico
+
+funcion T identidad<T>(T valor) {
+    retornar valor;
+}
+
+imprimir(identidad<entero>(42));
+imprimir(identidad<texto>("genérico"));
+imprimir(identidad<decimal>(3.1416));
+imprimir(identidad<booleano>(verdadero));
+
+estructura Par<T, U> {
+    primero: T,
+    segundo: U
+}
+
+Par<entero, texto> p1 = Par<entero, texto> { primero: 100, segundo: "cien" };
+imprimir(p1.primero);
+imprimir(p1.segundo);
+
+Par<texto, decimal> p2 = Par<texto, decimal> { primero: "pi", segundo: 3.1416 };
+imprimir(p2.primero);
+imprimir(p2.segundo);

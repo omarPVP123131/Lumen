@@ -1,0 +1,6 @@
+// Sub-agent 5: Arrays (listas) - corregido
+lista<entero> numeros = [1, 2, 3, 4, 5];
+imprimir(numeros[0]);
+imprimir(largo(numeros));
+agregar(numeros, 6);
+imprimir(largo(numeros));

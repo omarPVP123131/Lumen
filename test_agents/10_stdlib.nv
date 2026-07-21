@@ -1,0 +1,12 @@
+// Sub-agent 10: Stdlib
+// Usar la librería estándar
+importar matematicas;
+importar texto;
+importar coleccion;
+importar fecha;
+
+imprimir(matematicas_abs(-5));
+imprimir(matematicas_potencia(2, 10));
+imprimir(texto_longitud("prueba"));
+imprimir(texto_mayusculas("hola"));
+imprimir(coleccion_primero([1, 2, 3]));

@@ -1,0 +1,41 @@
+// Módulo coleccion — funciones para operaciones en listas
+// Uso: importar "coleccion.nv"
+// Las funciones se importan con prefijo coleccion_
+
+// Invertir una lista numérica
+funcion lista<numero> invertir(lista<numero> items) {
+    retornar __lista_invertir(items);
+}
+
+// Invertir una lista de textos
+funcion lista<texto> invertir_textos(lista<texto> items) {
+    retornar __lista_invertir(items);
+}
+
+// Ordenar una lista numérica
+funcion lista<numero> ordenar(lista<numero> items) {
+    retornar __lista_ordenar(items);
+}
+
+// Obtener el primer elemento
+funcion numero primero(lista<numero> items) {
+    retornar items[0];
+}
+
+// Obtener el último elemento
+funcion numero ultimo(lista<numero> items) {
+    retornar items[items.largo() - 1];
+}
+
+// Contar cuántas veces aparece un número
+funcion entero contar(lista<numero> items, numero valor) {
+    entero total = 0;
+    entero i = 0;
+    mientras (i < items.largo()) {
+        si (items[i] == valor) {
+            total = total + 1;
+        }
+        i = i + 1;
+    }
+    retornar total;
+}

@@ -422,11 +422,11 @@ impl Parser {
             let s = s.clone();
             self.advance();
             s
-        } else if self.check_ident() {
+        } else if self.check_ident() || Self::is_keyword(&self.peek().kind) {
             let token = self.advance()?;
-            match token.kind {
-                TokenKind::Ident(s) => s,
-                _ => unreachable!(),
+            match &token.kind {
+                TokenKind::Ident(s) => s.clone(),
+                kind => kind.as_str().to_string(),
             }
         } else {
             self.error(
@@ -439,11 +439,11 @@ impl Parser {
         };
         let alias = if self.check(&[TokenKind::Como, TokenKind::As]) {
             self.advance();
-            if self.check_ident() {
+            if self.check_ident() || Self::is_keyword(&self.peek().kind) {
                 let token = self.advance()?;
-                match token.kind {
-                    TokenKind::Ident(s) => Some(s),
-                    _ => unreachable!(),
+                match &token.kind {
+                    TokenKind::Ident(s) => Some(s.clone()),
+                    kind => Some(kind.as_str().to_string()),
                 }
             } else {
                 self.error(
@@ -573,13 +573,17 @@ impl Parser {
 
     fn parse_if(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
+        let kw = self.peek().kind.as_str().to_string();
         self.advance();
         if !self.check(&[TokenKind::LeftParen]) {
             self.error(
                 "E018",
-                "Se esperaba '('",
+                format!("Se esperaba '(' después de '{}'", kw),
                 start,
-                "Agrega '(' antes de la condición",
+                format!(
+                    "Escribe '{}(condición) {{ ... }}' con paréntesis alrededor de la condición",
+                    kw
+                ),
             );
             return None;
         }
@@ -612,13 +616,29 @@ impl Parser {
 
     fn parse_while(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
+        let kw = self.peek().kind.as_str().to_string();
         self.advance();
         if !self.check(&[TokenKind::LeftParen]) {
+            self.error(
+                "E018",
+                format!("Se esperaba '(' después de '{}'", kw),
+                start,
+                format!(
+                    "Escribe '{}(condición) {{ ... }}' con paréntesis alrededor de la condición",
+                    kw
+                ),
+            );
             return None;
         }
         self.advance();
         let condition = Box::new(self.parse_expression()?);
         if !self.check(&[TokenKind::RightParen]) {
+            self.error(
+                "E019",
+                "Se esperaba ')'",
+                start,
+                "Agrega ')' después de la condición",
+            );
             return None;
         }
         self.advance();
@@ -2074,6 +2094,77 @@ impl Parser {
             return false;
         }
         matches!(self.peek().kind, TokenKind::Ident(_))
+    }
+
+    fn is_keyword(kind: &TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Si
+                | TokenKind::Sino
+                | TokenKind::Mientras
+                | TokenKind::Para
+                | TokenKind::Funcion
+                | TokenKind::Retornar
+                | TokenKind::Verdadero
+                | TokenKind::Falso
+                | TokenKind::Numero
+                | TokenKind::Entero
+                | TokenKind::Decimal
+                | TokenKind::Texto
+                | TokenKind::Booleano
+                | TokenKind::Imprimir
+                | TokenKind::Leer
+                | TokenKind::Lista
+                | TokenKind::Romper
+                | TokenKind::Continuar
+                | TokenKind::Elegir
+                | TokenKind::Caso
+                | TokenKind::Defecto
+                | TokenKind::Estructura
+                | TokenKind::Importar
+                | TokenKind::Como
+                | TokenKind::Resultado
+                | TokenKind::Exito
+                | TokenKind::ErrKeyword
+                | TokenKind::Intentar
+                | TokenKind::En
+                | TokenKind::Enum
+                | TokenKind::Opcion
+                | TokenKind::Algun
+                | TokenKind::Ninguno
+                | TokenKind::If
+                | TokenKind::Else
+                | TokenKind::While
+                | TokenKind::For
+                | TokenKind::Function
+                | TokenKind::Return
+                | TokenKind::True
+                | TokenKind::False
+                | TokenKind::Number
+                | TokenKind::Integer
+                | TokenKind::Float
+                | TokenKind::String
+                | TokenKind::Boolean
+                | TokenKind::Print
+                | TokenKind::Read
+                | TokenKind::Array
+                | TokenKind::Break
+                | TokenKind::Continue
+                | TokenKind::Match
+                | TokenKind::Case
+                | TokenKind::Default
+                | TokenKind::Struct
+                | TokenKind::Import
+                | TokenKind::As
+                | TokenKind::Result
+                | TokenKind::Ok
+                | TokenKind::Err
+                | TokenKind::Try
+                | TokenKind::In
+                | TokenKind::Option
+                | TokenKind::Some
+                | TokenKind::None
+        )
     }
 
     fn check_ident_next(&self) -> bool {

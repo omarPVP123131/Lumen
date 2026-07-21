@@ -1,0 +1,15 @@
+// J02: Variables y Tipos (Junior)
+// Novato: Declara variables de cada tipo
+entero edad = 25;
+decimal precio = 19.99;
+texto nombre = "Ana";
+booleano activo = verdadero;
+
+imprimir(edad);
+imprimir(precio);
+imprimir(nombre);
+imprimir(activo);
+
+// Reasignación
+edad = 26;
+imprimir(edad);

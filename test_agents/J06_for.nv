@@ -1,0 +1,14 @@
+// J06: For Loop (Junior)
+// Novato: Itera con for usando while-style
+entero i = 0;
+mientras (i < 5) {
+    imprimir(i);
+    i = i + 1;
+}
+
+// Tabla del 2
+entero j = 1;
+mientras (j <= 10) {
+    imprimir(j * 2);
+    j = j + 1;
+}

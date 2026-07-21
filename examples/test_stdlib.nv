@@ -1,0 +1,37 @@
+// Test de la librería estándar
+importar "matematicas.nv";
+importar "texto.nv";
+importar "coleccion.nv";
+
+// --- Prueba matematicas ---
+imprimir("abs(-5) = ", matematicas_abs(-5));
+imprimir("max(3, 7) = ", matematicas_max(3, 7));
+imprimir("min(3, 7) = ", matematicas_min(3, 7));
+imprimir("potencia(2, 8) = ", matematicas_potencia(2, 8));
+imprimir("raiz(16) = ", matematicas_raiz(16));
+imprimir("seno(0) = ", matematicas_seno(0));
+imprimir("coseno(0) = ", matematicas_coseno(0));
+
+// --- Prueba texto ---
+imprimir("longitud: ", texto_longitud("abc"));
+imprimir("mayusculas: ", texto_mayusculas("hola"));
+imprimir("minusculas: ", texto_minusculas("HOLA"));
+imprimir("recortar: '", texto_recortar("  Hola  "), "'");
+imprimir("contiene: ", texto_contiene("Hola Mundo", "Mundo"));
+
+lista<texto> partes = texto_dividir("a,b,c", ",");
+imprimir("dividir: ", partes[0], ", ", partes[1], ", ", partes[2]);
+
+// --- Prueba coleccion ---
+lista<numero> nums = [3, 1, 4, 1, 5];
+lista<numero> rev = coleccion_invertir(nums);
+imprimir("invertir: ", rev[0], ", ", rev[1], ", ", rev[2], ", ", rev[3], ", ", rev[4]);
+
+lista<numero> ord = coleccion_ordenar(nums);
+imprimir("ordenar: ", ord[0], ", ", ord[1], ", ", ord[2], ", ", ord[3], ", ", ord[4]);
+
+imprimir("primero: ", coleccion_primero(nums));
+imprimir("ultimo: ", coleccion_ultimo(nums));
+imprimir("contar(1): ", coleccion_contar(nums, 1));
+
+imprimir("--- FIN TEST STDLIB ---");

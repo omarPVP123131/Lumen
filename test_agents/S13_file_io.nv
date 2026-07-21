@@ -1,0 +1,18 @@
+// S13: File I/O (Senior)
+// Ingeniero: Lectura y escritura de archivos
+
+importar archivos;
+
+texto contenido = "Hola, archivo!\nEsta es una prueba.\n";
+
+// Escribir - retorna resultado<booleano, texto>
+resultado<booleano, texto> res_write = archivos_escribir_archivo("test_s13_output.txt", contenido);
+imprimir(res_write);
+
+// Verificar existencia - retorna booleano
+booleano existe = archivos_existe_archivo("test_s13_output.txt");
+imprimir(existe);
+
+// Leer - retorna resultado<texto, texto>
+resultado<texto, texto> res_read = archivos_leer_archivo("test_s13_output.txt");
+imprimir(res_read);
