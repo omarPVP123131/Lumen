@@ -128,7 +128,7 @@ mod tests {
     fn test_disassemble_header_shows_metadata() {
         let mut bc = Bytecode::new();
         bc.strings.push("foo".to_string());
-        bc.nums.push(3.14);
+        bc.nums.push(12.34);
         bc.names.push("bar".to_string());
         let output = disassemble(&bc);
         assert!(output.contains("Strings: 1 entries"));

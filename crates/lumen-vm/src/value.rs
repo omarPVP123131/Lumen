@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_display_float() {
-        assert_eq!(format!("{}", Value::Float(3.14)), "3.14");
+        assert_eq!(format!("{}", Value::Float(2.71)), "2.71");
     }
 
     #[test]

@@ -1069,10 +1069,10 @@ imprimir(x);";
 
     #[test]
     fn test_constant_folding_unary_negate_float() {
-        let instrs = vec![Instr::ConstFloat(3.14), Instr::Unary(Op::Negate)];
+        let instrs = vec![Instr::ConstFloat(1.5), Instr::Unary(Op::Negate)];
         let folded = IRBuilder::fold_constants_pass(&instrs);
         assert_eq!(folded.len(), 1);
-        assert!(matches!(folded[0], Instr::ConstFloat(v) if (v - (-3.14)).abs() < f64::EPSILON));
+        assert!(matches!(folded[0], Instr::ConstFloat(v) if (v - (-1.5)).abs() < f64::EPSILON));
     }
 
     #[test]
