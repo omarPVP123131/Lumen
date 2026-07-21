@@ -412,11 +412,7 @@ impl IRBuilder {
                     UnOp::Not => Op::Not,
                 }));
             }
-            Expr::Call {
-                callee,
-                args,
-                ..
-            } => {
+            Expr::Call { callee, args, .. } => {
                 let callee_inner = match callee.as_ref() {
                     Expr::Grouping { expr, .. } => expr.as_ref(),
                     other => other,

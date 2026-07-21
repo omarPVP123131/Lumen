@@ -106,7 +106,7 @@ impl Codegen {
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect();
-        func_list.sort_by(|a, b| a.1.cmp(&b.1));
+        func_list.sort_by_key(|a| a.1);
         for (name, start) in &func_list {
             let params = program
                 .funcs
