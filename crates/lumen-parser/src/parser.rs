@@ -930,12 +930,10 @@ impl Parser {
         }
 
         if self.check_ident() && self.check_next(&[TokenKind::Equal]) {
-            let name = match self.advance() {
-                Some(t) => match t.kind {
-                    TokenKind::Ident(s) => s,
-                    _ => unreachable!(),
-                },
-                None => return None,
+            let t = self.advance()?;
+            let name = match t.kind {
+                TokenKind::Ident(s) => s,
+                _ => unreachable!(),
             };
             self.advance();
             let value = Box::new(self.parse_expression()?);
