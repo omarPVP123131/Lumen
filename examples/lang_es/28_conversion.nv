@@ -1,0 +1,16 @@
+importar ingles;
+
+entero n = 42;
+texto s = a_texto(n);
+imprimir(s);
+
+decimal d = 3.14159;
+texto t = a_texto(d);
+imprimir(t);
+
+booleano b = verdadero;
+texto u = a_texto(b);
+imprimir(u);
+
+texto combinado = "Numero: " + a_texto(100) + " Decimal: " + a_texto(2.5);
+imprimir(combinado);

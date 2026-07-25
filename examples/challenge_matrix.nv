@@ -1,30 +1,30 @@
 importar ingles;
 
-// Matrix operations using nested lists
-funcion lista<lista<entero>> crear_matriz(entero f, entero c, entero val) {
+lista<lista<entero>> a = [[1, 2], [3, 4]];
+lista<lista<entero>> b = [[5, 6], [7, 8]];
+
+funcion lista<lista<entero>> crear(entero f, entero c, entero v) {
     lista<lista<entero>> m = [];
     entero i = 0;
-    mientras i < f {
+    mientras (i < f) {
         lista<entero> fila = [];
         entero j = 0;
-        mientras j < c { fila.agregar(val); j = j + 1; }
+        mientras (j < c) { fila.agregar(v); j = j + 1; }
         m.agregar(fila);
         i = i + 1;
     }
     retornar m;
 }
 
-funcion lista<lista<entero>> multiplicar(lista<lista<entero>> a, lista<lista<entero>> b) {
-    entero fa = largo(a);
-    entero cb = largo(b[0]);
-    entero ca = largo(a[0]);
-    lista<lista<entero>> r = crear_matriz(fa, cb, 0);
+funcion lista<lista<entero>> mult(lista<lista<entero>> a, lista<lista<entero>> b) {
+    entero fa = largo(a); entero cb = largo(b[0]); entero ca = largo(a[0]);
+    lista<lista<entero>> r = crear(fa, cb, 0);
     entero i = 0;
-    mientras i < fa {
+    mientras (i < fa) {
         entero j = 0;
-        mientras j < cb {
+        mientras (j < cb) {
             entero k = 0;
-            mientras k < ca { r[i][j] = r[i][j] + a[i][k] * b[k][j]; k = k + 1; }
+            mientras (k < ca) { r[i][j] = r[i][j] + a[i][k] * b[k][j]; k = k + 1; }
             j = j + 1;
         }
         i = i + 1;
@@ -32,16 +32,13 @@ funcion lista<lista<entero>> multiplicar(lista<lista<entero>> a, lista<lista<ent
     retornar r;
 }
 
-funcion void imprimir_matriz(lista<lista<entero>> m) {
-    para fila en m {
-        texto linea = "";
-        entero j = 0;
-        mientras j < largo(fila) { linea = linea + fila[j] + " "; j = j + 1; }
-        imprimir(linea);
-    }
-}
-
-lista<lista<entero>> a = [[1, 2], [3, 4]];
-lista<lista<entero>> b = [[5, 6], [7, 8]];
 imprimir("A x B =");
-imprimir_matriz(multiplicar(a, b));
+lista<lista<entero>> c = mult(a, b);
+entero x = 0;
+mientras (x < largo(c)) {
+    texto linea = "";
+    entero y = 0;
+    mientras (y < largo(c[x])) { linea = linea + c[x][y] + " "; y = y + 1; }
+    imprimir(linea);
+    x = x + 1;
+}

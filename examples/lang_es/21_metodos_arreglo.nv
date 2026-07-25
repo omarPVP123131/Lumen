@@ -1,0 +1,19 @@
+importar ingles;
+
+lista<entero> arr = [];
+arr.agregar(10);
+arr.agregar(20);
+arr.agregar(30);
+
+entero tam = largo(arr);
+imprimir(tam);
+
+entero i = 0;
+mientras (i < largo(arr)) {
+    arr[i] = arr[i] * 2;
+    i = i + 1;
+}
+
+para v en arr {
+    imprimir(v);
+}

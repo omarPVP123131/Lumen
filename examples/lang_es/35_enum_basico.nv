@@ -1,0 +1,15 @@
+importar ingles;
+
+enum Dia {
+    Lunes,
+    Martes,
+    Miercoles,
+    Jueves,
+    Viernes
+}
+
+Dia hoy = Dia::Viernes;
+imprimir(hoy);
+
+Dia manana = Dia::Lunes;
+imprimir(manana);

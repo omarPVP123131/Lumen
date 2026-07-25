@@ -1,0 +1,12 @@
+[package]
+name = "lumen-aot"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Compilación Ahead-of-Time para LÚMEN — genera binarios nativos vía LLVM"
+keywords = ["lumen", "language", "aot", "llvm", "native", "compiler"]
+
+[dependencies]
+lumen-ir = { path = "../lumen-ir" }

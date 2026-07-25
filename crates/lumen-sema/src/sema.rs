@@ -1468,7 +1468,7 @@ impl SemanticAnalyzer {
                                     }
                                     if let Some(got) = arg_types.first() {
                                         match got {
-                                            TypeInfo::Lista(_) => {}
+                                            TypeInfo::Lista(_) | TypeInfo::Texto => {}
                                             _ => {
                                                 self.errors.push(SemError {
                                                     code: "E041".to_string(),
@@ -1477,7 +1477,8 @@ impl SemanticAnalyzer {
                                                         callee, got
                                                     ),
                                                     span: *span,
-                                                    suggestion: "Pasa una lista".to_string(),
+                                                    suggestion: "Pasa una lista o texto"
+                                                        .to_string(),
                                                 });
                                             }
                                         }

@@ -1,0 +1,21 @@
+importar ingles;
+
+funcion entero sumar(entero a, entero b) {
+    retornar a + b;
+}
+
+funcion entero restar(entero a, entero b) {
+    retornar a - b;
+}
+
+funcion texto combinar(texto p, texto q) {
+    retornar p + q;
+}
+
+entero s = sumar(10, 20);
+entero r = restar(s, 5);
+texto c = combinar("Lumen", "Rust");
+
+imprimir(s);
+imprimir(r);
+imprimir(c);

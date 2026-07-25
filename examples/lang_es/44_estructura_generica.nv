@@ -1,0 +1,11 @@
+importar ingles;
+
+estructura Caja<T> {
+    valor: T
+}
+
+Caja<entero> ci = Caja<entero> { valor: 42 };
+Caja<texto> cs = Caja<texto> { valor: "secreto" };
+
+imprimir(ci.valor);
+imprimir(cs.valor);

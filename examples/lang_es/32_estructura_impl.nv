@@ -1,0 +1,15 @@
+importar ingles;
+
+estructura Rectangulo {
+    ancho: entero,
+    alto: entero
+}
+
+impl Rectangulo {
+    funcion entero area(yo) {
+        retornar yo.ancho * yo.alto;
+    }
+}
+
+Rectangulo r = Rectangulo { ancho: 5, alto: 3 };
+imprimir(r.area());

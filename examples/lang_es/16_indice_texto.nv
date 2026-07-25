@@ -1,0 +1,13 @@
+importar ingles;
+
+texto s = "Lumen";
+imprimir(s[0]);
+imprimir(s[1]);
+imprimir(s[4]);
+
+texto palabra = "programacion";
+entero idx = 0;
+mientras (idx < largo(palabra)) {
+    imprimir(palabra[idx]);
+    idx = idx + 1;
+}

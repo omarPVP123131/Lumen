@@ -1,0 +1,22 @@
+importar ingles;
+
+estructura Persona {
+    nombre: texto,
+    edad: entero
+}
+
+estructura Direccion {
+    calle: texto,
+    numero: entero
+}
+
+Persona p = Persona { nombre: "Ana", edad: 28 };
+Direccion d = Direccion { calle: "Av. Central", numero: 123 };
+
+imprimir(p.nombre);
+imprimir(p.edad);
+imprimir(d.calle);
+imprimir(d.numero);
+
+p.edad = 29;
+imprimir(p.edad);
