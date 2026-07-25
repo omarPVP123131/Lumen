@@ -89,7 +89,7 @@ impl AotCompiler {
             let mut builder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
             let block = builder.create_block();
             builder.switch_to_block(block);
-            builder.seal_block(block);
+            builder.ensure_inserted_block();
 
             let mut stack: Vec<Value> = Vec::new();
             let i64 = types::I64;
@@ -142,7 +142,11 @@ impl AotCompiler {
                         let val = stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0));
                         builder.ins().return_(&[val]);
                     }
-                    Instr::Halt | Instr::Nop => {}
+                    Instr::Halt => {
+                        let zero = builder.ins().iconst(i64, 0);
+                        builder.ins().return_(&[zero]);
+                    }
+                    Instr::Nop => {}
                     _ => {}
                 }
             }
@@ -157,7 +161,7 @@ impl AotCompiler {
                 let zero = builder.ins().iconst(i64, 0);
                 builder.ins().return_(&[zero]);
             }
-
+            builder.seal_block(block);
             builder.finalize();
         }
 
@@ -170,7 +174,7 @@ impl AotCompiler {
         sig.returns.push(AbiParam::new(types::I64));
         let main_id = self
             .module
-            .declare_function("lumen_entry", Linkage::Export, &sig)
+            .declare_function("main", Linkage::Export, &sig)
             .unwrap();
 
         let mut ctx = self.module.make_context();
@@ -184,7 +188,7 @@ impl AotCompiler {
             let mut builder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx2);
             let block = builder.create_block();
             builder.switch_to_block(block);
-            builder.seal_block(block);
+            builder.ensure_inserted_block();
 
             if let Some(info) = self.funcs.get(entry) {
                 let func_ref = self.module.declare_func_in_func(info.id, &mut builder.func);
@@ -195,7 +199,7 @@ impl AotCompiler {
                 let zero = builder.ins().iconst(types::I64, 0);
                 builder.ins().return_(&[zero]);
             }
-
+            builder.seal_block(block);
             builder.finalize();
         }
 
