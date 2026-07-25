@@ -48,6 +48,12 @@ pub enum Decl {
         variants: Vec<EnumVariant>,
         span: Span,
     },
+    Const {
+        var_type: Type,
+        name: String,
+        value: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -260,6 +266,12 @@ pub enum Expr {
         index: usize,
         span: Span,
     },
+    Ternary {
+        condition: Box<Expr>,
+        true_branch: Box<Expr>,
+        false_branch: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -334,7 +346,8 @@ impl Expr {
             | Expr::Ninguno { span, .. }
             | Expr::EnumCtor { span, .. }
             | Expr::Tuple { span, .. }
-            | Expr::TupleAccess { span, .. } => *span,
+            | Expr::TupleAccess { span, .. }
+            | Expr::Ternary { span, .. } => *span,
         }
     }
 }

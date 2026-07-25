@@ -109,6 +109,8 @@ impl Parser {
             self.parse_struct_decl().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Enum]) {
             self.parse_enum().map(DeclOrStmt::Decl)
+        } else if self.check(&[TokenKind::Const]) {
+            self.parse_const().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Importar, TokenKind::Import]) {
             self.parse_import().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::LeftBrace]) {
@@ -411,6 +413,31 @@ impl Parser {
         Some(Decl::Enum {
             name,
             variants,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_const(&mut self) -> Option<Decl> {
+        let start = self.peek().span;
+        self.advance(); // consume const
+        let var_type = self.parse_type()?;
+        let name = self.expect_ident()?;
+        if !self.check(&[TokenKind::Equal]) {
+            self.error(
+                "E012",
+                "Se esperaba '=' en declaración const",
+                self.peek().span,
+                "Agrega '=' después del nombre de la constante",
+            );
+            return None;
+        }
+        self.advance();
+        let value = Box::new(self.parse_expression()?);
+        self.expect_semicolon();
+        Some(Decl::Const {
+            var_type,
+            name,
+            value,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -990,7 +1017,35 @@ impl Parser {
     // --- Pratt Parser for Expressions ---
 
     fn parse_expression(&mut self) -> Option<Expr> {
-        self.parse_logical_or()
+        self.parse_ternary()
+    }
+
+    fn parse_ternary(&mut self) -> Option<Expr> {
+        let condition = self.parse_logical_or()?;
+        if !self.check(&[TokenKind::Question]) {
+            return Some(condition);
+        }
+        let start = condition.span();
+        self.advance();
+        let true_branch = self.parse_expression()?;
+        if !self.check(&[TokenKind::Colon]) {
+            self.error(
+                "E012",
+                "Se esperaba ':' en el operador ternario",
+                self.peek().span,
+                "Agrega ':' para la rama falsa del ternario",
+            );
+            return None;
+        }
+        self.advance();
+        let false_branch = self.parse_expression()?;
+        let span = Span::merge(&start, &false_branch.span());
+        Some(Expr::Ternary {
+            condition: Box::new(condition),
+            true_branch: Box::new(true_branch),
+            false_branch: Box::new(false_branch),
+            span,
+        })
     }
 
     fn parse_logical_or(&mut self) -> Option<Expr> {
@@ -2162,6 +2217,7 @@ impl Parser {
                 | TokenKind::Option
                 | TokenKind::Some
                 | TokenKind::None
+                | TokenKind::Const
         )
     }
 
@@ -2512,7 +2568,8 @@ impl Spannable for Expr {
             | Expr::Ninguno { span, .. }
             | Expr::EnumCtor { span, .. }
             | Expr::Tuple { span, .. }
-            | Expr::TupleAccess { span, .. } => *span,
+            | Expr::TupleAccess { span, .. }
+            | Expr::Ternary { span, .. } => *span,
         }
     }
 }

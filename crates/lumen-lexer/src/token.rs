@@ -83,6 +83,7 @@ pub enum TokenKind {
     Opcion,
     Algun,
     Ninguno,
+    Const,
 
     // English equivalents
     If,
@@ -138,6 +139,7 @@ pub enum TokenKind {
     GreaterEqual, // >=
     AndAnd,       // &&
     OrOr,         // ||
+    Question,     // ?
 
     // Delimiters
     LeftParen,    // (
@@ -226,6 +228,7 @@ impl TokenKind {
             "some" => Some(TokenKind::Some),
             "ninguno" => Some(TokenKind::Ninguno),
             "none" => Some(TokenKind::None),
+            "const" => Some(TokenKind::Const),
             _ => None,
         }
     }

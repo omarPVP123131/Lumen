@@ -165,6 +165,10 @@ impl IRBuilder {
                 // Enum declarations are collected during IR build setup
                 // No code generation needed for the declaration itself
             }
+            Decl::Const { name, value, .. } => {
+                self.gen_expr(value);
+                self.emit(Instr::Store(name.clone()));
+            }
         }
     }
 
@@ -601,6 +605,22 @@ impl IRBuilder {
                     variant: variant.clone(),
                     argc: args.len(),
                 });
+            }
+            Expr::Ternary {
+                condition,
+                true_branch,
+                false_branch,
+                ..
+            } => {
+                let else_label = self.new_label();
+                let end_label = self.new_label();
+                self.gen_expr(condition);
+                self.emit(Instr::JmpIf(else_label));
+                self.gen_expr(true_branch);
+                self.emit(Instr::Jmp(end_label));
+                self.emit(Instr::Label(else_label));
+                self.gen_expr(false_branch);
+                self.emit(Instr::Label(end_label));
             }
         }
     }

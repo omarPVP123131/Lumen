@@ -159,6 +159,7 @@ impl Lexer {
                         tokens.push(self.single_token(TokenKind::Greater));
                     }
                 }
+                Some('?') => tokens.push(self.single_token(TokenKind::Question)),
                 Some('&') => {
                     if self.peek() == Some('&') {
                         self.advance();

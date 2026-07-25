@@ -357,6 +357,30 @@ impl SemanticAnalyzer {
                 variants: _,
                 span: _,
             } => TypeInfo::Enum(name.clone()),
+            Decl::Const {
+                var_type,
+                name,
+                value,
+                span,
+            } => {
+                let declared_type = self.type_to_info(var_type.clone());
+                let value_type = self.analyze_expr(value);
+                if !can_assign(&declared_type, &value_type) {
+                    self.errors.push(SemError {
+                        code: "E031".to_string(),
+                        message: format!("No puedes asignar un valor de tipo '{:?}' a una constante de tipo '{:?}'", value_type, declared_type),
+                        span: *span,
+                        suggestion: format!("Usa un valor de tipo '{:?}' en lugar de '{:?}'", declared_type, value_type),
+                    });
+                }
+                if let Err(e) = self
+                    .current_scope()
+                    .define(name, declared_type.clone(), *span)
+                {
+                    self.errors.push(e);
+                }
+                declared_type
+            }
         }
     }
 
@@ -1811,6 +1835,42 @@ impl SemanticAnalyzer {
                         TypeInfo::Void
                     }
                 }
+            }
+            Expr::Ternary {
+                condition,
+                true_branch,
+                false_branch,
+                span,
+            } => {
+                let cond_type = self.analyze_expr(condition);
+                if cond_type != TypeInfo::Booleano {
+                    self.errors.push(SemError {
+                        code: "E034".to_string(),
+                        message: format!(
+                            "La condición del operador ternario debe ser booleano, no '{:?}'",
+                            cond_type
+                        ),
+                        span: *span,
+                        suggestion: "Usa una expresión booleana como condición".to_string(),
+                    });
+                }
+                let true_type = self.analyze_expr(true_branch);
+                let false_type = self.analyze_expr(false_branch);
+                if true_type != false_type
+                    && !can_assign(&true_type, &false_type)
+                    && !can_assign(&false_type, &true_type)
+                {
+                    self.errors.push(SemError {
+                        code: "E031".to_string(),
+                        message: format!(
+                            "El operador ternario requiere que ambas ramas tengan el mismo tipo, no '{:?}' y '{:?}'",
+                            true_type, false_type
+                        ),
+                        span: *span,
+                        suggestion: "Ambas ramas deben ser del mismo tipo".to_string(),
+                    });
+                }
+                true_type
             }
         }
     }

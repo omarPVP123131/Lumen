@@ -190,6 +190,20 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
                 prefix_expr(expr, prefix, locals);
             }
         }
+        Decl::Const {
+            var_type,
+            name,
+            value,
+            ..
+        } => {
+            prefix_type(var_type, prefix);
+            if top_level {
+                *name = format!("{}_{}", prefix, name);
+            } else {
+                locals.insert(name.clone());
+            }
+            prefix_expr(value, prefix, locals);
+        }
         Decl::Destructure { targets, init, .. } => {
             for target in targets.iter_mut() {
                 if let Some(ref mut t_type) = target.var_type {
@@ -485,6 +499,16 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             for arg in args.iter_mut() {
                 prefix_expr(arg, prefix, locals);
             }
+        }
+        Expr::Ternary {
+            condition,
+            true_branch,
+            false_branch,
+            ..
+        } => {
+            prefix_expr(condition, prefix, locals);
+            prefix_expr(true_branch, prefix, locals);
+            prefix_expr(false_branch, prefix, locals);
         }
     }
 }
