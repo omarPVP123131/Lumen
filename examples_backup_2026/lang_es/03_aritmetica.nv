@@ -1,0 +1,20 @@
+importar ingles;
+
+entero suma = 10 + 5;
+entero resta = 20 - 7;
+entero mult = 6 * 4;
+entero div = 15 / 4;
+entero mod = 17 % 5;
+
+imprimir(suma);
+imprimir(resta);
+imprimir(mult);
+imprimir(div);
+imprimir(mod);
+
+decimal a = 7.5 + 3.2;
+decimal b = 10.0 - 4.0;
+decimal c = 2.5 * 4.0;
+imprimir(a);
+imprimir(b);
+imprimir(c);

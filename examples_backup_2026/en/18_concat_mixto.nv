@@ -1,0 +1,9 @@
+importar ingles;
+
+integer edad = 25;
+float altura = 1.75;
+string clave = "usuario";
+
+print("Edad: " + edad);
+print("Altura: " + altura);
+print("Clave: " + clave + 10);

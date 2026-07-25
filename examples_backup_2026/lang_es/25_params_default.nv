@@ -1,0 +1,14 @@
+importar ingles;
+
+funcion texto saludar(texto nombre = "anonimo") {
+    retornar "Hola " + nombre;
+}
+
+funcion entero multiplicar(entero a, entero b = 1) {
+    retornar a * b;
+}
+
+imprimir(saludar("Maria"));
+imprimir(saludar());
+imprimir(multiplicar(5, 3));
+imprimir(multiplicar(7));

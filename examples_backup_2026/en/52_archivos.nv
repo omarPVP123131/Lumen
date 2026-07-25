@@ -1,0 +1,8 @@
+importar ingles;
+importar "texto.nv";
+
+string s = "  Lumen  ";
+print(texto_longitud("abc"));
+print(texto_mayusculas("hola"));
+print(texto_recortar(s));
+print(texto_contiene("Hola Mundo", "Mun"));

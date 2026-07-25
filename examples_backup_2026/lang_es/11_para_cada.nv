@@ -1,0 +1,10 @@
+importar ingles;
+
+lista<entero> nums = [10, 20, 30, 40, 50];
+entero total = 0;
+
+para n en nums {
+    total = total + n;
+    imprimir(n);
+}
+imprimir(total);

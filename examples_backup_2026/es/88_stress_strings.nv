@@ -1,0 +1,18 @@
+texto s = "Hola Mundo Lumen";
+texto invertido = "";
+entero i = __str_longitud(s) - 1;
+mientras (i >= 0) {
+    invertido = invertido + s[i];
+    i = i - 1;
+}
+imprimir(invertido);
+
+texto s2 = "abcdef";
+texto mayus = __str_mayusculas(s2);
+texto minus = __str_minusculas(s2);
+imprimir(mayus);
+imprimir(minus);
+
+si __str_contiene(s, "Mundo") {
+    imprimir("contiene Mundo");
+}

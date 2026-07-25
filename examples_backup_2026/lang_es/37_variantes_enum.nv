@@ -1,0 +1,19 @@
+importar ingles;
+
+enum Color {
+    Rojo,
+    Verde,
+    Azul
+}
+
+enum Estado {
+    Activo,
+    Inactivo,
+    Pendiente
+}
+
+Color favorito = Color::Azul;
+Estado actual = Estado::Activo;
+
+imprimir(favorito);
+imprimir(actual);

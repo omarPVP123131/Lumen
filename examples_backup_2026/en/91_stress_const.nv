@@ -1,0 +1,14 @@
+importar ingles;
+
+const integer MAX = 1000;
+const integer MIN = 1;
+const string APP = "Lumen";
+const float PI = 3.14159;
+const boolean DEBUG = false;
+const integer TAM = 256;
+
+print(MAX);
+print(MIN);
+print(APP);
+print(PI);
+print(TAM);

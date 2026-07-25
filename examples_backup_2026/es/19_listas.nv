@@ -1,0 +1,8 @@
+lista<entero> nums = [1, 2, 3];
+nums.agregar(4);
+nums.agregar(5);
+
+imprimir(nums[0]);
+imprimir(nums.largo());
+imprimir(nums[3]);
+imprimir(nums[4]);

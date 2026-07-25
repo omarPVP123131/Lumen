@@ -1,0 +1,10 @@
+importar ingles;
+
+integer nota = 85;
+
+if (nota >= 60) {
+    print("Aprobado");
+}
+if (nota < 50) {
+    print("Reprobado");
+}

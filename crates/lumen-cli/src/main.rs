@@ -547,45 +547,49 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
         builder.build(&program)
     };
 
-    let c_code = lumen_aot::compile_to_c(&ir_program);
     let out_name = Path::new(path).with_extension("");
-    let c_path = out_name.with_extension("c");
-    fs::write(&c_path, &c_code).unwrap_or_else(|e| {
-        eprintln!("Error al escribir C: {}", e);
-        process::exit(1);
-    });
-
-    // Compile C to native binary
-    let exe_path = if cfg!(windows) {
-        out_name.with_extension("exe")
-    } else {
-        out_name.clone()
-    };
-
-    // Compile C to native binary using system compiler
-    let cc = if cfg!(windows) { "gcc" } else { "cc" };
-    let status = std::process::Command::new(cc)
-        .args([
-            c_path.to_str().unwrap(),
-            "-O3",
-            "-o",
-            exe_path.to_str().unwrap(),
-            "-lm",
-        ])
-        .status();
-    match status {
-        Ok(s) if s.success() => {
-            let _ = fs::remove_file(&c_path);
-            println!("✓ Binario nativo generado ({})", exe_path.display());
-            println!("  Compilado con {} -O3 — rendimiento nativo C", cc);
+    let obj_path = out_name.with_extension("o");
+    match lumen_aot::compile_to_object(&ir_program, obj_path.to_str().unwrap()) {
+        Ok(()) => {
+            let exe_ext = if cfg!(windows) { "exe" } else { "" };
+            let exe_name = if exe_ext.is_empty() {
+                out_name.clone()
+            } else {
+                out_name.with_extension(exe_ext)
+            };
+            let cc = if cfg!(windows) { "gcc" } else { "cc" };
+            let s = std::process::Command::new(cc)
+                .args([
+                    obj_path.to_str().unwrap(),
+                    "-o",
+                    exe_name.to_str().unwrap(),
+                    "-lm",
+                ])
+                .status();
+            match s {
+                Ok(st) if st.success() => {
+                    let _ = fs::remove_file(&obj_path);
+                    println!("✓ Binario nativo (Cranelift + {})", cc);
+                    println!("  {}", exe_name.display());
+                }
+                Ok(st) => {
+                    println!("✓ Objeto: {}", obj_path.display());
+                    eprintln!(
+                        "Linkea: {} {} -o {} -lm",
+                        cc,
+                        obj_path.display(),
+                        exe_name.display()
+                    );
+                }
+                Err(_) => {
+                    println!("✓ Objeto: {}", obj_path.display());
+                }
+            }
         }
-        Ok(s) => {
-            eprintln!("Error de compilacion C (exit {})", s);
-            process::exit(1);
-        }
-        Err(_) => {
-            eprintln!("gcc/clang no encontrado. Instala GCC o Clang para compilar a nativo.");
+        Err(e) => {
+            eprintln!("Error AOT: {}", e);
             process::exit(1);
         }
     }
+    let _ = bytecode;
 }

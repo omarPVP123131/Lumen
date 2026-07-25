@@ -1,0 +1,12 @@
+const entero MAX = 1000;
+const entero MIN = 1;
+const texto APP = "Lumen";
+const decimal PI = 3.14159;
+const booleano DEBUG = falso;
+const entero TAM = 256;
+
+imprimir(MAX);
+imprimir(MIN);
+imprimir(APP);
+imprimir(PI);
+imprimir(TAM);

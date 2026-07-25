@@ -1,0 +1,25 @@
+importar ingles;
+
+function string calificar(integer nota) {
+    if (nota >= 90) {
+        return "A";
+    }
+    if (nota >= 80) {
+        return "B";
+    }
+    if (nota >= 70) {
+        return "C";
+    }
+    if (nota >= 60) {
+        return "D";
+    }
+    if (nota >= 50) {
+        return "E";
+    }
+    return "F";
+}
+
+print(calificar(95));
+print(calificar(75));
+print(calificar(45));
+print(calificar(82));

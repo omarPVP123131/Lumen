@@ -1,0 +1,9 @@
+importar ingles;
+
+function float calcular_propina(float cuenta, float porcentaje) {
+    return cuenta * porcentaje / 100.0;
+}
+
+print(calcular_propina(100.0, 10.0));
+print(calcular_propina(250.0, 15.0));
+print(calcular_propina(50.0, 20.0));

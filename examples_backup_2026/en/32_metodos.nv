@@ -1,0 +1,18 @@
+importar ingles;
+
+struct Contador {
+    valor: integer
+}
+
+function void incrementar(Contador c) {
+    c.valor = c.valor + 1;
+}
+
+function integer obtener(Contador c) {
+    return c.valor;
+}
+
+Contador c = Contador { valor: 0 };
+incrementar(c);
+incrementar(c);
+print(obtener(c));

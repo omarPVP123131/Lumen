@@ -1,0 +1,18 @@
+importar ingles;
+
+enum Color {
+    Rojo,
+    Verde,
+    Azul
+}
+
+funcion texto describir(Color c) {
+    elegir (c) {
+        caso Color::Rojo: { retornar "color calido"; }
+        caso Color::Verde: { retornar "color natural"; }
+        caso Color::Azul: { retornar "color frio"; }
+    }
+}
+
+Color c = Color::Verde;
+imprimir(describir(c));

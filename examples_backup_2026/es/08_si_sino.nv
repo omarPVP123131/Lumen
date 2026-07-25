@@ -1,0 +1,7 @@
+entero edad = 20;
+
+si (edad >= 18) {
+    imprimir("Mayor de edad");
+} sino {
+    imprimir("Menor de edad");
+}

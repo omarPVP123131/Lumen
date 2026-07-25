@@ -1,0 +1,18 @@
+importar ingles;
+
+function boolean es_palindromo(string s) {
+    integer izq = 0;
+    integer der = __str_longitud(s) - 1;
+    while (izq < der) {
+        if (s[izq] != s[der]) {
+            return false;
+        }
+        izq = izq + 1;
+        der = der - 1;
+    }
+    return true;
+}
+
+print(es_palindromo("ana"));
+print(es_palindromo("hola"));
+print(es_palindromo("reconocer"));

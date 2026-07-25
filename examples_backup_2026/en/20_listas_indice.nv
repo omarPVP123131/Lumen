@@ -1,0 +1,8 @@
+importar ingles;
+
+array<integer> arr = [10, 20, 30];
+print(arr[0]);
+print(arr[1]);
+
+array<integer> arr2 = [10, 99, 30];
+print(arr2[1]);

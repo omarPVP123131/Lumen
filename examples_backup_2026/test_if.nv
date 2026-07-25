@@ -1,0 +1,1 @@
+si (falso) { imprimir("si"); } sino { imprimir("no"); }

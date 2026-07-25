@@ -1,0 +1,15 @@
+entero i = 1;
+mientras (i <= 20) {
+    texto salida = "";
+    si (i % 3 == 0) {
+        salida = salida + "Fizz";
+    }
+    si (i % 5 == 0) {
+        salida = salida + "Buzz";
+    }
+    si (salida == "") {
+        salida = a_texto(i);
+    }
+    imprimir(salida);
+    i = i + 1;
+}

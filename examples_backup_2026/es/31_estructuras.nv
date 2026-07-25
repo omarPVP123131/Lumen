@@ -1,0 +1,11 @@
+estructura Punto {
+    x: entero,
+    y: entero
+}
+
+Punto p = Punto { x: 3, y: 7 };
+imprimir(p.x);
+imprimir(p.y);
+
+p.x = 10;
+imprimir(p.x + p.y);

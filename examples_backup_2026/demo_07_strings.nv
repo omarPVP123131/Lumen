@@ -1,0 +1,19 @@
+importar ingles;
+
+// Test: string interpolation, mixed concat, indexing, builtins
+texto nombre = "Ana";
+entero edad = 28;
+decimal altura = 1.68;
+
+imprimir("Me llamo {nombre}, tengo {edad} años y mido {altura}m");
+imprimir("Edad: " + edad);
+imprimir("Altura: " + altura);
+
+texto s = "Hola Mundo";
+imprimir(__str_mayusculas(s));
+imprimir(__str_minusculas(s));
+imprimir(s[0] + s[5]);
+
+si __str_contiene(s, "Mun") { imprimir("contiene Mun"); }
+lista<texto> parts = __str_dividir(s, " ");
+para p en parts { imprimir("parte: " + p); }

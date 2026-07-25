@@ -10,3 +10,9 @@ keywords = ["lumen", "language", "aot", "llvm", "native", "compiler"]
 
 [dependencies]
 lumen-ir = { path = "../lumen-ir" }
+cranelift = { version = "0.132", features = ["frontend"] }
+cranelift-module = "0.132"
+cranelift-object = "0.132"
+cranelift-native = "0.132"
+cranelift-jit = "0.132"
+target-lexicon = "0.12"

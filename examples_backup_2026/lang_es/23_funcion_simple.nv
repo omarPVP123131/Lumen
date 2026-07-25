@@ -1,0 +1,8 @@
+importar ingles;
+
+funcion entero duplicar(entero x) {
+    retornar x * 2;
+}
+
+entero res = duplicar(21);
+imprimir(res);

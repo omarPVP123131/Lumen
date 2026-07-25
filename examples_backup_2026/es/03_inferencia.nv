@@ -1,0 +1,9 @@
+entero a = 42;
+decimal b = 3.14;
+texto c = "Lumen";
+booleano d = verdadero;
+
+imprimir(a);
+imprimir(b);
+imprimir(c);
+imprimir(d);

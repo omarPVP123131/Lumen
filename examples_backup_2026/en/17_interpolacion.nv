@@ -1,0 +1,7 @@
+importar ingles;
+
+string nombre = "Ana";
+integer edad = 28;
+float altura = 1.68;
+
+print("Me llamo {nombre}, tengo {edad} años y mido {altura}m");

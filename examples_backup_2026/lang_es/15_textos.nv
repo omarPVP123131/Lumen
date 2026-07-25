@@ -1,0 +1,8 @@
+importar ingles;
+
+texto saludo = "Hola";
+texto nombre = "Mundo";
+texto frase = saludo + " " + nombre;
+
+imprimir(frase);
+imprimir(largo(frase));

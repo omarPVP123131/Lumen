@@ -1,0 +1,15 @@
+importar ingles;
+
+integer x, string y = (1, "hola");
+print(x);
+print(y);
+
+integer a, _, integer c = (1, 2, 3);
+print(a);
+print(c);
+
+integer p = 0;
+string q = "";
+p, q = (42, "mundo");
+print(p);
+print(q);

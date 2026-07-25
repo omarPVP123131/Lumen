@@ -1,0 +1,26 @@
+// Ejemplo de Enums (Tipos Suma) en LÚMEN
+
+// Declaración de enum
+enum Color {
+    Rojo,
+    Verde,
+    Azul
+}
+
+// Construcción de variantes sin datos
+Color c = Color::Rojo;
+imprimir(c);
+
+// Enum con variantes con datos
+enum Resultado {
+    Exitoso(entero),
+    Fallido(texto),
+    Pendiente
+}
+
+Resultado r1 = Resultado::Exitoso(100);
+Resultado r2 = Resultado::Fallido("algo salió mal");
+Resultado r3 = Resultado::Pendiente;
+imprimir(r1);
+imprimir(r2);
+imprimir(r3);

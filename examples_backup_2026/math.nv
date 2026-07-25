@@ -1,0 +1,9 @@
+importar ingles;
+
+funcion entero suma(entero a, entero b) { retornar a + b; }
+funcion entero resta(entero a, entero b) { retornar a - b; }
+funcion entero multiplica(entero a, entero b) { retornar a * b; }
+
+imprimir(suma(3, 5));
+imprimir(resta(10, 4));
+imprimir(multiplica(3, 7));

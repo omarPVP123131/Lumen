@@ -1,0 +1,23 @@
+importar ingles;
+
+enum Forma {
+    Circulo,
+    Rectangulo,
+    Punto
+}
+
+function float area(Forma f, float r, float w, float h) {
+    match (f) {
+        case Forma::Circulo: { return 3.14159 * r * r; }
+        case Forma::Rectangulo: { return w * h; }
+        case Forma::Punto: { return 0.0; }
+    }
+}
+
+Forma c = Forma::Circulo;
+Forma rec = Forma::Rectangulo;
+Forma p = Forma::Punto;
+
+print(area(c, 5.0, 0.0, 0.0));
+print(area(rec, 0.0, 4.0, 6.0));
+print(area(p, 0.0, 0.0, 0.0));

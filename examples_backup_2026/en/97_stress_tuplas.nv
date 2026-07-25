@@ -1,0 +1,12 @@
+importar ingles;
+
+print((1, "hola", 3.0).0);
+print(((10, 20), 30).0.1);
+
+(integer, string) anidada = (1, "x");
+print(anidada.0);
+print(anidada.1);
+
+integer a, string b = (42, "lumen");
+print(a);
+print(b);

@@ -1,0 +1,16 @@
+importar ingles;
+
+entero x = 10;
+entero y = 20;
+
+imprimir(x == y);
+imprimir(x != y);
+imprimir(x < y);
+imprimir(x > y);
+imprimir(x <= y);
+imprimir(x >= y);
+
+texto a = "abc";
+texto b = "def";
+imprimir(a == b);
+imprimir(a != b);

@@ -1,0 +1,10 @@
+importar ingles;
+
+entero i = 0;
+mientras (i < 20) {
+    si (i >= 7) {
+        romper;
+    }
+    imprimir(i);
+    i = i + 1;
+}

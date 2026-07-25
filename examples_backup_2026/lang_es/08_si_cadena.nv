@@ -1,0 +1,17 @@
+importar ingles;
+
+entero nota = 75;
+
+si (nota >= 90) {
+    imprimir("Sobresaliente");
+} sino {
+    si (nota >= 70) {
+        imprimir("Notable");
+    } sino {
+        si (nota >= 50) {
+            imprimir("Aprobado");
+        } sino {
+            imprimir("Reprobado");
+        }
+    }
+}

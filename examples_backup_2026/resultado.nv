@@ -1,0 +1,34 @@
+// Ejemplo de Resultado<T, E> en LÚMEN
+// exito(valor)  -> Resultado<T, E> con valor exitoso
+// error(mensaje) -> Resultado<T, E> con valor de error
+// intentar expr  -> propaga el error automáticamente
+
+funcion resultado<entero, texto> dividir(entero a, entero b) {
+    si (b == 0) {
+        retornar error("división por cero");
+    }
+    retornar exito(a / b);
+}
+
+resultado<entero, texto> exito_res = dividir(10, 2);
+resultado<entero, texto> error_res = dividir(10, 0);
+imprimir(exito_res);
+imprimir(error_res);
+
+// Propagar error con intentar
+funcion resultado<entero, texto> validar(entero x) {
+    si (x < 0) {
+        retornar error("negativo");
+    }
+    retornar exito(x);
+}
+
+funcion resultado<entero, texto> procesar(entero x) {
+    entero val = intentar validar(x);
+    retornar exito(val * 2);
+}
+
+resultado<entero, texto> r1 = procesar(5);
+resultado<entero, texto> r2 = procesar(-1);
+imprimir(r1);
+imprimir(r2);

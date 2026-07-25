@@ -1,0 +1,15 @@
+funcion texto adivinar_numero(entero secreto, entero intento) {
+    si (intento == secreto) {
+        retornar "Correcto";
+    } sino {
+        si (intento < secreto) {
+            retornar "Muy bajo";
+        } sino {
+            retornar "Muy alto";
+        }
+    }
+}
+
+imprimir(adivinar_numero(42, 50));
+imprimir(adivinar_numero(42, 30));
+imprimir(adivinar_numero(42, 42));

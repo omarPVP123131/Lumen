@@ -1,0 +1,13 @@
+importar ingles;
+
+struct Punto {
+    x: integer,
+    y: integer
+}
+
+Punto p = Punto { x: 3, y: 7 };
+print(p.x);
+print(p.y);
+
+p.x = 10;
+print(p.x + p.y);

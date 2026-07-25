@@ -1,0 +1,17 @@
+importar ingles;
+
+entero a = funcion(entero x) { retornar x + 10; }(5);
+imprimir(a);
+
+texto b = funcion(texto s, texto t) {
+    retornar s + " " + t;
+}("Hola", "Lumen");
+imprimir(b);
+
+entero c = funcion(entero n) {
+    si (n == 0) {
+        retornar 1;
+    }
+    retornar n * funcion(entero m) { retornar m - 1; }(n - 1);
+}(4);
+imprimir(c);

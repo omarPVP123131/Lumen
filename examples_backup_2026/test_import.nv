@@ -1,0 +1,10 @@
+importar "math.nv";
+
+numero r = math_suma(10, 20);
+imprimir(r);
+
+r = math_resta(100, 50);
+imprimir(r);
+
+r = math_multiplica(6, 7);
+imprimir(r);

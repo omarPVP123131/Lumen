@@ -1,0 +1,13 @@
+entero x, texto y = (1, "hola");
+imprimir(x);
+imprimir(y);
+
+entero a, _, entero c = (1, 2, 3);
+imprimir(a);
+imprimir(c);
+
+entero p = 0;
+texto q = "";
+p, q = (42, "mundo");
+imprimir(p);
+imprimir(q);
