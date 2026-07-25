@@ -1,0 +1,7 @@
+const entero MAX = 100;
+const texto NOMBRE = "Lumen";
+const decimal PI = 3.14159;
+
+imprimir(MAX);
+imprimir(NOMBRE);
+imprimir(PI);

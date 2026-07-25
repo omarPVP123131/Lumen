@@ -1,0 +1,9 @@
+funcion entero factorial(entero n) {
+    si (n <= 1) {
+        retornar 1;
+    }
+    retornar n * factorial(n - 1);
+}
+
+imprimir(factorial(5));
+imprimir(factorial(7));

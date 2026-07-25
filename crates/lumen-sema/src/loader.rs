@@ -656,5 +656,9 @@ fn is_builtin(name: &str) -> bool {
             | "__lista_invertir"
             | "__list_sort"
             | "__lista_ordenar"
+            | "__json_parse"
+            | "__json_parsear"
+            | "__json_stringify"
+            | "__json_texto"
     )
 }

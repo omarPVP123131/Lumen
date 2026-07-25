@@ -1,0 +1,11 @@
+entero a = 10;
+entero b = 5;
+entero c = 3;
+texto r = a > b ? (b > c ? "a > b > c" : "a > b <= c") : "a <= b";
+imprimir(r);
+
+entero x = -5;
+texto s = x > 0 ? "positivo" : (x < 0 ? "negativo" : "cero");
+imprimir(s);
+
+imprimir(10 > 5 ? (3 < 2 ? "X" : "Y") : "Z");

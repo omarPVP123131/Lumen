@@ -801,6 +801,16 @@ impl VM {
                         an.partial_cmp(&bn).unwrap_or(std::cmp::Ordering::Equal)
                     });
                     self.push(Value::Array(arr));
+                } else if name == "__json_parse" || name == "__json_parsear" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match serde_json::from_str::<serde_json::Value>(&s) {
+                        Ok(v) => self.push(json_value_to_lumen(v)),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                } else if name == "__json_stringify" || name == "__json_texto" {
+                    let val = args.first().cloned().unwrap_or(Value::Void);
+                    let json = lumen_value_to_json(&val);
+                    self.push(Value::Str(serde_json::to_string(&json).unwrap_or_default()));
                 } else if let Some(func) = self.find_func(&name) {
                     let func_start = func.start;
                     let func_params = func.params.clone();
@@ -876,6 +886,16 @@ impl VM {
                         s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
                     };
                     self.push(Value::Array(parts));
+                } else if name == "__json_parse" || name == "__json_parsear" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match serde_json::from_str::<serde_json::Value>(&s) {
+                        Ok(v) => self.push(json_value_to_lumen(v)),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                } else if name == "__json_stringify" || name == "__json_texto" {
+                    let val = args.first().cloned().unwrap_or(Value::Void);
+                    let json = lumen_value_to_json(&val);
+                    self.push(Value::Str(serde_json::to_string(&json).unwrap_or_default()));
                 } else if let Some(func) = self.find_func(&name) {
                     let func_start = func.start;
                     let func_params = func.params.clone();
@@ -1043,6 +1063,53 @@ impl VM {
             }
         }
         Err(VmError::UndefinedVariable(name.to_string()))
+    }
+}
+
+fn json_value_to_lumen(v: serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Void,
+        serde_json::Value::Bool(b) => Value::Bool(b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Int(i)
+            } else {
+                Value::Float(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        serde_json::Value::String(s) => Value::Str(s),
+        serde_json::Value::Array(arr) => {
+            Value::Array(arr.into_iter().map(json_value_to_lumen).collect())
+        }
+        serde_json::Value::Object(map) => {
+            let pairs: Vec<(Value, Value)> = map
+                .into_iter()
+                .map(|(k, v)| (Value::Str(k), json_value_to_lumen(v)))
+                .collect();
+            Value::Map(pairs)
+        }
+    }
+}
+
+fn lumen_value_to_json(v: &Value) -> serde_json::Value {
+    match v {
+        Value::Int(n) => serde_json::json!(*n),
+        Value::Float(n) => serde_json::json!(*n),
+        Value::Str(s) => serde_json::json!(s),
+        Value::Bool(b) => serde_json::json!(*b),
+        Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(lumen_value_to_json).collect())
+        }
+        Value::Map(pairs) => {
+            let mut map = serde_json::Map::new();
+            for (k, v) in pairs {
+                if let Value::Str(key) = k {
+                    map.insert(key.clone(), lumen_value_to_json(v));
+                }
+            }
+            serde_json::Value::Object(map)
+        }
+        _ => serde_json::Value::Null,
     }
 }
 

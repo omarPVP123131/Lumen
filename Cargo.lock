@@ -232,6 +232,7 @@ dependencies = [
  "lumen-lexer",
  "lumen-parser",
  "lumen-sema",
+ "serde_json",
  "thiserror",
 ]
 

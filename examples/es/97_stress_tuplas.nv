@@ -1,0 +1,10 @@
+imprimir((1, "hola", 3.0).0);
+imprimir(((10, 20), 30).0.1);
+
+(entero, texto) anidada = (1, "x");
+imprimir(anidada.0);
+imprimir(anidada.1);
+
+entero a, texto b = (42, "lumen");
+imprimir(a);
+imprimir(b);

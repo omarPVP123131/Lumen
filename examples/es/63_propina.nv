@@ -1,0 +1,7 @@
+funcion decimal calcular_propina(decimal cuenta, decimal porcentaje) {
+    retornar cuenta * porcentaje / 100.0;
+}
+
+imprimir(calcular_propina(100.0, 10.0));
+imprimir(calcular_propina(250.0, 15.0));
+imprimir(calcular_propina(50.0, 20.0));

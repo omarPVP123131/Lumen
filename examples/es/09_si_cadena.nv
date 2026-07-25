@@ -1,0 +1,15 @@
+entero puntuacion = 75;
+
+si (puntuacion >= 90) {
+    imprimir("Excelente");
+} sino {
+    si (puntuacion >= 70) {
+        imprimir("Bueno");
+    } sino {
+        si (puntuacion >= 50) {
+            imprimir("Regular");
+        } sino {
+            imprimir("Insuficiente");
+        }
+    }
+}

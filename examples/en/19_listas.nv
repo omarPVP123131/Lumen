@@ -1,0 +1,10 @@
+importar ingles;
+
+array<integer> nums = [1, 2, 3];
+nums.agregar(4);
+nums.agregar(5);
+
+print(nums[0]);
+print(nums.largo());
+print(nums[3]);
+print(nums[4]);

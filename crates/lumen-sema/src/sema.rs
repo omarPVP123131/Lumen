@@ -1452,6 +1452,35 @@ impl SemanticAnalyzer {
                                         .first()
                                         .cloned()
                                         .unwrap_or(TypeInfo::Lista(Box::new(TypeInfo::Void)))
+                                } else if callee == "__json_parse" || callee == "__json_parsear" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento de tipo texto (JSON)"
+                                                .to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Void
+                                } else if callee == "__json_stringify" || callee == "__json_texto" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Texto
                                 } else if callee == "largo" || callee == "len" {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {

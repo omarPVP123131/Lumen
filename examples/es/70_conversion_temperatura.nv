@@ -1,0 +1,12 @@
+funcion decimal c_a_f(decimal celsius) {
+    retornar celsius * 9.0 / 5.0 + 32.0;
+}
+
+funcion decimal f_a_c(decimal fahrenheit) {
+    retornar (fahrenheit - 32.0) * 5.0 / 9.0;
+}
+
+imprimir(c_a_f(0.0));
+imprimir(c_a_f(100.0));
+imprimir(f_a_c(32.0));
+imprimir(f_a_c(212.0));

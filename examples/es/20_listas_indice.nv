@@ -1,0 +1,6 @@
+lista<entero> arr = [10, 20, 30];
+imprimir(arr[0]);
+imprimir(arr[1]);
+
+lista<entero> arr2 = [10, 99, 30];
+imprimir(arr2[1]);

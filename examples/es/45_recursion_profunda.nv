@@ -1,0 +1,11 @@
+funcion entero fib(entero n) {
+    si (n <= 1) {
+        retornar n;
+    }
+    retornar fib(n - 1) + fib(n - 2);
+}
+
+imprimir(fib(0));
+imprimir(fib(1));
+imprimir(fib(5));
+imprimir(fib(10));

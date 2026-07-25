@@ -1,0 +1,17 @@
+entero encontrado = 0;
+entero i = 0;
+mientras (i < 10) {
+    entero j = 0;
+    mientras (j < 10) {
+        si (i * j > 50) {
+            encontrado = i * j;
+            romper;
+        }
+        j = j + 1;
+    }
+    si (encontrado > 0) {
+        romper;
+    }
+    i = i + 1;
+}
+imprimir(encontrado);

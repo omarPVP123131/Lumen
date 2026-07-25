@@ -1,0 +1,8 @@
+entero nota = 85;
+
+si (nota >= 60) {
+    imprimir("Aprobado");
+}
+si (nota < 50) {
+    imprimir("Reprobado");
+}

@@ -1,0 +1,23 @@
+importar ingles;
+
+function boolean es_bisiesto(integer anio) {
+    if (anio % 400 == 0) {
+        return true;
+    }
+    if (anio % 100 == 0) {
+        return false;
+    }
+    return anio % 4 == 0;
+}
+
+function integer dias_mes(integer mes, integer anio) {
+    array<integer> dias = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (mes == 2 && es_bisiesto(anio)) {
+        return 29;
+    }
+    return dias[mes - 1];
+}
+
+print(dias_mes(2, 2024));
+print(dias_mes(2, 2025));
+print(dias_mes(7, 2026));

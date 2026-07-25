@@ -1,0 +1,7 @@
+funcion decimal convertir_moneda(decimal monto, decimal tasa) {
+    retornar monto * tasa;
+}
+
+imprimir(convertir_moneda(100.0, 0.92));
+imprimir(convertir_moneda(50.0, 1.1));
+imprimir(convertir_moneda(200.0, 0.0078));

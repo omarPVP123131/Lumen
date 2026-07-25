@@ -1,0 +1,11 @@
+importar ingles;
+
+integer x = 2;
+string dia = "";
+match (x) {
+    case 1: { dia = "lunes"; }
+    case 2: { dia = "martes"; }
+    case 3: { dia = "miercoles"; }
+    default: { dia = "fin de semana"; }
+}
+print(dia);

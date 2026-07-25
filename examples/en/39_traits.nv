@@ -1,0 +1,19 @@
+importar ingles;
+
+trait Describible {
+    function string mostrar(yo);
+}
+
+struct Punto {
+    x: integer,
+    y: integer
+}
+
+impl Describible para Punto {
+    function string mostrar(yo) {
+        return "Punto(" + yo.x + "," + yo.y + ")";
+    }
+}
+
+Punto p = Punto { x: 3, y: 7 };
+print(p.mostrar());

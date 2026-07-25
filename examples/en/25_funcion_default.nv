@@ -1,0 +1,8 @@
+importar ingles;
+
+function integer suma(integer a, integer b = 10) {
+    return a + b;
+}
+
+print(suma(5));
+print(suma(5, 20));

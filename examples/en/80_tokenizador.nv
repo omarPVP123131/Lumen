@@ -1,0 +1,27 @@
+importar ingles;
+
+function array<string> tokenizar(string expr) {
+    array<string> tokens = [];
+    string actual = "";
+    integer i = 0;
+    while (i < __str_longitud(expr)) {
+        if (expr[i] == " ") {
+            if (actual != "") {
+                tokens.agregar(actual);
+                actual = "";
+            }
+        } else {
+            actual = actual + expr[i];
+        }
+        i = i + 1;
+    }
+    if (actual != "") {
+        tokens.agregar(actual);
+    }
+    return tokens;
+}
+
+array<string> t = tokenizar("1 + 2 * 3");
+print(t[0]);
+print(t[2]);
+print(t[4]);

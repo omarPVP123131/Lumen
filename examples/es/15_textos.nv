@@ -1,0 +1,7 @@
+texto a = "Hola";
+texto b = "Mundo";
+texto c = a + " " + b;
+
+imprimir(a);
+imprimir(b);
+imprimir(c);

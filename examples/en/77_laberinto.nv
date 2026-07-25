@@ -1,0 +1,20 @@
+importar ingles;
+
+function boolean tiene_camino(array<array<integer>> lab, integer x, integer y, integer fx, integer fy) {
+    if (x == fx && y == fy) {
+        return true;
+    }
+    if (x < 0) { return false; }
+    if (y < 0) { return false; }
+    if (x >= lab.largo()) { return false; }
+    if (y >= lab[0].largo()) { return false; }
+    if (lab[x][y] == 1) { return false; }
+
+    if (tiene_camino(lab, x + 1, y, fx, fy)) {
+        return true;
+    }
+    return tiene_camino(lab, x, y + 1, fx, fy);
+}
+
+array<array<integer>> lab = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+print(tiene_camino(lab, 0, 0, 2, 2));

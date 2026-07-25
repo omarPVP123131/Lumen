@@ -1,0 +1,3 @@
+imprimir(a_texto(42));
+imprimir(a_texto(3.14));
+imprimir(a_texto(verdadero));

@@ -1,0 +1,9 @@
+funcion entero suma_profundidad(entero n) {
+    si (n <= 0) {
+        retornar 0;
+    }
+    retornar n + suma_profundidad(n - 1);
+}
+
+imprimir(suma_profundidad(100));
+imprimir(suma_profundidad(50));

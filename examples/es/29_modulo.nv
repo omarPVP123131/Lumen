@@ -1,0 +1,4 @@
+imprimir(10 % 3);
+imprimir(17 % 5);
+imprimir(100 % 7);
+imprimir(3 % 3);

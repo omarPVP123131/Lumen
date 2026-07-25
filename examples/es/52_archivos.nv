@@ -1,0 +1,7 @@
+importar "texto.nv";
+
+texto s = "  Lumen  ";
+imprimir(texto_longitud("abc"));
+imprimir(texto_mayusculas("hola"));
+imprimir(texto_recortar(s));
+imprimir(texto_contiene("Hola Mundo", "Mun"));

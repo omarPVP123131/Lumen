@@ -1,0 +1,13 @@
+enum Color {
+    Rojo,
+    Verde,
+    Azul
+}
+
+Color c = Color::Rojo;
+imprimir(c);
+
+Color v = Color::Verde;
+Color a = Color::Azul;
+imprimir(v);
+imprimir(a);

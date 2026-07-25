@@ -10,6 +10,7 @@ keywords = ["lumen", "language", "vm", "virtual-machine", "educational"]
 
 [dependencies]
 lumen-codegen = { path = "../lumen-codegen" }
+serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

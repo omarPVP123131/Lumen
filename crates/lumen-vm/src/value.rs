@@ -21,6 +21,7 @@ pub enum Value {
     Error(Box<Value>),
     Opcion(Option<Box<Value>>),
     Tuple(Vec<Value>),
+    Map(Vec<(Value, Value)>),
     Void,
 }
 
@@ -72,6 +73,7 @@ impl Value {
             Value::Error(_) => true,
             Value::Opcion(Some(_)) => true,
             Value::Opcion(None) => false,
+            Value::Map(v) => !v.is_empty(),
             Value::Tuple(_) => true,
             Value::Void => false,
         }
@@ -122,6 +124,11 @@ impl fmt::Display for Value {
             Value::Tuple(v) => {
                 let items: Vec<String> = v.iter().map(|x| format!("{}", x)).collect();
                 write!(f, "({})", items.join(", "))
+            }
+            Value::Map(pairs) => {
+                let items: Vec<String> =
+                    pairs.iter().map(|(k, v)| format!("{}: {}", k, v)).collect();
+                write!(f, "{{{} }}", items.join(", "))
             }
             Value::Void => write!(f, "void"),
         }
