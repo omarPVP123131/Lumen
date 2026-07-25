@@ -115,9 +115,11 @@ pub enum Stmt {
         span: Span,
     },
     Break {
+        label: Option<String>,
         span: Span,
     },
     Continue {
+        label: Option<String>,
         span: Span,
     },
     Match {

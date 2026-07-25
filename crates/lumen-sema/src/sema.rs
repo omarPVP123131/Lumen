@@ -503,18 +503,18 @@ impl SemanticAnalyzer {
                 .as_ref()
                 .map(|e| self.analyze_expr(e))
                 .unwrap_or(TypeInfo::Void),
-            Stmt::Break { span } => {
+            Stmt::Break { label: _, span } => {
                 if self.loop_depth == 0 {
                     self.errors.push(SemError {
-                        code: "E054".to_string(),
-                        message: "'romper' solo se puede usar dentro de un ciclo".to_string(),
+                        code: "E070".to_string(),
+                        message: "'romper' fuera de un bucle".to_string(),
                         span: *span,
-                        suggestion: "Usa 'romper' dentro de 'mientras' o 'para'".to_string(),
+                        suggestion: "Usa 'romper' solo dentro de 'mientras' o 'para'".to_string(),
                     });
                 }
                 TypeInfo::Void
             }
-            Stmt::Continue { span } => {
+            Stmt::Continue { label: _, span } => {
                 if self.loop_depth == 0 {
                     self.errors.push(SemError {
                         code: "E055".to_string(),

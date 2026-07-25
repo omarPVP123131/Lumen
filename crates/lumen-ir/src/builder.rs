@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 struct LoopLabels {
     break_label: usize,
     continue_label: usize,
+    loop_name: Option<String>,
 }
 
 pub struct IRBuilder {
@@ -211,6 +212,7 @@ impl IRBuilder {
                 self.loop_labels.push(LoopLabels {
                     break_label: end_label,
                     continue_label: start_label,
+                    loop_name: None,
                 });
                 for node in body {
                     self.gen_decl_or_stmt(node);
@@ -236,6 +238,7 @@ impl IRBuilder {
                 self.loop_labels.push(LoopLabels {
                     break_label: end_label,
                     continue_label,
+                    loop_name: None,
                 });
                 for node in body {
                     self.gen_decl_or_stmt(node);
@@ -270,14 +273,32 @@ impl IRBuilder {
             Stmt::Expr { expr, .. } => {
                 self.gen_expr(expr);
             }
-            Stmt::Break { .. } => {
-                if let Some(labels) = self.loop_labels.last() {
-                    self.emit(Instr::Jmp(labels.break_label));
+            Stmt::Break { label, .. } => {
+                let target = if let Some(ref lbl) = label {
+                    self.loop_labels
+                        .iter()
+                        .rev()
+                        .find(|ll| ll.loop_name.as_deref() == Some(lbl))
+                        .map(|ll| ll.break_label)
+                } else {
+                    self.loop_labels.last().map(|ll| ll.break_label)
+                };
+                if let Some(t) = target {
+                    self.emit(Instr::Jmp(t));
                 }
             }
-            Stmt::Continue { .. } => {
-                if let Some(labels) = self.loop_labels.last() {
-                    self.emit(Instr::Jmp(labels.continue_label));
+            Stmt::Continue { label, .. } => {
+                let target = if let Some(ref lbl) = label {
+                    self.loop_labels
+                        .iter()
+                        .rev()
+                        .find(|ll| ll.loop_name.as_deref() == Some(lbl))
+                        .map(|ll| ll.continue_label)
+                } else {
+                    self.loop_labels.last().map(|ll| ll.continue_label)
+                };
+                if let Some(t) = target {
+                    self.emit(Instr::Jmp(t));
                 }
             }
             Stmt::Match {

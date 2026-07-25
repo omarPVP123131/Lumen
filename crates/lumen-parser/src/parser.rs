@@ -750,15 +750,25 @@ impl Parser {
     fn parse_break(&mut self) -> Option<Stmt> {
         let token = self.advance()?;
         let span = token.span;
+        let label = if self.check_ident() {
+            Some(self.expect_ident()?)
+        } else {
+            None
+        };
         self.expect_semicolon();
-        Some(Stmt::Break { span })
+        Some(Stmt::Break { label, span })
     }
 
     fn parse_continue(&mut self) -> Option<Stmt> {
         let token = self.advance()?;
         let span = token.span;
+        let label = if self.check_ident() {
+            Some(self.expect_ident()?)
+        } else {
+            None
+        };
         self.expect_semicolon();
-        Some(Stmt::Continue { span })
+        Some(Stmt::Continue { label, span })
     }
 
     fn parse_match(&mut self) -> Option<Stmt> {
