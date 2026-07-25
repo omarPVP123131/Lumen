@@ -746,7 +746,7 @@ impl SemanticAnalyzer {
                 let lt = self.analyze_expr(left);
                 let rt = self.analyze_expr(right);
                 match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
                         if matches!(op, BinOp::Add)
                             && lt == TypeInfo::Texto
                             && (rt == TypeInfo::Texto

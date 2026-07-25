@@ -1,8 +1,0 @@
-importar ingles;
-
-funcion texto main() {
-    para i en 0..5 {
-        imprimir(i);
-    }
-    retornar "ok";
-}

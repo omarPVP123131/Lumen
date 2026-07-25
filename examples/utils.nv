@@ -1,3 +1,15 @@
-funcion numero cuadrado(numero x) {
+importar ingles;
+
+funcion entero cuadrado(entero x) {
     retornar x * x;
+}
+
+funcion entero cubo(entero x) {
+    retornar x * x * x;
+}
+
+funcion texto main() {
+    imprimir(cuadrado(5));
+    imprimir(cubo(3));
+    retornar "ok";
 }

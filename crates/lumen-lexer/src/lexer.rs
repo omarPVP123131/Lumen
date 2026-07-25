@@ -110,6 +110,7 @@ impl Lexer {
                 Some('-') => tokens.push(self.single_token(TokenKind::Minus)),
                 Some('*') => tokens.push(self.single_token(TokenKind::Star)),
                 Some('/') => tokens.push(self.single_token(TokenKind::Slash)),
+                Some('%') => tokens.push(self.single_token(TokenKind::Percent)),
                 Some(';') => tokens.push(self.single_token(TokenKind::Semicolon)),
                 Some(',') => tokens.push(self.single_token(TokenKind::Comma)),
                 Some('(') => tokens.push(self.single_token(TokenKind::LeftParen)),

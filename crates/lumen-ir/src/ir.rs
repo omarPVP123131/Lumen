@@ -16,6 +16,7 @@ pub enum Op {
     Sub,
     Mul,
     Div,
+    Mod,
     Equal,
     NotEqual,
     Less,

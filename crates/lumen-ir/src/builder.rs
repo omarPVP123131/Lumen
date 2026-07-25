@@ -399,6 +399,7 @@ impl IRBuilder {
                     BinOp::Sub => Op::Sub,
                     BinOp::Mul => Op::Mul,
                     BinOp::Div => Op::Div,
+                    BinOp::Mod => Op::Mod,
                     BinOp::Equal => Op::Equal,
                     BinOp::NotEqual => Op::NotEqual,
                     BinOp::Less => Op::Less,
@@ -726,6 +727,13 @@ impl IRBuilder {
             (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Div)) => {
                 if *b != 0 {
                     Some(Instr::ConstInt(a / b))
+                } else {
+                    None
+                }
+            }
+            (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Mod)) => {
+                if *b != 0 {
+                    Some(Instr::ConstInt(a % b))
                 } else {
                     None
                 }

@@ -1,6 +1,0 @@
-importar ingles;
-
-diccionario<texto, entero> d = {"a": 1, "b": 2};
-imprimir(d["a"]);
-d["c"] = 3;
-imprimir(largo(d));

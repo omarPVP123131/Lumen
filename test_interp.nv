@@ -1,8 +1,0 @@
-importar ingles;
-
-funcion texto main() {
-    texto nombre = "Mundo";
-    imprimir("Hola {nombre}!");
-    imprimir("2 + 2 = {2 + 2}");
-    retornar "ok";
-}

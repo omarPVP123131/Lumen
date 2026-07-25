@@ -1,55 +1,36 @@
 importar ingles;
 
 funcion entero factorial(entero n) {
-    si n <= 1 {
-        retornar 1;
-    }
+    si (n <= 1) { retornar 1; }
     retornar n * factorial(n - 1);
 }
 
 funcion entero fibonacci(entero n) {
-    si n <= 1 {
-        retornar n;
-    }
+    si (n <= 1) { retornar n; }
     retornar fibonacci(n - 1) + fibonacci(n - 2);
 }
 
 funcion entero suma_lista(lista<entero> arr) {
     entero total = 0;
     entero i = 0;
-    mientras i < largo(arr) {
+    mientras (i < largo(arr)) {
         total = total + arr[i];
         i = i + 1;
     }
     retornar total;
 }
 
-funcion entero modulo(entero a, entero b) {
-    retornar a % b;
-}
+funcion entero modulo(entero a, entero b) { retornar a % b; }
 
-estructura Punto {
-    x: entero,
-    y: entero,
-}
+estructura Punto { x: entero, y: entero }
 
-funcion texto main() {
-    imprimir(factorial(10));
-    imprimir(fibonacci(10));
-    imprimir(suma_lista([1, 2, 3, 4, 5]));
-    lista<entero> nums = [10, 20, 30, 40, 50];
-    imprimir(nums[0]);
-    imprimir(nums[4]);
-    imprimir(modulo(10, 3));
-    imprimir(modulo(100, 7));
-    Punto p = Punto { x: 10, y: 20 };
-    imprimir(p.x + p.y);
-    booleano a = true && false;
-    booleano b = true || false;
-    si a { imprimir(1); } sino { imprimir(0); }
-    si b { imprimir(1); } sino { imprimir(0); }
-    decimal x = 10.5;
-    entero y = 3;
-    imprimir(x * y);
-    retornar "ok";
-}
+imprimir(factorial(10));
+imprimir(fibonacci(10));
+imprimir(suma_lista([1, 2, 3, 4, 5]));
+lista<entero> nums = [10, 20, 30, 40, 50];
+imprimir(nums[0]);
+imprimir(nums[4]);
+imprimir(modulo(10, 3));
+imprimir(modulo(100, 7));
+Punto p = Punto { x: 10, y: 20 };
+imprimir(p.x + p.y);

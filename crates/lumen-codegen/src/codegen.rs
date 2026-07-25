@@ -166,6 +166,7 @@ impl Codegen {
                     Op::Sub => Opcode::Sub,
                     Op::Mul => Opcode::Mul,
                     Op::Div => Opcode::Div,
+                    Op::Mod => Opcode::Mod,
                     Op::Equal => Opcode::Eq,
                     Op::NotEqual => Opcode::Neq,
                     Op::Less => Opcode::Lt,

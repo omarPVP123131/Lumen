@@ -1135,10 +1135,11 @@ impl Parser {
 
     fn parse_multiplication(&mut self) -> Option<Expr> {
         let mut left = self.parse_unary()?;
-        while self.check(&[TokenKind::Star, TokenKind::Slash]) {
+        while self.check(&[TokenKind::Star, TokenKind::Slash, TokenKind::Percent]) {
             let op = match self.peek().kind {
                 TokenKind::Star => BinOp::Mul,
                 TokenKind::Slash => BinOp::Div,
+                TokenKind::Percent => BinOp::Mod,
                 _ => unreachable!(),
             };
             self.advance();

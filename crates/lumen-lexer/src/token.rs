@@ -129,6 +129,7 @@ pub enum TokenKind {
     Minus,        // -
     Star,         // *
     Slash,        // /
+    Percent,      // %
     Equal,        // =
     EqualEqual,   // ==
     Bang,         // !

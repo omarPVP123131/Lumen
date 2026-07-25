@@ -188,6 +188,33 @@ impl VM {
                     _ => return Err(VmError::TypeError("Div requires numbers".to_string())),
                 }
             }
+            Opcode::Mod => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                match (&a, &b) {
+                    (Value::Int(_), Value::Int(0)) => return Err(VmError::DivisionByZero),
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a.rem_euclid(*b))),
+                    (Value::Int(a), Value::Float(b)) => {
+                        if *b == 0.0 {
+                            return Err(VmError::DivisionByZero);
+                        }
+                        self.push(Value::Float(*a as f64 % b))
+                    }
+                    (Value::Float(a), Value::Int(b)) => {
+                        if *b == 0 {
+                            return Err(VmError::DivisionByZero);
+                        }
+                        self.push(Value::Float(a % *b as f64))
+                    }
+                    (Value::Float(a), Value::Float(b)) => {
+                        if *b == 0.0 {
+                            return Err(VmError::DivisionByZero);
+                        }
+                        self.push(Value::Float(a % b))
+                    }
+                    _ => return Err(VmError::TypeError("Mod requires numbers".to_string())),
+                }
+            }
             Opcode::Eq => {
                 let b = self.pop()?;
                 let a = self.pop()?;
