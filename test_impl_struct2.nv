@@ -1,0 +1,23 @@
+importar ingles;
+
+estructura Punto { x: entero, y: entero }
+
+impl Punto {
+    funcion entero suma(Punto self) {
+        retornar self.x + self.y;
+    }
+    // Method with extra arguments
+    funcion entero distancia_al_cuadrado(Punto self, entero ox, entero oy) {
+        entero dx = self.x - ox;
+        entero dy = self.y - oy;
+        retornar dx * dx + dy * dy;
+    }
+}
+
+funcion texto main() {
+    Punto p = Punto { x: 10, y: 20 };
+    imprimir(p.suma());
+    entero d = p.distancia_al_cuadrado(0, 0);
+    imprimir(d);
+    retornar "ok";
+}

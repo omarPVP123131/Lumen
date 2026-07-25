@@ -1,0 +1,12 @@
+importar ingles;
+estructura Punto { x: entero, y: entero }
+impl Punto {
+    funcion entero suma(Punto self) {
+        retornar self.x + self.y;
+    }
+}
+funcion texto main() {
+    Punto p = Punto { x: 10, y: 20 };
+    imprimir(p.suma());
+    retornar "ok";
+}

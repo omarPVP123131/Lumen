@@ -1,0 +1,13 @@
+importar ingles;
+
+funcion texto main() {
+    x = 42;
+    imprimir(x);
+    y = 3.14;
+    imprimir(y);
+    z = "hola";
+    imprimir(z);
+    a = verdadero;
+    imprimir(a);
+    retornar "ok";
+}
