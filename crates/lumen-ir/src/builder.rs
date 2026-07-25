@@ -18,6 +18,7 @@ pub struct IRBuilder {
     loop_labels: Vec<LoopLabels>,
     default_params: HashMap<String, Vec<Option<Expr>>>,
     fn_names: HashSet<String>,
+    impl_method_map: HashMap<String, String>,
 }
 
 impl Default for IRBuilder {
@@ -38,6 +39,7 @@ impl IRBuilder {
             loop_labels: Vec::new(),
             default_params: HashMap::new(),
             fn_names: HashSet::new(),
+            impl_method_map: HashMap::new(),
         }
     }
 
@@ -48,6 +50,8 @@ impl IRBuilder {
                 DeclOrStmt::Decl(Decl::Function { .. })
                     | DeclOrStmt::Decl(Decl::Struct { .. })
                     | DeclOrStmt::Decl(Decl::Enum { .. })
+                    | DeclOrStmt::Decl(Decl::Rasgo { .. })
+                    | DeclOrStmt::Decl(Decl::ImplRasgo { .. })
             )
         });
 
@@ -61,6 +65,40 @@ impl IRBuilder {
                 };
                 self.program.funcs.insert(name.clone(), func);
                 self.fn_names.insert(name.clone());
+            }
+        }
+
+        // Collect impl methods
+        for node in program {
+            if let DeclOrStmt::Decl(Decl::ImplRasgo {
+                trait_name,
+                target_type,
+                methods,
+                ..
+            }) = node
+            {
+                let type_name = match target_type {
+                    lumen_parser::ast::Type::Struct(ref name) => name.clone(),
+                    lumen_parser::ast::Type::GenericStruct { ref name, .. } => name.clone(),
+                    _ => continue,
+                };
+                for method_decl in methods {
+                    if let Decl::Function {
+                        name, ref params, ..
+                    } = method_decl
+                    {
+                        let mangled = format!("{}_{}_{}", type_name, trait_name, name);
+                        let func = Func {
+                            name: mangled.clone(),
+                            params: params.iter().map(|p| p.name.clone()).collect(),
+                            entry: 0,
+                            instrs: Vec::new(),
+                        };
+                        self.program.funcs.insert(mangled.clone(), func);
+                        self.fn_names.insert(mangled.clone());
+                        self.impl_method_map.insert(name.clone(), mangled);
+                    }
+                }
             }
         }
 
@@ -165,6 +203,47 @@ impl IRBuilder {
             Decl::Enum { .. } => {
                 // Enum declarations are collected during IR build setup
                 // No code generation needed for the declaration itself
+            }
+            Decl::Rasgo { .. } => {
+                // Trait declaration — no code generation
+            }
+            Decl::ImplRasgo {
+                trait_name,
+                target_type,
+                methods,
+                ..
+            } => {
+                let type_name = match target_type {
+                    lumen_parser::ast::Type::Struct(ref name) => name.clone(),
+                    lumen_parser::ast::Type::GenericStruct { ref name, .. } => name.clone(),
+                    _ => return,
+                };
+                for method_decl in methods {
+                    if let Decl::Function { name, ref body, .. } = method_decl {
+                        let mangled = format!("{}_{}_{}", type_name, trait_name, name);
+                        self.finalize_func();
+                        self.current_func = Some(mangled.clone());
+                        self.current_instrs = Vec::new();
+                        self.temp_counter = 0;
+                        for node in body {
+                            self.gen_decl_or_stmt(node);
+                        }
+                        if !self
+                            .current_instrs
+                            .iter()
+                            .any(|i| matches!(i, Instr::Return))
+                        {
+                            self.emit(Instr::Return);
+                        }
+                        self.finalize_func();
+                        if self.program.funcs.contains_key("__main__") {
+                            self.current_func = Some("__main__".to_string());
+                            self.current_instrs = Vec::new();
+                        } else {
+                            self.current_func = None;
+                        }
+                    }
+                }
             }
             Decl::Const { name, value, .. } => {
                 self.gen_expr(value);
@@ -540,27 +619,44 @@ impl IRBuilder {
                 self.emit(Instr::ArrayGet);
             }
             Expr::MethodCall {
-                expr, method, args, ..
+                expr,
+                method,
+                args,
+                resolved_func,
+                ..
             } => {
                 let var_name = match expr.as_ref() {
                     Expr::Ident { name, .. } => Some(name.clone()),
                     _ => None,
                 };
-                self.gen_expr(expr);
-                match method.as_str() {
-                    "agregar" | "push" => {
-                        for arg in args {
-                            self.gen_expr(arg);
-                        }
-                        self.emit(Instr::ArrayPush);
-                        if let Some(name) = var_name {
-                            self.emit(Instr::Store(name));
-                        }
+                // Check if this is a trait method call
+                let func_name = resolved_func
+                    .clone()
+                    .or_else(|| self.impl_method_map.get(method.as_str()).cloned());
+                if let Some(fname) = func_name {
+                    // Trait method: receiver pushed as first arg
+                    self.gen_expr(expr);
+                    for arg in args {
+                        self.gen_expr(arg);
                     }
-                    "largo" | "len" | "length" => {
-                        self.emit(Instr::ArrayLen);
+                    self.emit(Instr::Call(fname, args.len() + 1));
+                } else {
+                    self.gen_expr(expr);
+                    match method.as_str() {
+                        "agregar" | "push" => {
+                            for arg in args {
+                                self.gen_expr(arg);
+                            }
+                            self.emit(Instr::ArrayPush);
+                            if let Some(name) = var_name {
+                                self.emit(Instr::Store(name));
+                            }
+                        }
+                        "largo" | "len" | "length" => {
+                            self.emit(Instr::ArrayLen);
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
             Expr::Grouping { expr, .. } => {

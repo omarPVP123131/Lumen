@@ -35,12 +35,14 @@ pub enum Decl {
         params: Vec<Param>,
         body: Vec<DeclOrStmt>,
         type_params: Vec<String>,
+        type_param_bounds: Vec<(String, String)>,
         span: Span,
     },
     Struct {
         name: String,
         fields: Vec<StructField>,
         type_params: Vec<String>,
+        type_param_bounds: Vec<(String, String)>,
         span: Span,
     },
     Enum {
@@ -52,6 +54,17 @@ pub enum Decl {
         var_type: Type,
         name: String,
         value: Box<Expr>,
+        span: Span,
+    },
+    Rasgo {
+        name: String,
+        methods: Vec<TraitMethod>,
+        span: Span,
+    },
+    ImplRasgo {
+        trait_name: String,
+        target_type: Type,
+        methods: Vec<Decl>,
         span: Span,
     },
 }
@@ -68,6 +81,13 @@ pub struct EnumVariant {
     pub name: String,
     pub types: Vec<Type>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraitMethod {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Type,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,6 +237,7 @@ pub enum Expr {
         expr: Box<Expr>,
         method: String,
         args: Vec<Expr>,
+        resolved_func: Option<String>,
         span: Span,
     },
     Lambda {

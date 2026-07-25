@@ -225,6 +225,7 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             params,
             body,
             type_params,
+            type_param_bounds: _,
             ..
         } => {
             let type_params_set: HashSet<String> = type_params.iter().cloned().collect();
@@ -250,6 +251,7 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             name,
             fields,
             type_params,
+            type_param_bounds: _,
             ..
         } => {
             if top_level {
@@ -268,6 +270,28 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
                 for t in variant.types.iter_mut() {
                     prefix_type(t, prefix);
                 }
+            }
+        }
+        Decl::Rasgo { name, methods, .. } => {
+            if top_level {
+                *name = format!("{}_{}", prefix, name);
+            }
+            for method in methods.iter_mut() {
+                prefix_type(&mut method.return_type, prefix);
+                for p in method.params.iter_mut() {
+                    prefix_type(&mut p.param_type, prefix);
+                }
+            }
+        }
+        Decl::ImplRasgo {
+            trait_name: _,
+            target_type,
+            methods,
+            ..
+        } => {
+            prefix_type(target_type, prefix);
+            for method_decl in methods.iter_mut() {
+                prefix_decl(method_decl, prefix, locals, top_level);
             }
         }
     }
@@ -438,7 +462,10 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             prefix_expr(index, prefix, locals);
         }
         Expr::MethodCall {
-            expr: target, args, ..
+            expr: target,
+            args,
+            resolved_func: _,
+            ..
         } => {
             prefix_expr(target, prefix, locals);
             for arg in args.iter_mut() {

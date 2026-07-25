@@ -111,6 +111,10 @@ impl Parser {
             self.parse_enum().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Const]) {
             self.parse_const().map(DeclOrStmt::Decl)
+        } else if self.check(&[TokenKind::Rasgo, TokenKind::Trait]) {
+            self.parse_rasgo().map(DeclOrStmt::Decl)
+        } else if self.check(&[TokenKind::Impl]) {
+            self.parse_impl_rasgo().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Importar, TokenKind::Import]) {
             self.parse_import().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::LeftBrace]) {
@@ -206,7 +210,7 @@ impl Parser {
         let return_type = self.parse_type()?;
         let name = self.expect_ident()?;
 
-        let type_params = self.parse_type_params();
+        let (type_params, type_param_bounds) = self.parse_type_params();
 
         if !self.check(&[TokenKind::LeftParen]) {
             self.error(
@@ -254,6 +258,7 @@ impl Parser {
             params,
             body,
             type_params,
+            type_param_bounds,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -263,7 +268,7 @@ impl Parser {
         self.advance();
         let name = self.expect_ident()?;
 
-        let type_params = self.parse_type_params();
+        let (type_params, type_param_bounds) = self.parse_type_params();
 
         if !self.check(&[TokenKind::LeftBrace]) {
             self.error(
@@ -332,6 +337,7 @@ impl Parser {
             name,
             fields,
             type_params,
+            type_param_bounds,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -438,6 +444,257 @@ impl Parser {
             var_type,
             name,
             value,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_rasgo(&mut self) -> Option<Decl> {
+        let start = self.peek().span;
+        self.advance(); // consume rasgo/trait
+        let name = self.expect_ident()?;
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error(
+                "E017",
+                "Se esperaba '{' para el rasgo",
+                start,
+                "Agrega '{' para definir los métodos",
+            );
+            return None;
+        }
+        self.advance();
+        let mut methods = Vec::new();
+        while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
+            if self.check(&[TokenKind::Eof]) {
+                break;
+            }
+            if !self.check(&[TokenKind::Funcion, TokenKind::Function]) {
+                self.error(
+                    "E072",
+                    "Se esperaba una firma de función en el rasgo",
+                    self.peek().span,
+                    "Agrega 'funcion tipo nombre(...)'",
+                );
+                return None;
+            }
+            self.advance(); // consume funcion/function
+            let ret_type = self.parse_type()?;
+            let method_name = self.expect_ident()?;
+            if !self.check(&[TokenKind::LeftParen]) {
+                self.error(
+                    "E014",
+                    "Se esperaba '('",
+                    start,
+                    "Agrega '(' para iniciar los parámetros",
+                );
+                return None;
+            }
+            self.advance();
+            let mut params = Vec::new();
+            if !self.check(&[TokenKind::RightParen]) {
+                // Check if first param is the receiver (just a name, no type)
+                if self.check_ident() && !self.is_type_keyword(&self.peek().kind) {
+                    let receiver_name = self.expect_ident()?;
+                    // Use a placeholder type for the receiver — resolved during sema
+                    params.push(Param {
+                        param_type: Type::Struct("Self".to_string()),
+                        name: receiver_name,
+                        default: None,
+                        span: Span::merge(&start, &self.previous().span),
+                    });
+                    if self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                    }
+                }
+                while !self.check(&[TokenKind::RightParen]) {
+                    params.push(self.parse_param()?);
+                    while self.check(&[TokenKind::Comma]) {
+                        self.advance();
+                        if self.check(&[TokenKind::RightParen]) {
+                            break;
+                        }
+                        params.push(self.parse_param()?);
+                    }
+                }
+            }
+            if !self.check(&[TokenKind::RightParen]) {
+                self.error(
+                    "E015",
+                    "Se esperaba ')'",
+                    start,
+                    "Agrega ')' para cerrar los parámetros",
+                );
+                return None;
+            }
+            self.advance();
+            self.expect_semicolon();
+            methods.push(TraitMethod {
+                name: method_name,
+                params,
+                return_type: ret_type,
+            });
+        }
+        if !self.check(&[TokenKind::RightBrace]) {
+            self.error(
+                "E017",
+                "Se esperaba '}' para cerrar el rasgo",
+                start,
+                "Agrega '}' al final del rasgo",
+            );
+            return None;
+        }
+        self.advance();
+        Some(Decl::Rasgo {
+            name,
+            methods,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn is_type_keyword(&self, kind: &TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Numero
+                | TokenKind::Number
+                | TokenKind::Entero
+                | TokenKind::Integer
+                | TokenKind::Decimal
+                | TokenKind::Float
+                | TokenKind::Texto
+                | TokenKind::String
+                | TokenKind::Booleano
+                | TokenKind::Boolean
+                | TokenKind::Lista
+                | TokenKind::Array
+                | TokenKind::Resultado
+                | TokenKind::Result
+                | TokenKind::Opcion
+                | TokenKind::Option
+        )
+    }
+
+    fn parse_impl_rasgo(&mut self) -> Option<Decl> {
+        let start = self.peek().span;
+        self.advance(); // consume impl
+        let trait_name = self.expect_ident()?;
+        if !self.check(&[TokenKind::Para, TokenKind::For]) {
+            self.error(
+                "E073",
+                "Se esperaba 'para'/'for' después del nombre del rasgo",
+                self.peek().span,
+                "Agrega 'para <tipo>' para implementar el rasgo",
+            );
+            return None;
+        }
+        self.advance(); // consume para/for
+        let target_type = self.parse_type()?;
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error(
+                "E017",
+                "Se esperaba '{' para la implementación",
+                start,
+                "Agrega '{' para definir los métodos",
+            );
+            return None;
+        }
+        self.advance();
+        let mut methods = Vec::new();
+        while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
+            if self.check(&[TokenKind::Eof]) {
+                break;
+            }
+            if !self.check(&[TokenKind::Funcion, TokenKind::Function]) {
+                self.error(
+                    "E072",
+                    "Se esperaba 'funcion' en la implementación",
+                    self.peek().span,
+                    "Agrega 'funcion tipo nombre(...) { ... }'",
+                );
+                return None;
+            }
+            let func = self.parse_method_impl()?;
+            methods.push(func);
+        }
+        if !self.check(&[TokenKind::RightBrace]) {
+            self.error(
+                "E017",
+                "Se esperaba '}' para cerrar la implementación",
+                start,
+                "Agrega '}' al final",
+            );
+            return None;
+        }
+        self.advance();
+        Some(Decl::ImplRasgo {
+            trait_name,
+            target_type,
+            methods,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_method_impl(&mut self) -> Option<Decl> {
+        let start = self.peek().span;
+        self.advance(); // consume funcion/function
+        let return_type = self.parse_type()?;
+        let name = self.expect_ident()?;
+
+        if !self.check(&[TokenKind::LeftParen]) {
+            self.error(
+                "E014",
+                "Se esperaba '('",
+                start,
+                "Agrega '(' para iniciar la lista de parámetros",
+            );
+            return None;
+        }
+        self.advance();
+
+        let mut params = Vec::new();
+        if !self.check(&[TokenKind::RightParen]) {
+            // Check if first param is the receiver (just a name, no type)
+            if self.check_ident() && !self.is_type_keyword(&self.peek().kind) {
+                let receiver_name = self.expect_ident()?;
+                params.push(Param {
+                    param_type: Type::Struct("Self".to_string()),
+                    name: receiver_name,
+                    default: None,
+                    span: Span::merge(&start, &self.previous().span),
+                });
+                if self.check(&[TokenKind::Comma]) {
+                    self.advance();
+                }
+            }
+            while !self.check(&[TokenKind::RightParen]) {
+                params.push(self.parse_param()?);
+                while self.check(&[TokenKind::Comma]) {
+                    self.advance();
+                    if self.check(&[TokenKind::RightParen]) {
+                        break;
+                    }
+                    params.push(self.parse_param()?);
+                }
+            }
+        }
+
+        if !self.check(&[TokenKind::RightParen]) {
+            self.error(
+                "E015",
+                "Se esperaba ')'",
+                start,
+                "Agrega ')' para cerrar la lista de parámetros",
+            );
+            return None;
+        }
+        self.advance();
+
+        let body = self.parse_block()?;
+        Some(Decl::Function {
+            return_type,
+            name,
+            params,
+            body,
+            type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -1236,6 +1493,7 @@ impl Parser {
                                         expr: Box::new(expr),
                                         method: s,
                                         args,
+                                        resolved_func: None,
                                         span,
                                     };
                                 } else {
@@ -1749,23 +2007,34 @@ impl Parser {
         }
     }
 
-    fn parse_type_params(&mut self) -> Vec<String> {
+    fn parse_type_params(&mut self) -> (Vec<String>, Vec<(String, String)>) {
         if !self.check(&[TokenKind::Less]) {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
         self.advance();
-        let mut params = Vec::new();
+        let mut names = Vec::new();
+        let mut bounds = Vec::new();
         let token = self.advance();
         match token {
             Some(t) => match t.kind {
                 TokenKind::Ident(name) => {
-                    params.push(name);
+                    let bound = self.parse_type_param_bound();
+                    names.push(name.clone());
+                    if let Some(b) = bound {
+                        bounds.push((name, b));
+                    }
                     while self.check(&[TokenKind::Comma]) {
                         self.advance();
                         let next = self.advance();
                         match next {
                             Some(t2) => match t2.kind {
-                                TokenKind::Ident(s) => params.push(s),
+                                TokenKind::Ident(s) => {
+                                    let bound = self.parse_type_param_bound();
+                                    names.push(s.clone());
+                                    if let Some(b) = bound {
+                                        bounds.push((s, b));
+                                    }
+                                }
                                 _ => {
                                     self.error(
                                         "E011",
@@ -1773,10 +2042,10 @@ impl Parser {
                                         t2.span,
                                         "Escribe un nombre de parámetro de tipo",
                                     );
-                                    return params;
+                                    return (names, bounds);
                                 }
                             },
-                            None => return params,
+                            None => return (names, bounds),
                         }
                     }
                 }
@@ -1787,10 +2056,10 @@ impl Parser {
                         t.span,
                         "Escribe un nombre de parámetro de tipo",
                     );
-                    return params;
+                    return (names, bounds);
                 }
             },
-            None => return params,
+            None => return (names, bounds),
         }
         if !self.check(&[TokenKind::Greater]) {
             self.error(
@@ -1799,10 +2068,23 @@ impl Parser {
                 self.peek().span,
                 "Agrega '>' después de los parámetros de tipo",
             );
-            return params;
+            return (names, bounds);
         }
         self.advance();
-        params
+        (names, bounds)
+    }
+
+    fn parse_type_param_bound(&mut self) -> Option<String> {
+        if !self.check(&[TokenKind::Colon]) {
+            return None;
+        }
+        self.advance();
+        let name = match &self.peek().kind {
+            TokenKind::Ident(s) => s.clone(),
+            _ => return None,
+        };
+        self.advance();
+        Some(name)
     }
 
     fn is_type_arg_start(&self) -> bool {
@@ -1810,7 +2092,7 @@ impl Parser {
             return false;
         }
         let next = &self.tokens[self.pos + 1].kind;
-        matches!(
+        let is_type_keyword = matches!(
             next,
             TokenKind::Numero
                 | TokenKind::Number
@@ -1829,7 +2111,22 @@ impl Parser {
                 | TokenKind::Opcion
                 | TokenKind::Option
                 | TokenKind::LeftParen
-        ) || self.is_next_type_param()
+        );
+        if is_type_keyword {
+            return true;
+        }
+        if self.is_next_type_param() {
+            return true;
+        }
+        // Allow any Ident as a potential type arg (user-defined struct type)
+        // but only if it's followed by > and then ( or {
+        if matches!(next, TokenKind::Ident(_)) {
+            let after_type = self.find_token_after_type_args(self.pos);
+            if let Some(tok) = after_type {
+                return matches!(tok.kind, TokenKind::LeftParen | TokenKind::LeftBrace);
+            }
+        }
+        false
     }
 
     fn is_next_type_param(&self) -> bool {
@@ -2223,6 +2520,9 @@ impl Parser {
                 | TokenKind::Some
                 | TokenKind::None
                 | TokenKind::Const
+                | TokenKind::Rasgo
+                | TokenKind::Trait
+                | TokenKind::Impl
         )
     }
 
@@ -2372,6 +2672,10 @@ impl Parser {
                 self.advance();
                 Some("en".to_string())
             }
+            TokenKind::Rasgo | TokenKind::Trait => {
+                self.advance();
+                Some("rasgo".to_string())
+            }
             _ => {
                 self.error(
                     "E011",
@@ -2468,7 +2772,10 @@ impl Parser {
                 | TokenKind::Importar
                 | TokenKind::Import
                 | TokenKind::Resultado
-                | TokenKind::Result => return,
+                | TokenKind::Result
+                | TokenKind::Rasgo
+                | TokenKind::Trait
+                | TokenKind::Impl => return,
                 _ => {
                     self.advance();
                 }
@@ -2539,6 +2846,8 @@ fn token_matches(kind: &TokenKind, expected: &TokenKind) -> bool {
                 | (TokenKind::Try, TokenKind::Intentar)
                 | (TokenKind::En, TokenKind::In)
                 | (TokenKind::In, TokenKind::En)
+                | (TokenKind::Rasgo, TokenKind::Trait)
+                | (TokenKind::Trait, TokenKind::Rasgo)
         )
 }
 

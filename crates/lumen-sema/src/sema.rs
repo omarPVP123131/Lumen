@@ -79,12 +79,18 @@ impl Scope {
 
 type FuncSig = (TypeInfo, Vec<TypeInfo>, usize, Vec<String>);
 type StructDef = (Vec<(String, TypeInfo)>, Vec<String>);
+type TraitSig = Vec<(String, Vec<TypeInfo>, TypeInfo)>;
+type ImplKey = (String, String);
 
 pub struct SemanticAnalyzer {
     scopes: Vec<Scope>,
     functions: HashMap<String, FuncSig>,
     structs: HashMap<String, StructDef>,
     enums: HashMap<String, Vec<(String, Vec<TypeInfo>)>>,
+    traits: HashMap<String, TraitSig>,
+    impls: HashMap<ImplKey, Vec<usize>>,
+    impl_methods: Vec<(String, FuncSig)>,
+    type_param_bounds: HashMap<String, Vec<(String, String)>>,
     errors: Vec<SemError>,
     loop_depth: usize,
 }
@@ -102,14 +108,20 @@ impl SemanticAnalyzer {
             functions: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
+            traits: HashMap::new(),
+            impls: HashMap::new(),
+            impl_methods: Vec::new(),
+            type_param_bounds: HashMap::new(),
             errors: Vec::new(),
             loop_depth: 0,
         }
     }
 
     pub fn analyze(mut self, program: &mut Program) -> Vec<SemError> {
+        self.collect_traits(program);
         self.collect_structs(program);
         self.collect_enums(program);
+        self.collect_impls(program);
         self.collect_functions(program);
         self.analyze_program(program);
         self.errors
@@ -122,6 +134,7 @@ impl SemanticAnalyzer {
                 name,
                 params,
                 type_params,
+                type_param_bounds,
                 ..
             }) = node
             {
@@ -135,6 +148,85 @@ impl SemanticAnalyzer {
                     name.clone(),
                     (ret, params_t, default_count, type_params.clone()),
                 );
+                if !type_param_bounds.is_empty() {
+                    self.type_param_bounds
+                        .insert(name.clone(), type_param_bounds.clone());
+                }
+            }
+        }
+    }
+
+    fn collect_traits(&mut self, program: &Program) {
+        for node in program {
+            if let DeclOrStmt::Decl(Decl::Rasgo { name, methods, .. }) = node {
+                let sigs: Vec<(String, Vec<TypeInfo>, TypeInfo)> = methods
+                    .iter()
+                    .map(|m| {
+                        let param_types: Vec<TypeInfo> = m
+                            .params
+                            .iter()
+                            .map(|p| self.type_to_info(p.param_type.clone()))
+                            .collect();
+                        let ret = self.type_to_info(m.return_type.clone());
+                        (m.name.clone(), param_types, ret)
+                    })
+                    .collect();
+                self.traits.insert(name.clone(), sigs);
+            }
+        }
+    }
+
+    fn collect_impls(&mut self, program: &Program) {
+        for node in program {
+            if let DeclOrStmt::Decl(Decl::ImplRasgo {
+                trait_name,
+                target_type,
+                methods,
+                ..
+            }) = node
+            {
+                let type_name = match target_type {
+                    Type::Struct(ref name) => name.clone(),
+                    Type::GenericStruct { ref name, .. } => name.clone(),
+                    _ => continue,
+                };
+                let _trait_sig = match self.traits.get(trait_name) {
+                    Some(s) => s.clone(),
+                    None => continue,
+                };
+                for _method_decl in methods {
+                    if let Decl::Function {
+                        ref return_type,
+                        ref name,
+                        ref params,
+                        ref type_params,
+                        ..
+                    } = _method_decl
+                    {
+                        let ret = self.resolve_type(return_type.clone(), type_params);
+                        let params_t: Vec<TypeInfo> = params
+                            .iter()
+                            .map(|p| self.resolve_type(p.param_type.clone(), type_params))
+                            .collect();
+                        let default_count = params.iter().filter(|p| p.default.is_some()).count();
+                        let mangled = format!("{}_{}_{}", type_name, trait_name, name);
+                        self.impls
+                            .entry((type_name.clone(), trait_name.clone()))
+                            .or_default()
+                            .push(self.impl_methods.len());
+                        self.impl_methods.push((
+                            mangled.clone(),
+                            (
+                                ret.clone(),
+                                params_t.clone(),
+                                default_count,
+                                type_params.clone(),
+                            ),
+                        ));
+                        self.functions
+                            .insert(mangled, (ret, params_t, default_count, type_params.clone()));
+                    }
+                }
             }
         }
     }
@@ -164,6 +256,7 @@ impl SemanticAnalyzer {
                 name,
                 fields,
                 type_params,
+                type_param_bounds,
                 ..
             }) = node
             {
@@ -178,6 +271,10 @@ impl SemanticAnalyzer {
                     .collect();
                 self.structs
                     .insert(name.clone(), (struct_fields, type_params.clone()));
+                if !type_param_bounds.is_empty() {
+                    self.type_param_bounds
+                        .insert(name.clone(), type_param_bounds.clone());
+                }
             }
         }
     }
@@ -297,6 +394,7 @@ impl SemanticAnalyzer {
                 params,
                 body,
                 type_params,
+                type_param_bounds: _,
                 span: _,
             } => {
                 self.scopes.push(Scope::new());
@@ -336,6 +434,7 @@ impl SemanticAnalyzer {
                 name,
                 fields,
                 type_params,
+                type_param_bounds: _,
                 span: _,
             } => {
                 let struct_fields: Vec<(String, TypeInfo)> = fields
@@ -380,6 +479,83 @@ impl SemanticAnalyzer {
                     self.errors.push(e);
                 }
                 declared_type
+            }
+            Decl::Rasgo { .. } => TypeInfo::Void,
+            Decl::ImplRasgo {
+                trait_name,
+                target_type,
+                methods,
+                span,
+            } => {
+                let _type_name = match target_type {
+                    Type::Struct(ref name) => name.clone(),
+                    Type::GenericStruct { ref name, .. } => name.clone(),
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E074".to_string(),
+                            message: format!(
+                                "No se puede implementar un rasgo para el tipo '{:?}'",
+                                target_type
+                            ),
+                            span: *span,
+                            suggestion: "Solo se puede implementar rasgos para structs".to_string(),
+                        });
+                        return TypeInfo::Void;
+                    }
+                };
+                if !self.traits.contains_key(trait_name) {
+                    self.errors.push(SemError {
+                        code: "E075".to_string(),
+                        message: format!("El rasgo '{}' no está definido", trait_name),
+                        span: *span,
+                        suggestion: format!("Define '{}' antes de implementarlo", trait_name),
+                    });
+                    return TypeInfo::Void;
+                }
+                let trait_sig = self.traits[trait_name].clone();
+                for (t_mname, t_params, t_ret) in &trait_sig {
+                    let found = methods.iter().any(|m| {
+                        if let Decl::Function {
+                            name,
+                            params,
+                            return_type,
+                            ..
+                        } = m
+                        {
+                            if name != t_mname {
+                                return false;
+                            }
+                            let m_params: Vec<TypeInfo> = params
+                                .iter()
+                                .map(|p| self.type_to_info(p.param_type.clone()))
+                                .collect();
+                            let m_ret = self.type_to_info(return_type.clone());
+                            m_params.len() == t_params.len()
+                                && m_params
+                                    .iter()
+                                    .zip(t_params.iter())
+                                    .all(|(a, b)| can_assign(b, a) || can_assign(a, b))
+                                && (can_assign(t_ret, &m_ret) || can_assign(&m_ret, t_ret))
+                        } else {
+                            false
+                        }
+                    });
+                    if !found {
+                        self.errors.push(SemError {
+                            code: "E076".to_string(),
+                            message: format!(
+                                "Falta implementar el método '{}' del rasgo '{}'",
+                                t_mname, trait_name
+                            ),
+                            span: *span,
+                            suggestion: format!(
+                                "Agrega la función '{}' en el bloque impl",
+                                t_mname
+                            ),
+                        });
+                    }
+                }
+                TypeInfo::Void
             }
         }
     }
@@ -926,6 +1102,34 @@ impl SemanticAnalyzer {
                                     let mut map = HashMap::new();
                                     for (tp, ta) in fn_type_params.iter().zip(type_args.iter()) {
                                         map.insert(tp.clone(), self.type_to_info(ta.clone()));
+                                    }
+                                    // Validate type bounds
+                                    if let Some(bounds) = self.type_param_bounds.get(&callee) {
+                                        for (tp, bound_trait) in bounds {
+                                            if let Some(concrete) = map.get(tp) {
+                                                let concrete_name = match concrete {
+                                                    TypeInfo::Struct { name, .. } => name.clone(),
+                                                    TypeInfo::Enum(name) => name.clone(),
+                                                    _ => continue,
+                                                };
+                                                let key =
+                                                    (concrete_name.clone(), bound_trait.clone());
+                                                if !self.impls.contains_key(&key) {
+                                                    self.errors.push(SemError {
+                                                        code: "E077".to_string(),
+                                                        message: format!(
+                                                            "El tipo '{}' no implementa el rasgo '{}' requerido por '{}'",
+                                                            concrete_name, bound_trait, callee
+                                                        ),
+                                                        span: *span,
+                                                        suggestion: format!(
+                                                            "Implementa el rasgo '{}' para '{}'",
+                                                            bound_trait, concrete_name
+                                                        ),
+                                                    });
+                                                }
+                                            }
+                                        }
                                     }
                                     Some(map)
                                 } else {
@@ -1475,6 +1679,7 @@ impl SemanticAnalyzer {
                 expr,
                 method,
                 args,
+                resolved_func: _,
                 span,
             } => {
                 let expr_type = self.analyze_expr(expr);
@@ -1548,6 +1753,12 @@ impl SemanticAnalyzer {
                         }
                     },
                     _ => {
+                        // Try trait method resolution
+                        let resolved =
+                            self.resolve_trait_method(&expr_type, method, &arg_types, span);
+                        if resolved.is_some() {
+                            return resolved.unwrap();
+                        }
                         self.errors.push(SemError {
                             code: "E050".to_string(),
                             message: format!(
@@ -1927,6 +2138,82 @@ impl SemanticAnalyzer {
         for scope in self.scopes.iter().rev() {
             if let Some(sym) = scope.lookup(name) {
                 return Some(sym);
+            }
+        }
+        None
+    }
+
+    fn resolve_trait_method(
+        &self,
+        receiver_type: &TypeInfo,
+        method: &str,
+        arg_types: &[TypeInfo],
+        span: &Span,
+    ) -> Option<TypeInfo> {
+        let _ = span;
+        let type_name = match receiver_type {
+            TypeInfo::Struct { name, .. } => name.clone(),
+            TypeInfo::TypeVar(tv) => {
+                // Look up type param bounds
+                if let Some(bounds) = self
+                    .type_param_bounds
+                    .values()
+                    .find(|bounds| bounds.iter().any(|(name, _)| name == tv))
+                {
+                    if let Some((_, bound_trait)) = bounds.iter().find(|(name, _)| name == tv) {
+                        bound_trait.clone()
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        };
+
+        // When receiver is a TypeVar, look up the bound trait
+        if let TypeInfo::TypeVar(tv) = receiver_type {
+            // Find bounds for this type var
+            let bound_trait = self.find_bound_for_typevar(tv)?;
+            let trait_sig = self.traits.get(&bound_trait)?;
+            for (t_mname, t_params, t_ret) in trait_sig {
+                if t_mname == method {
+                    if arg_types.len() + 1 != t_params.len() {
+                        return Some(t_ret.clone());
+                    }
+                    return Some(t_ret.clone());
+                }
+            }
+            return None;
+        }
+
+        // Look through impls for the receiver type
+        for ((impl_type, trait_name), _method_idxs) in &self.impls {
+            if impl_type != &type_name {
+                continue;
+            }
+            let trait_sig = self.traits.get(trait_name)?;
+            for (t_mname, t_params, t_ret) in trait_sig {
+                if t_mname == method {
+                    // The first param is the receiver (yo), args are the rest
+                    if arg_types.len() + 1 == t_params.len() {
+                        return Some(t_ret.clone());
+                    }
+                    // Fallback: just return ret type
+                    return Some(t_ret.clone());
+                }
+            }
+        }
+        None
+    }
+
+    fn find_bound_for_typevar(&self, tv: &str) -> Option<String> {
+        for bounds in self.type_param_bounds.values() {
+            for (name, bound) in bounds {
+                if name == tv {
+                    return Some(bound.clone());
+                }
             }
         }
         None

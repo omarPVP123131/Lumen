@@ -84,6 +84,8 @@ pub enum TokenKind {
     Algun,
     Ninguno,
     Const,
+    Rasgo,
+    Impl,
 
     // English equivalents
     If,
@@ -118,6 +120,7 @@ pub enum TokenKind {
     Option,
     Some,
     None,
+    Trait,
 
     // Identifiers & Literals
     Ident(String),
@@ -230,6 +233,9 @@ impl TokenKind {
             "ninguno" => Some(TokenKind::Ninguno),
             "none" => Some(TokenKind::None),
             "const" => Some(TokenKind::Const),
+            "rasgo" => Some(TokenKind::Rasgo),
+            "trait" => Some(TokenKind::Trait),
+            "impl" => Some(TokenKind::Impl),
             _ => None,
         }
     }
@@ -268,6 +274,8 @@ impl TokenKind {
             TokenKind::Opcion | TokenKind::Option => "opcion",
             TokenKind::Algun | TokenKind::Some => "algun",
             TokenKind::Ninguno | TokenKind::None => "ninguno",
+            TokenKind::Rasgo | TokenKind::Trait => "rasgo",
+            TokenKind::Impl => "impl",
             _ => "",
         }
     }
