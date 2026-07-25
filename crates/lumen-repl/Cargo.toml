@@ -1,16 +1,12 @@
 [package]
-name = "lumen-cli"
+name = "lumen-repl"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "CLI del lenguaje LÚMEN — run, build, check, disasm"
-keywords = ["lumen", "language", "cli", "compiler", "educational"]
-
-[[bin]]
-name = "lumen"
-path = "src/main.rs"
+description = "REPL interactivo para el lenguaje LÚMEN — bucle lectura-evaluación-impresión"
+keywords = ["lumen", "language", "repl", "interactive", "educational"]
 
 [dependencies]
 lumen-lexer = { path = "../lumen-lexer" }
@@ -19,6 +15,6 @@ lumen-sema = { path = "../lumen-sema" }
 lumen-ir = { path = "../lumen-ir" }
 lumen-codegen = { path = "../lumen-codegen" }
 lumen-vm = { path = "../lumen-vm" }
-lumen-fmt = { path = "../lumen-fmt" }
-lumen-repl = { path = "../lumen-repl" }
-lumen-project = { path = "../lumen-project" }
+
+[dev-dependencies]
+lumen-cli = { path = "../lumen-cli" }

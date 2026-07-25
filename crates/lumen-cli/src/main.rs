@@ -4,9 +4,12 @@ use std::path::{Path, PathBuf};
 use std::process;
 
 use lumen_codegen::{disassemble, Bytecode, Codegen};
+use lumen_fmt;
 use lumen_ir::IRBuilder;
 use lumen_lexer::token::Span;
 use lumen_parser::ast::DeclOrStmt;
+use lumen_project::ProjectManifest;
+use lumen_repl::Repl;
 use lumen_sema::{ModuleLoader, SemanticAnalyzer};
 use lumen_vm::VM;
 
@@ -141,6 +144,37 @@ fn main() {
                 process::exit(1);
             }
             disasm_file(&config.file);
+        }
+        "fmt" => {
+            if config.file.is_empty() {
+                eprintln!("Error: falta el archivo");
+                process::exit(1);
+            }
+            run_fmt(&config.file);
+        }
+        "repl" => {
+            lumen_repl::run_repl();
+        }
+        "new" => {
+            if config.file.is_empty() {
+                eprintln!("Error: falta el nombre del proyecto");
+                eprintln!("Uso: lumen new <nombre-del-proyecto>");
+                process::exit(1);
+            }
+            match ProjectManifest::create(&config.file) {
+                Ok(dir) => println!("✓ Proyecto '{}' creado en {}", config.file, dir.display()),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        "test" => {
+            if config.file.is_empty() {
+                eprintln!("Error: falta el archivo");
+                process::exit(1);
+            }
+            run_tests(&config.file, &config.lib_dirs);
         }
         "--version" | "-v" => {
             println!("LÚMEN v{}", env!("CARGO_PKG_VERSION"));
@@ -381,5 +415,103 @@ fn disasm_file(path: &str) {
             eprintln!("Error al decodificar bytecode: {}", e);
             process::exit(1);
         }
+    }
+}
+
+fn run_fmt(path: &str) {
+    let source = match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error al leer '{}': {}", path, e);
+            process::exit(1);
+        }
+    };
+    match lumen_fmt::format_source(&source) {
+        Ok(formatted) => {
+            let trimmed = formatted.trim_end().to_string() + "\n";
+            match fs::write(path, &trimmed) {
+                Ok(()) => println!("✓ Archivo formateado: {}", path),
+                Err(e) => {
+                    eprintln!("Error al escribir '{}': {}", path, e);
+                    process::exit(1);
+                }
+            }
+        }
+        Err(errors) => {
+            for e in &errors {
+                eprintln!("Error: {}", e);
+            }
+            process::exit(1);
+        }
+    }
+}
+
+fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
+    let source = match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error al leer '{}': {}", path, e);
+            process::exit(1);
+        }
+    };
+    let lexer = lumen_lexer::Lexer::new(&source);
+    let (tokens, lex_errors) = lexer.tokenize();
+    if !lex_errors.is_empty() {
+        eprintln!("Errores léxicos");
+        process::exit(1);
+    }
+    let parser = lumen_parser::Parser::new(tokens);
+    let (mut program, parse_errors) = parser.parse();
+    if !parse_errors.is_empty() {
+        eprintln!("Errores sintácticos");
+        process::exit(1);
+    }
+    let sema = SemanticAnalyzer::new();
+    let sem_errors = sema.analyze(&mut program);
+    if !sem_errors.is_empty() {
+        eprintln!("Errores semánticos");
+        process::exit(1);
+    }
+    let mut loader = ModuleLoader::new(lib_dirs.to_vec());
+    let base_dir = Path::new(path).parent().unwrap_or(Path::new("."));
+    let flat = match loader.resolve_imports(&source, base_dir) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Error imports: {:?}", e);
+            process::exit(1);
+        }
+    };
+    let builder = IRBuilder::new();
+    let ir = builder.build(&flat);
+    let codegen = Codegen::new();
+    let (bytecode, _) = codegen.generate(&ir);
+    let mut passed = 0u32;
+    let mut failed = 0u32;
+    for fm in &bytecode.funcs {
+        if fm.name.starts_with("test_") {
+            let test_bc = lumen_codegen::bytecode::Bytecode {
+                instructions: bytecode.instructions.clone(),
+                strings: bytecode.strings.clone(),
+                ints: bytecode.ints.clone(),
+                nums: bytecode.nums.clone(),
+                names: bytecode.names.clone(),
+                funcs: vec![fm.clone()],
+            };
+            let mut vm = VM::new(test_bc);
+            match vm.run() {
+                Ok(()) => {
+                    passed += 1;
+                    println!("✓ {}", fm.name);
+                }
+                Err(e) => {
+                    failed += 1;
+                    eprintln!("✗ {}: {}", fm.name, e.with_stack(vm.call_stack()));
+                }
+            }
+        }
+    }
+    println!("\n{} pasaron, {} fallaron", passed, failed);
+    if failed > 0 {
+        process::exit(1);
     }
 }
