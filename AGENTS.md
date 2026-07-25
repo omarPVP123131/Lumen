@@ -1,6 +1,6 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v1.2.0 — Release: Julio 2026**
+**v1.5.0 — Release: Julio 2026**
 
 ---
 
@@ -15,10 +15,13 @@
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 102 | e2e |
-| **Total** | **294** | |
+| lumen-vm | 111 | e2e |
+| lumen-fmt | 2 | unit |
+| lumen-repl | 2 | unit |
+| lumen-project | 1 | unit |
+| **Total** | **~308** | |
 
-**0 warnings, 294 tests passing.**
+**0 warnings, ~308 tests passing. 42/42 ejemplos funcionando.**
 
 ---
 
@@ -28,148 +31,77 @@
 Lexer, parser, sema, IR, bytecode, VM, CLI, arrays, control de flujo avanzado.
 
 ### Fase 16: Funciones avanzadas ✅
-- Parámetros default (`funcion foo(entero a, entero b = 10)`)
-- Lambdas IIFE (`funcion(x) { retornar x; }(5)`)
-- Lambdas asignables (`dup = funcion(x) { retornar x*2; }; dup(5)`)
-- Closures con `Value::Func(String)`, `FuncRef`/`CallValue` opcodes
-- `Type::Func { param_types, return_type }` en AST y TypeInfo
+Parámetros default, Lambdas IIFE, Closures.
 
 ### Fase 17: Estructuras/Objetos ✅
-- `estructura Nombre { campo: tipo, ... }` — declaración
-- `Nombre { campo: expr, ... }` — inicialización
-- `expr.campo` — acceso a campo
-- `expr.campo = valor` — asignación de campo
-- `Type::Struct(String)`, `TypeInfo::Struct { name, fields }`
-- `Value::Struct { name, fields }` en VM
-- Opcodes: `StructNew(35)`, `StructGet(36)`, `StructSet(37)`
+`estructura`, inicialización, acceso, asignación de campos.
 
 ### Fase 18: Módulos ✅
-- `importar "ruta.nv"`, `importar modulo`, `importar ... como alias`
-- ModuleLoader: resolución de rutas, detección circular (E063)
-- Prefixado de nombres (scope-tracked, builtins exentos)
-- CLI: `-L`/`--lib-dir` para rutas de búsqueda
+`importar`, ModuleLoader, detección circular.
 
 ### Fase 19: Optimizaciones ✅
-- IR: constant folding (aritmética, booleanos, comparaciones, strings, mixto Int/Float)
-- IR: dead code elimination (Nop removal)
-- Bytecode: shared constant pools (string_cache, int_cache, num_cache, name_cache)
-- VM: function index cache (`HashMap<String, usize>`)
+Constant folding, DCE, shared pools.
 
-### Fase 20: v1.0 — Release ✅
-- README.md completo con features, ejemplos, CLI, instalación
-- Versionado SemVer 1.0.0
+### Fase 20: v1.0 Release ✅
 
-### Fase 21: For-Each ✅
-- Sintaxis: `para x en expr` / `for x in expr`
-- Token: `En`/`In` en lexer
-- AST: `Stmt::ForEach { var_name, expr, body }`
-- Parser: `parse_foreach()` con flag `no_struct_init`
-- Sema: verifica que `expr` sea `Lista`
-- IR: desugaring a while-loop con `ArrayLen`/`ArrayGet`/`Store`
-- Tests: 4 parser, 6 sema, 9 e2e
+### Fase 21-27: Features del lenguaje ✅
+For-Each, Resultado<T,E>, Opcion, Enums, Tuplas, Destructuring, Genéricos.
 
-### Fase 22: Resultado<T, E> ✅
-- Sintaxis: `resultado<entero, texto>` como tipo
-- Variantes: `exito(valor)` y `error(mensaje)`
-- `intentar`/`try` para propagación automática
-- AST: `Expr::Exito`, `Expr::Error`, `Expr::Intentar`, `Type::Resultado`
-- Sema: `TypeInfo::Resultado { ok, err }`, validación completa
-- IR: `Instr::ResultOk`, `Instr::ResultErr`, `Instr::TryUnwrap`
-- Bytecode: `ResultOk(38)`, `ResultErr(39)`, `TryUnwrap(40)`
-- VM: `Value::Exito(Box<Value>)`, `Value::Error(Box<Value>)`, propagación
-
-### Fase 23: Opcion/Optional Type ✅
-- Sintaxis: `opcion<T>`, valores `algun(valor)` y `ninguno`
-- Token: `Opcion`/`Option`, `Algun`/`Some`, `Ninguno`/`None`
-- AST: `Type::Opcion(Box<Type>)`, `Expr::Algun { expr }`, `Expr::Ninguno`
-- Sema: `TypeInfo::Opcion(Box<TypeInfo>)`, `ninguno` asignable a cualquier `Opcion<T>`
-- IR: `Instr::OptionSome`, `Instr::OptionNone`
-- Bytecode: `OptionSome(41)`, `OptionNone(42)`
-- VM: `Value::Opcion(Option<Box<Value>>)`, comparación por igualdad
-- Tests: 5 sema, 10 e2e
-
-### Fase 24: Enums/Tipos Suma ✅
-- Sintaxis: `enum Nombre { Variante, Variante(tipo, ...) }`
-- Constructor: `Nombre::Variante` o `Nombre::Variante(valor)`
-- `DoubleColon` (::) para acceso a variantes
-- Sema: validación de tipos en construcción y matching
-- VM: `Value::Enum { name, variant, fields }`, opcode `EnumCtor(43)`
-- Tests: 5 sema, 15 e2e
-
-### Fase 25: Tuplas ✅
-- Sintaxis: `(tipo, tipo)` y `(expr, expr)`
-- Acceso por índice: `tupla.0`, `tupla.1`
-- VM: `Value::Tuple(Vec<Value>)`, opcodes `TupleNew(44)`, `TupleAccess(45)`
-- Tests: 4 e2e
-
-### Fase 26: Destructuring ✅
-- Sintaxis: `entero x, texto y = expr` (declaración) y `x, y = expr` (asignación)
-- Wildcard `_`: `entero x, _ = (1, 2)` ignora elementos
-- AST: `Decl::Destructure`, `Stmt::Destructure`, `DestructureTarget`
-- Parser: desugaring en `parse_destructure_decl()` y `parse_destructure_assign_stmt()`
-- Sema: valida tupla, verifica tipos/aridad, registra variables, omite `_`
-- IR: temp variable `__dt_N` + `Load`/`TupleAccess(i)`/`Store` por cada target
-- Loader: prefixing de nombres en targets de destructuración
-- Tests: 14 e2e
-
-### Fase 27: Genéricos Básicos ✅
-- Sintaxis: `<T, U>` en funciones y estructuras
-- Soporte en llamadas: `identidad<entero>(42)`
-- Soporte en structs: `Par<entero, texto> { ... }`
-- Implementación: Type erasure (compile-time checking)
-- Parser: `parse_type_params`, `parse_type_args`, tracking de contexto genérico
-- Sema: sustitución de tipos en firmas y validación
-- Tests: 6 parser, 5 sema, 6 e2e
-
----
-
-## Fases en construcción
-
-### Fase 28: Stdlib — matematicas, texto ✅
-- Módulos `.nv` en `stdlib/`
-- `matematicas`: `abs`, `max`, `min`, `potencia`, `raiz`, `seno`, `coseno`
-- `texto`: `longitud`, `mayusculas`, `minusculas`, `recortar`, `dividir`, `contiene`
-
-### Fase 29: Stdlib — coleccion, fecha ✅
-- `coleccion`: `invertir`, `ordenar`, `primero`, `ultimo`, `contar`
-- `fecha`: `ahora` (timestamp UNIX)
-
-### Fase 30: E/S de Archivos ✅
-- `leer_archivo`, `escribir_archivo`, `existe_archivo` como builtins de VM
-- Manejo de errores integrado (retorna errores en runtime)
+### Fase 28-30: Stdlib + Archivos ✅
+matematicas, texto, coleccion, fecha, archivos.
 
 ### Fase 31: Stack Traces ✅
-- VM mantiene call stack con `CallFrame { func_name, return_ip }`
-- `VmError::with_stack()` muestra pila de llamadas completa
-- `call_stack.push()` en Call y CallValue; pop en Ret y TryUnwrap
 
 ### Fase 32: Mensajes de Error Mejorados ✅
-- Subrayado de posición exacta con caret (`^^^^`)
-- Colores ANSI en terminal (rojo error, azul ubicación, verde subrayado, amarillo ayuda)
-- Errores de `si`/`mientras` sin paréntesis muestran sugerencia con sintaxis correcta
-- `show_error()` en CLI: muestra línea fuente, columna y subrayado
-- `--help`/`-h`: ayuda completa con ejemplos de sintaxis básica
+Caret, ANSI, preview multi-línea, conteo de errores.
 
-### Fase 33: Fuzzing ⏳
-- `cargo-fuzz` para lexer, parser, decoder
+### Fase 33: Fuzzing ✅
+3 targets cargo-fuzz (lexer, parser, decoder).
 
-### Fase 34: Property-Based Testing ⏳
-- Round-trip invariants con proptest
+### Fase 34: Property-Based Testing ✅
+Proptest en codegen.
 
-### Fase 35: lumen fmt ⏳
-- Formateador automático de código
+### Fase 35: lumen fmt ✅
+`lumen fmt` formatea código .nv. Crate `lumen-fmt`.
 
-### Fase 36: lumen repl ⏳
-- Bucle interactivo
+### Fase 36: lumen repl ✅
+REPL interactivo. Crate `lumen-repl`.
 
-### Fase 37: lumen test ⏳
-- Framework de testing nativo con `test`/`afirmar`
+### Fase 37: lumen test ✅
+`lumen test` ejecuta funciones `test_*`.
 
-### Fase 38: lumen.toml + lumen new ⏳
-- Manifiesto de proyecto
+### Fase 38: lumen.toml + lumen new ✅
+`lumen new` scaffolding. Crate `lumen-project`.
 
-### Fase 39: Benchmarks + GitHub Releases ⏳
-- Suite Criterion + binarios precompilados
+### Fase 39: CI/CD + Releases ✅
+GitHub Actions CI + release multiplataforma.
+
+### Fases 42-57: Lenguaje & Sintaxis (Bloque 1) ✅
+- 42: Inferencia de tipos (`x = 42`)
+- 43: Métodos en structs (`impl Struct`)
+- 44: Diccionarios (`diccionario<K,V>`)
+- 45: String interpolation (`"Hola {nombre}"`)
+- 46: Rangos (`0..5`, `0..=5`)
+- 47: Constantes (`const`)
+- 48: String indexing (`s[i]`)
+- 49: Conversiones (`a_texto`, `a_entero`, `a_decimal`)
+- 50: División entera (`entero/entero → entero`)
+- 51: Concatenación mixta (`"x" + 42`)
+- 52: Mejores errores (preview multi-línea)
+- 53: Operador ternario (`?:`)
+- 54: Loop labels (`romper etiqueta`)
+- 55: Pattern matching exhaustivo + guardas
+- 56: Genéricos con bounds (`<T: Rasgo>`)
+- 57: Matrices 2D (`lista<lista<T>>` + stdlib matrices.nv)
+
+### Fase 58: Enums Avanzados ✅
+Variantes con datos (`Variant(entero)`).
+
+### Fase 59: Closures Pro 🔄
+Captura por valor/referencia. En desarrollo.
+
+### Fase 60: Async/Await 📋
+Planificado para v2.0.
 
 ---
 
@@ -181,6 +113,10 @@ Lexer, parser, sema, IR, bytecode, VM, CLI, arrays, control de flujo avanzado.
 | `lumen build <file>` | Compila a .nvc |
 | `lumen check <file>` | Verifica sintaxis + semántica |
 | `lumen disasm <file>` | Desensambla .nvc |
+| `lumen fmt <file>` | Formatea código |
+| `lumen repl` | Modo interactivo |
+| `lumen new <name>` | Crea proyecto |
+| `lumen test <file>` | Ejecuta tests |
 | `lumen run -L <dir> <file>` | Ejecuta con ruta de librerías |
 
 ---
@@ -189,15 +125,16 @@ Lexer, parser, sema, IR, bytecode, VM, CLI, arrays, control de flujo avanzado.
 
 - **Version**: 6
 - **Magic**: `LUMN` (4 bytes)
-- **Opcodes**: 0-45
+- **Opcodes**: 0-46
   - 0-27: Core (Push, Pop, Add, Sub, Jmp, Call, Ret, Print, etc.)
-  - 28-32: Arrays (ArrayNew, ArrayGet, ArraySet, ArrayLen, ArrayPush)
-  - 33-34: Closures (FuncRef, CallValue)
-  - 35-37: Structs (StructNew, StructGet, StructSet)
-  - 38-40: Result (ResultOk, ResultErr, TryUnwrap)
-  - 41-42: Option (OptionSome, OptionNone)
-  - 43: Enum (EnumCtor)
-  - 44-45: Tuples (TupleNew, TupleAccess)
+  - 28-32: Arrays
+  - 33-34: Closures
+  - 35-37: Structs
+  - 38-40: Result
+  - 41-42: Option
+  - 43: Enum
+  - 44-45: Tuples
+  - 46: Mod (módulo %)
 
 ---
 
@@ -212,8 +149,11 @@ crates/
   lumen-codegen/  → bytecode.rs, codegen.rs, disasm.rs
   lumen-vm/       → vm.rs, value.rs
   lumen-cli/      → main.rs
+  lumen-fmt/      → lib.rs
+  lumen-repl/     → lib.rs
+  lumen-project/  → lib.rs
 docs/spec/        → grammar.ebnf, bytecode-format.md, error-codes.md, vm-spec.md
-examples/         → *.nv (21+ ejemplos funcionales)
-stdlib/           → *.nv (librería estándar)
-tests/            → integration_test.rs
+examples/         → *.nv (42 ejemplos funcionales + desafiantes)
+stdlib/           → *.nv (librería estándar: texto, matematicas, coleccion, fecha, archivos, matrices)
+scripts/          → PowerShell CI/CD (pre-commit, pre-vuelo)
 ```

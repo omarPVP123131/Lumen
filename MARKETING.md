@@ -1,6 +1,6 @@
 # LÚMEN — El Lenguaje que Ilumina
 
-**v1.4.0 — Documento de Posicionamiento y Visión**
+**v1.5.0 — Documento de Posicionamiento y Visión**
 
 > *"Programar no debería ser un lujo en inglés. Debería ser un derecho en tu idioma."*
 

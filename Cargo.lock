@@ -122,7 +122,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "lumen-cli"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "lumen-codegen",
  "lumen-fmt",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-codegen"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "lumen-ir",
  "proptest",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-fmt"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-ir"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -166,7 +166,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-lexer"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-parser"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "lumen-lexer",
  "serde",
@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-project"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -194,7 +194,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-repl"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "lumen-cli",
  "lumen-codegen",
@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-sema"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -217,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-vm"
-version = "1.2.0"
+version = "1.5.0"
 dependencies = [
  "lumen-codegen",
  "lumen-ir",
