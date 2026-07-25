@@ -47,6 +47,9 @@ impl ModuleLoader {
         for node in program {
             match node {
                 DeclOrStmt::Stmt(Stmt::Import { path, alias, span }) => {
+                    if path == "ingles" || path == "english" {
+                        continue;
+                    }
                     let resolved = self.resolve_path(&path, current_dir)?;
                     if !self.visited.insert(resolved.clone()) {
                         return Err(ModuleError::Circular {
@@ -572,6 +575,9 @@ fn is_builtin(name: &str) -> bool {
             | "print"
             | "leer"
             | "read"
+            | "a_texto"
+            | "to_texto"
+            | "__str_from"
             | "__str_len"
             | "__str_longitud"
             | "__str_upper"

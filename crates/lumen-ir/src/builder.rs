@@ -426,6 +426,9 @@ impl IRBuilder {
                                     | "print"
                                     | "leer"
                                     | "read"
+                                    | "a_texto"
+                                    | "to_texto"
+                                    | "__str_from"
                                     | "largo"
                                     | "len"
                                     | "agregar"
@@ -702,11 +705,7 @@ impl IRBuilder {
             }
             (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Div)) => {
                 if *b != 0 {
-                    if a % b == 0 {
-                        Some(Instr::ConstInt(a / b))
-                    } else {
-                        Some(Instr::ConstFloat(*a as f64 / *b as f64))
-                    }
+                    Some(Instr::ConstInt(a / b))
                 } else {
                     None
                 }

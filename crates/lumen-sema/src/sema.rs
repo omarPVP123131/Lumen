@@ -108,9 +108,9 @@ impl SemanticAnalyzer {
     }
 
     pub fn analyze(mut self, program: &mut Program) -> Vec<SemError> {
-        self.collect_functions(program);
         self.collect_structs(program);
         self.collect_enums(program);
+        self.collect_functions(program);
         self.analyze_program(program);
         self.errors
     }
@@ -725,7 +725,14 @@ impl SemanticAnalyzer {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
                         if matches!(op, BinOp::Add)
                             && lt == TypeInfo::Texto
+                            && (rt == TypeInfo::Texto
+                                || is_numeric(&rt)
+                                || rt == TypeInfo::Booleano)
+                        {
+                            TypeInfo::Texto
+                        } else if matches!(op, BinOp::Add)
                             && rt == TypeInfo::Texto
+                            && (is_numeric(&lt) || lt == TypeInfo::Booleano)
                         {
                             TypeInfo::Texto
                         } else if lt == TypeInfo::Entero && rt == TypeInfo::Entero {
@@ -906,6 +913,11 @@ impl SemanticAnalyzer {
                                     || callee == "read"
                                 {
                                     TypeInfo::Void
+                                } else if callee == "a_texto"
+                                    || callee == "to_texto"
+                                    || callee == "__str_from"
+                                {
+                                    TypeInfo::Texto
                                 } else if callee == "__str_len" || callee == "__str_longitud" {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
@@ -1371,6 +1383,7 @@ impl SemanticAnalyzer {
                 }
                 match expr_type {
                     TypeInfo::Lista(inner) => *inner,
+                    TypeInfo::Texto => TypeInfo::Texto,
                     _ => {
                         self.errors.push(SemError {
                             code: "E044".to_string(),
@@ -1379,7 +1392,8 @@ impl SemanticAnalyzer {
                                 expr_type
                             ),
                             span: *span,
-                            suggestion: "La indexación solo funciona con listas".to_string(),
+                            suggestion: "La indexación solo funciona con listas y texto"
+                                .to_string(),
                         });
                         TypeInfo::Decimal
                     }

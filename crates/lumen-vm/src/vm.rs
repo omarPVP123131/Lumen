@@ -122,6 +122,16 @@ impl VM {
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Float(a + *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Float(a + b)),
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Str(format!("{}{}", a, b))),
+                    (Value::Str(a), Value::Int(b)) => self.push(Value::Str(format!("{}{}", a, b))),
+                    (Value::Str(a), Value::Float(b)) => {
+                        self.push(Value::Str(format!("{}{}", a, b)))
+                    }
+                    (Value::Int(a), Value::Str(b)) => self.push(Value::Str(format!("{}{}", a, b))),
+                    (Value::Float(a), Value::Str(b)) => {
+                        self.push(Value::Str(format!("{}{}", a, b)))
+                    }
+                    (Value::Str(a), Value::Bool(b)) => self.push(Value::Str(format!("{}{}", a, b))),
+                    (Value::Bool(a), Value::Str(b)) => self.push(Value::Str(format!("{}{}", a, b))),
                     _ => {
                         return Err(VmError::TypeError(
                             "Add requires numbers or strings".to_string(),
@@ -156,13 +166,7 @@ impl VM {
                 let a = self.pop()?;
                 match (&a, &b) {
                     (Value::Int(_), Value::Int(0)) => return Err(VmError::DivisionByZero),
-                    (Value::Int(a), Value::Int(b)) => {
-                        if a % b == 0 {
-                            self.push(Value::Int(a / b))
-                        } else {
-                            self.push(Value::Float(*a as f64 / *b as f64))
-                        }
-                    }
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a / b)),
                     (Value::Int(a), Value::Float(b)) => {
                         if *b == 0.0 {
                             return Err(VmError::DivisionByZero);
@@ -420,9 +424,17 @@ impl VM {
             }
             Opcode::ArrayGet => {
                 let index = self.pop()?;
-                let array = self.pop()?;
-                match (array, index) {
-                    (Value::Array(arr), Value::Int(idx)) => {
+                let container = self.pop()?;
+                match container {
+                    Value::Array(arr) => {
+                        let idx = match &index {
+                            Value::Int(i) => *i,
+                            _ => {
+                                return Err(VmError::TypeError(
+                                    "ArrayGet requires integer index for arrays".to_string(),
+                                ))
+                            }
+                        };
                         if idx < 0 || idx as usize >= arr.len() {
                             return Err(VmError::Runtime(format!(
                                 "Índice {} fuera de rango (largo: {})",
@@ -432,9 +444,28 @@ impl VM {
                         }
                         self.push(arr[idx as usize].clone());
                     }
+                    Value::Str(s) => {
+                        let idx = match &index {
+                            Value::Int(i) => *i,
+                            _ => {
+                                return Err(VmError::TypeError(
+                                    "ArrayGet requires integer index for strings".to_string(),
+                                ))
+                            }
+                        };
+                        let chars: Vec<char> = s.chars().collect();
+                        if idx < 0 || idx as usize >= chars.len() {
+                            return Err(VmError::Runtime(format!(
+                                "Índice {} fuera de rango (largo: {})",
+                                idx,
+                                chars.len()
+                            )));
+                        }
+                        self.push(Value::Str(chars[idx as usize].to_string()));
+                    }
                     _ => {
                         return Err(VmError::TypeError(
-                            "ArrayGet requires array and integer index".to_string(),
+                            "ArrayGet requires array or string".to_string(),
                         ))
                     }
                 }
@@ -466,7 +497,12 @@ impl VM {
                 let array = self.pop()?;
                 match array {
                     Value::Array(arr) => self.push(Value::Int(arr.len() as i64)),
-                    _ => return Err(VmError::TypeError("ArrayLen requires array".to_string())),
+                    Value::Str(s) => self.push(Value::Int(s.chars().count() as i64)),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "ArrayLen requires array or string".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::ArrayPush => {
@@ -619,11 +655,24 @@ impl VM {
                     self.push(Value::Void);
                 } else if name == "leer" || name == "read" {
                     self.push(Value::Str(String::new()));
+                } else if name == "a_texto" || name == "to_texto" || name == "__str_from" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s));
                 } else if name == "largo" || name == "len" {
-                    if let Some(Value::Array(v)) = args.into_iter().next() {
-                        self.push(Value::Int(v.len() as i64));
-                    } else {
-                        return Err(VmError::TypeError("'largo' espera una lista".to_string()));
+                    match args.into_iter().next() {
+                        Some(Value::Array(v)) => self.push(Value::Int(v.len() as i64)),
+                        Some(Value::Str(s)) => self.push(Value::Int(s.chars().count() as i64)),
+                        Some(other) => {
+                            return Err(VmError::TypeError(format!(
+                                "'largo' espera lista o texto, no {:?}",
+                                other
+                            )))
+                        }
+                        None => {
+                            return Err(VmError::TypeError(
+                                "'largo' espera 1 argumento".to_string(),
+                            ))
+                        }
                     }
                 } else if name == "agregar" || name == "push" {
                     let mut iter = args.into_iter();
@@ -772,6 +821,9 @@ impl VM {
                     self.push(Value::Void);
                 } else if name == "leer" || name == "read" {
                     self.push(Value::Str(String::new()));
+                } else if name == "a_texto" || name == "to_texto" || name == "__str_from" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s));
                 } else if name == "__str_len" || name == "__str_longitud" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     self.push(Value::Int(s.len() as i64));
@@ -1488,12 +1540,13 @@ mod tests {
     }
 
     #[test]
-    fn test_type_error_on_add_str() {
+    fn test_add_str_num_concatenates() {
         let bc = Bytecode {
             instructions: vec![
                 Instruction::WithIdx(Opcode::PushStr, 0),
                 Instruction::WithIdx(Opcode::PushNum, 0),
                 Instruction::Simple(Opcode::Add),
+                Instruction::Simple(Opcode::Print),
                 Instruction::Simple(Opcode::Halt),
             ],
             strings: vec!["x".to_string()],
@@ -1503,7 +1556,8 @@ mod tests {
             funcs: vec![],
         };
         let mut vm = VM::new(bc);
-        assert!(vm.run().is_err());
+        assert!(vm.run().is_ok());
+        assert_eq!(vm.output(), &["x1"]);
     }
 
     #[test]
