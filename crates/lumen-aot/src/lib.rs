@@ -227,9 +227,9 @@ mod tests {
     fn test_basic_compile() {
         let mut funcs = BTreeMap::new();
         funcs.insert(
-            "main".to_string(),
+            "test_func".to_string(),
             Func {
-                name: "main".to_string(),
+                name: "test_func".to_string(),
                 params: vec![],
                 entry: 0,
                 instrs: vec![Instr::ConstInt(42), Instr::Return],
@@ -237,7 +237,7 @@ mod tests {
         );
         let program = Program {
             funcs,
-            entry: "main".to_string(),
+            entry: "test_func".to_string(),
         };
         let compiler = AotCompiler::new();
         let _ = compiler.compile(&program);
