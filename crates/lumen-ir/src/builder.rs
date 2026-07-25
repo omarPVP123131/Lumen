@@ -316,6 +316,10 @@ impl IRBuilder {
                     self.emit(Instr::Binary(Op::Equal));
                     next_label = self.new_label();
                     self.emit(Instr::JmpIf(next_label));
+                    if let Some(ref guard_expr) = arm.guard {
+                        self.gen_expr(guard_expr);
+                        self.emit(Instr::JmpIf(next_label));
+                    }
                     for node in &arm.body {
                         self.gen_decl_or_stmt(node);
                     }

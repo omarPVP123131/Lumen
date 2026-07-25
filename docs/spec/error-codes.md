@@ -38,3 +38,4 @@
 | E040 | Número incorrecto de argumentos |
 | E041 | Tipo de argumento incorrecto |
 | E042 | Función no definida |
+| E080 | Match no exhaustivo, falta una variante |

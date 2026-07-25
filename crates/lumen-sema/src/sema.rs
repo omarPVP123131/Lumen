@@ -529,9 +529,42 @@ impl SemanticAnalyzer {
                 expr,
                 arms,
                 default,
-                span: _,
+                span,
             } => {
                 let expr_type = self.analyze_expr(expr);
+
+                // Exhaustiveness check for enum types
+                if default.is_none() {
+                    if let TypeInfo::Enum(ref enum_name) = expr_type {
+                        if let Some(variants) = self.enums.get(enum_name) {
+                            let all_variants: Vec<&String> =
+                                variants.iter().map(|(name, _)| name).collect();
+                            let mut covered: Vec<&String> = Vec::new();
+                            for arm in arms.iter() {
+                                if let Expr::EnumCtor { variant, .. } = &arm.value {
+                                    covered.push(variant);
+                                }
+                            }
+                            for var_name in &all_variants {
+                                if !covered.contains(var_name) {
+                                    self.errors.push(SemError {
+                                        code: "E080".to_string(),
+                                        message: format!(
+                                            "Match no exhaustivo: falta la variante '{}'",
+                                            var_name
+                                        ),
+                                        span: *span,
+                                        suggestion: format!(
+                                            "Agrega 'caso {}::{}:' o un caso 'defecto'",
+                                            enum_name, var_name
+                                        ),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
                 for arm in arms {
                     let arm_val_type = self.analyze_expr(&arm.value);
                     if arm_val_type != expr_type
@@ -550,6 +583,21 @@ impl SemanticAnalyzer {
                                 expr_type
                             ),
                         });
+                    }
+                    // Validate guard type
+                    if let Some(ref guard) = arm.guard {
+                        let guard_type = self.analyze_expr(guard);
+                        if guard_type != TypeInfo::Booleano {
+                            self.errors.push(SemError {
+                                code: "E034".to_string(),
+                                message: format!(
+                                    "La guardia del 'caso' debe ser booleano, no '{:?}'",
+                                    guard_type
+                                ),
+                                span: guard.span(),
+                                suggestion: "Usa una expresión booleana como guardia".to_string(),
+                            });
+                        }
                     }
                     self.scopes.push(Scope::new());
                     for node in &arm.body {
@@ -2458,5 +2506,77 @@ texto s = id<texto>(\"hola\");
 decimal d = id<decimal>(3.5);";
         let errors = analyze(src);
         assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_match_exhaustiveness_error() {
+        let src = "enum Color { Rojo, Verde, Azul }
+Color c = Color::Rojo;
+elegir (c) {
+    caso Color::Rojo: imprimir(\"rojo\");
+    caso Color::Verde: imprimir(\"verde\");
+}";
+        let errors = analyze(src);
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E080");
+    }
+
+    #[test]
+    fn test_match_exhaustiveness_with_default() {
+        let src = "enum Color { Rojo, Verde, Azul }
+Color c = Color::Rojo;
+elegir (c) {
+    caso Color::Rojo: imprimir(\"rojo\");
+    defecto: imprimir(\"otro\");
+}";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_match_exhaustiveness_all_covered() {
+        let src = "enum Color { Rojo, Verde, Azul }
+Color c = Color::Rojo;
+elegir (c) {
+    caso Color::Rojo: imprimir(\"rojo\");
+    caso Color::Verde: imprimir(\"verde\");
+    caso Color::Azul: imprimir(\"azul\");
+}";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_match_guard_boolean_type_error() {
+        let src = "entero x = 1;
+elegir (x) {
+    caso 1 si 42: imprimir(\"mal\");
+}";
+        let errors = analyze(src);
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E034");
+    }
+
+    #[test]
+    fn test_match_guard_valid_boolean() {
+        let src = "entero x = 5;
+elegir (x) {
+    caso 5 si x > 3: imprimir(\"valido\");
+}";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_match_exhaustiveness_enum_with_data() {
+        let src = "enum Forma { Circulo(decimal), Cuadrado, Triangulo }
+Forma f = Forma::Circulo(5.0);
+elegir (f) {
+    caso Forma::Circulo(5.0): imprimir(\"circulo\");
+    caso Forma::Cuadrado: imprimir(\"cuadrado\");
+}";
+        let errors = analyze(src);
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E080");
     }
 }

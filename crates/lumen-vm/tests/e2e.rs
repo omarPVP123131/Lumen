@@ -1041,3 +1041,96 @@ imprimir(s);";
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["99", "mundo"]);
 }
+
+#[test]
+fn test_match_guard_passes() {
+    let src = "entero x = 5;
+elegir (x) {
+    caso 5 si x > 3: imprimir(\"cinco mayor que 3\");
+    defecto: imprimir(\"otro\");
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["cinco mayor que 3"]);
+}
+
+#[test]
+fn test_match_guard_fails_falls_through() {
+    let src = "entero x = 5;
+elegir (x) {
+    caso 5 si x > 10: imprimir(\"cinco mayor que 10\");
+    defecto: imprimir(\"defecto\");
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["defecto"]);
+}
+
+#[test]
+fn test_match_guard_multiple_arms() {
+    let src = "entero x = 3;
+elegir (x) {
+    caso 1 si x < 5: imprimir(\"uno\");
+    caso 3 si x < 10: imprimir(\"tres\");
+    defecto: imprimir(\"otro\");
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["tres"]);
+}
+
+#[test]
+fn test_match_guard_falls_through_to_next_arm() {
+    let src = "entero x = 3;
+elegir (x) {
+    caso 3 si x < 0: imprimir(\"negativo\");
+    caso 3: imprimir(\"solo tres\");
+    defecto: imprimir(\"otro\");
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["solo tres"]);
+}
+
+#[test]
+fn test_match_english_guard() {
+    let src = "integer x = 10;
+match (x) {
+    case 10 if x > 5: print(\"diez\");
+    default: print(\"otro\");
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["diez"]);
+}
+
+#[test]
+fn test_match_exhaustiveness_error() {
+    let src = "enum Color { Rojo, Verde, Azul }
+Color c = Color::Rojo;
+elegir (c) {
+    caso Color::Rojo: imprimir(\"rojo\");
+    caso Color::Verde: imprimir(\"verde\");
+}";
+    let result = run_source(src);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}
+
+#[test]
+fn test_match_exhaustiveness_with_default() {
+    let src = "enum Color { Rojo, Verde, Azul }
+Color c = Color::Rojo;
+elegir (c) {
+    caso Color::Rojo: imprimir(\"rojo\");
+    defecto: imprimir(\"otro\");
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["rojo"]);
+}
+
+#[test]
+fn test_match_guard_type_error() {
+    let src = "entero x = 1;
+elegir (x) {
+    caso 1 si 42: imprimir(\"mal\");
+}";
+    let result = run_source(src);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("SemError"));
+}

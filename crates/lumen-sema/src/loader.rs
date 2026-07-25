@@ -353,6 +353,9 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
             prefix_expr(expr, prefix, locals);
             for arm in arms.iter_mut() {
                 prefix_expr(&mut arm.value, prefix, locals);
+                if let Some(ref mut guard) = arm.guard {
+                    prefix_expr(guard, prefix, locals);
+                }
                 let mut arm_locals = locals.clone();
                 for node in arm.body.iter_mut() {
                     prefix_node(node, prefix, &mut arm_locals, false);

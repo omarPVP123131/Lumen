@@ -600,32 +600,24 @@ impl Parser {
 
     fn parse_if(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
-        let kw = self.peek().kind.as_str().to_string();
         self.advance();
-        if !self.check(&[TokenKind::LeftParen]) {
-            self.error(
-                "E018",
-                format!("Se esperaba '(' después de '{}'", kw),
-                start,
-                format!(
-                    "Escribe '{}(condición) {{ ... }}' con paréntesis alrededor de la condición",
-                    kw
-                ),
-            );
-            return None;
+        let has_paren = self.check(&[TokenKind::LeftParen]);
+        if has_paren {
+            self.advance();
         }
-        self.advance();
         let condition = Box::new(self.parse_expression()?);
-        if !self.check(&[TokenKind::RightParen]) {
-            self.error(
-                "E019",
-                "Se esperaba ')'",
-                start,
-                "Agrega ')' después de la condición",
-            );
-            return None;
+        if has_paren {
+            if !self.check(&[TokenKind::RightParen]) {
+                self.error(
+                    "E019",
+                    "Se esperaba ')'",
+                    start,
+                    "Agrega ')' después de la condición",
+                );
+                return None;
+            }
+            self.advance();
         }
-        self.advance();
         let then_body = self.parse_block()?;
         let else_body = if self.check(&[TokenKind::Sino, TokenKind::Else]) {
             self.advance();
@@ -643,32 +635,24 @@ impl Parser {
 
     fn parse_while(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
-        let kw = self.peek().kind.as_str().to_string();
         self.advance();
-        if !self.check(&[TokenKind::LeftParen]) {
-            self.error(
-                "E018",
-                format!("Se esperaba '(' después de '{}'", kw),
-                start,
-                format!(
-                    "Escribe '{}(condición) {{ ... }}' con paréntesis alrededor de la condición",
-                    kw
-                ),
-            );
-            return None;
+        let has_paren = self.check(&[TokenKind::LeftParen]);
+        if has_paren {
+            self.advance();
         }
-        self.advance();
         let condition = Box::new(self.parse_expression()?);
-        if !self.check(&[TokenKind::RightParen]) {
-            self.error(
-                "E019",
-                "Se esperaba ')'",
-                start,
-                "Agrega ')' después de la condición",
-            );
-            return None;
+        if has_paren {
+            if !self.check(&[TokenKind::RightParen]) {
+                self.error(
+                    "E019",
+                    "Se esperaba ')'",
+                    start,
+                    "Agrega ')' después de la condición",
+                );
+                return None;
+            }
+            self.advance();
         }
-        self.advance();
         let body = self.parse_block()?;
         Some(Stmt::While {
             condition,
@@ -680,10 +664,10 @@ impl Parser {
     fn parse_for(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
         self.advance();
-        if !self.check(&[TokenKind::LeftParen]) {
-            return None;
+        let has_paren = self.check(&[TokenKind::LeftParen]);
+        if has_paren {
+            self.advance();
         }
-        self.advance();
         let init = Box::new(self.parse_declaration()?);
         let condition = Box::new(self.parse_expression()?);
         if !self.check(&[TokenKind::Semicolon]) {
@@ -691,10 +675,12 @@ impl Parser {
         }
         self.advance();
         let update = Box::new(self.parse_assignment()?);
-        if !self.check(&[TokenKind::RightParen]) {
-            return None;
+        if has_paren {
+            if !self.check(&[TokenKind::RightParen]) {
+                return None;
+            }
+            self.advance();
         }
-        self.advance();
         let body = self.parse_block()?;
         Some(Stmt::For {
             init,
@@ -865,6 +851,13 @@ impl Parser {
 
                 let value = self.parse_expression()?;
 
+                let guard = if self.check(&[TokenKind::Si, TokenKind::If]) {
+                    self.advance();
+                    Some(Box::new(self.parse_expression()?))
+                } else {
+                    None
+                };
+
                 if !self.check(&[TokenKind::Colon]) {
                     self.error(
                         "E052",
@@ -902,6 +895,7 @@ impl Parser {
                 }
                 arms.push(MatchArm {
                     value,
+                    guard,
                     body,
                     span: Span::merge(&arm_start, &self.previous().span),
                 });
