@@ -4,7 +4,7 @@ funcion texto categoria(entero edad) {
     elegir (edad) {
         caso 0 si edad < 13: { retornar "nino"; }
         caso 1 si edad < 18: { retornar "adolescente"; }
-        defecto { retornar "adulto"; }
+        defecto: { retornar "adulto"; }
     }
 }
 

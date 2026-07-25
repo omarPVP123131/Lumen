@@ -7,7 +7,7 @@ funcion texto dia_texto(entero n) {
         caso 3: { retornar "miercoles"; }
         caso 4: { retornar "jueves"; }
         caso 5: { retornar "viernes"; }
-        defecto { retornar "fin de semana"; }
+        defecto: { retornar "fin de semana"; }
     }
 }
 
