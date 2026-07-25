@@ -204,11 +204,21 @@ fn resolve_or_exit(mut loader: ModuleLoader, source: &str, base_dir: &Path) -> V
 fn show_error(source: &str, path: &str, code: &str, message: &str, span: &Span, suggestion: &str) {
     let line = span.start.line;
     let col = span.start.col;
-    let line_str = source.lines().nth(line - 1).unwrap_or("");
+    let lines: Vec<&str> = source.lines().collect();
+    let line_str = lines.get(line.saturating_sub(1)).copied().unwrap_or("");
     eprintln!();
     eprintln!("  \x1b[1;31m{}\x1b[0m \x1b[1m{}\x1b[0m", code, message);
     eprintln!("  \x1b[1;34m-->\x1b[0m {}:{}:{}", path, line, col);
     eprintln!("   \x1b[1;34m|\x1b[0m");
+    if line > 1 {
+        if let Some(prev) = lines.get(line - 2) {
+            eprintln!(
+                "  \x1b[90m{}\x1b[0m \x1b[1m|\x1b[0m \x1b[90m{}\x1b[0m",
+                line - 1,
+                prev
+            );
+        }
+    }
     eprintln!("  \x1b[1;34m{}\x1b[0m \x1b[1m|\x1b[0m {}", line, line_str);
     let underline = format!(
         "{}{}",
@@ -220,6 +230,15 @@ fn show_error(source: &str, path: &str, code: &str, message: &str, span: &Span, 
         " ".repeat(line.to_string().len() + 1),
         underline
     );
+    if line < lines.len() {
+        if let Some(next) = lines.get(line) {
+            eprintln!(
+                "  \x1b[90m{}\x1b[0m \x1b[1m|\x1b[0m \x1b[90m{}\x1b[0m",
+                line + 1,
+                next
+            );
+        }
+    }
     eprintln!("   \x1b[1;34m|\x1b[0m");
     eprintln!("   \x1b[1;33mAyuda:\x1b[0m {}", suggestion);
     eprintln!();
@@ -238,6 +257,9 @@ fn show_sema_errors(errors: &[lumen_sema::SemError], source: &str, path: &str) -
             &err.span,
             &err.suggestion,
         );
+    }
+    if errors.len() > 1 {
+        eprintln!("  \x1b[1;33m{}\x1b[0m errores encontrados\n", errors.len());
     }
     true
 }
