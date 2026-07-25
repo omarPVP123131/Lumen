@@ -6,9 +6,9 @@ Este documento detalla la evolución completa del lenguaje de programación educ
 
 ## 📊 Estado de Progreso General
 ```
-[████████████████████████████████████████████] Fases 0-54 (100% Completadas)
-[████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fases 55-60 (En Desarrollo)
-[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fases 61-80 (Planificadas)
+[████████████████████████████████████████████] Fases 0-56 (100% Completadas)
+[██████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fases 57-59 (En Desarrollo)
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fases 60-80 (Planificadas)
 ```
 
 ---
@@ -78,9 +78,9 @@ Estas fases representan la construcción de la infraestructura base, el compilad
 | **52** | **Mejores Errores** | Preview multi-línea, conteo, ANSI, ModuleError estructurado. | ✅ Completado |
 | **53** | **Operador Ternario** | `cond ? si : no` — expresión condicional compacta. | ✅ Completado |
 | **54** | **Loop Labels** | `romper etiqueta` / `continuar etiqueta`. | ✅ Completado |
-| **55** | **Pattern Matching** | Match exhaustivo con guardas (`caso x si x > 0`). | 🔄 En desarrollo |
-| **56** | **Genéricos Pro** | Bounds `<T: Comparable>` con traits. | 🔄 En desarrollo |
-| **57** | **Matrices 2D** | Sintaxis `[[1,2],[3,4]]` nativa. | 🔄 En desarrollo |
+| **55** | **Pattern Matching** | Match exhaustivo con guardas (`caso x si x > 0`). Error E080 si faltan variantes. | ✅ Completado |
+| **56** | **Genéricos Pro** | Bounds `<T: Comparable>` con traits (`rasgo`/`impl para`). | ✅ Completado |
+| **57** | **Matrices 2D** | Sintaxis `[[1,2],[3,4]]` nativa con slicing. | 🔄 En desarrollo |
 | **58** | **Enums Avanzados** | Variantes con datos (`Variant(entero)`). | ✅ Completado |
 | **59** | **Closures Pro** | Captura por valor/referencia. | 🔄 En desarrollo |
 | **60** | **Async/Await** | `async funcion` + `esperar` con event loop. | 📋 Planificado |
