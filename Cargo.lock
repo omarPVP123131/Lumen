@@ -131,6 +131,7 @@ dependencies = [
 name = "lumen-cli"
 version = "1.5.0"
 dependencies = [
+ "lumen-aot",
  "lumen-codegen",
  "lumen-fmt",
  "lumen-ir",

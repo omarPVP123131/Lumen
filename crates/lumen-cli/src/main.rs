@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 
+use lumen_aot;
 use lumen_codegen::{disassemble, Bytecode, Codegen};
 use lumen_fmt;
 use lumen_ir::IRBuilder;
@@ -17,6 +18,7 @@ struct Config {
     command: String,
     file: String,
     lib_dirs: Vec<PathBuf>,
+    native: bool,
 }
 
 fn parse_args(args: &[String]) -> Config {
@@ -24,6 +26,7 @@ fn parse_args(args: &[String]) -> Config {
     let mut command = String::new();
     let mut file = String::new();
     let mut lib_dirs = Vec::new();
+    let mut native = false;
 
     while i < args.len() {
         match args[i].as_str() {
@@ -35,6 +38,9 @@ fn parse_args(args: &[String]) -> Config {
                     eprintln!("Error: falta un directorio después de '-L'");
                     process::exit(1);
                 }
+            }
+            "--native" => {
+                native = true;
             }
             s if command.is_empty() => {
                 command = s.to_string();
@@ -64,6 +70,7 @@ fn parse_args(args: &[String]) -> Config {
         command,
         file,
         lib_dirs,
+        native,
     }
 }
 
@@ -129,7 +136,11 @@ fn main() {
                 eprintln!("Error: falta el archivo");
                 process::exit(1);
             }
-            build_bytecode(&config.file, &config.lib_dirs);
+            if config.native {
+                build_native(&config.file, &config.lib_dirs);
+            } else {
+                build_bytecode(&config.file, &config.lib_dirs);
+            }
         }
         "check" => {
             if config.file.is_empty() {
@@ -513,5 +524,68 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
     println!("\n{} pasaron, {} fallaron", passed, failed);
     if failed > 0 {
         process::exit(1);
+    }
+}
+
+fn build_native(path: &str, lib_dirs: &[PathBuf]) {
+    let bytecode = compile_source(path, lib_dirs);
+    let ir_program = {
+        let source = match fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error al leer '{}': {}", path, e);
+                process::exit(1);
+            }
+        };
+        let lexer = lumen_lexer::Lexer::new(&source);
+        let (tokens, _) = lexer.tokenize();
+        let parser = lumen_parser::Parser::new(tokens);
+        let (mut program, _) = parser.parse();
+        let sema = lumen_sema::SemanticAnalyzer::new();
+        sema.analyze(&mut program);
+        let builder = lumen_ir::IRBuilder::new();
+        builder.build(&program)
+    };
+
+    let c_code = lumen_aot::compile_to_c(&ir_program);
+    let out_name = Path::new(path).with_extension("");
+    let c_path = out_name.with_extension("c");
+    fs::write(&c_path, &c_code).unwrap_or_else(|e| {
+        eprintln!("Error al escribir C: {}", e);
+        process::exit(1);
+    });
+
+    // Compile C to native binary
+    let exe_path = if cfg!(windows) {
+        out_name.with_extension("exe")
+    } else {
+        out_name.clone()
+    };
+
+    // Compile C to native binary using system compiler
+    let cc = if cfg!(windows) { "gcc" } else { "cc" };
+    let status = std::process::Command::new(cc)
+        .args([
+            c_path.to_str().unwrap(),
+            "-O3",
+            "-o",
+            exe_path.to_str().unwrap(),
+            "-lm",
+        ])
+        .status();
+    match status {
+        Ok(s) if s.success() => {
+            let _ = fs::remove_file(&c_path);
+            println!("✓ Binario nativo generado ({})", exe_path.display());
+            println!("  Compilado con {} -O3 — rendimiento nativo C", cc);
+        }
+        Ok(s) => {
+            eprintln!("Error de compilacion C (exit {})", s);
+            process::exit(1);
+        }
+        Err(_) => {
+            eprintln!("gcc/clang no encontrado. Instala GCC o Clang para compilar a nativo.");
+            process::exit(1);
+        }
     }
 }

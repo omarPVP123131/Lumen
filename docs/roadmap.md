@@ -103,7 +103,7 @@ Estas fases representan la construcción de la infraestructura base, el compilad
 | **75** | **Plugins** | API para inyectar pasos personalizados en el compilador o en el sema. | Extensibilidad ilimitada para investigación y educación avanzada. |
 
 ### ⚡ Bloque 3: Performance, Educación & Lanzamiento (76-80)
-- **76**: **Gramática EBNF Inmutable**: Estabilización final de la sintaxis y gramática oficial.
+- **76**: **Compilación AOT (C)**: Transpilación a C + compilación nativa con gcc/clang -O3. Binarios nativos con rendimiento C. `lumen build --native`. ✅ Completado
 - **77**: **Ecosistema Educativo**: Creación de un Playground web interactivo con tutoriales paso a paso basados en WASM.
-- **79**: **VM Performance Tuning**: NaN-boxing, optimización de inlining en bytecode y JIT-like cache para hot-paths en ejecución.
+- **79**: **Cranelift Nativo**: Backend directo a código máquina (sin gcc/clang). Como el backend alternativo de Rust. 📋 Planificado
 - **80**: **LÚMEN v2.0 Release**: Lanzamiento final del lenguaje educativo bilingüe más completo y rápido.

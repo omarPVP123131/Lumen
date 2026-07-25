@@ -22,3 +22,4 @@ lumen-vm = { path = "../lumen-vm" }
 lumen-fmt = { path = "../lumen-fmt" }
 lumen-repl = { path = "../lumen-repl" }
 lumen-project = { path = "../lumen-project" }
+lumen-aot = { path = "../lumen-aot" }
