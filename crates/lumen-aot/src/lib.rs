@@ -31,7 +31,6 @@ impl AotCompiler {
         let mut fb = settings::builder();
         fb.set("use_colocated_libcalls", "false").unwrap();
         fb.set("is_pic", "false").unwrap();
-        fb.set("opt_level", "none").unwrap();
         let flags = settings::Flags::new(fb);
 
         let builder = cranelift_native::builder().expect("Host machine not supported by Cranelift");
@@ -80,14 +79,15 @@ impl AotCompiler {
     fn compile_body(&mut self, name: &str, func: &LumenFunc) {
         let info = self.funcs.get(name).cloned().unwrap();
         let mut ctx = self.module.make_context();
-        ctx.func.name = cranelift::codegen::ir::UserFuncName::user(0, info.id.as_u32());
-        ctx.func.signature = info.sig.clone();
+        ctx.func = cranelift::codegen::ir::Function::with_name_signature(
+            cranelift::codegen::ir::UserFuncName::user(0, info.id.as_u32()),
+            info.sig,
+        );
 
         {
             let mut func_ctx = FunctionBuilderContext::new();
             let mut builder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
             let block = builder.create_block();
-            builder.append_block_params_for_function_params(block);
             builder.switch_to_block(block);
             builder.seal_block(block);
 
@@ -148,7 +148,6 @@ impl AotCompiler {
             }
 
             // Ensure function has a return
-            builder.seal_all_blocks();
             if func.instrs.is_empty()
                 || !func
                     .instrs
@@ -175,8 +174,10 @@ impl AotCompiler {
             .unwrap();
 
         let mut ctx = self.module.make_context();
-        ctx.func.name = cranelift::codegen::ir::UserFuncName::user(0, main_id.as_u32());
-        ctx.func.signature = sig;
+        ctx.func = cranelift::codegen::ir::Function::with_name_signature(
+            cranelift::codegen::ir::UserFuncName::user(0, main_id.as_u32()),
+            sig,
+        );
 
         {
             let mut func_ctx2 = FunctionBuilderContext::new();
