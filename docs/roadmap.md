@@ -8,9 +8,10 @@ Este documento detalla la evolución completa del lenguaje **LÚMEN**, desde sus
 
 ## 📊 Estado de Progreso General
 ```
-[████████████████████████████████████████░░░░░░░] Fases 0-58 (100% Completadas)
-[████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fase 59 (En Desarrollo)
-[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fases 60-230 (Planificadas)
+[████████████████████████████████████████████] Fases 0-60 (100% Completadas)
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fases 61-70 (Planificadas)
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fases 71-120 Herramientas (En desarrollo)
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Fases 121-230 (Planificadas)
 ```
 
 ---
@@ -87,11 +88,28 @@ Estas fases representan la construcción de la infraestructura base, el compilad
 
 | Fase | Concepto | Detalle de Implementación | Estado |
 | :---: | :--- | :--- | :---: |
-| **59** | **Closures Pro** | Captura por valor/referencia de contextos exteriores en closures. | 🔄 En desarrollo |
+| **59** | **Closures Pro** | Captura por valor/referencia vía lambda lifting con capture_map. | ✅ Completado |
+| **60** | **Async/Await** | `async funcion` + `esperar` con sintaxis, sema y runtime síncrono. | ✅ Completado |
 
 ---
 
-## 📋 Roadmap — Fases Planificadas (60-230)
+## 🛠️ Herramientas & Ecosistema — Completado (Fases 37-67)
+
+| Fase | Herramienta | Estado |
+| :---: | :--- | :---: |
+| **37** | lumen fmt | ✅ |
+| **38** | lumen repl | ✅ |
+| **39** | lumen test | ✅ |
+| **40** | lumen new / lumen.toml | ✅ |
+| **62** | lumen doc (HTML) | ✅ |
+| **67** | lumen install (pkg) | ✅ |
+| **71** | lumen debug (breakpoints/step) | ✅ |
+| **71-74** | LSP Server (diagnostics) | ✅ |
+| **76** | AOT (C transpiler + Cranelift) | ✅ |
+
+---
+
+## 📋 Roadmap — Fases Planificadas (61-230)
 
 ---
 
@@ -99,7 +117,7 @@ Estas fases representan la construcción de la infraestructura base, el compilad
 
 | Fase | Concepto | Detalle de Implementación | Impacto |
 | :---: | :--- | :--- | :--- |
-| **60** | **Async/Await** | `async funcion` + `esperar` con event loop integrado. Concurrencia nativa. | 📋 |
+| **60** | **Async/Await** | `async funcion` + `esperar` con sintaxis y sema completos. Runtime síncrono. | ✅ |
 | **61** | **OR Patterns en Match** | `caso A \| B \| C:` — múltiples patrones en un solo brazo. | 📋 |
 | **62** | **If-let / While-let** | `si sea Algun(x) = opcion { ... }` — condicionales con destructuring. | 📋 |
 | **63** | **Range Patterns** | `caso 0..10:` y `caso 10..=100:` en match. | 📋 |
