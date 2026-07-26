@@ -414,6 +414,16 @@ impl IRBuilder {
                     self.emit(Instr::Binary(Op::Equal));
                     next_label = self.new_label();
                     self.emit(Instr::JmpIf(next_label));
+                    // Check OR pattern alternatives
+                    for alt in &arm.alt_values {
+                        self.gen_expr(expr);
+                        self.gen_expr(alt);
+                        self.emit(Instr::Binary(Op::Equal));
+                        let match_label = self.new_label();
+                        self.emit(Instr::JmpIf(match_label));
+                        self.emit(Instr::Jmp(next_label));
+                        self.emit(Instr::Label(match_label));
+                    }
                     if let Some(ref guard_expr) = arm.guard {
                         self.gen_expr(guard_expr);
                         self.emit(Instr::JmpIf(next_label));

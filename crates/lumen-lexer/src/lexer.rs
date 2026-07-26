@@ -179,12 +179,7 @@ impl Lexer {
                         self.advance();
                         tokens.push(self.double_token(TokenKind::OrOr));
                     } else {
-                        self.errors.push(LexError {
-                            code: "E005".to_string(),
-                            message: "Se esperaba '||'".to_string(),
-                            pos: self.prev_pos(),
-                            suggestion: "Usa '||' para el operador lógico O".to_string(),
-                        });
+                        tokens.push(self.single_token(TokenKind::Pipe));
                     }
                 }
                 Some(ch) if ch.is_ascii_digit() => {

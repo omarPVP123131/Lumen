@@ -146,6 +146,7 @@ pub enum TokenKind {
     GreaterEqual, // >=
     AndAnd,       // &&
     OrOr,         // ||
+    Pipe,         // |
     Question,     // ?
 
     // Delimiters

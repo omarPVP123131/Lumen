@@ -721,6 +721,11 @@ impl SemanticAnalyzer {
                                 if let Expr::EnumCtor { variant, .. } = &arm.value {
                                     covered.push(variant);
                                 }
+                                for alt in &arm.alt_values {
+                                    if let Expr::EnumCtor { variant, .. } = alt {
+                                        covered.push(variant);
+                                    }
+                                }
                             }
                             for var_name in &all_variants {
                                 if !covered.contains(var_name) {

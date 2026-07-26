@@ -1124,6 +1124,13 @@ impl Parser {
 
                 let value = self.parse_expression()?;
 
+                // OR patterns: A | B | C
+                let mut alt_values = Vec::new();
+                while self.check(&[TokenKind::Pipe]) {
+                    self.advance();
+                    alt_values.push(self.parse_expression()?);
+                }
+
                 let guard = if self.check(&[TokenKind::Si, TokenKind::If]) {
                     self.advance();
                     Some(Box::new(self.parse_expression()?))
@@ -1170,6 +1177,7 @@ impl Parser {
                     value,
                     guard,
                     body,
+                    alt_values,
                     span: Span::merge(&arm_start, &self.previous().span),
                 });
             } else {

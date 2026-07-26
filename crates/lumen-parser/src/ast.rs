@@ -104,6 +104,7 @@ pub struct MatchArm {
     pub value: Expr,
     pub guard: Option<Box<Expr>>,
     pub body: Vec<DeclOrStmt>,
+    pub alt_values: Vec<Expr>,
     pub span: Span,
 }
 
