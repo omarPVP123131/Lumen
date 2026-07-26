@@ -441,6 +441,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumen-doc"
+version = "1.5.0"
+dependencies = [
+ "lumen-lexer",
+ "lumen-parser",
+]
+
+[[package]]
 name = "lumen-fmt"
 version = "1.5.0"
 dependencies = [

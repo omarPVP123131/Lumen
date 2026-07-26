@@ -12,6 +12,7 @@ members = [
     "crates/lumen-project",
     "crates/lumen-aot",
     "crates/lumen-lsp",
+    "crates/lumen-doc",
 ]
 resolver = "2"
 
