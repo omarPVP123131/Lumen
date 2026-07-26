@@ -415,10 +415,11 @@ impl SemanticAnalyzer {
                 let lt = Self::infer_expr_type_from_map(left, var_types);
                 let method_name = Self::op_to_method_name(op);
                 if let Some(mname) = method_name {
-                    if let TypeInfo::Struct {
-                        name: type_name, ..
-                    } = &lt
-                    {
+                    let type_name = match &lt {
+                        TypeInfo::Struct { name, .. } => Some(name.clone()),
+                        _ => type_info_to_impl_name(&lt),
+                    };
+                    if let Some(ref type_name) = type_name {
                         if resolved_method.is_none() {
                             if let Some(mangled) = self.find_op_method(type_name, mname) {
                                 *resolved_method = Some(mangled);
@@ -437,7 +438,25 @@ impl SemanticAnalyzer {
                     self.resolve_op_expr_var(arg, var_types);
                 }
             }
-            Expr::MethodCall { expr, args, .. } => {
+            Expr::MethodCall {
+                expr,
+                method,
+                args,
+                ref mut resolved_func,
+                span,
+            } => {
+                let expr_type = Self::infer_expr_type_from_map(expr, var_types);
+                let mut arg_types = Vec::new();
+                for arg in args.iter_mut() {
+                    arg_types.push(Self::infer_expr_type_from_map(arg, var_types));
+                }
+                if resolved_func.is_none() {
+                    if let Some((_, mangled)) =
+                        self.resolve_trait_method_mangled(&expr_type, method, &arg_types, span)
+                    {
+                        *resolved_func = Some(mangled);
+                    }
+                }
                 self.resolve_op_expr_var(expr, var_types);
                 for arg in args.iter_mut() {
                     self.resolve_op_expr_var(arg, var_types);
@@ -614,23 +633,22 @@ impl SemanticAnalyzer {
                 ..
             }) = node
             {
-                let type_name = match target_type {
-                    Type::Struct(ref name) => name.clone(),
-                    Type::GenericStruct { ref name, .. } => name.clone(),
-                    _ => continue,
+                let type_name = match type_to_impl_name(target_type) {
+                    Some(n) => n,
+                    None => continue,
                 };
                 let _trait_sig = match self.traits.get(trait_name) {
                     Some(s) => s.clone(),
                     None => continue,
                 };
-                for _method_decl in methods {
+                for method_decl in methods {
                     if let Decl::Function {
-                        ref return_type,
-                        ref name,
-                        ref params,
-                        ref type_params,
+                        return_type,
+                        name,
+                        params,
+                        type_params,
                         ..
-                    } = _method_decl
+                    } = method_decl
                     {
                         let ret = self.resolve_type(return_type.clone(), type_params);
                         let params_t: Vec<TypeInfo> = params
@@ -917,10 +935,9 @@ impl SemanticAnalyzer {
                 methods,
                 span,
             } => {
-                let _type_name = match target_type {
-                    Type::Struct(ref name) => name.clone(),
-                    Type::GenericStruct { ref name, .. } => name.clone(),
-                    _ => {
+                let _type_name = match type_to_impl_name(target_type) {
+                    Some(n) => n,
+                    None => {
                         self.errors.push(SemError {
                             code: "E074".to_string(),
                             message: format!(
@@ -928,7 +945,7 @@ impl SemanticAnalyzer {
                                 target_type
                             ),
                             span: *span,
-                            suggestion: "Solo se puede implementar rasgos para structs".to_string(),
+                            suggestion: "Este tipo no soporta implementación de rasgos".to_string(),
                         });
                         return TypeInfo::Void;
                     }
@@ -2319,8 +2336,8 @@ impl SemanticAnalyzer {
                         // Try trait method resolution
                         let resolved =
                             self.resolve_trait_method(&expr_type, method, &arg_types, span);
-                        if resolved.is_some() {
-                            return resolved.unwrap();
+                        if let Some(ret_type) = resolved {
+                            return ret_type;
                         }
                         self.errors.push(SemError {
                             code: "E050".to_string(),
@@ -2711,12 +2728,24 @@ impl SemanticAnalyzer {
         &self,
         receiver_type: &TypeInfo,
         method: &str,
-        arg_types: &[TypeInfo],
+        _arg_types: &[TypeInfo],
         span: &Span,
     ) -> Option<TypeInfo> {
+        self.resolve_trait_method_mangled(receiver_type, method, _arg_types, span)
+            .map(|(t, _)| t)
+    }
+
+    fn resolve_trait_method_mangled(
+        &self,
+        receiver_type: &TypeInfo,
+        method: &str,
+        _arg_types: &[TypeInfo],
+        span: &Span,
+    ) -> Option<(TypeInfo, String)> {
         let _ = span;
         let type_name = match receiver_type {
             TypeInfo::Struct { name, .. } => name.clone(),
+            TypeInfo::Enum(name) => name.clone(),
             TypeInfo::TypeVar(tv) => {
                 // Look up type param bounds
                 if let Some(bounds) = self
@@ -2733,20 +2762,20 @@ impl SemanticAnalyzer {
                     return None;
                 }
             }
-            _ => return None,
+            _ => match type_info_to_impl_name(receiver_type) {
+                Some(n) => n,
+                None => return None,
+            },
         };
 
         // When receiver is a TypeVar, look up the bound trait
         if let TypeInfo::TypeVar(tv) = receiver_type {
-            // Find bounds for this type var
             let bound_trait = self.find_bound_for_typevar(tv)?;
             let trait_sig = self.traits.get(&bound_trait)?;
-            for (t_mname, t_params, t_ret) in trait_sig {
+            for (t_mname, _t_params, t_ret) in trait_sig {
                 if t_mname == method {
-                    if arg_types.len() + 1 != t_params.len() {
-                        return Some(t_ret.clone());
-                    }
-                    return Some(t_ret.clone());
+                    let mangled = format!("{}_{}_{}", tv, bound_trait, method);
+                    return Some((t_ret.clone(), mangled));
                 }
             }
             return None;
@@ -2758,14 +2787,10 @@ impl SemanticAnalyzer {
                 continue;
             }
             let trait_sig = self.traits.get(trait_name)?;
-            for (t_mname, t_params, t_ret) in trait_sig {
+            for (t_mname, _t_params, t_ret) in trait_sig {
                 if t_mname == method {
-                    // The first param is the receiver (yo), args are the rest
-                    if arg_types.len() + 1 == t_params.len() {
-                        return Some(t_ret.clone());
-                    }
-                    // Fallback: just return ret type
-                    return Some(t_ret.clone());
+                    let mangled = format!("{}_{}_{}", impl_type, trait_name, method);
+                    return Some((t_ret.clone(), mangled));
                 }
             }
         }
@@ -2887,6 +2912,40 @@ impl SemanticAnalyzer {
             }
             Type::ImplTrait(name) => TypeInfo::TypeVar(name), // opaque; resolved at call site
         }
+    }
+}
+
+fn type_to_impl_name(t: &Type) -> Option<String> {
+    match t {
+        Type::Numero => Some("numero".to_string()),
+        Type::Entero => Some("entero".to_string()),
+        Type::Decimal => Some("decimal".to_string()),
+        Type::Texto => Some("texto".to_string()),
+        Type::Booleano => Some("booleano".to_string()),
+        Type::Struct(name) => Some(name.clone()),
+        Type::GenericStruct { name, .. } => Some(name.clone()),
+        Type::Lista(_) => Some("lista".to_string()),
+        Type::Resultado { .. } => Some("resultado".to_string()),
+        Type::Opcion(_) => Some("opcion".to_string()),
+        Type::Tuple(_) => Some("tupla".to_string()),
+        Type::Func { .. } | Type::ImplTrait(_) => None,
+    }
+}
+
+fn type_info_to_impl_name(t: &TypeInfo) -> Option<String> {
+    match t {
+        TypeInfo::Struct { name, .. } => Some(name.clone()),
+        TypeInfo::Enum(name) => Some(name.clone()),
+        TypeInfo::Entero => Some("entero".to_string()),
+        TypeInfo::Decimal => Some("decimal".to_string()),
+        TypeInfo::Texto => Some("texto".to_string()),
+        TypeInfo::Booleano => Some("booleano".to_string()),
+        TypeInfo::Numero => Some("numero".to_string()),
+        TypeInfo::Lista(_) => Some("lista".to_string()),
+        TypeInfo::Resultado { .. } => Some("resultado".to_string()),
+        TypeInfo::Opcion(_) => Some("opcion".to_string()),
+        TypeInfo::Tuple(_) => Some("tupla".to_string()),
+        TypeInfo::Void | TypeInfo::Func { .. } | TypeInfo::TypeVar(_) => None,
     }
 }
 

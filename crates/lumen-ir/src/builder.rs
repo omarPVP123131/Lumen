@@ -1,5 +1,5 @@
 use crate::ir::*;
-use lumen_parser::ast::{BinOp, Decl, DeclOrStmt, Expr, Param, Stmt, UnOp};
+use lumen_parser::ast::{BinOp, Decl, DeclOrStmt, Expr, Param, Stmt, Type, UnOp};
 use std::collections::{HashMap, HashSet};
 
 struct LoopLabels {
@@ -81,10 +81,9 @@ impl IRBuilder {
                 ..
             }) = node
             {
-                let type_name = match target_type {
-                    lumen_parser::ast::Type::Struct(ref name) => name.clone(),
-                    lumen_parser::ast::Type::GenericStruct { ref name, .. } => name.clone(),
-                    _ => continue,
+                let type_name = match type_to_impl_name(target_type) {
+                    Some(n) => n,
+                    None => continue,
                 };
                 for method_decl in methods {
                     if let Decl::Function {
@@ -131,7 +130,10 @@ impl IRBuilder {
             };
             self.program.funcs.insert("__main__".to_string(), main_func);
             self.fn_names.insert("__main__".to_string());
-            self.current_func = Some("__main__".to_string());
+            self.finalize_func(); // Guardar el estado inicial (vacío) de __main__
+            self.current_func = Some("__main__".to_string()); // Volver a main
+            self.current_instrs = self.program.funcs.get("__main__").unwrap().instrs.clone();
+            // Cargar sus instrucciones
         }
 
         for node in program {
@@ -189,9 +191,17 @@ impl IRBuilder {
                 }
             }
             Decl::Function { name, body, .. } => {
-                self.finalize_func();
+                self.finalize_func(); // Guarda las instrucciones de la función actual (que podría ser __main__) antes de cambiar de contexto!
+                let prev_func_name = self.current_func.take();
+
                 self.current_func = Some(name.clone());
-                self.current_instrs = Vec::new();
+                // Cargar instrucciones si esta función ya existía (por ejemplo, en un paso previo)
+                self.current_instrs = self
+                    .program
+                    .funcs
+                    .get(name)
+                    .map(|f| f.instrs.clone())
+                    .unwrap_or_default();
                 self.temp_counter = 0;
                 for node in body {
                     self.gen_decl_or_stmt(node);
@@ -203,12 +213,21 @@ impl IRBuilder {
                 {
                     self.emit(Instr::Return);
                 }
-                self.finalize_func();
-                if self.program.funcs.contains_key("__main__") {
-                    self.current_func = Some("__main__".to_string());
-                    self.current_instrs = Vec::new();
+                self.finalize_func(); // Guardar las instrucciones de esta función
+
+                // Restaurar el contexto anterior
+                if let Some(prev_name) = prev_func_name {
+                    self.current_func = Some(prev_name.clone());
+                    // Cargar las instrucciones actualizadas de la función anterior
+                    self.current_instrs = self
+                        .program
+                        .funcs
+                        .get(&prev_name)
+                        .map(|f| f.instrs.clone())
+                        .unwrap_or_default();
                 } else {
                     self.current_func = None;
+                    self.current_instrs = Vec::new(); // Estado inicial si no había función anterior
                 }
             }
             Decl::Struct { .. } => {
@@ -228,17 +247,25 @@ impl IRBuilder {
                 methods,
                 ..
             } => {
-                let type_name = match target_type {
-                    lumen_parser::ast::Type::Struct(ref name) => name.clone(),
-                    lumen_parser::ast::Type::GenericStruct { ref name, .. } => name.clone(),
-                    _ => return,
+                let type_name = match type_to_impl_name(target_type) {
+                    Some(n) => n,
+                    None => return,
                 };
+
+                self.finalize_func(); // Guarda las instrucciones de la función actual (que podría ser __main__) antes de cambiar de contexto!
+                let prev_func_name = self.current_func.take();
+
                 for method_decl in methods {
                     if let Decl::Function { name, ref body, .. } = method_decl {
                         let mangled = format!("{}_{}_{}", type_name, trait_name, name);
-                        self.finalize_func();
                         self.current_func = Some(mangled.clone());
-                        self.current_instrs = Vec::new();
+                        // Cargar instrucciones si este método ya existía
+                        self.current_instrs = self
+                            .program
+                            .funcs
+                            .get(&mangled)
+                            .map(|f| f.instrs.clone())
+                            .unwrap_or_default();
                         self.temp_counter = 0;
                         for node in body {
                             self.gen_decl_or_stmt(node);
@@ -250,14 +277,23 @@ impl IRBuilder {
                         {
                             self.emit(Instr::Return);
                         }
-                        self.finalize_func();
-                        if self.program.funcs.contains_key("__main__") {
-                            self.current_func = Some("__main__".to_string());
-                            self.current_instrs = Vec::new();
-                        } else {
-                            self.current_func = None;
-                        }
+                        self.finalize_func(); // Guardar las instrucciones de este método
                     }
+                }
+
+                // Restaurar el contexto anterior
+                if let Some(prev_name) = prev_func_name {
+                    self.current_func = Some(prev_name.clone());
+                    // Cargar las instrucciones actualizadas de la función anterior
+                    self.current_instrs = self
+                        .program
+                        .funcs
+                        .get(&prev_name)
+                        .map(|f| f.instrs.clone())
+                        .unwrap_or_default();
+                } else {
+                    self.current_func = None;
+                    self.current_instrs = Vec::new(); // Estado inicial si no había función anterior
                 }
             }
             Decl::Const { name, value, .. } => {
@@ -1288,6 +1324,23 @@ impl IRBuilder {
             }
         }
         func.instrs = optimized;
+    }
+}
+
+fn type_to_impl_name(t: &Type) -> Option<String> {
+    match t {
+        Type::Numero => Some("numero".to_string()),
+        Type::Entero => Some("entero".to_string()),
+        Type::Decimal => Some("decimal".to_string()),
+        Type::Texto => Some("texto".to_string()),
+        Type::Booleano => Some("booleano".to_string()),
+        Type::Struct(name) => Some(name.clone()),
+        Type::GenericStruct { name, .. } => Some(name.clone()),
+        Type::Lista(_) => Some("lista".to_string()),
+        Type::Resultado { .. } => Some("resultado".to_string()),
+        Type::Opcion(_) => Some("opcion".to_string()),
+        Type::Tuple(_) => Some("tupla".to_string()),
+        Type::Func { .. } | Type::ImplTrait(_) => None,
     }
 }
 
