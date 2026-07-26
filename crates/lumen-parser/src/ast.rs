@@ -60,11 +60,13 @@ pub enum Decl {
     Rasgo {
         name: String,
         methods: Vec<TraitMethod>,
+        associated_types: Vec<AssociatedType>,
         span: Span,
     },
     ImplRasgo {
         trait_name: String,
         target_type: Type,
+        associated_types: Vec<ImplAssociatedType>,
         methods: Vec<Decl>,
         span: Span,
     },
@@ -89,6 +91,20 @@ pub struct TraitMethod {
     pub name: String,
     pub params: Vec<Param>,
     pub return_type: Type,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssociatedType {
+    pub name: String,
+    pub default: Option<Type>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImplAssociatedType {
+    pub name: String,
+    pub target_type: Type,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

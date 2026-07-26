@@ -1134,3 +1134,24 @@ elegir (x) {
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("SemError"));
 }
+
+#[test]
+fn test_trait_associated_types() {
+    let src = "rasgo Contenedor {
+    tipo Item;
+    funcion Item obtener_valor(este);
+}
+estructura Caja {
+    valor: entero,
+}
+impl Contenedor para Caja {
+    tipo Item = entero;
+    funcion entero obtener_valor(este) {
+        retornar este.valor;
+    }
+}
+sea c = Caja { valor: 99 };
+imprimir(c.obtener_valor());";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["99"]);
+}

@@ -79,8 +79,17 @@ impl Scope {
 
 type FuncSig = (TypeInfo, Vec<TypeInfo>, usize, Vec<String>);
 type StructDef = (Vec<(String, TypeInfo)>, Vec<String>);
-type TraitSig = Vec<(String, Vec<TypeInfo>, TypeInfo)>;
+type TraitSig = (
+    Vec<(String, Vec<TypeInfo>, TypeInfo)>,
+    Vec<AssociatedTypeDef>,
+);
 type ImplKey = (String, String);
+
+#[derive(Debug, Clone)]
+pub struct AssociatedTypeDef {
+    pub name: String,
+    pub default: Option<TypeInfo>,
+}
 
 pub struct SemanticAnalyzer {
     scopes: Vec<Scope>,
@@ -564,7 +573,7 @@ impl SemanticAnalyzer {
             if impl_type != type_name {
                 continue;
             }
-            if let Some(methods) = self.traits.get(trait_name) {
+            if let Some((methods, _)) = self.traits.get(trait_name) {
                 for (tm, _, _) in methods {
                     if tm == method {
                         return Some(format!("{}_{}_{}", type_name, trait_name, method));
@@ -606,7 +615,13 @@ impl SemanticAnalyzer {
 
     fn collect_traits(&mut self, program: &Program) {
         for node in program {
-            if let DeclOrStmt::Decl(Decl::Rasgo { name, methods, .. }) = node {
+            if let DeclOrStmt::Decl(Decl::Rasgo {
+                name,
+                methods,
+                associated_types,
+                ..
+            }) = node
+            {
                 let sigs: Vec<(String, Vec<TypeInfo>, TypeInfo)> = methods
                     .iter()
                     .map(|m| {
@@ -619,7 +634,14 @@ impl SemanticAnalyzer {
                         (m.name.clone(), param_types, ret)
                     })
                     .collect();
-                self.traits.insert(name.clone(), sigs);
+                let assoc_types: Vec<AssociatedTypeDef> = associated_types
+                    .iter()
+                    .map(|at| AssociatedTypeDef {
+                        name: at.name.clone(),
+                        default: at.default.as_ref().map(|t| self.type_to_info(t.clone())),
+                    })
+                    .collect();
+                self.traits.insert(name.clone(), (sigs, assoc_types));
             }
         }
     }
@@ -934,6 +956,7 @@ impl SemanticAnalyzer {
                 target_type,
                 methods,
                 span,
+                ..
             } => {
                 let _type_name = match type_to_impl_name(target_type) {
                     Some(n) => n,
@@ -960,7 +983,8 @@ impl SemanticAnalyzer {
                     return TypeInfo::Void;
                 }
                 let trait_sig = self.traits[trait_name].clone();
-                for (t_mname, t_params, t_ret) in &trait_sig {
+                let (methods_sig, _assoc_types) = trait_sig;
+                for (t_mname, t_params, t_ret) in &methods_sig {
                     let found = methods.iter().any(|m| {
                         if let Decl::Function {
                             name,
@@ -1483,7 +1507,7 @@ impl SemanticAnalyzer {
                         if impl_type != &type_name {
                             continue;
                         }
-                        if let Some(methods) = self.traits.get(trait_name) {
+                        if let Some((methods, _)) = self.traits.get(trait_name) {
                             for (tm, _, _) in methods {
                                 if tm == mname {
                                     return true;
@@ -1524,7 +1548,7 @@ impl SemanticAnalyzer {
                                 if impl_type != &type_name {
                                     continue;
                                 }
-                                if let Some(methods) = self.traits.get(trait_name) {
+                                if let Some((methods, _)) = self.traits.get(trait_name) {
                                     for (tm, _params, tr) in methods {
                                         if tm == mname {
                                             ret = tr.clone();
@@ -2772,7 +2796,8 @@ impl SemanticAnalyzer {
         if let TypeInfo::TypeVar(tv) = receiver_type {
             let bound_trait = self.find_bound_for_typevar(tv)?;
             let trait_sig = self.traits.get(&bound_trait)?;
-            for (t_mname, _t_params, t_ret) in trait_sig {
+            let (methods, _assoc_types) = trait_sig;
+            for (t_mname, _t_params, t_ret) in methods {
                 if t_mname == method {
                     let mangled = format!("{}_{}_{}", tv, bound_trait, method);
                     return Some((t_ret.clone(), mangled));
@@ -2787,7 +2812,8 @@ impl SemanticAnalyzer {
                 continue;
             }
             let trait_sig = self.traits.get(trait_name)?;
-            for (t_mname, _t_params, t_ret) in trait_sig {
+            let (methods, _assoc_types) = trait_sig;
+            for (t_mname, _t_params, t_ret) in methods {
                 if t_mname == method {
                     let mangled = format!("{}_{}_{}", impl_type, trait_name, method);
                     return Some((t_ret.clone(), mangled));

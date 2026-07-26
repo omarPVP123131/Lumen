@@ -481,75 +481,95 @@ impl Parser {
         }
         self.advance();
         let mut methods = Vec::new();
+        let mut associated_types = Vec::new();
         while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
             if self.check(&[TokenKind::Eof]) {
                 break;
             }
-            if !self.check(&[TokenKind::Funcion, TokenKind::Function]) {
+            // Check for associated type: tipo Item;
+            if self.check(&[TokenKind::Tipo]) {
+                let type_start = self.peek().span;
+                self.advance(); // consume tipo
+                let assoc_name = self.expect_ident()?;
+                let default = if self.check(&[TokenKind::Equal]) {
+                    self.advance(); // consume =
+                    Some(self.parse_type()?)
+                } else {
+                    None
+                };
+                self.expect_semicolon();
+                associated_types.push(AssociatedType {
+                    name: assoc_name,
+                    default,
+                    span: Span::merge(&type_start, &self.previous().span),
+                });
+            } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
+                // Parse method signature
+                self.advance(); // consume funcion/function
+                let ret_type = self.parse_type()?;
+                let method_name = self.expect_ident()?;
+                if !self.check(&[TokenKind::LeftParen]) {
+                    self.error(
+                        "E014",
+                        "Se esperaba '('",
+                        start,
+                        "Agrega '(' para iniciar los parámetros",
+                    );
+                    return None;
+                }
+                self.advance();
+                let mut params = Vec::new();
+                if !self.check(&[TokenKind::RightParen]) {
+                    // Check if first param is the receiver (just a name, no type)
+                    if self.check_ident() && !self.is_type_keyword(&self.peek().kind) {
+                        let receiver_name = self.expect_ident()?;
+                        // Use a placeholder type for the receiver — resolved during sema
+                        params.push(Param {
+                            param_type: Type::Struct("Self".to_string()),
+                            name: receiver_name,
+                            default: None,
+                            span: Span::merge(&start, &self.previous().span),
+                        });
+                        if self.check(&[TokenKind::Comma]) {
+                            self.advance();
+                        }
+                    }
+                    while !self.check(&[TokenKind::RightParen]) {
+                        params.push(self.parse_param()?);
+                        while self.check(&[TokenKind::Comma]) {
+                            self.advance();
+                            if self.check(&[TokenKind::RightParen]) {
+                                break;
+                            }
+                            params.push(self.parse_param()?);
+                        }
+                    }
+                }
+                if !self.check(&[TokenKind::RightParen]) {
+                    self.error(
+                        "E015",
+                        "Se esperaba ')'",
+                        start,
+                        "Agrega ')' para cerrar los parámetros",
+                    );
+                    return None;
+                }
+                self.advance();
+                self.expect_semicolon();
+                methods.push(TraitMethod {
+                    name: method_name,
+                    params,
+                    return_type: ret_type,
+                });
+            } else {
                 self.error(
                     "E072",
-                    "Se esperaba una firma de función en el rasgo",
+                    "Se esperaba 'funcion' o 'tipo' en el rasgo",
                     self.peek().span,
-                    "Agrega 'funcion tipo nombre(...)'",
+                    "Agrega 'funcion tipo nombre(...)' o 'tipo Nombre'",
                 );
                 return None;
             }
-            self.advance(); // consume funcion/function
-            let ret_type = self.parse_type()?;
-            let method_name = self.expect_ident()?;
-            if !self.check(&[TokenKind::LeftParen]) {
-                self.error(
-                    "E014",
-                    "Se esperaba '('",
-                    start,
-                    "Agrega '(' para iniciar los parámetros",
-                );
-                return None;
-            }
-            self.advance();
-            let mut params = Vec::new();
-            if !self.check(&[TokenKind::RightParen]) {
-                // Check if first param is the receiver (just a name, no type)
-                if self.check_ident() && !self.is_type_keyword(&self.peek().kind) {
-                    let receiver_name = self.expect_ident()?;
-                    // Use a placeholder type for the receiver — resolved during sema
-                    params.push(Param {
-                        param_type: Type::Struct("Self".to_string()),
-                        name: receiver_name,
-                        default: None,
-                        span: Span::merge(&start, &self.previous().span),
-                    });
-                    if self.check(&[TokenKind::Comma]) {
-                        self.advance();
-                    }
-                }
-                while !self.check(&[TokenKind::RightParen]) {
-                    params.push(self.parse_param()?);
-                    while self.check(&[TokenKind::Comma]) {
-                        self.advance();
-                        if self.check(&[TokenKind::RightParen]) {
-                            break;
-                        }
-                        params.push(self.parse_param()?);
-                    }
-                }
-            }
-            if !self.check(&[TokenKind::RightParen]) {
-                self.error(
-                    "E015",
-                    "Se esperaba ')'",
-                    start,
-                    "Agrega ')' para cerrar los parámetros",
-                );
-                return None;
-            }
-            self.advance();
-            self.expect_semicolon();
-            methods.push(TraitMethod {
-                name: method_name,
-                params,
-                return_type: ret_type,
-            });
         }
         if !self.check(&[TokenKind::RightBrace]) {
             self.error(
@@ -564,6 +584,7 @@ impl Parser {
         Some(Decl::Rasgo {
             name,
             methods,
+            associated_types,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -616,21 +637,44 @@ impl Parser {
         }
         self.advance();
         let mut methods = Vec::new();
+        let mut associated_types = Vec::new();
         while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
             if self.check(&[TokenKind::Eof]) {
                 break;
             }
-            if !self.check(&[TokenKind::Funcion, TokenKind::Function]) {
+            if self.check(&[TokenKind::Tipo]) {
+                let type_start = self.peek().span;
+                self.advance(); // consume tipo
+                let assoc_name = self.expect_ident()?;
+                if !self.check(&[TokenKind::Equal]) {
+                    self.error(
+                        "E071",
+                        "Se esperaba '=' en la especificación del tipo asociado",
+                        self.peek().span,
+                        "Agrega '=' seguido de un tipo",
+                    );
+                    return None;
+                }
+                self.advance(); // consume =
+                let assoc_type = self.parse_type()?;
+                self.expect_semicolon();
+                associated_types.push(ImplAssociatedType {
+                    name: assoc_name,
+                    target_type: assoc_type,
+                    span: Span::merge(&type_start, &self.previous().span),
+                });
+            } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
+                let func = self.parse_method_impl()?;
+                methods.push(func);
+            } else {
                 self.error(
                     "E072",
-                    "Se esperaba 'funcion' en la implementación",
+                    "Se esperaba 'funcion' o 'tipo' en la implementación",
                     self.peek().span,
-                    "Agrega 'funcion tipo nombre(...) { ... }'",
+                    "Agrega 'funcion' o 'tipo Nombre = Tipo;'",
                 );
                 return None;
             }
-            let func = self.parse_method_impl()?;
-            methods.push(func);
         }
         if !self.check(&[TokenKind::RightBrace]) {
             self.error(
@@ -645,6 +689,7 @@ impl Parser {
         Some(Decl::ImplRasgo {
             trait_name,
             target_type,
+            associated_types,
             methods,
             span: Span::merge(&start, &self.previous().span),
         })

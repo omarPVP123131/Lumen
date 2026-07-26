@@ -286,10 +286,14 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
         Decl::ImplRasgo {
             trait_name: _,
             target_type,
+            associated_types,
             methods,
             ..
         } => {
             prefix_type(target_type, prefix);
+            for assoc in associated_types.iter_mut() {
+                prefix_type(&mut assoc.target_type, prefix);
+            }
             for method_decl in methods.iter_mut() {
                 prefix_decl(method_decl, prefix, locals, top_level);
             }

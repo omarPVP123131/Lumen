@@ -4,7 +4,14 @@
 program = { declaration | statement } ;
 
 (* --- Declarations --- *)
-declaration = variable_decl | function_decl ;
+declaration = variable_decl | function_decl | trait_decl | impl_decl ;
+
+trait_decl = "rasgo" , identifier , "{" , { assoc_type_decl | trait_method_decl } , "}" ;
+assoc_type_decl = "tipo" , identifier , [ "=" , type_annotation ] , ";" ;
+trait_method_decl = "funcion" , type_annotation , identifier , "(" , [ parameter_list ] , ")" , ";" ;
+
+impl_decl = "impl" , identifier , "para" , type_annotation , "{" , { assoc_type_impl | function_decl } , "}" ;
+assoc_type_impl = "tipo" , identifier , "=" , type_annotation , ";" ;
 
 variable_decl = type_annotation , identifier , [ "=" , expression ] , ";" ;
 

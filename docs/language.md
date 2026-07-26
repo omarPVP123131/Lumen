@@ -196,6 +196,24 @@ funcion impl Comparable crear() {
 }
 ```
 
+## Tipos Asociados en Traits
+
+Definición de tipos asociados en rasgos e implementaciones:
+
+```lumen
+rasgo Contenedor {
+    tipo Item;
+    funcion Item obtener_valor(este);
+}
+
+impl Contenedor para Caja {
+    tipo Item = entero;
+    funcion entero obtener_valor(este) {
+        retornar este.valor;
+    }
+}
+```
+
 ## Entrada/Salida
 
 ```lumen

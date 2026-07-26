@@ -15,13 +15,13 @@
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 108 | e2e |
+| lumen-vm | 109 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
-| **Total** | **~305** | |
+| **Total** | **~306** | |
 
-**~9 warnings, ~305 tests passing. 42/42 ejemplos funcionando.**
+**~9 warnings, ~306 tests passing. 43/43 ejemplos funcionando.**
 
 ---
 
@@ -118,6 +118,9 @@ Saltado — `<T: Rasgo>` syntax ya soporta bounds.
 ### Fase 70: Impl Trait return ✅
 `funcion impl Rasgo foo() { retornar expr; }`. `Type::ImplTrait(String)` en AST.
 Parseo en `parse_type()`, mapea a `TypeInfo::TypeVar` en sema (tipo opaco resuelto en llamada).
+
+### Fase 71: Tipos Asociados en Traits ✅
+`tipo Item;` en traits y `tipo Item = T;` en impl. `AssociatedType` e `ImplAssociatedType` en AST, sema e IR.
 
 ---
 

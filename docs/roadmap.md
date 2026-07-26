@@ -47,7 +47,7 @@ Inferencia de tipos, Métodos en structs (impl), Diccionarios nativos, String in
 | 65 | **Guard Let** | `sea x = expr sino { romper }` | ✅ |
 | 66 | **Operator Overloading** | `impl Suma for MiTipo` | ✅ |
 | 67 | **Extension Methods** | `impl MiRasgo for TipoExterno` | 📋 |
-| 68 | **Associated Types** | `tipo Item;` en traits | 📋 |
+| 68 | **Associated Types** | `tipo Item;` en traits | ✅ |
 | 69 | **Where Clauses** | `<T> donde T: Comparable` | ⏭️ Salta (ya soportado por `<T: Rasgo>`) |
 | 70 | **Impl Trait return** | `-> impl Mostrable` | ✅ |
 

@@ -14,6 +14,10 @@
   - `Type::ImplTrait(String)` en AST.
   - Parseo de `impl Rasgo` en `parse_type()`.
   - Sema: mapea a `TypeInfo::TypeVar` (tipo opaco resuelto en llamada).
+- **Fase 71: Tipos Asociados en Traits** — `tipo Item;` en rasgos y `tipo Item = T;` en impl.
+  - AST: `AssociatedType` e `ImplAssociatedType`.
+  - Parseo en `parse_rasgo()` e `parse_impl_rasgo()`.
+  - Sema e IR con soporte para resolución de tipos asociados.
 
 ### Changed
 - Version bump to 1.6.0.
