@@ -299,7 +299,49 @@ pub fn compile_to_object(program: &Program, output: &str) -> Result<(), String> 
     Ok(())
 }
 
-#[cfg(test)]
+pub fn compile_to_c(program: &Program) -> String {
+    let mut out = String::from("#include <stdint.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <math.h>\n\ntypedef struct { int t; int64_t i; double f; char* s; int b; } Val;\n");
+    out.push_str("static Val gv[256]; static const char* gn[256]; static int gc=0;\n");
+    out.push_str("static int _fv(const char* n){for(int i=0;i<gc;i++)if(!strcmp(gn[i],n))return i;gn[gc]=n;return gc++;}\n");
+    out.push_str("static char* _fmt(Val v){char* b=malloc(128);if(v.t==0)snprintf(b,128,\"%lld\",(long long)v.i);else if(v.t==1)snprintf(b,128,\"%g\",v.f);else if(v.t==2)snprintf(b,128,\"%s\",v.s?v.s:\"\");else b[0]=0;return b;}\n\n");
+
+    for (name, func) in &program.funcs {
+        out.push_str(&format!("void _f_{}(){{\n", mangle(name)));
+        for instr in &func.instrs {
+            match instr {
+                Instr::ConstInt(n) => {
+                    out.push_str(&format!(" Val _v; _v.t=0; _v.i={};\n", n));
+                }
+                Instr::ConstStr(s) => {
+                    let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+                    out.push_str(&format!(" Val _v; _v.t=2; _v.s=(char*)\"{}\";\n", escaped));
+                }
+                Instr::ConstBool(b) => {
+                    out.push_str(&format!(
+                        " Val _v; _v.t=3; _v.b={};\n",
+                        if *b { 1 } else { 0 }
+                    ));
+                }
+                Instr::Print => out.push_str(" printf(\"%s\\n\",_fmt(_v));\n"),
+                Instr::Halt => out.push_str(" return;\n"),
+                Instr::Return => out.push_str(" return;\n"),
+                Instr::Nop => {}
+                _ => out.push_str(&format!(" /* {:?} */\n", instr)),
+            }
+        }
+        out.push_str("}\n\n");
+    }
+
+    out.push_str(&format!(
+        "int main(){{_f_{}();return 0;}}\n",
+        mangle(&program.entry)
+    ));
+    out
+}
+
+fn mangle(name: &str) -> String {
+    name.replace(|c: char| !c.is_alphanumeric() && c != '_', "_")
+}
 mod tests {
     use super::*;
     use lumen_ir::ir::Func;

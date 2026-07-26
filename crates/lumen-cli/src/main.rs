@@ -545,68 +545,69 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
 }
 
 fn build_native(path: &str, lib_dirs: &[PathBuf]) {
-    let bytecode = compile_source(path, lib_dirs);
-    let ir_program = {
-        let source = match fs::read_to_string(path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error al leer '{}': {}", path, e);
-                process::exit(1);
-            }
-        };
-        let lexer = lumen_lexer::Lexer::new(&source);
-        let (tokens, _) = lexer.tokenize();
-        let parser = lumen_parser::Parser::new(tokens);
-        let (mut program, _) = parser.parse();
-        let sema = lumen_sema::SemanticAnalyzer::new();
-        sema.analyze(&mut program);
-        let builder = lumen_ir::IRBuilder::new();
-        builder.build(&program)
-    };
-
-    let out_name = Path::new(path).with_extension("");
-    let obj_path = out_name.with_extension("o");
-    match lumen_aot::compile_to_object(&ir_program, obj_path.to_str().unwrap()) {
-        Ok(()) => {
-            let exe_ext = if cfg!(windows) { "exe" } else { "" };
-            let exe_name = if exe_ext.is_empty() {
-                out_name.clone()
-            } else {
-                out_name.with_extension(exe_ext)
-            };
-            let cc = if cfg!(windows) { "gcc" } else { "cc" };
-            let s = std::process::Command::new(cc)
-                .args([
-                    obj_path.to_str().unwrap(),
-                    "-o",
-                    exe_name.to_str().unwrap(),
-                    "-lm",
-                ])
-                .status();
-            match s {
-                Ok(st) if st.success() => {
-                    let _ = fs::remove_file(&obj_path);
-                    println!("✓ Binario nativo (Cranelift + {})", cc);
-                    println!("  {}", exe_name.display());
-                }
-                Ok(st) => {
-                    println!("✓ Objeto: {}", obj_path.display());
-                    eprintln!(
-                        "Linkea: {} {} -o {} -lm",
-                        cc,
-                        obj_path.display(),
-                        exe_name.display()
-                    );
-                }
-                Err(_) => {
-                    println!("✓ Objeto: {}", obj_path.display());
-                }
-            }
-        }
+    let source = match fs::read_to_string(path) {
+        Ok(s) => s,
         Err(e) => {
-            eprintln!("Error AOT: {}", e);
+            eprintln!("Error al leer '{}': {}", path, e);
+            process::exit(1);
+        }
+    };
+    let base_dir = Path::new(path).parent().unwrap_or(Path::new("."));
+    let mut loader = ModuleLoader::new(lib_dirs.to_vec());
+    let program = match loader.resolve_imports(&source, base_dir) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Error imports: {:?}", e);
+            process::exit(1);
+        }
+    };
+    let mut prog = program;
+    let errors = SemanticAnalyzer::new().analyze(&mut prog);
+    if !errors.is_empty() {
+        for e in &errors {
+            eprintln!("  [{}] {}", e.code, e.message);
+        }
+        process::exit(1);
+    }
+    let ir = IRBuilder::new().build(&prog);
+
+    let c_code = lumen_aot::compile_to_c(&ir);
+    let out_name = Path::new(path).with_extension("");
+    let c_path = out_name.with_extension("c");
+    fs::write(&c_path, &c_code).unwrap_or_else(|e| {
+        eprintln!("Error: {}", e);
+        process::exit(1);
+    });
+
+    let exe_ext = if cfg!(windows) { "exe" } else { "" };
+    let exe_name = if exe_ext.is_empty() {
+        out_name.clone()
+    } else {
+        out_name.with_extension(exe_ext)
+    };
+    let cc = if cfg!(windows) { "gcc" } else { "cc" };
+    let s = std::process::Command::new(cc)
+        .args([
+            c_path.to_str().unwrap(),
+            "-O3",
+            "-o",
+            exe_name.to_str().unwrap(),
+            "-lm",
+        ])
+        .status();
+    match s {
+        Ok(st) if st.success() => {
+            let _ = fs::remove_file(&c_path);
+            println!("✓ Binario nativo (C -O3)");
+            println!("  {}", exe_name.display());
+        }
+        Ok(st) => {
+            eprintln!("Error compilacion C (exit {})", st);
+            process::exit(1);
+        }
+        Err(_) => {
+            eprintln!("gcc/clang no encontrado. Instala GCC.");
             process::exit(1);
         }
     }
-    let _ = bytecode;
 }
