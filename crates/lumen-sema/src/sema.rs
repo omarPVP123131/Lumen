@@ -395,6 +395,7 @@ impl SemanticAnalyzer {
                 body,
                 type_params,
                 type_param_bounds: _,
+                is_async: _,
                 span: _,
             } => {
                 self.scopes.push(Scope::new());
@@ -2161,6 +2162,7 @@ impl SemanticAnalyzer {
                 }
                 true_type
             }
+            Expr::Esperar { expr, .. } => self.analyze_expr(expr),
         }
     }
 

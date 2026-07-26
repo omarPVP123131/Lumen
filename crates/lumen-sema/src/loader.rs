@@ -540,6 +540,9 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             prefix_expr(true_branch, prefix, locals);
             prefix_expr(false_branch, prefix, locals);
         }
+        Expr::Esperar { expr, .. } => {
+            prefix_expr(expr, prefix, locals);
+        }
     }
 }
 

@@ -772,6 +772,9 @@ impl IRBuilder {
                 self.gen_expr(false_branch);
                 self.emit(Instr::Label(end_label));
             }
+            Expr::Esperar { expr, .. } => {
+                self.gen_expr(expr);
+            }
         }
     }
 

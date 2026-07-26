@@ -36,6 +36,7 @@ pub enum Decl {
         body: Vec<DeclOrStmt>,
         type_params: Vec<String>,
         type_param_bounds: Vec<(String, String)>,
+        is_async: bool,
         span: Span,
     },
     Struct {
@@ -296,6 +297,10 @@ pub enum Expr {
         false_branch: Box<Expr>,
         span: Span,
     },
+    Esperar {
+        expr: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -373,6 +378,7 @@ impl Expr {
             | Expr::Tuple { span, .. }
             | Expr::TupleAccess { span, .. }
             | Expr::Ternary { span, .. } => *span,
+            Expr::Esperar { span, .. } => *span,
         }
     }
 }

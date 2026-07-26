@@ -86,6 +86,8 @@ pub enum TokenKind {
     Const,
     Rasgo,
     Impl,
+    Async,
+    Esperar,
 
     // English equivalents
     If,
@@ -121,6 +123,7 @@ pub enum TokenKind {
     Some,
     None,
     Trait,
+    Await,
 
     // Identifiers & Literals
     Ident(String),
@@ -236,6 +239,9 @@ impl TokenKind {
             "rasgo" => Some(TokenKind::Rasgo),
             "trait" => Some(TokenKind::Trait),
             "impl" => Some(TokenKind::Impl),
+            "async" => Some(TokenKind::Async),
+            "await" => Some(TokenKind::Await),
+            "esperar" => Some(TokenKind::Esperar),
             _ => None,
         }
     }

@@ -62,6 +62,8 @@ impl Parser {
             || self.check_ident_next_is_generic_type()
         {
             self.parse_declaration().map(DeclOrStmt::Decl)
+        } else if self.check(&[TokenKind::Async]) {
+            self.parse_async_function().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
             if self.check_next(&[
                 TokenKind::Numero,
@@ -204,6 +206,18 @@ impl Parser {
         })
     }
 
+    fn parse_async_function(&mut self) -> Option<Decl> {
+        self.advance(); // consume async
+        let mut decl = self.parse_function()?;
+        if let Decl::Function {
+            ref mut is_async, ..
+        } = &mut decl
+        {
+            *is_async = true;
+        }
+        Some(decl)
+    }
+
     fn parse_function(&mut self) -> Option<Decl> {
         let start = self.peek().span;
         self.advance();
@@ -259,6 +273,7 @@ impl Parser {
             body,
             type_params,
             type_param_bounds,
+            is_async: false,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -695,6 +710,7 @@ impl Parser {
             body,
             type_params: Vec::new(),
             type_param_bounds: Vec::new(),
+            is_async: false,
             span: Span::merge(&start, &self.previous().span),
         })
     }
@@ -1417,7 +1433,16 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Option<Expr> {
-        if self.check(&[TokenKind::Minus, TokenKind::Bang]) {
+        if self.check(&[TokenKind::Esperar, TokenKind::Await]) {
+            let start = self.peek().span;
+            self.advance();
+            let expr = self.parse_unary()?;
+            let span = Span::merge(&start, &expr.span());
+            Some(Expr::Esperar {
+                expr: Box::new(expr),
+                span,
+            })
+        } else if self.check(&[TokenKind::Minus, TokenKind::Bang]) {
             let op = match self.peek().kind {
                 TokenKind::Minus => UnOp::Negate,
                 TokenKind::Bang => UnOp::Not,
@@ -2884,6 +2909,7 @@ impl Spannable for Expr {
             | Expr::Tuple { span, .. }
             | Expr::TupleAccess { span, .. }
             | Expr::Ternary { span, .. } => *span,
+            Expr::Esperar { span, .. } => *span,
         }
     }
 }
