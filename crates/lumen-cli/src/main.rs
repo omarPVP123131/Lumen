@@ -187,6 +187,23 @@ fn main() {
             }
             run_tests(&config.file, &config.lib_dirs);
         }
+        "doc" => {
+            if config.file.is_empty() {
+                eprintln!("Error: falta el archivo");
+                process::exit(1);
+            }
+            let out = config.file.replace(".nv", ".html");
+            let status = std::process::Command::new("lumen-doc")
+                .args([&config.file, &out])
+                .status();
+            match status {
+                Ok(s) if s.success() => println!("✓ Documentación: {}", out),
+                _ => eprintln!("Error ejecutando lumen-doc"),
+            }
+        }
+        "lsp" => {
+            let _status = std::process::Command::new("lumen-lsp").status();
+        }
         "--version" | "-v" => {
             println!("LÚMEN v{}", env!("CARGO_PKG_VERSION"));
         }
