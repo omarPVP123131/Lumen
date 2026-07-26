@@ -657,7 +657,7 @@ fn format_type(t: &Type) -> String {
             param_types,
             return_type,
         } => {
-            let params: Vec<String> = param_types.iter().map(|t| format_type(t)).collect();
+            let params: Vec<String> = param_types.iter().map(format_type).collect();
             format!(
                 "funcion({}) {}",
                 params.join(", "),
@@ -666,7 +666,7 @@ fn format_type(t: &Type) -> String {
         }
         Type::Struct(name) => name.clone(),
         Type::Tuple(types) => {
-            let inner: Vec<String> = types.iter().map(|t| format_type(t)).collect();
+            let inner: Vec<String> = types.iter().map(format_type).collect();
             format!("({})", inner.join(", "))
         }
         Type::GenericStruct { name, .. } => name.clone(),

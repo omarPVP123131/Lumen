@@ -3,9 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 
-use lumen_aot;
 use lumen_codegen::{disassemble, Bytecode, Codegen};
-use lumen_fmt;
 use lumen_ir::IRBuilder;
 use lumen_lexer::token::Span;
 use lumen_parser::ast::DeclOrStmt;

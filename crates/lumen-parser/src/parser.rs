@@ -2647,10 +2647,12 @@ impl Parser {
                         return false;
                     }
                 }
-                _ if token_matches(kind, &TokenKind::Sino) => {
-                    if brace_depth == 0 && paren_depth == 0 && bracket_depth == 0 {
-                        return true;
-                    }
+                _ if token_matches(kind, &TokenKind::Sino)
+                    && brace_depth == 0
+                    && paren_depth == 0
+                    && bracket_depth == 0 =>
+                {
+                    return true;
                 }
                 _ => {}
             }

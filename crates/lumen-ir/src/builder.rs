@@ -541,7 +541,7 @@ impl IRBuilder {
                 ..
             } => {
                 self.gen_expr(value);
-                self.gen_expr(&pattern);
+                self.gen_expr(pattern);
                 self.emit(Instr::Binary(Op::Equal));
                 let el = self.new_label();
                 let end_l = self.new_label();
@@ -565,7 +565,7 @@ impl IRBuilder {
                 ..
             } => {
                 self.gen_expr(value);
-                self.gen_expr(&pattern);
+                self.gen_expr(pattern);
                 self.emit(Instr::Binary(Op::Equal));
                 let ok_l = self.new_label();
                 let else_l = self.new_label();
@@ -984,11 +984,8 @@ impl IRBuilder {
                 self.collect_expr_refs(expr, params, out);
                 self.collect_variable_refs(body, params, out);
             }
-            Stmt::Return { value, .. } => {
-                if let Some(v) = value {
-                    self.collect_expr_refs(v, params, out);
-                }
-            }
+            Stmt::Return { value: Some(v), .. } => self.collect_expr_refs(v, params, out),
+            Stmt::Return { value: None, .. } => {}
             Stmt::FieldAssign { expr, value, .. } => {
                 self.collect_expr_refs(expr, params, out);
                 self.collect_expr_refs(value, params, out);
@@ -1006,11 +1003,8 @@ impl IRBuilder {
 
     fn collect_decl_refs(&self, decl: &Decl, params: &[String], out: &mut Vec<String>) {
         match decl {
-            Decl::Variable { init, .. } => {
-                if let Some(v) = init {
-                    self.collect_expr_refs(v, params, out);
-                }
-            }
+            Decl::Variable { init: Some(v), .. } => self.collect_expr_refs(v, params, out),
+            Decl::Variable { init: None, .. } => {}
             Decl::Destructure { init, .. } => {
                 self.collect_expr_refs(init, params, out);
             }

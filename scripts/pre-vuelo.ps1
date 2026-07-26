@@ -1,5 +1,6 @@
 param(
     [switch]$SkipCoverage,
+    [switch]$SkipClippy,
     [switch]$SkipTests,
     [string]$ReportPath = "target/pre-vuelo-report.json"
 )
@@ -152,7 +153,27 @@ $checkOk = Invoke-Step -Name "check" -Block {
     cargo check --all-targets --workspace 2>&1
 }
 
-# Step 3: Tests
+# Step 3: Clippy
+Write-Step "cargo clippy"
+if ($SkipClippy) {
+    Write-Skip "omitido por flag -SkipClippy"
+    $script:steps += @{
+        name = "clippy"
+        status = "skipped"
+        duration_ms = 0
+        warnings = @()
+        errors = @()
+        has_warnings = $false
+    }
+    $clippyOk = "skipped"
+}
+else {
+    $clippyOk = Invoke-Step -Name "clippy" -Block {
+        cargo clippy --all -- -D warnings 2>&1
+    }
+}
+
+# Step 4: Tests
 Write-Step "cargo test"
 if ($SkipTests) {
     Write-Skip "omitido por flag -SkipTests"
@@ -172,7 +193,7 @@ else {
     }
 }
 
-# Step 4: Coverage
+# Step 5: Coverage
 Write-Step "cargo llvm-cov"
 if ($SkipCoverage) {
     Write-Skip "omitido por flag -SkipCoverage"

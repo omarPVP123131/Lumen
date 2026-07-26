@@ -11,6 +11,12 @@ pub struct Repl {
     accumulated: String,
 }
 
+impl Default for Repl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Repl {
     pub fn new() -> Self {
         Self {

@@ -1,7 +1,7 @@
 // lumen-pkg — Package Manager
 // lumen install <pkg>, registry, dependency resolution
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
@@ -26,7 +26,7 @@ fn main() {
     }
 }
 
-fn install_from_registry(pkg: &str, cache: &PathBuf) {
+fn install_from_registry(pkg: &str, cache: &Path) {
     let pkg_dir = cache.join(pkg);
     if pkg_dir.exists() {
         println!("✓ {} ya instalado en {}", pkg, pkg_dir.display());
@@ -52,7 +52,7 @@ fn install_from_registry(pkg: &str, cache: &PathBuf) {
     }
 }
 
-fn install_from_path(path: &str, cache: &PathBuf) {
+fn install_from_path(path: &str, cache: &Path) {
     let src = PathBuf::from(path);
     let name = src.file_name().unwrap_or_default().to_string_lossy();
     let dest = cache.join(name.as_ref());
@@ -65,7 +65,7 @@ fn install_from_path(path: &str, cache: &PathBuf) {
     println!("✓ {} instalado en {}", name, dest.display());
 }
 
-fn copy_dir(src: &PathBuf, dest: &PathBuf) {
+fn copy_dir(src: &Path, dest: &Path) {
     if let Ok(entries) = fs::read_dir(src) {
         for entry in entries.flatten() {
             let path = entry.path();

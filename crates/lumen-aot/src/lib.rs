@@ -28,6 +28,12 @@ pub struct AotCompiler {
     printf_id: FuncId,
 }
 
+impl Default for AotCompiler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AotCompiler {
     pub fn new() -> Self {
         let mut fb = settings::builder();
@@ -132,7 +138,7 @@ impl AotCompiler {
                 Instr::ConstStr(s) => {
                     let data_id = self.get_string_ptr(s);
                     // Declare the data as a global symbol and get its address
-                    let gv = self.module.declare_data_in_func(data_id, &mut builder.func);
+                    let gv = self.module.declare_data_in_func(data_id, builder.func);
                     let ptr = builder.ins().global_value(i64, gv);
                     stack.push(ptr);
                 }
@@ -180,13 +186,13 @@ impl AotCompiler {
                     if let Some(v) = stack.pop() {
                         let printf_ref = self
                             .module
-                            .declare_func_in_func(self.printf_id, &mut builder.func);
+                            .declare_func_in_func(self.printf_id, builder.func);
                         builder.ins().call(printf_ref, &[v]);
                     }
                 }
                 Instr::Call(name, _argc) => {
                     if let Some(info) = self.funcs.get(name).cloned() {
-                        let func_ref = self.module.declare_func_in_func(info.id, &mut builder.func);
+                        let func_ref = self.module.declare_func_in_func(info.id, builder.func);
                         let call = builder.ins().call(func_ref, &[]);
                         if !builder.inst_results(call).is_empty() {
                             stack.push(builder.inst_results(call)[0]);
@@ -275,7 +281,7 @@ impl AotCompiler {
         builder.ensure_inserted_block();
 
         if let Some(info) = self.funcs.get(entry) {
-            let func_ref = self.module.declare_func_in_func(info.id, &mut builder.func);
+            let func_ref = self.module.declare_func_in_func(info.id, builder.func);
             let call = builder.ins().call(func_ref, &[]);
             let res = builder.inst_results(call)[0];
             builder.ins().return_(&[res]);

@@ -229,13 +229,8 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn collect_var_types_in_expr(expr: &Expr, _var_types: &mut HashMap<String, TypeInfo>) {
-        match expr {
-            Expr::StructInit { struct_name: _, .. } => {
-                // Skip — type handled by infer_static_type
-            }
-            _ => {}
-        }
+    fn collect_var_types_in_expr(_expr: &Expr, _var_types: &mut HashMap<String, TypeInfo>) {
+        // Skip — type handled by infer_static_type
     }
 
     fn infer_static_type(expr: &Expr) -> TypeInfo {
@@ -403,11 +398,10 @@ impl SemanticAnalyzer {
                     var_types.insert(name.clone(), Self::infer_static_type(value));
                 }
             }
-            Stmt::Return { value, .. } => {
-                if let Some(val) = value {
-                    self.resolve_op_expr_var(val, var_types);
-                }
-            }
+            Stmt::Return {
+                value: Some(val), ..
+            } => self.resolve_op_expr_var(val, var_types),
+            Stmt::Return { value: None, .. } => {}
             _ => {}
         }
     }
@@ -569,7 +563,7 @@ impl SemanticAnalyzer {
     }
 
     fn find_op_method(&self, type_name: &str, method: &str) -> Option<String> {
-        for ((impl_type, trait_name), _) in &self.impls {
+        for (impl_type, trait_name) in self.impls.keys() {
             if impl_type != type_name {
                 continue;
             }
@@ -1525,7 +1519,7 @@ impl SemanticAnalyzer {
                         TypeInfo::Struct { name, .. } => name.clone(),
                         _ => return false,
                     };
-                    for ((impl_type, trait_name), _) in &self.impls {
+                    for (impl_type, trait_name) in self.impls.keys() {
                         if impl_type != &type_name {
                             continue;
                         }
@@ -1542,15 +1536,12 @@ impl SemanticAnalyzer {
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
                         if matches!(op, BinOp::Add)
-                            && lt == TypeInfo::Texto
-                            && (rt == TypeInfo::Texto
-                                || is_numeric(&rt)
-                                || rt == TypeInfo::Booleano)
-                        {
-                            TypeInfo::Texto
-                        } else if matches!(op, BinOp::Add)
-                            && rt == TypeInfo::Texto
-                            && (is_numeric(&lt) || lt == TypeInfo::Booleano)
+                            && ((lt == TypeInfo::Texto
+                                && (rt == TypeInfo::Texto
+                                    || is_numeric(&rt)
+                                    || rt == TypeInfo::Booleano))
+                                || (rt == TypeInfo::Texto
+                                    && (is_numeric(&lt) || lt == TypeInfo::Booleano)))
                         {
                             TypeInfo::Texto
                         } else if lt == TypeInfo::Entero && rt == TypeInfo::Entero {
@@ -1566,7 +1557,7 @@ impl SemanticAnalyzer {
                                 _ => String::new(),
                             };
                             let mut ret = TypeInfo::Void;
-                            for ((impl_type, trait_name), _) in &self.impls {
+                            for (impl_type, trait_name) in self.impls.keys() {
                                 if impl_type != &type_name {
                                     continue;
                                 }
@@ -1594,9 +1585,8 @@ impl SemanticAnalyzer {
                             || (is_numeric(&lt) && is_numeric(&rt))
                             || can_assign(&lt, &rt)
                             || can_assign(&rt, &lt)
+                            || has_op_overload(&lt, op)
                         {
-                            TypeInfo::Booleano
-                        } else if has_op_overload(&lt, op) {
                             TypeInfo::Booleano
                         } else {
                             self.errors.push(SemError {
@@ -1609,9 +1599,7 @@ impl SemanticAnalyzer {
                         }
                     }
                     BinOp::Less | BinOp::LessEqual | BinOp::Greater | BinOp::GreaterEqual => {
-                        if is_numeric(&lt) && is_numeric(&rt) {
-                            TypeInfo::Booleano
-                        } else if has_op_overload(&lt, op) {
+                        if (is_numeric(&lt) && is_numeric(&rt)) || has_op_overload(&lt, op) {
                             TypeInfo::Booleano
                         } else {
                             self.errors.push(SemError {
@@ -2808,10 +2796,7 @@ impl SemanticAnalyzer {
                     return None;
                 }
             }
-            _ => match type_info_to_impl_name(receiver_type) {
-                Some(n) => n,
-                None => return None,
-            },
+            _ => type_info_to_impl_name(receiver_type)?,
         };
 
         // When receiver is a TypeVar, look up the bound trait
@@ -2829,7 +2814,7 @@ impl SemanticAnalyzer {
         }
 
         // Look through impls for the receiver type
-        for ((impl_type, trait_name), _method_idxs) in &self.impls {
+        for (impl_type, trait_name) in self.impls.keys() {
             if impl_type != &type_name {
                 continue;
             }

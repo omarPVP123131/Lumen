@@ -76,7 +76,7 @@ function Invoke-Step {
 }
 
 Write-Host "$BOLD$MAGENTA"
-Write-Host "  PRE-COMMIT CHECK (fmt + check)$CLEAR"
+Write-Host "  PRE-COMMIT CHECK (fmt + check + clippy)$CLEAR"
 Write-Host "  $CYAN$(Get-Date -Format 'HH:mm:ss')$CLEAR`n"
 
 Write-Step "cargo fmt"
@@ -91,6 +91,11 @@ Invoke-Step -Name "fmt" -Block {
 Write-Step "cargo check"
 Invoke-Step -Name "check" -Block {
     cargo check --all-targets --workspace 2>&1
+}
+
+Write-Step "cargo clippy"
+Invoke-Step -Name "clippy" -Block {
+    cargo clippy --all -- -D warnings 2>&1
 }
 
 $totalDuration = [math]::Round(((Get-Date) - $startTime).TotalMilliseconds)
