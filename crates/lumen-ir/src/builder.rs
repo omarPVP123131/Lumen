@@ -488,6 +488,32 @@ impl IRBuilder {
                 self.emit(Instr::Label(end_label));
             }
             Stmt::Import { .. } => {}
+            Stmt::IfLet {
+                pattern,
+                value,
+                then_body,
+                else_body,
+                ..
+            } => {
+                self.gen_expr(value);
+                self.gen_expr(&pattern);
+                self.emit(Instr::Binary(Op::Equal));
+                let el = self.new_label();
+                let end_l = self.new_label();
+                self.emit(Instr::JmpIf(el));
+                for n in then_body {
+                    self.gen_decl_or_stmt(n);
+                }
+                self.emit(Instr::Jmp(end_l));
+                self.emit(Instr::Label(el));
+                if let Some(eb) = else_body {
+                    for n in eb {
+                        self.gen_decl_or_stmt(n);
+                    }
+                }
+                self.emit(Instr::Label(end_l));
+            }
+            _ => {}
             Stmt::Destructure { targets, value, .. } => {
                 let temp = format!("__dt_{}", self.temp_counter);
                 self.temp_counter += 1;

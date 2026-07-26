@@ -588,6 +588,27 @@ impl SemanticAnalyzer {
                 }
                 value_type
             }
+            Stmt::IfLet {
+                value,
+                then_body,
+                else_body,
+                ..
+            } => {
+                self.analyze_expr(value);
+                self.scopes.push(Scope::new());
+                for n in then_body {
+                    self.analyze_decl_or_stmt(n);
+                }
+                self.scopes.pop();
+                if let Some(eb) = else_body {
+                    self.scopes.push(Scope::new());
+                    for n in eb {
+                        self.analyze_decl_or_stmt(n);
+                    }
+                    self.scopes.pop();
+                }
+                TypeInfo::Void
+            }
             Stmt::If {
                 condition,
                 then_body,

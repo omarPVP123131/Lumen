@@ -368,6 +368,7 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
             }
         }
         Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
+        _ => {}
         Stmt::Match {
             expr,
             arms,

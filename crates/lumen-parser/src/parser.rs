@@ -874,6 +874,10 @@ impl Parser {
     fn parse_if(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
         self.advance();
+        // If-let: si sea Patron = Expr { ... }
+        if self.check(&[TokenKind::Sea, TokenKind::Let]) {
+            return self.parse_if_let(start);
+        }
         let has_paren = self.check(&[TokenKind::LeftParen]);
         if has_paren {
             self.advance();
@@ -900,6 +904,40 @@ impl Parser {
         };
         Some(Stmt::If {
             condition,
+            then_body,
+            else_body,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn parse_if_let(&mut self, start: Span) -> Option<Stmt> {
+        self.advance(); // consume sea/let
+        let pattern = self.parse_expression()?;
+        if !self.check(&[TokenKind::Equal]) {
+            self.error(
+                "E071",
+                "Se esperaba '=' en 'si sea'",
+                start,
+                "Agrega '=' y una expresión",
+            );
+            return None;
+        }
+        self.advance();
+        // Avoid struct init ambiguity: parse value without treating `{` as struct fields
+        let saved_no_struct = self.no_struct_init;
+        self.no_struct_init = true;
+        let value = Box::new(self.parse_expression()?);
+        self.no_struct_init = saved_no_struct;
+        let then_body = self.parse_block()?;
+        let else_body = if self.check(&[TokenKind::Sino, TokenKind::Else]) {
+            self.advance();
+            Some(self.parse_block()?)
+        } else {
+            None
+        };
+        Some(Stmt::IfLet {
+            pattern,
+            value,
             then_body,
             else_body,
             span: Span::merge(&start, &self.previous().span),

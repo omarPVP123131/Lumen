@@ -121,6 +121,13 @@ pub enum Stmt {
         else_body: Option<Vec<DeclOrStmt>>,
         span: Span,
     },
+    IfLet {
+        pattern: Expr,
+        value: Box<Expr>,
+        then_body: Vec<DeclOrStmt>,
+        else_body: Option<Vec<DeclOrStmt>>,
+        span: Span,
+    },
     While {
         condition: Box<Expr>,
         body: Vec<DeclOrStmt>,

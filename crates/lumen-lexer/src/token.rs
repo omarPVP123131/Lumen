@@ -88,6 +88,7 @@ pub enum TokenKind {
     Impl,
     Async,
     Esperar,
+    Sea,
 
     // English equivalents
     If,
@@ -124,6 +125,7 @@ pub enum TokenKind {
     None,
     Trait,
     Await,
+    Let,
 
     // Identifiers & Literals
     Ident(String),
@@ -243,6 +245,8 @@ impl TokenKind {
             "async" => Some(TokenKind::Async),
             "await" => Some(TokenKind::Await),
             "esperar" => Some(TokenKind::Esperar),
+            "sea" => Some(TokenKind::Sea),
+            "let" => Some(TokenKind::Let),
             _ => None,
         }
     }
