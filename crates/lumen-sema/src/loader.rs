@@ -225,7 +225,6 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             params,
             body,
             type_params,
-            type_param_bounds: _,
             ..
         } => {
             let type_params_set: HashSet<String> = type_params.iter().cloned().collect();
@@ -251,7 +250,6 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             name,
             fields,
             type_params,
-            type_param_bounds: _,
             ..
         } => {
             if top_level {
@@ -491,10 +489,7 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             prefix_expr(index, prefix, locals);
         }
         Expr::MethodCall {
-            expr: target,
-            args,
-            resolved_func: _,
-            ..
+            expr: target, args, ..
         } => {
             prefix_expr(target, prefix, locals);
             for arg in args.iter_mut() {

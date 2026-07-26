@@ -2782,18 +2782,16 @@ impl SemanticAnalyzer {
             TypeInfo::Enum(name) => name.clone(),
             TypeInfo::TypeVar(tv) => {
                 // Look up type param bounds
-                if let Some(bounds) = self
-                    .type_param_bounds
-                    .values()
-                    .find(|bounds| bounds.iter().any(|(name, _)| name == tv))
                 {
+                    let bounds = self
+                        .type_param_bounds
+                        .values()
+                        .find(|bounds| bounds.iter().any(|(name, _)| name == tv))?;
                     if let Some((_, bound_trait)) = bounds.iter().find(|(name, _)| name == tv) {
                         bound_trait.clone()
                     } else {
                         return None;
                     }
-                } else {
-                    return None;
                 }
             }
             _ => type_info_to_impl_name(receiver_type)?,
