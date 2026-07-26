@@ -1,6 +1,0 @@
-imprimir(0 % 1);
-imprimir(1 % 1);
-imprimir(5 % 2);
-imprimir(-5 % 3);
-imprimir(100 % 13);
-imprimir(7 % 7);

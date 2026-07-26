@@ -1,8 +1,0 @@
-estructura Par {
-    clave: texto,
-    valor: entero
-}
-
-Par p = Par { clave: "x", valor: 100 };
-imprimir(p.clave);
-imprimir(p.valor);

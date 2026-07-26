@@ -1,9 +1,0 @@
-importar ingles;
-
-entero suma = 0;
-entero n = 1;
-mientras (n <= 10) {
-    suma = suma + n;
-    n = n + 1;
-}
-imprimir(suma);

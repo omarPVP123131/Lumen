@@ -1,8 +1,0 @@
-booleano a = verdadero;
-booleano b = falso;
-
-imprimir(a && b);
-imprimir(a || b);
-imprimir(!a);
-imprimir(!b);
-imprimir(verdadero || falso);

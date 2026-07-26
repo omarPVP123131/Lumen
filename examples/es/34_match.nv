@@ -1,9 +1,0 @@
-entero x = 2;
-texto dia = "";
-elegir (x) {
-    caso 1: { dia = "lunes"; }
-    caso 2: { dia = "martes"; }
-    caso 3: { dia = "miercoles"; }
-    defecto: { dia = "fin de semana"; }
-}
-imprimir(dia);

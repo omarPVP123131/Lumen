@@ -1,9 +1,0 @@
-entero x = 5;
-entero y = 10;
-
-imprimir(x == y);
-imprimir(x != y);
-imprimir(x < y);
-imprimir(x > y);
-imprimir(x <= y);
-imprimir(x >= y);

@@ -40,10 +40,10 @@ Inferencia de tipos, Métodos en structs (impl), Diccionarios nativos, String in
 
 | # | Feature | Sintaxis | Estado |
 |---|---------|----------|--------|
-| 61 | **OR Patterns** | `caso Rojo \| Verde:` | 📋 |
-| 62 | **If-let / While-let** | `si sea Algun(x) = opt { }` | 📋 |
-| 63 | **Range Patterns** | `caso 0..10:` | 📋 |
-| 64 | **String Patterns** | `caso "hola":` | 📋 |
+| 61 | **OR Patterns** | `caso Rojo \| Verde:` | ✅ |
+| 62 | **If-let / While-let** | `si sea Algun(x) = opt { }` | ✅ |
+| 63 | **Range Patterns** | `caso 0..10:` — list equality | ✅ |
+| 64 | **String Patterns** | `caso "hola":` — string == | ✅ |
 | 65 | **Guard Let** | `sea x = expr sino { romper }` | 📋 |
 | 66 | **Operator Overloading** | `impl Suma for MiTipo` | 📋 |
 | 67 | **Extension Methods** | `impl MiRasgo for TipoExterno` | 📋 |

@@ -1,6 +1,0 @@
-entero x = 10;
-texto r = x > 0 ? "positivo" : "negativo";
-imprimir(r);
-
-entero y = -5;
-imprimir(y >= 0 ? "no negativo" : "negativo");

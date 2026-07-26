@@ -1,9 +1,0 @@
-texto s = "Hola Mundo";
-lista<texto> partes = __str_dividir(s, " ");
-
-imprimir(partes[0]);
-imprimir(partes[1]);
-
-imprimir(__str_mayusculas(s));
-imprimir(__str_minusculas(s));
-imprimir(__str_contiene(s, "Mun"));

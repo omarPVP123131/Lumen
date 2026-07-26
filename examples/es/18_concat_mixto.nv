@@ -1,7 +1,0 @@
-entero edad = 25;
-decimal altura = 1.75;
-texto clave = "usuario";
-
-imprimir("Edad: " + edad);
-imprimir("Altura: " + altura);
-imprimir("Clave: " + clave + 10);

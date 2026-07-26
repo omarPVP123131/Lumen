@@ -1,8 +1,0 @@
-entero i = 0;
-mientras (i < 10) {
-    si (i == 5) {
-        romper;
-    }
-    imprimir(i);
-    i = i + 1;
-}
