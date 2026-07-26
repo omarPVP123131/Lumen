@@ -769,13 +769,17 @@ impl SemanticAnalyzer {
                 init,
                 span,
             } => {
-                let declared_type = self.type_to_info(var_type.clone());
-                let _init_type = init
+                let inferred_type = init
                     .as_ref()
                     .map(|e| self.analyze_expr(e))
-                    .unwrap_or(declared_type.clone());
-                if let Some(ref init_expr) = init {
-                    let init_type = self.analyze_expr(init_expr);
+                    .unwrap_or_else(|| self.type_to_info(var_type.clone()));
+                let declared_type = if matches!(var_type, Type::Struct(name) if name == "Infer") {
+                    inferred_type.clone()
+                } else {
+                    self.type_to_info(var_type.clone())
+                };
+                if init.is_some() {
+                    let init_type = inferred_type;
                     if !can_assign(&declared_type, &init_type) {
                         self.errors.push(SemError {
                             code: "E031".to_string(),
@@ -954,9 +958,9 @@ impl SemanticAnalyzer {
             Decl::ImplRasgo {
                 trait_name,
                 target_type,
+                associated_types,
                 methods,
                 span,
-                ..
             } => {
                 let _type_name = match type_to_impl_name(target_type) {
                     Some(n) => n,
@@ -983,8 +987,25 @@ impl SemanticAnalyzer {
                     return TypeInfo::Void;
                 }
                 let trait_sig = self.traits[trait_name].clone();
-                let (methods_sig, _assoc_types) = trait_sig;
+                let (methods_sig, assoc_types) = trait_sig;
+                let mut assoc_subst = HashMap::new();
+                for assoc in assoc_types {
+                    if let Some(default) = assoc.default {
+                        assoc_subst.insert(assoc.name, default);
+                    }
+                }
+                for assoc in associated_types {
+                    assoc_subst.insert(
+                        assoc.name.clone(),
+                        self.type_to_info(assoc.target_type.clone()),
+                    );
+                }
                 for (t_mname, t_params, t_ret) in &methods_sig {
+                    let expected_params: Vec<TypeInfo> = t_params
+                        .iter()
+                        .map(|param| substitute_typevars(param, &assoc_subst))
+                        .collect();
+                    let expected_ret = substitute_typevars(t_ret, &assoc_subst);
                     let found = methods.iter().any(|m| {
                         if let Decl::Function {
                             name,
@@ -1001,12 +1022,13 @@ impl SemanticAnalyzer {
                                 .map(|p| self.type_to_info(p.param_type.clone()))
                                 .collect();
                             let m_ret = self.type_to_info(return_type.clone());
-                            m_params.len() == t_params.len()
+                            m_params.len() == expected_params.len()
                                 && m_params
                                     .iter()
-                                    .zip(t_params.iter())
+                                    .zip(expected_params.iter())
                                     .all(|(a, b)| can_assign(b, a) || can_assign(a, b))
-                                && (can_assign(t_ret, &m_ret) || can_assign(&m_ret, t_ret))
+                                && (can_assign(&expected_ret, &m_ret)
+                                    || can_assign(&m_ret, &expected_ret))
                         } else {
                             false
                         }
@@ -3000,6 +3022,9 @@ fn substitute_typevars(typ: &TypeInfo, subst: &HashMap<String, TypeInfo>) -> Typ
                 .map(|t| substitute_typevars(t, subst))
                 .collect(),
         ),
+        TypeInfo::Struct { name, fields } if fields.is_empty() => {
+            subst.get(name).cloned().unwrap_or(typ.clone())
+        }
         TypeInfo::Struct { name, fields } => TypeInfo::Struct {
             name: name.clone(),
             fields: fields

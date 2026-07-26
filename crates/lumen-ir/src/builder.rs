@@ -94,7 +94,10 @@ impl IRBuilder {
                         let mut param_names: Vec<String> =
                             params.iter().map(|p| p.name.clone()).collect();
                         // Trait methods always have an implicit receiver (self)
-                        if !param_names.iter().any(|n| n == "self" || n == "yo") {
+                        if !param_names
+                            .iter()
+                            .any(|n| n == "self" || n == "yo" || n == "este")
+                        {
                             param_names.insert(0, "self".to_string());
                         }
                         let func = Func {

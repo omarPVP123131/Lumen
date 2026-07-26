@@ -91,7 +91,11 @@ impl Parser {
                 self.parse_function().map(DeclOrStmt::Decl)
             }
         } else if self.check(&[TokenKind::Sea, TokenKind::Let]) {
-            self.parse_guard_let().map(DeclOrStmt::Stmt)
+            if self.is_guard_let() {
+                self.parse_guard_let().map(DeclOrStmt::Stmt)
+            } else {
+                self.parse_declaration().map(DeclOrStmt::Decl)
+            }
         } else if self.check(&[TokenKind::Si, TokenKind::If]) {
             self.parse_if().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::Mientras, TokenKind::While]) {
@@ -2374,6 +2378,7 @@ impl Parser {
         let token = self.advance()?;
         match token.kind {
             TokenKind::Numero | TokenKind::Number => Some(Type::Numero),
+            TokenKind::Sea | TokenKind::Let => Some(Type::Struct("Infer".to_string())),
             TokenKind::Entero | TokenKind::Integer => Some(Type::Entero),
             TokenKind::Decimal | TokenKind::Float => Some(Type::Decimal),
             TokenKind::Texto | TokenKind::String => Some(Type::Texto),
@@ -2609,6 +2614,49 @@ impl Parser {
         } else {
             None
         }
+    }
+
+    fn is_guard_let(&self) -> bool {
+        let mut i = self.pos;
+        let mut brace_depth = 0;
+        let mut paren_depth = 0;
+        let mut bracket_depth = 0;
+        while i < self.tokens.len() {
+            let kind = &self.tokens[i].kind;
+            match kind {
+                TokenKind::LeftBrace => brace_depth += 1,
+                TokenKind::RightBrace => {
+                    if brace_depth > 0 {
+                        brace_depth -= 1;
+                    }
+                }
+                TokenKind::LeftParen => paren_depth += 1,
+                TokenKind::RightParen => {
+                    if paren_depth > 0 {
+                        paren_depth -= 1;
+                    }
+                }
+                TokenKind::LeftBracket => bracket_depth += 1,
+                TokenKind::RightBracket => {
+                    if bracket_depth > 0 {
+                        bracket_depth -= 1;
+                    }
+                }
+                TokenKind::Semicolon => {
+                    if brace_depth == 0 && paren_depth == 0 && bracket_depth == 0 {
+                        return false;
+                    }
+                }
+                _ if token_matches(kind, &TokenKind::Sino) => {
+                    if brace_depth == 0 && paren_depth == 0 && bracket_depth == 0 {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        false
     }
 
     fn check(&self, kinds: &[TokenKind]) -> bool {
