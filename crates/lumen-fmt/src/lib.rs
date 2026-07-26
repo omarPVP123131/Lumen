@@ -4,7 +4,31 @@ use lumen_parser::Parser;
 
 /// Formatea código fuente LÚMEN.
 /// Retorna el código formateado o una lista de errores.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct FmtConfig {
+    pub indent_spaces: usize,
+}
+
+impl Default for FmtConfig {
+    fn default() -> Self {
+        Self { indent_spaces: 4 }
+    }
+}
+
 pub fn format_source(source: &str) -> Result<String, Vec<String>> {
+    let config = load_config();
+    format_source_with_config(source, &config)
+}
+
+pub fn load_config() -> FmtConfig {
+    if let Ok(content) = std::fs::read_to_string(".lumen-fmt.toml") {
+        toml::from_str(&content).unwrap_or_default()
+    } else {
+        FmtConfig::default()
+    }
+}
+
+pub fn format_source_with_config(source: &str, config: &FmtConfig) -> Result<String, Vec<String>> {
     let lexer = Lexer::new(source);
     let (tokens, lex_errors) = lexer.tokenize();
     if !lex_errors.is_empty() {
@@ -33,7 +57,7 @@ pub fn format_source(source: &str) -> Result<String, Vec<String>> {
             .collect());
     }
 
-    let mut fmt = Formatter::new();
+    let mut fmt = Formatter::new(config.indent_spaces);
     fmt.fmt_program(&program);
     Ok(fmt.output.trim_end().to_string() + "\n")
 }
@@ -41,13 +65,15 @@ pub fn format_source(source: &str) -> Result<String, Vec<String>> {
 struct Formatter {
     output: String,
     indent: usize,
+    indent_spaces: usize,
 }
 
 impl Formatter {
-    fn new() -> Self {
+    fn new(indent_spaces: usize) -> Self {
         Self {
             output: String::new(),
             indent: 0,
+            indent_spaces,
         }
     }
 
@@ -56,7 +82,9 @@ impl Formatter {
     }
     fn push_indent(&mut self) {
         for _ in 0..self.indent {
-            self.output.push_str("    ");
+            for _ in 0..self.indent_spaces {
+                self.output.push(' ');
+            }
         }
     }
     fn newline(&mut self) {

@@ -1,4 +1,4 @@
-# Referencia CLI de LÚMEN
+# Referencia CLI de LÚMEN — v1.6.0
 
 ## Uso General
 
@@ -6,37 +6,155 @@
 lumen <comando> [opciones] <archivo>
 ```
 
+---
+
 ## Comandos
 
-### run — Ejecutar programa
+### `run` — Ejecutar programa
 
 ```bash
-lumen run programa.nv     # Ejecuta fuente .nv
-lumen run programa.nvc    # Ejecuta bytecode compilado
-lumen run -L ./libs prog.nv  # Con ruta de librerías
+lumen run programa.nv       # Ejecuta fuente .nv
+lumen run programa.nvc      # Ejecuta bytecode compilado
+lumen run -L ./libs prog.nv # Con directorio de librerías
 ```
 
-Compila y ejecuta en un solo paso. Para fuente `.nv`, el pipeline completo (lexer → parser → módulos → sema → IR → codegen → VM) se ejecuta en memoria.
+Compila y ejecuta en un solo paso. El pipeline completo se ejecuta en memoria.
 
-### build — Compilar a bytecode
+---
+
+### `build` — Compilar a bytecode
 
 ```bash
-lumen build programa.nv   # Genera programa.nvc
+lumen build programa.nv     # Genera programa.nvc
 ```
 
-### check — Verificar sintaxis y semántica
+---
+
+### `check` — Verificar sintaxis y semántica
 
 ```bash
-lumen check programa.nv   # Solo análisis, sin ejecución
+lumen check programa.nv     # Análisis completo sin ejecutar
 ```
 
-### disasm — Desensamblar bytecode
+---
+
+### `disasm` — Desensamblar bytecode
 
 ```bash
-lumen disasm programa.nvc  # Muestra instrucciones en texto legible
+lumen disasm programa.nvc   # Muestra instrucciones en texto legible
 ```
 
-Útil para aprendizaje: muestra cada instrucción de la VM con sus operandos.
+Útil para aprendizaje: cada instrucción de la VM con sus operandos.
+
+---
+
+### `fmt` — Formatear código
+
+```bash
+lumen fmt archivo.nv        # Formatea en su lugar
+lumen fmt --check archivo.nv # Solo verifica sin modificar
+```
+
+Soporta configuración vía `.lumen-fmt.toml`:
+
+```toml
+indent_spaces = 4
+max_line_length = 100
+trailing_newline = true
+```
+
+---
+
+### `repl` — REPL interactivo
+
+```bash
+lumen repl
+```
+
+Características: historial persistente, edición multilínea, resaltado de sintaxis,
+autocompletado de símbolos.
+
+---
+
+### `new` — Crear proyecto
+
+```bash
+lumen new mi_proyecto
+```
+
+Genera scaffolding con `lumen.toml`, `src/main.nv`, y estructura de proyecto estándar.
+
+---
+
+### `test` — Ejecutar tests
+
+```bash
+lumen test tests.nv
+```
+
+Ejecuta todas las funciones que empiecen con `test_`. Usa `afirmar(expr)` para assertions.
+
+---
+
+### `lint` — Análisis estático
+
+```bash
+lumen lint programa.nv
+```
+
+Detecta: código muerto, variables no usadas, complejidad ciclomática alta, imports no usados.
+
+---
+
+### `doc` — Generar documentación
+
+```bash
+lumen doc programa.nv       # Genera HTML en ./docs/
+lumen doc programa.nv -o mi_docs/
+```
+
+Extrae comentarios `///` y genera documentación HTML estática.
+
+---
+
+### `debug` — Depurador interactivo
+
+```bash
+lumen debug programa.nv
+```
+
+Comandos en el depurador:
+- `break <linea>` — Añadir breakpoint
+- `step` / `s` — Ejecutar siguiente instrucción
+- `continue` / `c` — Continuar hasta siguiente breakpoint
+- `inspect <var>` — Ver valor de variable
+- `quit` — Salir
+
+---
+
+### `serve` — Servidor de desarrollo
+
+```bash
+lumen serve programa.nv
+```
+
+Inicia servidor con hot reload. Recarga automáticamente al detectar cambios en `.nv`.
+
+---
+
+### `lsp` — Servidor LSP
+
+```bash
+lumen lsp
+```
+
+Servidor LSP para VS Code y editores compatibles. Provee:
+- Diagnósticos en tiempo real (`publishDiagnostics`)
+- Autocompletado (`textDocument/completion`)
+- Ir a definición (`textDocument/definition`)
+- Hover con tipos (`textDocument/hover`)
+
+---
 
 ## Opciones Globales
 
@@ -45,13 +163,8 @@ lumen disasm programa.nvc  # Muestra instrucciones en texto legible
 | `-L <dir>` / `--lib-dir <dir>` | Directorio de búsqueda para importar módulos |
 | `--version` | Versión del compilador |
 | `--help` | Mensaje de ayuda |
-| `lumen fmt <file>` | Formatea código fuente |
-| `lumen repl` | Inicia el REPL interactivo |
-| `lumen new <name>` | Crea un nuevo proyecto |
-| `lumen test <file>` | Ejecuta tests unitarios |
-| `lumen doc <file>` | Genera documentación HTML desde `///` |
-| `lumen lsp` | Inicia el servidor LSP |
-| `lumen debug <file>` | Inicia el depurador con breakpoints |
+
+---
 
 ## Códigos de Salida
 
@@ -61,10 +174,12 @@ lumen disasm programa.nvc  # Muestra instrucciones en texto legible
 | 1 | Error del usuario (sintaxis, semántica, runtime) |
 | 2 | Error interno (bug del compilador) |
 
+---
+
 ## Ejemplos
 
 ```bash
-# Ejecutar ejemplo
+# Ejecutar un programa
 lumen run examples/hello.nv
 
 # Compilar y luego ejecutar bytecode
@@ -77,6 +192,18 @@ lumen check examples/loop.nv
 # Desensamblar
 lumen disasm examples/func.nvc
 
-# Programa con imports
-lumen run -L ./librerias programa.nv
+# Formatear todos los .nv
+lumen fmt src/*.nv
+
+# Ejecutar tests
+lumen test tests/unit.nv
+
+# Programa con imports desde directorio
+lumen run -L ./stdlib programa.nv
+
+# Generar docs
+lumen doc src/main.nv -o ./docs
+
+# Depurar
+lumen debug programa.nv
 ```

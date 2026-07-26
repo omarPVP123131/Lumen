@@ -454,6 +454,8 @@ version = "1.5.0"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
+ "serde",
+ "toml",
 ]
 
 [[package]]

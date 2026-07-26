@@ -3,22 +3,27 @@
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-1.6.0-orange)
-![Tests](https://img.shields.io/badge/tests-307-brightgreen)
+![Tests](https://img.shields.io/badge/tests-307%20passing-brightgreen)
+![Fases](https://img.shields.io/badge/fases-0--83%20completadas-blueviolet)
 
-LÚMEN es un lenguaje de programación educativo de alto rendimiento con sintaxis nativa en español (y soporte completo para inglés). Cuenta con un pipeline de compilación completo escrito desde cero en Rust: Lexer → Parser → IR → Optimizador → Bytecode → VM.
+> **El primer lenguaje de programación moderno con el español como ciudadano de primera clase.**
+> Pipeline completo escrito en Rust: Lexer → Parser → Sema → IR → Optimizador → Bytecode → VM.
+
+---
 
 ## 🚀 Inicio Rápido
 
-### Instalación (desde binario)
-1. Ve a la sección de [Releases](https://github.com/omarPVP123131/Lumen/releases).
-2. Descarga el ejecutable para tu plataforma (Windows, Linux o macOS).
-3. Añade el ejecutable a tu `PATH` o ejecútalo directamente:
-   ```bash
-   ./lumen run mi_programa.nv
-   ```
+### Instalación (binario)
 
-### Compilación desde fuente
-Si tienes Rust instalado:
+1. Descarga el ejecutable en [Releases](https://github.com/omarPVP123131/Lumen/releases)
+2. Agrégalo a tu `PATH` y ejecuta:
+
+```bash
+lumen run mi_programa.nv
+```
+
+### Compilar desde fuente
+
 ```bash
 git clone https://github.com/omarPVP123131/Lumen.git
 cd Lumen
@@ -26,86 +31,160 @@ cargo build --release
 ./target/release/lumen --help
 ```
 
-## ✨ Características Principales
+---
 
-LÚMEN combina la legibilidad del español con la potencia de los lenguajes modernos:
+## 💡 El Lenguaje en un Vistazo
 
-- **🏠 Sintaxis Dual**: Programa en español (`si`, `mientras`, `funcion`) o inglés (`if`, `while`, `function`).
-- **🛡️ Tipado Estático Moderno**: `entero`, `decimal`, `texto`, `booleano`, `lista<T>`, `opcion<T>`, `resultado<T, E>`, `impl Rasgo`.
-- **➕ Sobrecarga de Operadores**: Traits `Suma`, `Resta`, `Multiplica`, `Divide` para tipos personalizados.
-- **🔐 Guard Let**: `sea x = expr sino { romper }` con desestructuración.
-- **🧩 Tipos Compuestos**:
-  - **Estructuras**: Objetos con campos nombrados.
-  - **Enums (Tipos Suma)**: Variantes con datos asociados (`enum Color { Rojo, Verde(entero) }`).
-  - **Tuplas**: Agrupación heterogénea de valores `(1, "hola")`.
-- **🔍 Pattern Matching**: Desempaquetado potente con `elegir` / `match`.
-- **🧬 Genéricos**: Funciones y estructuras reutilizables con parámetros de tipo `<T>`.
-- **📦 Módulos**: Sistema de importación robusto con `importar`.
-- **⚡ Optimizado**: Bytecode compacto y VM de alta velocidad con cache de funciones y pooling de constantes.
+### Hola Mundo
 
-## 💻 El Lenguaje en un Vistazo
+```nv
+imprimir("¡Hola, LÚMEN!");
+```
 
-### Funciones y Genéricos
-```lumen
-// Función genérica que funciona con cualquier tipo
+### Variables e Inferencia de Tipos
+
+```nv
+x = 42;             // entero (inferido)
+nombre = "Ana";     // texto (inferido)
+activo = verdadero; // booleano (inferido)
+```
+
+### Funciones, Genéricos y Traits
+
+```nv
+rasgo Mostrable {
+    funcion texto mostrar(este);
+}
+
 funcion T identidad<T>(T valor) {
     retornar valor;
 }
 
 imprimir(identidad<entero>(42));
-imprimir(identidad<texto>("Hola LÚMEN"));
+imprimir(identidad<texto>("LÚMEN"));
 ```
 
-### Enums y Pattern Matching
-```lumen
+### Enums con Datos y Pattern Matching
+
+```nv
 enum Forma {
-    Circulo(decimal),      // radio
-    Rectangulo(decimal, decimal) // base, altura
+    Circulo(decimal),
+    Rectangulo(decimal, decimal)
 }
 
 funcion decimal area(Forma f) {
     elegir f {
-        caso Forma::Circulo(r) { retornar 3.14159 * r * r; }
+        caso Forma::Circulo(r)       { retornar 3.14159 * r * r; }
         caso Forma::Rectangulo(b, h) { retornar b * h; }
     }
 }
 
 Forma mi_forma = Forma::Circulo(5.0);
-imprimir("Área: ", area(mi_forma));
+imprimir("Área: ", area(mi_forma)); // 78.53975
 ```
 
-### Tuplas y Destructuración
-```lumen
-// Declaración con destructuración
-entero x, texto etiqueta = (100, "Coordenada X");
+### Guard Let
 
-// Asignación múltiple
-x, etiqueta = (200, "Nueva Coordenada");
-
-imprimir(etiqueta, ": ", x);
+```nv
+sea Algun(valor) = obtener_config() sino {
+    imprimir("Sin configuración, usando defaults");
+    retornar;
+}
+imprimir("Config cargada: ", valor);
 ```
 
-## 🛠️ Herramientas de Línea de Comandos
+### Sobrecarga de Operadores
 
-| Comando | Acción |
-|---------|--------|
-| `lumen run <archivo>` | Ejecuta un archivo fuente `.nv` o bytecode `.nvc` |
-| `lumen build <archivo>` | Compila el código fuente a bytecode optimizado `.nvc` |
-| `lumen check <archivo>` | Realiza análisis léxico, sintáctico y semántico sin ejecutar |
-| `lumen disasm <archivo>` | Muestra las instrucciones de bajo nivel (bytecode) del programa |
+```nv
+estructura Vector2D { x: decimal, y: decimal }
+
+impl Suma para Vector2D {
+    funcion Vector2D sumar(Vector2D self, Vector2D otro) {
+        retornar Vector2D { x: self.x + otro.x, y: self.y + otro.y };
+    }
+}
+
+Vector2D a = Vector2D { x: 1.0, y: 2.0 };
+Vector2D b = Vector2D { x: 3.0, y: 4.0 };
+Vector2D c = a + b; // { x: 4.0, y: 6.0 }
+```
+
+### Tipos Asociados en Traits
+
+```nv
+rasgo Contenedor {
+    tipo Item;
+    funcion Item obtener(este);
+}
+
+impl Contenedor para Caja {
+    tipo Item = entero;
+    funcion entero obtener(este) { retornar este.valor; }
+}
+```
+
+### String Interpolation
+
+```nv
+texto saludo = "Hola {nombre}, tienes {edad} años.";
+imprimir(saludo);
+```
+
+---
+
+## 🛠️ Herramientas
+
+| Comando | Descripción |
+|---------|-------------|
+| `lumen run <archivo>` | Ejecuta fuente `.nv` o bytecode `.nvc` |
+| `lumen build <archivo>` | Compila a bytecode optimizado `.nvc` |
+| `lumen check <archivo>` | Análisis léxico + semántico sin ejecutar |
+| `lumen disasm <archivo>` | Desensambla bytecode a texto legible |
+| `lumen fmt <archivo>` | Formatea código (soporta `.lumen-fmt.toml`) |
+| `lumen repl` | REPL interactivo con historial y autocompletado |
+| `lumen new <nombre>` | Crea proyecto con scaffolding y `lumen.toml` |
+| `lumen test <archivo>` | Ejecuta funciones `test_*` |
+| `lumen lint <archivo>` | Análisis estático: código muerto, complejidad |
+| `lumen doc <archivo>` | Genera HTML desde comentarios `///` |
+| `lumen debug <archivo>` | Depurador con breakpoints e inspección |
+| `lumen serve` | Servidor de desarrollo con hot reload |
+| `lumen lsp` | Servidor LSP para VS Code (diagnostics, completion, hover, go-to-def) |
+
+---
+
+## 📊 Estado del Proyecto (v1.6.0)
+
+```
+Lenguaje Core      (Fases 0-60)   ████████████████████ 100%
+Lenguaje Avanzado  (Fases 61-70)  ████████████████████ 100%
+Herramientas       (Fases 71-83)  ███████████████████░  95%
+Distribución       (Fases 86-95)  ████████░░░░░░░░░░░░  40%
+```
+
+- ✅ **307 tests** pasando, ~9 warnings
+- ✅ **44 ejemplos** `.nv` funcionales
+- ✅ **14 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg
+
+---
 
 ## 📚 Documentación
 
-Para profundizar en LÚMEN, consulta nuestra documentación detallada:
+| Documento | Descripción |
+|-----------|-------------|
+| [LENGUAJE.md](LENGUAJE.md) | Manual completo del lenguaje — la Biblia de LÚMEN |
+| [HERRAMIENTAS.md](HERRAMIENTAS.md) | Guía de herramientas, CI/CD y flujo de trabajo |
+| [docs/language.md](docs/language.md) | Referencia rápida de sintaxis |
+| [docs/cli.md](docs/cli.md) | Referencia completa de comandos CLI |
+| [docs/architecture.md](docs/architecture.md) | Arquitectura interna del compilador y VM |
+| [docs/roadmap.md](docs/roadmap.md) | Roadmap completo v1.0 → v3.0 |
+| [CHANGELOG.md](CHANGELOG.md) | Historial de versiones |
+| [MARKETING.md](MARKETING.md) | Visión, posicionamiento y comparativas |
 
-- [📖 Guía del Lenguaje](docs/language.md) — Tutorial completo de sintaxis y tipos.
-- [⚙️ Referencia de la CLI](docs/cli.md) — Todos los flags y comandos.
-- [🏗️ Arquitectura Interna](docs/architecture.md) — Cómo funciona el compilador y la VM.
-- [🗺️ Roadmap](docs/roadmap.md) — El camino hacia la versión 2.0.
+---
 
 ## ❤️ Contribuir
 
-LÚMEN es un proyecto abierto. Si quieres reportar un error o sugerir una mejora, por favor abre un *Issue* o envía un *Pull Request*. Consulta [CONTRIBUTING.md](docs/contributing.md) para más detalles.
+Abre un *Issue* o *Pull Request*. Consulta [CONTRIBUTING.md](docs/contributing.md) para la guía completa.
 
 ---
 

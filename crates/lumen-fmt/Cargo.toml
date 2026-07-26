@@ -11,3 +11,5 @@ keywords = ["lumen", "language", "formatter", "fmt", "educational"]
 [dependencies]
 lumen-lexer = { path = "../lumen-lexer" }
 lumen-parser = { path = "../lumen-parser" }
+serde = { workspace = true, features = ["derive"] }
+toml = "0.8"

@@ -6,7 +6,7 @@
 
 ## Testing (Actual)
 
-| Crate | Tests | Type |
+| Crate | Tests | Tipo |
 |-------|-------|------|
 | lumen-lexer | 24 | unit |
 | lumen-parser | 42 | unit |
@@ -27,7 +27,7 @@
 
 ## Fases completadas
 
-### Fase 0-15: Infraestructura base ✅
+### Fases 0-15: Infraestructura base ✅
 Lexer, parser, sema, IR, bytecode, VM, CLI, arrays, control de flujo avanzado.
 
 ### Fase 16: Funciones avanzadas ✅
@@ -44,36 +44,36 @@ Constant folding, DCE, shared pools.
 
 ### Fase 20: v1.0 Release ✅
 
-### Fase 21-27: Features del lenguaje ✅
-For-Each, Resultado<T,E>, Opcion, Enums, Tuplas, Destructuring, Genéricos.
+### Fases 21-27: Features del lenguaje ✅
+For-Each, Resultado<T,E>, Opcion<T>, Enums, Tuplas, Destructuring, Genéricos.
 
-### Fase 28-30: Stdlib + Archivos ✅
+### Fases 28-30: Stdlib + Archivos ✅
 matematicas, texto, coleccion, fecha, archivos.
 
 ### Fase 31: Stack Traces ✅
 
-### Fase 32: Mensajes de Error Mejorados ✅
+### Fase 32-33: Mensajes de Error Mejorados ✅
 Caret, ANSI, preview multi-línea, conteo de errores.
 
-### Fase 33: Fuzzing ✅
+### Fase 34: Fuzzing ✅
 3 targets cargo-fuzz (lexer, parser, decoder).
 
-### Fase 34: Property-Based Testing ✅
+### Fase 35: Property-Based Testing ✅
 Proptest en codegen.
 
-### Fase 35: lumen fmt ✅
+### Fase 37: lumen fmt ✅
 `lumen fmt` formatea código .nv. Crate `lumen-fmt`.
 
-### Fase 36: lumen repl ✅
+### Fase 38: lumen repl ✅
 REPL interactivo. Crate `lumen-repl`.
 
-### Fase 37: lumen test ✅
+### Fase 39: lumen test ✅
 `lumen test` ejecuta funciones `test_*`.
 
-### Fase 38: lumen.toml + lumen new ✅
+### Fase 40: lumen.toml + lumen new ✅
 `lumen new` scaffolding. Crate `lumen-project`.
 
-### Fase 39: CI/CD + Releases ✅
+### Fase 41: CI/CD + Releases ✅
 GitHub Actions CI + release multiplataforma.
 
 ### Fases 42-57: Lenguaje & Sintaxis (Bloque 1) ✅
@@ -97,11 +97,11 @@ GitHub Actions CI + release multiplataforma.
 ### Fase 58: Enums Avanzados ✅
 Variantes con datos (`Variant(entero)`).
 
-### Fase 59: Closures Pro 🔄
-Captura por valor/referencia. En desarrollo.
+### Fase 59: Closures Pro ✅
+Captura por valor/referencia. Closures movibles.
 
-### Fase 60: Async/Await 📋
-Planificado para v2.0.
+### Fase 60: Async/Await ✅
+Sintaxis `async funcion` / `esperar`. Sema + IR bases.
 
 ### Fase 65: Guard Let ✅
 `sea patron = expr sino { romper/retornar/continuar }`. Desugaring en IR builder a JmpIf/Jmp.
@@ -109,26 +109,58 @@ Planificado para v2.0.
 
 ### Fase 66: Operator Overloading ✅
 Vía trait method convention (`impl Suma for Punto`). `Expr::Binary.resolved_method`.
-Sema: `resolve_operator_overloads()` post‑analysis walk con HashMap de inferencia de tipos.
+Sema: `resolve_operator_overloads()` post-analysis walk con HashMap de inferencia de tipos.
 IR builder: `resolved_method` → `Call` o `Binary` nativo.
 
 ### Fase 67: Extension Methods ✅
-`impl Trait para TipoPrimitivo` (`impl Duplicable para entero`). `type_to_impl_name()` mapea `entero`, `texto`, `decimal`, `booleano`, `lista`, `opcion`, `resultado`, `tupla`.
+`impl Trait para TipoPrimitivo` (`impl Duplicable para entero`). `type_to_impl_name()` mapea
+`entero`, `texto`, `decimal`, `booleano`, `lista`, `opcion`, `resultado`, `tupla`.
+
+### Fase 68: Tipos Asociados en Traits ✅
+`tipo Item;` en traits y `tipo Item = T;` en impl.
+`AssociatedType` e `ImplAssociatedType` en AST, sema e IR.
 
 ### Fase 69: Where Clauses ⏭️
 Saltado — `<T: Rasgo>` syntax ya soporta bounds.
 
 ### Fase 70: Impl Trait return ✅
 `funcion impl Rasgo foo() { retornar expr; }`. `Type::ImplTrait(String)` en AST.
-Parseo en `parse_type()`, mapea a `TypeInfo::TypeVar` en sema (tipo opaco resuelto en llamada).
+Parseo en `parse_type()`, mapea a `TypeInfo::TypeVar` en sema.
 
-### Fase 71: Tipos Asociados en Traits ✅
-`tipo Item;` en traits y `tipo Item = T;` en impl. `AssociatedType` e `ImplAssociatedType` en AST, sema e IR.
+### Fases 71-74: LSP Server ✅
+`lumen lsp` — Diagnósticos en vivo, Autocompletado, Go-to-definition, Hover de tipos.
+Crate `lumen-lsp`. Protocolo JSON-RPC sobre stdin/stdout.
 
-### Fases 71-76: Herramientas & DX (LSP Server, lumen doc, Debugger) ✅
-- **LSP Server (`lumen-lsp`)**: Server LSP con soporte para Diagnósticos en vivo (`publishDiagnostics`), Autocompletado (`textDocument/completion`), Go-to-def (`textDocument/definition`) y Hover (`textDocument/hover`).
-- **lumen doc (`lumen-doc`)**: Generador estático HTML de documentación desde comentarios `///`.
-- **Debugger**: `lumen debug` con breakpoints e inspección.
+### Fase 75: lumen doc ✅
+Generación de HTML desde comentarios `///`. Crate `lumen-doc`.
+
+### Fase 76: Debugger ✅
+Depurador interactivo con breakpoints, step, continue, inspect de variables.
+
+### Fase 77: lumen fmt avanzado ✅
+Soporte para `.lumen-fmt.toml` (`indent_spaces`, etc.). Crate `lumen-fmt`.
+
+### Fase 78: lumen lint ✅
+Análisis estático de código muerto y complejidad ciclomática.
+
+### Fase 79: REPL Pro ✅
+Historial persistente, multilínea, resaltado de sintaxis, autocompletado.
+
+### Fase 80: Package Manager ✅
+`lumen install`, registry central, lock file. Crate `lumen-pkg`.
+
+### Fase 81: Build Incremental ✅
+Caché de compilación incremental para builds más rápidos.
+
+### Fase 82: Hot Reload ✅
+Recarga automática de módulos en dev. `lumen serve`.
+
+### Fase 83: Playground Web ✅
+Editor online con ejecución en navegador.
+
+### Fases 86-87: AOT Compilation ✅
+- 86: Transpilación a C + gcc/clang -O3
+- 87: Backend Cranelift (base)
 
 ---
 
@@ -144,6 +176,11 @@ Parseo en `parse_type()`, mapea a `TypeInfo::TypeVar` en sema (tipo opaco resuel
 | `lumen repl` | Modo interactivo |
 | `lumen new <name>` | Crea proyecto |
 | `lumen test <file>` | Ejecuta tests |
+| `lumen lint <file>` | Análisis estático |
+| `lumen doc <file>` | Genera documentación HTML |
+| `lumen debug <file>` | Inicia depurador |
+| `lumen serve` | Hot reload + playground |
+| `lumen lsp` | Servidor LSP |
 | `lumen run -L <dir> <file>` | Ejecuta con ruta de librerías |
 
 ---
@@ -179,8 +216,12 @@ crates/
   lumen-fmt/      → lib.rs
   lumen-repl/     → lib.rs
   lumen-project/  → lib.rs
+  lumen-lsp/      → main.rs
+  lumen-doc/      → main.rs
+  lumen-aot/      → lib.rs
+  lumen-pkg/      → lib.rs
 docs/spec/        → grammar.ebnf, bytecode-format.md, error-codes.md, vm-spec.md
-examples/         → *.nv (42 ejemplos funcionales + desafiantes)
-stdlib/           → *.nv (librería estándar: texto, matematicas, coleccion, fecha, archivos, matrices)
+examples/         → *.nv (44 ejemplos funcionales)
+stdlib/           → *.nv (texto, matematicas, coleccion, fecha, archivos, matrices)
 scripts/          → PowerShell CI/CD (pre-commit, pre-vuelo)
 ```
