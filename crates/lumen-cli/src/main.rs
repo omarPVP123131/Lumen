@@ -201,6 +201,13 @@ fn main() {
                 _ => eprintln!("Error ejecutando lumen-doc"),
             }
         }
+        "debug" => {
+            if config.file.is_empty() {
+                eprintln!("Error: falta el archivo");
+                process::exit(1);
+            }
+            run_debug(&config.file, &config.lib_dirs);
+        }
         "lsp" => {
             let _status = std::process::Command::new("lumen-lsp").status();
         }
@@ -608,6 +615,63 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
         Err(_) => {
             eprintln!("gcc/clang no encontrado. Instala GCC.");
             process::exit(1);
+        }
+    }
+}
+
+fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
+    let bytecode = compile_source(path, lib_dirs);
+    let mut vm = VM::new(bytecode);
+    vm.debug = true;
+    vm.step();
+    println!("LUMEN Debugger — s=step, c=continue, b<ip>=breakpoint, q=quit");
+    loop {
+        print!("debug> ");
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+        let mut input = String::new();
+        if std::io::stdin().read_line(&mut input).is_err() {
+            break;
+        }
+        let cmd = input.trim();
+        match cmd {
+            "s" | "step" => {
+                match vm.step() {
+                    Ok(()) => {}
+                    Err(e) => {
+                        eprintln!("Error: {}", e.with_stack(vm.call_stack()));
+                        break;
+                    }
+                }
+                if false {
+                    println!("Programa terminado");
+                    break;
+                }
+                println!(
+                    "ip={} stack_len={}",
+                    vm.instr_count,
+                    vm.stack_top().is_some() as usize
+                );
+            }
+            "c" | "continue" => {
+                match vm.run() {
+                    Ok(()) => {}
+                    Err(e) => {
+                        eprintln!("Error: {}", e.with_stack(vm.call_stack()));
+                    }
+                }
+                println!("Output: {:?}", vm.output());
+            }
+            "q" | "quit" => break,
+            s if s.starts_with('b') => {
+                if let Some(rest) = s.strip_prefix('b') {
+                    if let Ok(bp) = rest.trim().parse::<usize>() {
+                        vm.set_breakpoint(bp);
+                        println!("Breakpoint en {}", bp);
+                    }
+                }
+            }
+            "" => continue,
+            _ => eprintln!("Comandos: s(tep) c(ontinue) b<ip> q(uit)"),
         }
     }
 }

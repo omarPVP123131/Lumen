@@ -48,6 +48,11 @@ pub struct VM {
     output: Vec<String>,
     call_stack: Vec<CallFrame>,
     func_index_cache: HashMap<String, usize>,
+    pub debug: bool,
+    pub breakpoints: Vec<usize>,
+    step_mode: bool,
+    last_instr: Option<Instruction>,
+    pub instr_count: usize,
 }
 
 impl VM {
@@ -72,6 +77,11 @@ impl VM {
             output: Vec::new(),
             call_stack: Vec::new(),
             func_index_cache,
+            debug: false,
+            breakpoints: Vec::new(),
+            step_mode: false,
+            last_instr: None,
+            instr_count: 0,
         }
     }
 
@@ -88,9 +98,51 @@ impl VM {
             }
             let instr = self.bytecode.instructions[self.ip].clone();
             self.ip += 1;
+            self.instr_count += 1;
+            self.last_instr = Some(instr.clone());
+            if self.debug && (self.breakpoints.contains(&self.ip) || self.step_mode) {
+                println!(
+                    "\n[DEBUG] ip={} instr={:?} stack={} vars={}",
+                    self.ip,
+                    instr,
+                    self.stack.len(),
+                    self.locals.last().map_or(0, |l| l.len())
+                );
+                if self.step_mode {
+                    let mut input = String::new();
+                    std::io::stdin().read_line(&mut input).ok();
+                    match input.trim() {
+                        "c" | "continue" => self.step_mode = false,
+                        "q" | "quit" => return Ok(()),
+                        _ => {}
+                    }
+                }
+            }
             self.execute(&instr)?;
         }
         Ok(())
+    }
+
+    pub fn set_breakpoint(&mut self, ip: usize) {
+        self.breakpoints.push(ip);
+    }
+    pub fn step(&mut self) -> Result<(), VmError> {
+        self.step_mode = true;
+        self.debug = true;
+        if self.ip >= self.bytecode.instructions.len() {
+            return Ok(());
+        }
+        let instr = self.bytecode.instructions[self.ip].clone();
+        self.ip += 1;
+        self.instr_count += 1;
+        self.last_instr = Some(instr.clone());
+        self.execute(&instr)
+    }
+    pub fn stack_top(&self) -> Option<&Value> {
+        self.stack.last()
+    }
+    pub fn current_locals(&self) -> Option<&HashMap<String, Value>> {
+        self.locals.last()
     }
 
     pub fn output(&self) -> &[String] {
