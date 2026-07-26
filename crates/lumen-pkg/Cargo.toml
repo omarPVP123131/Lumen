@@ -1,0 +1,16 @@
+[package]
+name = "lumen-pkg"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Package manager para LÚMEN — lumen install, dependencias, registry"
+keywords = ["lumen", "language", "package", "manager", "install"]
+
+[[bin]]
+name = "lumen-pkg"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true

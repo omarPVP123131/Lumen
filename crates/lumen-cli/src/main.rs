@@ -208,6 +208,15 @@ fn main() {
             }
             run_debug(&config.file, &config.lib_dirs);
         }
+        "install" => {
+            if config.file.is_empty() {
+                eprintln!("Error: falta el paquete");
+                process::exit(1);
+            }
+            let _ = std::process::Command::new("lumen-pkg")
+                .args(["install", &config.file])
+                .status();
+        }
         "lsp" => {
             let _status = std::process::Command::new("lumen-lsp").status();
         }

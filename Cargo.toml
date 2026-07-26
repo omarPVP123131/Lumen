@@ -13,6 +13,7 @@ members = [
     "crates/lumen-aot",
     "crates/lumen-lsp",
     "crates/lumen-doc",
+    "crates/lumen-pkg",
 ]
 resolver = "2"
 
