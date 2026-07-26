@@ -196,6 +196,25 @@ funcion impl Comparable crear() {
 }
 ```
 
+## Extension Methods
+
+Implementación de traits para tipos nativos y primitivos (`entero`, `texto`, `decimal`, etc.):
+
+```lumen
+rasgo Duplicable {
+    funcion entero duplicar(este);
+}
+
+impl Duplicable para entero {
+    funcion entero duplicar(este) {
+        retornar este * 2;
+    }
+}
+
+entero n = 21;
+imprimir(n.duplicar()); // 42
+```
+
 ## Tipos Asociados en Traits
 
 Definición de tipos asociados en rasgos e implementaciones:

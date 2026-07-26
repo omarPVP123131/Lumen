@@ -15,13 +15,13 @@
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 109 | e2e |
+| lumen-vm | 110 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
-| **Total** | **~306** | |
+| **Total** | **~307** | |
 
-**~9 warnings, ~306 tests passing. 43/43 ejemplos funcionando.**
+**~9 warnings, ~307 tests passing. 44/44 ejemplos funcionando.**
 
 ---
 
@@ -111,6 +111,9 @@ Planificado para v2.0.
 Vía trait method convention (`impl Suma for Punto`). `Expr::Binary.resolved_method`.
 Sema: `resolve_operator_overloads()` post‑analysis walk con HashMap de inferencia de tipos.
 IR builder: `resolved_method` → `Call` o `Binary` nativo.
+
+### Fase 67: Extension Methods ✅
+`impl Trait para TipoPrimitivo` (`impl Duplicable para entero`). `type_to_impl_name()` mapea `entero`, `texto`, `decimal`, `booleano`, `lista`, `opcion`, `resultado`, `tupla`.
 
 ### Fase 69: Where Clauses ⏭️
 Saltado — `<T: Rasgo>` syntax ya soporta bounds.

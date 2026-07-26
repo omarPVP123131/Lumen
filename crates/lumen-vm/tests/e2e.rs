@@ -1155,3 +1155,19 @@ imprimir(c.obtener_valor());";
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["99"]);
 }
+
+#[test]
+fn test_extension_methods() {
+    let src = "rasgo Duplicable {
+    funcion entero duplicar(este);
+}
+impl Duplicable para entero {
+    funcion entero duplicar(este) {
+        retornar este * 2;
+    }
+}
+entero x = 21;
+imprimir(x.duplicar());";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["42"]);
+}

@@ -10,6 +10,8 @@
   - Sema: `resolve_operator_overloads()` post‑analysis con `HashMap<String, TypeInfo>`.
   - IR builder: emite `Call` en lugar de `Binary` cuando hay overload resuelto.
   - Traits `Suma`, `Resta`, `Multiplica`, `Divide` en impl para structs.
+- **Fase 67: Extension Methods** — `impl Rasgo para TipoPrimitivo` (`entero`, `texto`, `decimal`, `booleano`, `lista`, etc.).
+  - `type_to_impl_name()` soporta resolución de tipos nativos.
 - **Fase 70: Impl Trait return** — `funcion impl Rasgo foo() { retornar expr }`.
   - `Type::ImplTrait(String)` en AST.
   - Parseo de `impl Rasgo` en `parse_type()`.
