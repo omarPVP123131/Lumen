@@ -55,6 +55,12 @@ fn main() {
                     "result": {
                         "capabilities": {
                             "textDocumentSync": 1, // Full sync
+                            "completionProvider": {
+                                "resolveProvider": false,
+                                "triggerCharacters": [".", ":"]
+                            },
+                            "definitionProvider": true,
+                            "hoverProvider": true,
                             "diagnosticProvider": {
                                 "interFileDependencies": false,
                                 "workspaceDiagnostics": false
@@ -91,6 +97,36 @@ fn main() {
                     }
                 });
                 send_response(&mut stdout, &notification);
+            }
+            "textDocument/completion" => {
+                let completions = get_completions();
+                let response = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": completions
+                });
+                send_response(&mut stdout, &response);
+            }
+            "textDocument/definition" => {
+                let response = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": serde_json::Value::Null
+                });
+                send_response(&mut stdout, &response);
+            }
+            "textDocument/hover" => {
+                let response = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": {
+                        "contents": {
+                            "kind": "markdown",
+                            "value": "### LÚMEN Symbol\nElemento de código LÚMEN"
+                        }
+                    }
+                });
+                send_response(&mut stdout, &response);
             }
             "shutdown" => {
                 let response = serde_json::json!({"jsonrpc": "2.0", "id": id, "result": null});
@@ -164,6 +200,73 @@ fn analyze(source: &str, _uri: &str) -> Vec<serde_json::Value> {
     }
 
     diagnostics
+}
+
+fn get_completions() -> Vec<serde_json::Value> {
+    let keywords = [
+        "funcion",
+        "function",
+        "entero",
+        "integer",
+        "decimal",
+        "float",
+        "texto",
+        "string",
+        "booleano",
+        "boolean",
+        "si",
+        "if",
+        "sino",
+        "else",
+        "mientras",
+        "while",
+        "para",
+        "for",
+        "en",
+        "in",
+        "elegir",
+        "match",
+        "caso",
+        "case",
+        "defecto",
+        "default",
+        "romper",
+        "break",
+        "continuar",
+        "continue",
+        "retornar",
+        "return",
+        "estructura",
+        "struct",
+        "rasgo",
+        "trait",
+        "impl",
+        "para",
+        "for",
+        "importar",
+        "import",
+        "tipo",
+        "const",
+        "sea",
+        "let",
+        "algun",
+        "ninguno",
+        "exito",
+        "error",
+        "verdadero",
+        "falso",
+    ];
+
+    keywords
+        .iter()
+        .map(|k| {
+            serde_json::json!({
+                "label": k,
+                "kind": 14, // Keyword
+                "detail": "Palabra clave de LÚMEN"
+            })
+        })
+        .collect()
 }
 
 fn send_response(stdout: &mut impl Write, response: &serde_json::Value) {

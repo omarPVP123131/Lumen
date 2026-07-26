@@ -125,6 +125,11 @@ Parseo en `parse_type()`, mapea a `TypeInfo::TypeVar` en sema (tipo opaco resuel
 ### Fase 71: Tipos Asociados en Traits ✅
 `tipo Item;` en traits y `tipo Item = T;` en impl. `AssociatedType` e `ImplAssociatedType` en AST, sema e IR.
 
+### Fases 71-76: Herramientas & DX (LSP Server, lumen doc, Debugger) ✅
+- **LSP Server (`lumen-lsp`)**: Server LSP con soporte para Diagnósticos en vivo (`publishDiagnostics`), Autocompletado (`textDocument/completion`), Go-to-def (`textDocument/definition`) y Hover (`textDocument/hover`).
+- **lumen doc (`lumen-doc`)**: Generador estático HTML de documentación desde comentarios `///`.
+- **Debugger**: `lumen debug` con breakpoints e inspección.
+
 ---
 
 ## Comandos CLI

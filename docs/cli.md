@@ -45,6 +45,13 @@ lumen disasm programa.nvc  # Muestra instrucciones en texto legible
 | `-L <dir>` / `--lib-dir <dir>` | Directorio de búsqueda para importar módulos |
 | `--version` | Versión del compilador |
 | `--help` | Mensaje de ayuda |
+| `lumen fmt <file>` | Formatea código fuente |
+| `lumen repl` | Inicia el REPL interactivo |
+| `lumen new <name>` | Crea un nuevo proyecto |
+| `lumen test <file>` | Ejecuta tests unitarios |
+| `lumen doc <file>` | Genera documentación HTML desde `///` |
+| `lumen lsp` | Inicia el servidor LSP |
+| `lumen debug <file>` | Inicia el depurador con breakpoints |
 
 ## Códigos de Salida
 

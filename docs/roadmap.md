@@ -58,9 +58,9 @@ Inferencia de tipos, Métodos en structs (impl), Diccionarios nativos, String in
 | # | Herramienta | Descripción | Estado |
 |---|-------------|-------------|--------|
 | 71 | **LSP Server** | Diagnostics en vivo en VS Code | ✅ |
-| 72 | **LSP: Completion** | Autocompletado | 📋 |
-| 73 | **LSP: Go-to-def** | Navegación a definiciones | 📋 |
-| 74 | **LSP: Hover** | Información de tipos al pasar mouse | 📋 |
+| 72 | **LSP: Completion** | Autocompletado | ✅ |
+| 73 | **LSP: Go-to-def** | Navegación a definiciones | ✅ |
+| 74 | **LSP: Hover** | Información de tipos al pasar mouse | ✅ |
 | 75 | **lumen doc** | Generación HTML desde `///` | ✅ |
 | 76 | **Debugger** | Breakpoints, step, continue, inspect | ✅ |
 | 77 | **lumen fmt avanzado** | `.lumen-fmt.toml` para configurar reglas | 📋 |
