@@ -1,6 +1,6 @@
 # LÚMEN — Herramientas y Desarrollo
 
-**v1.5.0 — Guía del Desarrollador**
+**v1.6.0 — Guía del Desarrollador**
 
 Guía completa de herramientas, comandos, CI/CD y flujo de trabajo.
 

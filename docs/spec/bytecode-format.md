@@ -5,7 +5,7 @@
 
 ## Header
 - Magic: 4 bytes
-- Version: u32 LE (currently 1)
+- Version: u32 LE (currently 6)
 - String count: u32 LE
 - Strings: for each: length (u32 LE) + UTF-8 bytes
 - Number count: u32 LE
@@ -52,3 +52,6 @@ Each instruction starts with a tag byte:
 | 24 | Jmp | target_idx | - |
 | 25 | JmpIf | target_idx | cond → |
 | 26 | Halt | - | - |
+| 27-46 | Extended | See VM source | Arrays, Closures, Structs, Result, Option, Enum, Tuple, Mod |
+
+Full opcode list (0-46) in `crates/lumen-vm/src/vm.rs`.

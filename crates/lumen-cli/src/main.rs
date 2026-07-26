@@ -10,7 +10,6 @@ use lumen_ir::IRBuilder;
 use lumen_lexer::token::Span;
 use lumen_parser::ast::DeclOrStmt;
 use lumen_project::ProjectManifest;
-use lumen_repl::Repl;
 use lumen_sema::{ModuleLoader, SemanticAnalyzer};
 use lumen_vm::VM;
 
@@ -632,7 +631,7 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
     let bytecode = compile_source(path, lib_dirs);
     let mut vm = VM::new(bytecode);
     vm.debug = true;
-    vm.step();
+    let _ = vm.step();
     println!("LUMEN Debugger — s=step, c=continue, b<ip>=breakpoint, q=quit");
     loop {
         print!("debug> ");

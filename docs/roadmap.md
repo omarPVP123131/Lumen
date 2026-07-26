@@ -1,4 +1,4 @@
-# 🛣️ Roadmap Oficial de LÚMEN (v1.5.0 → v3.0.0)
+# 🛣️ Roadmap Oficial de LÚMEN (v1.6.0 → v3.0.0)
 
 > **Visión:** El mejor lenguaje de programación — rápido, seguro, expresivo, con la mejor DX.
 
@@ -8,7 +8,7 @@
 
 ```
 Lenguaje Core      [████████████████████████████████████████████] 100% (Fases 1-60)
-Lenguaje Avanzado  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 61-70)
+Lenguaje Avanzado  [████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  25% (Fases 61-70)
 Herramientas        [████████████████████████████████████████░░░░]  90% (Fases 71-85)
 Distribución        [████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  40% (Fases 86-95)
 Stdlib & Runtime    [██████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  15% (Fases 96-140)
@@ -44,12 +44,12 @@ Inferencia de tipos, Métodos en structs (impl), Diccionarios nativos, String in
 | 62 | **If-let / While-let** | `si sea Algun(x) = opt { }` | ✅ |
 | 63 | **Range Patterns** | `caso 0..10:` — list equality | ✅ |
 | 64 | **String Patterns** | `caso "hola":` — string == | ✅ |
-| 65 | **Guard Let** | `sea x = expr sino { romper }` | 📋 |
-| 66 | **Operator Overloading** | `impl Suma for MiTipo` | 📋 |
+| 65 | **Guard Let** | `sea x = expr sino { romper }` | ✅ |
+| 66 | **Operator Overloading** | `impl Suma for MiTipo` | ✅ |
 | 67 | **Extension Methods** | `impl MiRasgo for TipoExterno` | 📋 |
 | 68 | **Associated Types** | `tipo Item;` en traits | 📋 |
-| 69 | **Where Clauses** | `<T> donde T: Comparable` | 📋 |
-| 70 | **Impl Trait return** | `-> impl Mostrable` | 📋 |
+| 69 | **Where Clauses** | `<T> donde T: Comparable` | ⏭️ Salta (ya soportado por `<T: Rasgo>`) |
+| 70 | **Impl Trait return** | `-> impl Mostrable` | ✅ |
 
 ---
 
@@ -171,7 +171,7 @@ Zonas horarias, duraciones, formatting, parsing, calendarios.
 | Versión | Alcance | Fases |
 |---------|---------|-------|
 | **v1.5** (Actual) | Lenguaje Core completo | 1-60 ✅ |
-| **v1.6** | Lenguaje Avanzado (OR patterns, if-let, etc.) | 61-70 |
+| **v1.6** | Lenguaje Avanzado (Guard Let, Op Overload, Impl Trait) | 61-70 ✅ |
 | **v2.0** | Distribución completa (WASM, cross-compile) + Herramientas | 71-85, 86-95 |
 | **v2.5** | Stdlib madura + Concurrencia | 96-160 |
 | **v3.0** | GUI + AI + Cloud — Lenguaje completo | 161-230 |

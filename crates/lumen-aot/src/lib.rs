@@ -342,9 +342,9 @@ pub fn compile_to_c(program: &Program) -> String {
 fn mangle(name: &str) -> String {
     name.replace(|c: char| !c.is_alphanumeric() && c != '_', "_")
 }
+#[cfg(test)]
 mod tests {
     use super::*;
-    use lumen_ir::ir::Func;
     use std::collections::BTreeMap;
 
     #[test]
@@ -352,7 +352,7 @@ mod tests {
         let mut funcs = BTreeMap::new();
         funcs.insert(
             "test_func".to_string(),
-            Func {
+            LumenFunc {
                 name: "test_func".to_string(),
                 params: vec![],
                 entry: 0,

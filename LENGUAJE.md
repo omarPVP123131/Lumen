@@ -1,6 +1,6 @@
 # LÚMEN — Manual del Lenguaje
 
-**v1.5.0 — La Biblia de LÚMEN**
+**v1.6.0 — La Biblia de LÚMEN**
 
 > Un lenguaje de programación en español diseñado para aprender a programar sin fricción.  
 > Simple, expresivo, y con esteroides de Rust por dentro.
@@ -29,7 +29,10 @@
 18. [Conversiones de Tipo](#18-conversiones-de-tipo)
 19. [Concatenación Mixta](#19-concatenación-mixta)
 20. [Indexación de Texto](#20-indexación-de-texto)
-21. [Ejemplos Completos](#21-ejemplos-completos)
+21. [Sobrecarga de Operadores](#21-sobrecarga-de-operadores)
+22. [Guard Let](#22-guard-let)
+23. [Impl Trait Return](#23-impl-trait-return)
+24. [Ejemplos Completos](#24-ejemplos-completos)
 
 ---
 

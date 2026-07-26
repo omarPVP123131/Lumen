@@ -516,7 +516,6 @@ dependencies = [
 name = "lumen-repl"
 version = "1.5.0"
 dependencies = [
- "lumen-cli",
  "lumen-codegen",
  "lumen-ir",
  "lumen-lexer",

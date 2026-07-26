@@ -642,6 +642,7 @@ fn format_type(t: &Type) -> String {
             format!("({})", inner.join(", "))
         }
         Type::GenericStruct { name, .. } => name.clone(),
+        Type::ImplTrait(name) => format!("impl {}", name),
     }
 }
 

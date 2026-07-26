@@ -157,6 +157,45 @@ importar "datos.nv" como datos;
 /* Comentario de bloque */
 ```
 
+## Guard Let
+
+Desestructuración con rama divergente si no hay match:
+
+```lumen
+sea x = opt sino { romper; }
+sea Algun(valor) = opt sino { retornar 0; }
+```
+
+El bloque `sino` debe contener una instrucción divergente (`romper`, `retornar`, `continuar`).
+
+## Sobrecarga de Operadores
+
+Vía traits del sistema (`Suma`, `Resta`, `Multiplica`, `Divide`):
+
+```lumen
+estructura Punto { x: entero, y: entero }
+
+impl Suma para Punto {
+    funcion Punto sumar(Punto self, Punto otro) {
+        retornar Punto { x: self.x + otro.x, y: self.y + otro.y };
+    }
+}
+
+Punto a = Punto { x: 1, y: 2 };
+Punto b = Punto { x: 3, y: 4 };
+Punto c = a + b;  // llama a Punto_Suma_sumar
+```
+
+## Impl Trait Return
+
+Retornar un tipo concreto sin exponer su nombre:
+
+```lumen
+funcion impl Comparable crear() {
+    retornar 42;  // el tipo concreto se infiere
+}
+```
+
 ## Entrada/Salida
 
 ```lumen

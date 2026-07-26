@@ -92,9 +92,15 @@ impl IRBuilder {
                     } = method_decl
                     {
                         let mangled = format!("{}_{}_{}", type_name, trait_name, name);
+                        let mut param_names: Vec<String> =
+                            params.iter().map(|p| p.name.clone()).collect();
+                        // Trait methods always have an implicit receiver (self)
+                        if !param_names.iter().any(|n| n == "self" || n == "yo") {
+                            param_names.insert(0, "self".to_string());
+                        }
                         let func = Func {
                             name: mangled.clone(),
-                            params: params.iter().map(|p| p.name.clone()).collect(),
+                            params: param_names,
                             entry: 0,
                             instrs: Vec::new(),
                         };
@@ -513,7 +519,25 @@ impl IRBuilder {
                 }
                 self.emit(Instr::Label(end_l));
             }
-            _ => {}
+            Stmt::GuardLet {
+                pattern,
+                value,
+                else_body,
+                ..
+            } => {
+                self.gen_expr(value);
+                self.gen_expr(&pattern);
+                self.emit(Instr::Binary(Op::Equal));
+                let ok_l = self.new_label();
+                let else_l = self.new_label();
+                self.emit(Instr::JmpIf(else_l));
+                self.emit(Instr::Jmp(ok_l));
+                self.emit(Instr::Label(else_l));
+                for n in else_body {
+                    self.gen_decl_or_stmt(n);
+                }
+                self.emit(Instr::Label(ok_l));
+            }
             Stmt::Destructure { targets, value, .. } => {
                 let temp = format!("__dt_{}", self.temp_counter);
                 self.temp_counter += 1;
@@ -554,25 +578,35 @@ impl IRBuilder {
                 self.emit(Instr::Load(resolved));
             }
             Expr::Binary {
-                op, left, right, ..
+                op,
+                left,
+                right,
+                resolved_method,
+                ..
             } => {
-                self.gen_expr(left);
-                self.gen_expr(right);
-                self.emit(Instr::Binary(match op {
-                    BinOp::Add => Op::Add,
-                    BinOp::Sub => Op::Sub,
-                    BinOp::Mul => Op::Mul,
-                    BinOp::Div => Op::Div,
-                    BinOp::Mod => Op::Mod,
-                    BinOp::Equal => Op::Equal,
-                    BinOp::NotEqual => Op::NotEqual,
-                    BinOp::Less => Op::Less,
-                    BinOp::LessEqual => Op::LessEqual,
-                    BinOp::Greater => Op::Greater,
-                    BinOp::GreaterEqual => Op::GreaterEqual,
-                    BinOp::And => Op::And,
-                    BinOp::Or => Op::Or,
-                }));
+                if let Some(ref fname) = resolved_method {
+                    self.gen_expr(left);
+                    self.gen_expr(right);
+                    self.emit(Instr::Call(fname.clone(), 2));
+                } else {
+                    self.gen_expr(left);
+                    self.gen_expr(right);
+                    self.emit(Instr::Binary(match op {
+                        BinOp::Add => Op::Add,
+                        BinOp::Sub => Op::Sub,
+                        BinOp::Mul => Op::Mul,
+                        BinOp::Div => Op::Div,
+                        BinOp::Mod => Op::Mod,
+                        BinOp::Equal => Op::Equal,
+                        BinOp::NotEqual => Op::NotEqual,
+                        BinOp::Less => Op::Less,
+                        BinOp::LessEqual => Op::LessEqual,
+                        BinOp::Greater => Op::Greater,
+                        BinOp::GreaterEqual => Op::GreaterEqual,
+                        BinOp::And => Op::And,
+                        BinOp::Or => Op::Or,
+                    }));
+                }
             }
             Expr::Unary { op, operand, .. } => {
                 self.gen_expr(operand);

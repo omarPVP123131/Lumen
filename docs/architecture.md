@@ -34,6 +34,8 @@ Fuente .nv
 │             │  Type checking
 │             │  Scope management
 │             │  Type inference
+│             │  Operator overload resolution
+│             │  Impl trait verification
 └──────┬──────┘
        │
        ▼
@@ -50,6 +52,7 @@ Fuente .nv
 │             │  IR → Bytecode
 │             │  Shared constant pools
 │             │  Formato .nvc
+│             │  Property-based testing (proptest)
 └──────┬──────┘
        │
        ▼
@@ -57,7 +60,9 @@ Fuente .nv
 │    VM       │  crates/lumen-vm
 │             │  Stack-based
 │             │  Call frames
-│             │  37 opcodes
+│             │  37 opcodes base
+│             │  + Result/Option/Enum/Tuple (8)
+│             │  + Mod (1)
 └─────────────┘
 ```
 
@@ -72,6 +77,9 @@ crates/
   lumen-codegen/   bytecode.rs, codegen.rs, disasm.rs
   lumen-vm/        vm.rs, value.rs
   lumen-cli/       main.rs
+  lumen-fmt/      lib.rs
+  lumen-repl/     lib.rs
+  lumen-project/  lib.rs
 docs/
   spec/            grammar.ebnf, bytecode-format.md,
                    error-codes.md, vm-spec.md
@@ -86,13 +94,18 @@ tests/             integration_test.rs
 
 ## Bytecode (.nvc)
 
-- **Versión**: 5
+- **Versión**: 6
 - **Magic**: `LUMN` (4 bytes)
-- **Opcodes**: 0-37
+- **Opcodes**: 0-46
   - 0-27: Core (Push, Pop, Add, Sub, Jmp, Call, Ret, Print, etc.)
   - 28-32: Arrays (ArrayNew, ArrayGet, ArraySet, ArrayLen, ArrayPush)
   - 33-34: Closures (FuncRef, CallValue)
   - 35-37: Structs (StructNew, StructGet, StructSet)
+  - 38-40: Result (ResultOk, ResultErr, ResultUnwrap)
+  - 41-42: Option (OptionSome, OptionNone)
+  - 43: Enum (EnumCtor)
+  - 44-45: Tuples (TupleNew, TupleAccess)
+  - 46: Mod
 
 ## Value System (VM)
 

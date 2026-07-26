@@ -368,7 +368,15 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
             }
         }
         Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
-        _ => {}
+        Stmt::GuardLet {
+            value, else_body, ..
+        } => {
+            prefix_expr(value, prefix, locals);
+            let mut guard_locals = locals.clone();
+            for node in else_body.iter_mut() {
+                prefix_node(node, prefix, &mut guard_locals, false);
+            }
+        }
         Stmt::Match {
             expr,
             arms,
@@ -413,6 +421,22 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
                 }
             }
             prefix_expr(value, prefix, locals);
+        }
+        Stmt::IfLet {
+            value,
+            then_body,
+            else_body,
+            ..
+        } => {
+            prefix_expr(value, prefix, locals);
+            for node in then_body.iter_mut() {
+                prefix_node(node, prefix, locals, false);
+            }
+            if let Some(eb) = else_body {
+                for node in eb.iter_mut() {
+                    prefix_node(node, prefix, locals, false);
+                }
+            }
         }
     }
 }

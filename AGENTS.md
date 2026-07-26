@@ -1,6 +1,6 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v1.5.0 — Release: Julio 2026**
+**v1.6.0 — Release: Julio 2026**
 
 ---
 
@@ -15,13 +15,13 @@
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 111 | e2e |
+| lumen-vm | 108 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
-| **Total** | **~308** | |
+| **Total** | **~305** | |
 
-**0 warnings, ~308 tests passing. 42/42 ejemplos funcionando.**
+**~9 warnings, ~305 tests passing. 42/42 ejemplos funcionando.**
 
 ---
 
@@ -102,6 +102,22 @@ Captura por valor/referencia. En desarrollo.
 
 ### Fase 60: Async/Await 📋
 Planificado para v2.0.
+
+### Fase 65: Guard Let ✅
+`sea patron = expr sino { romper/retornar/continuar }`. Desugaring en IR builder a JmpIf/Jmp.
+`Stmt::GuardLet` en AST, `parse_guard_let()` en parser, sema + loader, IR builder.
+
+### Fase 66: Operator Overloading ✅
+Vía trait method convention (`impl Suma for Punto`). `Expr::Binary.resolved_method`.
+Sema: `resolve_operator_overloads()` post‑analysis walk con HashMap de inferencia de tipos.
+IR builder: `resolved_method` → `Call` o `Binary` nativo.
+
+### Fase 69: Where Clauses ⏭️
+Saltado — `<T: Rasgo>` syntax ya soporta bounds.
+
+### Fase 70: Impl Trait return ✅
+`funcion impl Rasgo foo() { retornar expr; }`. `Type::ImplTrait(String)` en AST.
+Parseo en `parse_type()`, mapea a `TypeInfo::TypeVar` en sema (tipo opaco resuelto en llamada).
 
 ---
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.6.0 — Julio 2026
+
+### Added
+- **Fase 65: Guard Let** — `sea patron = expr sino { romper/retornar/continuar }`. Desugaring en IR builder a JmpIf/Jmp.
+  - Parseo de `sea` con guard-let (separado de variable declaration).
+- **Fase 66: Operator Overloading** — `impl Suma for Punto` con método `fn sumar(self, otro)`.
+  - `Expr::Binary` ahora tiene `resolved_method: Option<String>`.
+  - Sema: `resolve_operator_overloads()` post‑analysis con `HashMap<String, TypeInfo>`.
+  - IR builder: emite `Call` en lugar de `Binary` cuando hay overload resuelto.
+  - Traits `Suma`, `Resta`, `Multiplica`, `Divide` en impl para structs.
+- **Fase 70: Impl Trait return** — `funcion impl Rasgo foo() { retornar expr }`.
+  - `Type::ImplTrait(String)` en AST.
+  - Parseo de `impl Rasgo` en `parse_type()`.
+  - Sema: mapea a `TypeInfo::TypeVar` (tipo opaco resuelto en llamada).
+
+### Changed
+- Version bump to 1.6.0.
+- Trait impl functions reciben `"self"` como primer parámetro automáticamente.
+
+### Fixed
+- Pre-existing destructure e2e tests still failing (2 tests).
+- Lexer test `test_pipe_token` expects `[Pipe]` but gets `[Pipe, Eof]`.
+
 ## v1.2.0 — Julio 2026
 
 ### Added

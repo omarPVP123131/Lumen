@@ -82,6 +82,7 @@ impl Parser {
                 TokenKind::Float,
                 TokenKind::String,
                 TokenKind::Boolean,
+                TokenKind::Impl,
             ]) {
                 self.parse_function().map(DeclOrStmt::Decl)
             } else if self.check_next(&[TokenKind::LeftParen]) {
@@ -89,6 +90,8 @@ impl Parser {
             } else {
                 self.parse_function().map(DeclOrStmt::Decl)
             }
+        } else if self.check(&[TokenKind::Sea, TokenKind::Let]) {
+            self.parse_guard_let().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::Si, TokenKind::If]) {
             self.parse_if().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::Mientras, TokenKind::While]) {
@@ -944,6 +947,43 @@ impl Parser {
         })
     }
 
+    fn parse_guard_let(&mut self) -> Option<Stmt> {
+        let start = self.peek().span;
+        self.advance(); // consume sea/let
+        let pattern = self.parse_expression()?;
+        if !self.check(&[TokenKind::Equal]) {
+            self.error(
+                "E071",
+                "Se esperaba '=' en 'sea' guard",
+                start,
+                "Agrega '=' y una expresión",
+            );
+            return None;
+        }
+        self.advance();
+        let saved_no_struct = self.no_struct_init;
+        self.no_struct_init = true;
+        let value = Box::new(self.parse_expression()?);
+        self.no_struct_init = saved_no_struct;
+        if !self.check(&[TokenKind::Sino, TokenKind::Else]) {
+            self.error(
+                "E072",
+                "Se esperaba 'sino' en 'sea' guard",
+                start,
+                "Agrega 'sino { }' con una instrucción divergente",
+            );
+            return None;
+        }
+        self.advance();
+        let else_body = self.parse_block()?;
+        Some(Stmt::GuardLet {
+            pattern,
+            value,
+            else_body,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
     fn parse_while(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
         self.advance();
@@ -1381,6 +1421,7 @@ impl Parser {
                 op: BinOp::Or,
                 left: Box::new(left),
                 right: Box::new(right),
+                resolved_method: None,
                 span,
             };
         }
@@ -1397,6 +1438,7 @@ impl Parser {
                 op: BinOp::And,
                 left: Box::new(left),
                 right: Box::new(right),
+                resolved_method: None,
                 span,
             };
         }
@@ -1429,6 +1471,7 @@ impl Parser {
                 op,
                 left: Box::new(left),
                 right: Box::new(right),
+                resolved_method: None,
                 span,
             };
         }
@@ -1450,6 +1493,7 @@ impl Parser {
                 op,
                 left: Box::new(left),
                 right: Box::new(right),
+                resolved_method: None,
                 span,
             };
         }
@@ -1472,6 +1516,7 @@ impl Parser {
                 op,
                 left: Box::new(left),
                 right: Box::new(right),
+                resolved_method: None,
                 span,
             };
         }
@@ -2405,6 +2450,20 @@ impl Parser {
                 }
                 self.advance();
                 Some(Type::Opcion(Box::new(inner)))
+            }
+            TokenKind::Impl => {
+                if self.check_ident() {
+                    let trait_name = self.expect_ident()?;
+                    Some(Type::ImplTrait(trait_name))
+                } else {
+                    self.error(
+                        "E011",
+                        "Se esperaba un nombre de rasgo después de 'impl'",
+                        token.span,
+                        "Escribe el nombre del rasgo, ej: 'impl Comparable'",
+                    );
+                    None
+                }
             }
             _ => None,
         }

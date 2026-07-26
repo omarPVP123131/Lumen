@@ -124,7 +124,436 @@ impl SemanticAnalyzer {
         self.collect_impls(program);
         self.collect_functions(program);
         self.analyze_program(program);
+        self.resolve_operator_overloads(program);
         self.errors
+    }
+
+    fn resolve_operator_overloads(&self, program: &mut Program) {
+        // Build a map of known variable types from the program
+        let mut var_types: HashMap<String, TypeInfo> = HashMap::new();
+        Self::collect_var_types(program, &mut var_types);
+        self.resolve_op_program(program, &mut var_types);
+    }
+
+    fn collect_var_types(program: &mut Program, var_types: &mut HashMap<String, TypeInfo>) {
+        for node in program.iter() {
+            if let DeclOrStmt::Decl(Decl::Variable {
+                name,
+                init: Some(init),
+                ..
+            }) = node
+            {
+                let t = Self::infer_static_type(init);
+                if t != TypeInfo::Void {
+                    var_types.insert(name.clone(), t);
+                }
+            }
+            if let DeclOrStmt::Stmt(Stmt::Assignment { name, value, .. }) = node {
+                let t = Self::infer_static_type(value);
+                if t != TypeInfo::Void {
+                    var_types.insert(name.clone(), t);
+                }
+            }
+            // Recurse into function bodies
+            if let DeclOrStmt::Decl(Decl::Function { body, .. }) = node {
+                for child in body {
+                    Self::collect_var_types_in_block(child, var_types);
+                }
+            }
+        }
+    }
+
+    fn collect_var_types_in_block(node: &DeclOrStmt, var_types: &mut HashMap<String, TypeInfo>) {
+        match node {
+            DeclOrStmt::Decl(Decl::Variable {
+                name,
+                init: Some(init),
+                ..
+            }) => {
+                let t = Self::infer_static_type(init);
+                if t != TypeInfo::Void {
+                    var_types.insert(name.clone(), t);
+                }
+            }
+            DeclOrStmt::Stmt(stmt) => Self::collect_var_types_in_stmt(stmt, var_types),
+            _ => {}
+        }
+    }
+
+    fn collect_var_types_in_stmt(stmt: &Stmt, var_types: &mut HashMap<String, TypeInfo>) {
+        match stmt {
+            Stmt::Block { stmts, .. } => {
+                for s in stmts {
+                    Self::collect_var_types_in_block(s, var_types);
+                }
+            }
+            Stmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                for s in then_body {
+                    Self::collect_var_types_in_block(s, var_types);
+                }
+                if let Some(eb) = else_body {
+                    for s in eb {
+                        Self::collect_var_types_in_block(s, var_types);
+                    }
+                }
+            }
+            Stmt::While { body, .. } => {
+                for s in body {
+                    Self::collect_var_types_in_block(s, var_types);
+                }
+            }
+            Stmt::ForEach {
+                expr: foreach_expr,
+                body,
+                ..
+            } => {
+                Self::collect_var_types_in_expr(foreach_expr, var_types);
+                for s in body {
+                    Self::collect_var_types_in_block(s, var_types);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_var_types_in_expr(expr: &Expr, _var_types: &mut HashMap<String, TypeInfo>) {
+        match expr {
+            Expr::StructInit { struct_name: _, .. } => {
+                // Skip — type handled by infer_static_type
+            }
+            _ => {}
+        }
+    }
+
+    fn infer_static_type(expr: &Expr) -> TypeInfo {
+        match expr {
+            Expr::Int { .. } => TypeInfo::Entero,
+            Expr::Float { .. } => TypeInfo::Decimal,
+            Expr::Str { .. } => TypeInfo::Texto,
+            Expr::Bool { .. } => TypeInfo::Booleano,
+            Expr::StructInit { struct_name, .. } => TypeInfo::Struct {
+                name: struct_name.clone(),
+                fields: vec![],
+            },
+            Expr::List { items, .. } => {
+                if items.is_empty() {
+                    TypeInfo::Lista(Box::new(TypeInfo::Void))
+                } else {
+                    TypeInfo::Lista(Box::new(Self::infer_static_type(&items[0])))
+                }
+            }
+            _ => TypeInfo::Void,
+        }
+    }
+
+    fn resolve_op_program(&self, program: &mut Program, var_types: &mut HashMap<String, TypeInfo>) {
+        for node in program.iter_mut() {
+            self.resolve_op_decl_or_stmt_var(node, var_types);
+        }
+    }
+
+    fn resolve_op_decl_or_stmt_var(
+        &self,
+        dos: &mut DeclOrStmt,
+        var_types: &mut HashMap<String, TypeInfo>,
+    ) {
+        match dos {
+            DeclOrStmt::Stmt(stmt) => self.resolve_op_stmt_var(stmt, var_types),
+            DeclOrStmt::Decl(decl) => self.resolve_op_decl_var(decl, var_types),
+        }
+    }
+
+    fn resolve_op_decl_var(&self, decl: &mut Decl, var_types: &mut HashMap<String, TypeInfo>) {
+        match decl {
+            Decl::Function { body, .. } => {
+                for node in body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(node, var_types);
+                }
+            }
+            Decl::Variable {
+                name,
+                init: Some(init),
+                ..
+            } => {
+                let t = Self::infer_static_type(init);
+                if t != TypeInfo::Void {
+                    var_types.insert(name.clone(), t);
+                }
+                self.resolve_op_expr_var(init, var_types);
+            }
+            _ => {}
+        }
+    }
+
+    fn resolve_op_stmt_var(&self, stmt: &mut Stmt, var_types: &mut HashMap<String, TypeInfo>) {
+        match stmt {
+            Stmt::Expr { expr, .. } => self.resolve_op_expr_var(expr, var_types),
+            Stmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
+                self.resolve_op_expr_var(condition, var_types);
+                for n in then_body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(n, var_types);
+                }
+                if let Some(eb) = else_body {
+                    for n in eb.iter_mut() {
+                        self.resolve_op_decl_or_stmt_var(n, var_types);
+                    }
+                }
+            }
+            Stmt::IfLet {
+                value,
+                then_body,
+                else_body,
+                ..
+            } => {
+                self.resolve_op_expr_var(value, var_types);
+                for n in then_body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(n, var_types);
+                }
+                if let Some(eb) = else_body {
+                    for n in eb.iter_mut() {
+                        self.resolve_op_decl_or_stmt_var(n, var_types);
+                    }
+                }
+            }
+            Stmt::GuardLet {
+                value, else_body, ..
+            } => {
+                self.resolve_op_expr_var(value, var_types);
+                for n in else_body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(n, var_types);
+                }
+            }
+            Stmt::While {
+                condition, body, ..
+            } => {
+                self.resolve_op_expr_var(condition, var_types);
+                for n in body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(n, var_types);
+                }
+            }
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
+                self.resolve_op_decl_var(init, var_types);
+                self.resolve_op_expr_var(condition, var_types);
+                self.resolve_op_stmt_var(update, var_types);
+                for n in body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(n, var_types);
+                }
+            }
+            Stmt::ForEach { expr, body, .. } => {
+                self.resolve_op_expr_var(expr, var_types);
+                for n in body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(n, var_types);
+                }
+            }
+            Stmt::Match {
+                expr,
+                arms,
+                default,
+                ..
+            } => {
+                self.resolve_op_expr_var(expr, var_types);
+                for arm in arms.iter_mut() {
+                    self.resolve_op_expr_var(&mut arm.value, var_types);
+                    if let Some(ref mut guard) = arm.guard {
+                        self.resolve_op_expr_var(guard, var_types);
+                    }
+                    for n in arm.body.iter_mut() {
+                        self.resolve_op_decl_or_stmt_var(n, var_types);
+                    }
+                }
+                if let Some(db) = default {
+                    for n in db.iter_mut() {
+                        self.resolve_op_decl_or_stmt_var(n, var_types);
+                    }
+                }
+            }
+            Stmt::Block { stmts, .. } => {
+                for n in stmts.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(n, var_types);
+                }
+            }
+            Stmt::Destructure { value, .. } => self.resolve_op_expr_var(value, var_types),
+            Stmt::Assignment { name, value, .. } => {
+                self.resolve_op_expr_var(value, var_types);
+                if !var_types.contains_key(name) {
+                    var_types.insert(name.clone(), Self::infer_static_type(value));
+                }
+            }
+            Stmt::Return { value, .. } => {
+                if let Some(val) = value {
+                    self.resolve_op_expr_var(val, var_types);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn resolve_op_expr_var(&self, expr: &mut Expr, var_types: &mut HashMap<String, TypeInfo>) {
+        match expr {
+            Expr::Binary {
+                op,
+                left,
+                right,
+                resolved_method,
+                ..
+            } => {
+                let lt = Self::infer_expr_type_from_map(left, var_types);
+                let method_name = Self::op_to_method_name(op);
+                if let Some(mname) = method_name {
+                    if let TypeInfo::Struct {
+                        name: type_name, ..
+                    } = &lt
+                    {
+                        if resolved_method.is_none() {
+                            if let Some(mangled) = self.find_op_method(type_name, mname) {
+                                *resolved_method = Some(mangled);
+                            }
+                        }
+                    }
+                }
+                self.resolve_op_expr_var(left, var_types);
+                self.resolve_op_expr_var(right, var_types);
+            }
+            Expr::Grouping { expr, .. } => self.resolve_op_expr_var(expr, var_types),
+            Expr::Unary { operand, .. } => self.resolve_op_expr_var(operand, var_types),
+            Expr::Call { callee, args, .. } => {
+                self.resolve_op_expr_var(callee, var_types);
+                for arg in args.iter_mut() {
+                    self.resolve_op_expr_var(arg, var_types);
+                }
+            }
+            Expr::MethodCall { expr, args, .. } => {
+                self.resolve_op_expr_var(expr, var_types);
+                for arg in args.iter_mut() {
+                    self.resolve_op_expr_var(arg, var_types);
+                }
+            }
+            Expr::FieldAccess { expr, .. } => self.resolve_op_expr_var(expr, var_types),
+            Expr::Index { expr, index, .. } => {
+                self.resolve_op_expr_var(expr, var_types);
+                self.resolve_op_expr_var(index, var_types);
+            }
+            Expr::StructInit { fields, .. } => {
+                for (_, val) in fields.iter_mut() {
+                    self.resolve_op_expr_var(val, var_types);
+                }
+            }
+            Expr::List { items, .. } => {
+                for item in items.iter_mut() {
+                    self.resolve_op_expr_var(item, var_types);
+                }
+            }
+            Expr::Ternary {
+                condition,
+                true_branch,
+                false_branch,
+                ..
+            } => {
+                self.resolve_op_expr_var(condition, var_types);
+                self.resolve_op_expr_var(true_branch, var_types);
+                self.resolve_op_expr_var(false_branch, var_types);
+            }
+            Expr::Lambda { body, .. } => {
+                for node in body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(node, var_types);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn infer_expr_type_from_map(expr: &Expr, var_types: &HashMap<String, TypeInfo>) -> TypeInfo {
+        match expr {
+            Expr::Int { .. } => TypeInfo::Entero,
+            Expr::Float { .. } => TypeInfo::Decimal,
+            Expr::Str { .. } => TypeInfo::Texto,
+            Expr::Bool { .. } => TypeInfo::Booleano,
+            Expr::Ident { name, .. } => {
+                if name == "verdadero" || name == "true" || name == "falso" || name == "false" {
+                    TypeInfo::Booleano
+                } else if let Some(t) = var_types.get(name) {
+                    t.clone()
+                } else {
+                    TypeInfo::Void
+                }
+            }
+            Expr::StructInit { struct_name, .. } => TypeInfo::Struct {
+                name: struct_name.clone(),
+                fields: vec![],
+            },
+            Expr::Binary {
+                left, op, right, ..
+            } => {
+                let lt = Self::infer_expr_type_from_map(left, var_types);
+                let rt = Self::infer_expr_type_from_map(right, var_types);
+                match op {
+                    BinOp::Add if lt == TypeInfo::Texto || rt == TypeInfo::Texto => TypeInfo::Texto,
+                    _ if is_numeric(&lt) && is_numeric(&rt) => {
+                        if lt == TypeInfo::Entero && rt == TypeInfo::Entero {
+                            TypeInfo::Entero
+                        } else {
+                            TypeInfo::Decimal
+                        }
+                    }
+                    BinOp::Equal
+                    | BinOp::NotEqual
+                    | BinOp::Less
+                    | BinOp::LessEqual
+                    | BinOp::Greater
+                    | BinOp::GreaterEqual => TypeInfo::Booleano,
+                    _ => TypeInfo::Void,
+                }
+            }
+            _ => TypeInfo::Void,
+        }
+    }
+
+    fn op_to_method_name(op: &BinOp) -> Option<&'static str> {
+        match op {
+            BinOp::Add => Some("sumar"),
+            BinOp::Sub => Some("restar"),
+            BinOp::Mul => Some("multiplicar"),
+            BinOp::Div => Some("dividir"),
+            BinOp::Mod => Some("modulo"),
+            BinOp::Equal => Some("igual"),
+            BinOp::NotEqual => Some("diferente"),
+            BinOp::Less => Some("menor"),
+            BinOp::LessEqual => Some("menor_o_igual"),
+            BinOp::Greater => Some("mayor"),
+            BinOp::GreaterEqual => Some("mayor_o_igual"),
+            BinOp::And | BinOp::Or => None,
+        }
+    }
+
+    fn find_op_method(&self, type_name: &str, method: &str) -> Option<String> {
+        for ((impl_type, trait_name), _) in &self.impls {
+            if impl_type != type_name {
+                continue;
+            }
+            if let Some(methods) = self.traits.get(trait_name) {
+                for (tm, _, _) in methods {
+                    if tm == method {
+                        return Some(format!("{}_{}_{}", type_name, trait_name, method));
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn collect_functions(&mut self, program: &Program) {
@@ -609,6 +1038,17 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
+            Stmt::GuardLet {
+                value, else_body, ..
+            } => {
+                self.analyze_expr(value);
+                self.scopes.push(Scope::new());
+                for n in else_body {
+                    self.analyze_decl_or_stmt(n);
+                }
+                self.scopes.pop();
+                TypeInfo::Void
+            }
             Stmt::If {
                 condition,
                 then_body,
@@ -992,10 +1432,50 @@ impl SemanticAnalyzer {
                 op,
                 left,
                 right,
+                resolved_method: _,
                 span,
             } => {
                 let lt = self.analyze_expr(left);
                 let rt = self.analyze_expr(right);
+                let op_method_name = |op: &BinOp| -> &str {
+                    match op {
+                        BinOp::Add => "sumar",
+                        BinOp::Sub => "restar",
+                        BinOp::Mul => "multiplicar",
+                        BinOp::Div => "dividir",
+                        BinOp::Mod => "modulo",
+                        BinOp::Equal => "igual",
+                        BinOp::NotEqual => "diferente",
+                        BinOp::Less => "menor",
+                        BinOp::LessEqual => "menor_o_igual",
+                        BinOp::Greater => "mayor",
+                        BinOp::GreaterEqual => "mayor_o_igual",
+                        BinOp::And | BinOp::Or => "",
+                    }
+                };
+                let has_op_overload = |t: &TypeInfo, op: &BinOp| -> bool {
+                    let mname = op_method_name(op);
+                    if mname.is_empty() {
+                        return false;
+                    }
+                    let type_name = match t {
+                        TypeInfo::Struct { name, .. } => name.clone(),
+                        _ => return false,
+                    };
+                    for ((impl_type, trait_name), _) in &self.impls {
+                        if impl_type != &type_name {
+                            continue;
+                        }
+                        if let Some(methods) = self.traits.get(trait_name) {
+                            for (tm, _, _) in methods {
+                                if tm == mname {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    false
+                };
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
                         if matches!(op, BinOp::Add)
@@ -1014,6 +1494,28 @@ impl SemanticAnalyzer {
                             TypeInfo::Entero
                         } else if is_numeric(&lt) && is_numeric(&rt) {
                             TypeInfo::Decimal
+                        } else if has_op_overload(&lt, op) {
+                            // Operator overload via trait method — return method's return type
+                            // We infer the return type from the trait signature
+                            let mname = op_method_name(op);
+                            let type_name = match &lt {
+                                TypeInfo::Struct { name, .. } => name.clone(),
+                                _ => String::new(),
+                            };
+                            let mut ret = TypeInfo::Void;
+                            for ((impl_type, trait_name), _) in &self.impls {
+                                if impl_type != &type_name {
+                                    continue;
+                                }
+                                if let Some(methods) = self.traits.get(trait_name) {
+                                    for (tm, _params, tr) in methods {
+                                        if tm == mname {
+                                            ret = tr.clone();
+                                        }
+                                    }
+                                }
+                            }
+                            ret
                         } else {
                             self.errors.push(SemError {
                                 code: "E035".to_string(),
@@ -1031,6 +1533,8 @@ impl SemanticAnalyzer {
                             || can_assign(&rt, &lt)
                         {
                             TypeInfo::Booleano
+                        } else if has_op_overload(&lt, op) {
+                            TypeInfo::Booleano
                         } else {
                             self.errors.push(SemError {
                                 code: "E036".to_string(),
@@ -1043,6 +1547,8 @@ impl SemanticAnalyzer {
                     }
                     BinOp::Less | BinOp::LessEqual | BinOp::Greater | BinOp::GreaterEqual => {
                         if is_numeric(&lt) && is_numeric(&rt) {
+                            TypeInfo::Booleano
+                        } else if has_op_overload(&lt, op) {
                             TypeInfo::Booleano
                         } else {
                             self.errors.push(SemError {
@@ -2379,6 +2885,7 @@ impl SemanticAnalyzer {
             Type::Tuple(types) => {
                 TypeInfo::Tuple(types.into_iter().map(|t| self.type_to_info(t)).collect())
             }
+            Type::ImplTrait(name) => TypeInfo::TypeVar(name), // opaque; resolved at call site
         }
     }
 }

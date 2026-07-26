@@ -128,6 +128,12 @@ pub enum Stmt {
         else_body: Option<Vec<DeclOrStmt>>,
         span: Span,
     },
+    GuardLet {
+        pattern: Expr,
+        value: Box<Expr>,
+        else_body: Vec<DeclOrStmt>,
+        span: Span,
+    },
     While {
         condition: Box<Expr>,
         body: Vec<DeclOrStmt>,
@@ -216,6 +222,7 @@ pub enum Expr {
         op: BinOp,
         left: Box<Expr>,
         right: Box<Expr>,
+        resolved_method: Option<String>,
         span: Span,
     },
     Unary {
@@ -357,6 +364,7 @@ pub enum Type {
     },
     Opcion(Box<Type>),
     Tuple(Vec<Type>),
+    ImplTrait(String),
 }
 
 impl Expr {

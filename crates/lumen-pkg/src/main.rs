@@ -45,7 +45,8 @@ fn install_from_registry(pkg: &str, cache: &PathBuf) {
         Ok(s) if s.success() => println!("✓ {} instalado en {}", pkg, pkg_dir.display()),
         Ok(s) => eprintln!("Error: git clone exit {}", s),
         Err(e) => eprintln!(
-            "Error: git no encontrado — instala dependencias manualmente en {}",
+            "Error: git no encontrado ({}) — instala dependencias manualmente en {}",
+            e,
             cache.display()
         ),
     }

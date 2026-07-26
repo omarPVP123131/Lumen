@@ -541,7 +541,7 @@ mod tests {
     #[test]
     fn test_pipe_token() {
         let tokens = tokenize("|");
-        assert_eq!(tokens, vec![TokenKind::Pipe]);
+        assert_eq!(tokens, vec![TokenKind::Pipe, TokenKind::Eof]);
     }
 
     #[test]

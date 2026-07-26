@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.2.0-orange)
-![Tests](https://img.shields.io/badge/tests-294-brightgreen)
+![Version](https://img.shields.io/badge/version-1.6.0-orange)
+![Tests](https://img.shields.io/badge/tests-305-brightgreen)
 
 LÚMEN es un lenguaje de programación educativo de alto rendimiento con sintaxis nativa en español (y soporte completo para inglés). Cuenta con un pipeline de compilación completo escrito desde cero en Rust: Lexer → Parser → IR → Optimizador → Bytecode → VM.
 
@@ -31,7 +31,9 @@ cargo build --release
 LÚMEN combina la legibilidad del español con la potencia de los lenguajes modernos:
 
 - **🏠 Sintaxis Dual**: Programa en español (`si`, `mientras`, `funcion`) o inglés (`if`, `while`, `function`).
-- **🛡️ Tipado Estático Moderno**: `entero`, `decimal`, `texto`, `booleano`, `lista<T>`, `opcion<T>`, `resultado<T, E>`.
+- **🛡️ Tipado Estático Moderno**: `entero`, `decimal`, `texto`, `booleano`, `lista<T>`, `opcion<T>`, `resultado<T, E>`, `impl Rasgo`.
+- **➕ Sobrecarga de Operadores**: Traits `Suma`, `Resta`, `Multiplica`, `Divide` para tipos personalizados.
+- **🔐 Guard Let**: `sea x = expr sino { romper }` con desestructuración.
 - **🧩 Tipos Compuestos**:
   - **Estructuras**: Objetos con campos nombrados.
   - **Enums (Tipos Suma)**: Variantes con datos asociados (`enum Color { Rojo, Verde(entero) }`).
