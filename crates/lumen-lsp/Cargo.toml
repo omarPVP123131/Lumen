@@ -1,0 +1,19 @@
+[package]
+name = "lumen-lsp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Language Server Protocol para LÚMEN — diagnósticos en vivo en editores"
+keywords = ["lumen", "language", "lsp", "editor", "diagnostics"]
+
+[[bin]]
+name = "lumen-lsp"
+path = "src/main.rs"
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+serde_json.workspace = true

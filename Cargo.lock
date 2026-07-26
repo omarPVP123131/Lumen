@@ -469,6 +469,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumen-lsp"
+version = "1.5.0"
+dependencies = [
+ "lumen-lexer",
+ "lumen-parser",
+ "lumen-sema",
+ "serde_json",
+]
+
+[[package]]
 name = "lumen-parser"
 version = "1.5.0"
 dependencies = [

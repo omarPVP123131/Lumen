@@ -11,6 +11,7 @@ members = [
     "crates/lumen-repl",
     "crates/lumen-project",
     "crates/lumen-aot",
+    "crates/lumen-lsp",
 ]
 resolver = "2"
 
