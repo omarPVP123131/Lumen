@@ -539,10 +539,9 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_or() {
-        let (_, errors) = tokenize_with_errors("|");
-        assert!(!errors.is_empty());
-        assert_eq!(errors[0].code, "E005");
+    fn test_pipe_token() {
+        let tokens = tokenize("|");
+        assert_eq!(tokens, vec![TokenKind::Pipe]);
     }
 
     #[test]
