@@ -25,7 +25,7 @@
 | lumen-plugin | 1 | unit |
 | **Total** | **~318** | |
 
-**0 warnings, ~318 tests passing. 45/45 ejemplos funcionando.**
+**0 warnings, ~318 tests passing. 45/45 ejemplos funcionando. ~70 builtins nuevos.**
 
 ---
 

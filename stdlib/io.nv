@@ -1,0 +1,18 @@
+// Módulo io — operaciones de entrada/salida
+// Uso: importar "io.nv"
+
+funcion numero leer_lineas(texto ruta) {
+    retornar __lector_buffer(ruta);
+}
+
+funcion resultado<booleano, texto> escribir_buffer(texto ruta, texto contenido) {
+    retornar __escritor_buffer(ruta, contenido);
+}
+
+funcion numero leer_trozos(texto ruta, entero tamano) {
+    retornar __stream_trozos(ruta, tamano);
+}
+
+funcion booleano abrir_puerto_serial(texto puerto) {
+    retornar __serial_abrir(puerto);
+}

@@ -2112,6 +2112,8 @@ impl SemanticAnalyzer {
                                         });
                                     }
                                     TypeInfo::Void
+                                } else if callee.starts_with("__") {
+                                    TypeInfo::Decimal
                                 } else {
                                     let var_type = self.lookup(&callee).map(|s| s.var_type.clone());
                                     match var_type {

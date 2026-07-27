@@ -1,33 +1,68 @@
 // Módulo texto — funciones para manipulación de strings
 // Uso: importar "texto.nv"
-// Las funciones se importan con prefijo texto_
 
-// Longitud de una cadena
+// --- Básico ---
+
 funcion entero longitud(texto s) {
     retornar __str_longitud(s);
 }
 
-// Convertir a mayúsculas
 funcion texto mayusculas(texto s) {
     retornar __str_mayusculas(s);
 }
 
-// Convertir a minúsculas
 funcion texto minusculas(texto s) {
     retornar __str_minusculas(s);
 }
 
-// Eliminar espacios al inicio y final
 funcion texto recortar(texto s) {
     retornar __str_recortar(s);
 }
 
-// Dividir una cadena por un delimitador
 funcion lista<texto> dividir(texto s, texto delimitador) {
     retornar __str_dividir(s, delimitador);
 }
 
-// Verificar si una cadena contiene un substring
 funcion booleano contiene(texto s, texto subcadena) {
     retornar __str_contiene(s, subcadena);
+}
+
+// --- Padding ---
+
+funcion texto padding_inicio(texto s, entero largo, texto caracter) {
+    retornar __str_padding_inicio(s, largo, caracter);
+}
+
+funcion texto padding_fin(texto s, entero largo, texto caracter) {
+    retornar __str_padding_fin(s, largo, caracter);
+}
+
+// --- Regex ---
+
+funcion booleano regex_coincide(texto patron, texto s) {
+    retornar __regex_coincide(patron, s);
+}
+
+funcion T regex_capturar<T>(texto patron, texto s) {
+    retornar __regex_capturar(patron, s);
+}
+
+funcion texto regex_reemplazar(texto patron, texto s, texto reemplazo) {
+    retornar __regex_reemplazar(patron, s, reemplazo);
+}
+
+// --- Unicode ---
+
+funcion texto unicode_normalizar(texto s, texto forma) {
+    retornar __unicode_normalizar(s, forma);
+}
+
+// --- Encoding ---
+
+funcion T codificar_utf8<T>(texto s) {
+    retornar __codificacion_utf8(s);
+}
+
+funcion texto decodificar_utf8(numero bytes) {
+    retornar __desde_utf8(bytes);
 }

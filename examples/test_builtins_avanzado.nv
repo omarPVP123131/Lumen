@@ -1,0 +1,60 @@
+// Test de builtins avanzados
+
+// --- Diccionario ---
+numero d = __map_nuevo();
+d = __map_poner(d, "Ana", 30);
+d = __map_poner(d, "Luis", 25);
+imprimir("Ana: ", __map_obtener(d, "Ana"));
+imprimir("contiene Ana: ", __map_contiene(d, "Ana"));
+imprimir("longitud: ", __map_longitud(d));
+
+// --- Conjunto ---
+numero s = __conjunto_nuevo();
+s = __conjunto_agregar(s, "manzana");
+s = __conjunto_agregar(s, "pera");
+imprimir("tiene manzana: ", __conjunto_tiene(s, "manzana"));
+
+// --- Deque ---
+numero dq = __deque_nuevo();
+dq = __deque_agregar_final(dq, 1);
+dq = __deque_agregar_final(dq, 2);
+dq = __deque_agregar_frente(dq, 0);
+imprimir("deque largo: ", __deque_longitud(dq));
+numero frente = __deque_quitar_frente(dq);
+imprimir("deque frente: ", frente);
+
+// --- Monticulo ---
+numero hp = __monticulo_nuevo();
+hp = __monticulo_agregar(hp, 5);
+hp = __monticulo_agregar(hp, 1);
+hp = __monticulo_agregar(hp, 10);
+imprimir("monticulo ver: ", __monticulo_ver(hp));
+imprimir("monticulo largo: ", __monticulo_longitud(hp));
+
+// --- Enlazada ---
+numero ll = __enlazada_nuevo();
+ll = __enlazada_agregar_final(ll, "x");
+ll = __enlazada_agregar_final(ll, "y");
+ll = __enlazada_agregar_frente(ll, "z");
+imprimir("enlazada largo: ", __enlazada_longitud(ll));
+
+// --- Regex ---
+imprimir("regex coincide: ", __regex_coincide("\\d+", "abc123"));
+imprimir("regex reemplazar: ", __regex_reemplazar("mundo", "Hola mundo", "Lumen"));
+
+// --- Unicode ---
+imprimir("unicode nfc: ", __unicode_normalizar("cafe\u0301", "NFC"));
+
+// --- Padding ---
+imprimir("pad start: ", __str_padding_inicio("42", 5, "0"));
+imprimir("pad end: ", __str_padding_fin("42", 5, "."));
+
+// --- Encoding ---
+numero bytes = __codificacion_utf8("Hola");
+imprimir("bytes: ", bytes);
+
+// --- IO ---
+numero escrito = __escritor_buffer("test_salida.txt", "contenido");
+imprimir("escrito: ", escrito);
+
+imprimir("--- FIN ---");

@@ -1,0 +1,26 @@
+// Módulo red — operaciones de red
+// Uso: importar "red.nv"
+
+funcion booleano tcp_conectar(texto direccion) {
+    retornar __tcp_conectar(direccion);
+}
+
+funcion booleano tcp_escuchar(texto direccion) {
+    retornar __tcp_escuchar(direccion);
+}
+
+funcion texto tcp_aceptar() {
+    retornar __tcp_aceptar();
+}
+
+funcion resultado<texto, texto> http_obtener(texto url) {
+    retornar __http_obtener(url);
+}
+
+funcion resultado<texto, texto> http_enviar(texto url, texto cuerpo) {
+    retornar __http_enviar(url, cuerpo);
+}
+
+funcion texto http_servidor(texto direccion) {
+    retornar __http_servidor(direccion);
+}

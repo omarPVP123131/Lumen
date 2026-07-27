@@ -7,6 +7,11 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 ## v1.6.0 — Julio 2026
 
 ### Agregado
+- **Fase 96-110: Librería Estándar Extendida** — HashMap, HashSet, VecDeque, BinaryHeap,
+  LinkedList, Regex, Unicode Normalization, String Padding, UTF-8 Encoding,
+  Buffered I/O, Streaming, TCP, HTTP, Serial Port (stub).
+  ~70 builtins nuevos en VM (handlers Call/CallValue). Stdlib modules: `coleccion.nv`,
+  `texto.nv`, `io.nv`, `red.nv`. Registrados en sema/loader/IR builder.
 - **Fase 94: Single Binary** — `lumen` como binario único integrando `run`, `build`, `check`,
   `fmt`, `repl`, `doc`, `lsp`, `install` sin spawnear procesos hijos.
   Creadas libs `lumen_doc`, `lumen_lsp`, `lumen_pkg`.
