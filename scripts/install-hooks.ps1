@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# install-hooks.ps1 — Configura git para usar scripts/git-hooks/ como hooks
+# install-hooks.ps1 — Instala post-commit hook para auto-tag
 # Uso: ./scripts/install-hooks.ps1
 
 $RepoRoot = git rev-parse --show-toplevel 2>$null
@@ -8,10 +8,10 @@ if (-not $RepoRoot) {
     exit 1
 }
 
-$HooksPath = Join-Path $RepoRoot "scripts\git-hooks"
-git config core.hooksPath $HooksPath
+$HooksDir = Join-Path $RepoRoot ".git\hooks"
+$Source = Join-Path $RepoRoot "scripts\git-hooks\post-commit"
+$Dest = Join-Path $HooksDir "post-commit"
 
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "[install-hooks] hooksPath → $HooksPath"
-    Get-ChildItem $HooksPath | ForEach-Object { Write-Host "  ✓ $($_.Name)" }
-}
+Copy-Item -Path $Source -Destination $Dest -Force
+Write-Host "[install-hooks] Instalado: $Dest"
+Get-ChildItem $HooksDir | Where-Object { $_.Name -notlike "*.sample" } | ForEach-Object { Write-Host "  ✓ $($_.Name)" }
