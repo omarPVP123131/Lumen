@@ -12,5 +12,9 @@ keywords = ["lumen", "language", "package", "manager", "install"]
 name = "lumen-pkg"
 path = "src/main.rs"
 
+[lib]
+name = "lumen_pkg"
+path = "src/lib.rs"
+
 [dependencies]
 serde_json.workspace = true

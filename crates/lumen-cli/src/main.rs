@@ -189,13 +189,18 @@ fn main() {
                 eprintln!("Error: falta el archivo");
                 process::exit(1);
             }
+            let source = match fs::read_to_string(&config.file) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Error al leer '{}': {}", config.file, e);
+                    process::exit(1);
+                }
+            };
             let out = config.file.replace(".nv", ".html");
-            let status = std::process::Command::new("lumen-doc")
-                .args([&config.file, &out])
-                .status();
-            match status {
-                Ok(s) if s.success() => println!("✓ Documentación: {}", out),
-                _ => eprintln!("Error ejecutando lumen-doc"),
+            let html = lumen_doc::generate_docs(&source, &config.file);
+            match fs::write(&out, &html) {
+                Ok(()) => println!("✓ Documentación: {}", out),
+                Err(e) => eprintln!("Error generando documentación: {}", e),
             }
         }
         "debug" => {
@@ -210,12 +215,12 @@ fn main() {
                 eprintln!("Error: falta el paquete");
                 process::exit(1);
             }
-            let _ = std::process::Command::new("lumen-pkg")
-                .args(["install", &config.file])
-                .status();
+            let cache_dir = lumen_pkg::cache_dir();
+            std::fs::create_dir_all(&cache_dir).ok();
+            lumen_pkg::install_package(&config.file, &cache_dir);
         }
         "lsp" => {
-            let _status = std::process::Command::new("lumen-lsp").status();
+            lumen_lsp::run_lsp();
         }
         "lint" => {
             if config.file.is_empty() {

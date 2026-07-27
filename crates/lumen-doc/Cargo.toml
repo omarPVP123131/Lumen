@@ -12,6 +12,10 @@ keywords = ["lumen", "language", "docs", "documentation", "html"]
 name = "lumen-doc"
 path = "src/main.rs"
 
+[lib]
+name = "lumen_doc"
+path = "src/lib.rs"
+
 [dependencies]
 lumen-lexer = { path = "../lumen-lexer" }
 lumen-parser = { path = "../lumen-parser" }

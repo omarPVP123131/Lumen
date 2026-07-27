@@ -23,3 +23,6 @@ lumen-fmt = { path = "../lumen-fmt" }
 lumen-repl = { path = "../lumen-repl" }
 lumen-project = { path = "../lumen-project" }
 lumen-aot = { path = "../lumen-aot" }
+lumen-doc = { path = "../lumen-doc" }
+lumen-lsp = { path = "../lumen-lsp" }
+lumen-pkg = { path = "../lumen-pkg" }
