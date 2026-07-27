@@ -2777,52 +2777,42 @@ impl SemanticAnalyzer {
         span: &Span,
     ) -> Option<(TypeInfo, String)> {
         let _ = span;
-        let type_name = match receiver_type {
-            TypeInfo::Struct { name, .. } => name.clone(),
-            TypeInfo::Enum(name) => name.clone(),
-            TypeInfo::TypeVar(tv) => {
-                // Look up type param bounds
-                {
-                    let bounds = self
-                        .type_param_bounds
-                        .values()
-                        .find(|bounds| bounds.iter().any(|(name, _)| name == tv))?;
-                    if let Some((_, bound_trait)) = bounds.iter().find(|(name, _)| name == tv) {
-                        bound_trait.clone()
-                    } else {
-                        return None;
-                    }
-                }
-            }
-            _ => type_info_to_impl_name(receiver_type)?,
-        };
 
-        // When receiver is a TypeVar, look up the bound trait
+        // When receiver is a TypeVar, look up the bound trait and substitute defaults
         if let TypeInfo::TypeVar(tv) = receiver_type {
             let bound_trait = self.find_bound_for_typevar(tv)?;
             let trait_sig = self.traits.get(&bound_trait)?;
-            let (methods, _assoc_types) = trait_sig;
+            let (methods, assoc_types) = trait_sig;
+            let mut subst = HashMap::new();
+            for at in assoc_types {
+                if let Some(default) = &at.default {
+                    subst.insert(at.name.clone(), default.clone());
+                }
+            }
             for (t_mname, _t_params, t_ret) in methods {
                 if t_mname == method {
                     let mangled = format!("{}_{}_{}", tv, bound_trait, method);
-                    return Some((t_ret.clone(), mangled));
+                    let resolved_ret = substitute_typevars(t_ret, &subst);
+                    return Some((resolved_ret, mangled));
                 }
             }
             return None;
         }
 
-        // Look through impls for the receiver type
+        let type_name = match receiver_type {
+            TypeInfo::Struct { name, .. } => name.clone(),
+            TypeInfo::Enum(name) => name.clone(),
+            _ => type_info_to_impl_name(receiver_type)?,
+        };
+
+        // Look through impls for the receiver type, using the impl's concrete return type
         for (impl_type, trait_name) in self.impls.keys() {
             if impl_type != &type_name {
                 continue;
             }
-            let trait_sig = self.traits.get(trait_name)?;
-            let (methods, _assoc_types) = trait_sig;
-            for (t_mname, _t_params, t_ret) in methods {
-                if t_mname == method {
-                    let mangled = format!("{}_{}_{}", impl_type, trait_name, method);
-                    return Some((t_ret.clone(), mangled));
-                }
+            let mangled = format!("{}_{}_{}", impl_type, trait_name, method);
+            if let Some((ret, _, _, _)) = self.functions.get(&mangled) {
+                return Some((ret.clone(), mangled));
             }
         }
         None

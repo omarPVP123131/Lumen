@@ -1157,6 +1157,29 @@ imprimir(c.obtener_valor());";
 }
 
 #[test]
+fn test_trait_associated_types_typed_assign() {
+    let src = "rasgo Convertidor {
+    tipo Entrada;
+    tipo Salida;
+    funcion Salida convertir(este, Entrada val);
+}
+estructura Duplicador {}
+impl Convertidor para Duplicador {
+    tipo Entrada = entero;
+    tipo Salida = texto;
+    funcion texto convertir(este, entero val) {
+        retornar \"dup: \" + (val * 2);
+    }
+}
+sea d = Duplicador {};
+entero x = 21;
+texto r = d.convertir(x);
+imprimir(r);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["dup: 42"]);
+}
+
+#[test]
 fn test_extension_methods() {
     let src = "rasgo Duplicable {
     funcion entero duplicar(este);

@@ -1,6 +1,6 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v1.6.0 — Release: Julio 2026**
+**v1.6.0 — Released: Julio 2026**
 
 ---
 
@@ -10,18 +10,21 @@
 |-------|-------|------|
 | lumen-lexer | 24 | unit |
 | lumen-parser | 42 | unit |
-| lumen-sema | 43 | unit |
+| lumen-sema | 49 | unit |
 | lumen-ir | 20 | unit + folding |
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 110 | e2e |
+| lumen-vm | 113 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
-| **Total** | **~307** | |
+| lumen-aot | 1 | unit |
+| lumen-doc | 1 | unit |
+| lumen-pkg | 1 | unit |
+| **Total** | **~315** | |
 
-**~9 warnings, ~307 tests passing. 44/44 ejemplos funcionando.**
+**0 warnings, ~315 tests passing. 45/45 ejemplos funcionando.**
 
 ---
 
@@ -182,6 +185,7 @@ Editor online con ejecución en navegador.
 | `lumen serve` | Hot reload + playground |
 | `lumen lsp` | Servidor LSP |
 | `lumen run -L <dir> <file>` | Ejecuta con ruta de librerías |
+| `./scripts/install-hooks.ps1` | Instala git hooks (auto-tag en post-commit) |
 
 ---
 
@@ -223,5 +227,6 @@ crates/
 docs/spec/        → grammar.ebnf, bytecode-format.md, error-codes.md, vm-spec.md
 examples/         → *.nv (44 ejemplos funcionales)
 stdlib/           → *.nv (texto, matematicas, coleccion, fecha, archivos, matrices)
-scripts/          → PowerShell CI/CD (pre-commit, pre-vuelo)
+scripts/          → PowerShell CI/CD (pre-commit, pre-vuelo, auto-tag, install-hooks)
+scripts/git-hooks/ → post-commit (auto-tag v{version} al commitear)
 ```

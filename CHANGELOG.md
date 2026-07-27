@@ -18,6 +18,8 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
   - `type_to_impl_name()` soporta resolución de tipos nativos: `entero`, `texto`, `decimal`, etc.
 - **Fase 68: Tipos Asociados en Traits** — `tipo Item;` en rasgos y `tipo Item = T;` en impl.
   - AST: `AssociatedType` e `ImplAssociatedType`. Sema e IR completos.
+  - `resolve_trait_method_mangled()` ahora sustituye tipos asociados contra el impl concreto.
+  - `examples/senior/associated_types.nv` — demo funcional con 2 impls distintos.
 - **Fase 70: Impl Trait return** — `funcion impl Rasgo foo() { retornar expr }`.
   - `Type::ImplTrait(String)` en AST. Parseo en `parse_type()`.
 - **Fases 71-74: LSP Server (`lumen-lsp`)** — Diagnósticos en vivo, Autocompletado,
