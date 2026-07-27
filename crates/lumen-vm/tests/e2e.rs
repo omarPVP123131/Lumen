@@ -1194,3 +1194,337 @@ imprimir(x.duplicar());";
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["42"]);
 }
+
+// --- Fase 96-110: Colecciones ---
+
+#[test]
+fn test_diccionario() {
+    let src = r#"numero d = __map_nuevo();
+d = __map_poner(d, "Ana", 30);
+d = __map_poner(d, "Luis", 25);
+imprimir(__map_obtener(d, "Ana"));
+imprimir(__map_longitud(d));
+imprimir(__map_contiene(d, "Ana"));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["30", "2", "true"]);
+}
+
+#[test]
+fn test_conjunto() {
+    let src = r#"numero s = __conjunto_nuevo();
+s = __conjunto_agregar(s, "a");
+s = __conjunto_agregar(s, "b");
+imprimir(__conjunto_tiene(s, "a"));
+imprimir(__conjunto_tiene(s, "c"));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["true", "false"]);
+}
+
+#[test]
+fn test_conjunto_union() {
+    let src = r#"numero a = __conjunto_nuevo();
+a = __conjunto_agregar(a, 1);
+a = __conjunto_agregar(a, 2);
+numero b = __conjunto_nuevo();
+b = __conjunto_agregar(b, 2);
+b = __conjunto_agregar(b, 3);
+numero u = __conjunto_unir(a, b);
+imprimir(__conjunto_tiene(u, 1));
+imprimir(__conjunto_tiene(u, 3));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["true", "true"]);
+}
+
+#[test]
+fn test_conjunto_inter() {
+    let src = r#"numero a = __conjunto_nuevo();
+a = __conjunto_agregar(a, 1);
+a = __conjunto_agregar(a, 2);
+numero b = __conjunto_nuevo();
+b = __conjunto_agregar(b, 2);
+b = __conjunto_agregar(b, 3);
+numero i = __conjunto_interseccion(a, b);
+imprimir(__conjunto_tiene(i, 1));
+imprimir(__conjunto_tiene(i, 2));
+imprimir(__conjunto_tiene(i, 3));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["false", "true", "false"]);
+}
+
+#[test]
+fn test_conjunto_diff() {
+    let src = r#"numero a = __conjunto_nuevo();
+a = __conjunto_agregar(a, 1);
+a = __conjunto_agregar(a, 2);
+a = __conjunto_agregar(a, 3);
+numero b = __conjunto_nuevo();
+b = __conjunto_agregar(b, 2);
+numero d = __conjunto_diferencia(a, b);
+imprimir(__conjunto_tiene(d, 1));
+imprimir(__conjunto_tiene(d, 2));
+imprimir(__conjunto_tiene(d, 3));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["true", "false", "true"]);
+}
+
+#[test]
+fn test_deque() {
+    let src = r#"numero dq = __deque_nuevo();
+dq = __deque_agregar_final(dq, 1);
+dq = __deque_agregar_final(dq, 2);
+dq = __deque_agregar_frente(dq, 0);
+imprimir(__deque_longitud(dq));
+numero f = __deque_quitar_frente(dq);
+imprimir(f);
+numero b = __deque_quitar_final(dq);
+imprimir(b);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["3", "0", "2"]);
+}
+
+#[test]
+fn test_monticulo() {
+    let src = r#"numero h = __monticulo_nuevo();
+h = __monticulo_agregar(h, 5);
+h = __monticulo_agregar(h, 1);
+h = __monticulo_agregar(h, 10);
+imprimir(__monticulo_ver(h));
+imprimir(__monticulo_longitud(h));
+numero popped = __monticulo_quitar(h);
+imprimir(popped);
+imprimir(__monticulo_longitud(h));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["10", "3", "10", "3"]);
+}
+
+#[test]
+fn test_enlazada() {
+    let src = r#"numero ll = __enlazada_nuevo();
+ll = __enlazada_agregar_final(ll, "x");
+ll = __enlazada_agregar_final(ll, "y");
+ll = __enlazada_agregar_frente(ll, "z");
+imprimir(__enlazada_longitud(ll));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["3"]);
+}
+
+// --- Regex ---
+
+#[test]
+fn test_regex_is_match() {
+    let src = r#"imprimir(__regex_coincide("\\d+", "abc123"));
+imprimir(__regex_coincide("\\d+", "abc"));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["true", "false"]);
+}
+
+#[test]
+fn test_regex_replace() {
+    let src = r#"imprimir(__regex_reemplazar("mundo", "Hola mundo", "Lumen"));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["Hola Lumen"]);
+}
+
+// --- Unicode ---
+
+#[test]
+fn test_unicode_nfc() {
+    let src = r#"imprimir(__unicode_normalizar("cafe\\u0301", "NFC"));
+"#;
+    let output = run_source(src).unwrap();
+    // Composite é character
+    assert_eq!(output.len(), 1);
+}
+
+// --- Padding ---
+
+#[test]
+fn test_pad_start() {
+    let src = r#"imprimir(__str_padding_inicio("42", 5, "0"));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["00042"]);
+}
+
+#[test]
+fn test_pad_end() {
+    let src = r#"imprimir(__str_padding_fin("42", 5, "."));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["42..."]);
+}
+
+// --- Encoding ---
+
+#[test]
+fn test_utf8_encoding() {
+    let src = r#"numero bytes = __codificacion_utf8("Hola");
+imprimir(bytes);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["[72, 111, 108, 97]"]);
+}
+
+// --- IO (Buffered) ---
+
+#[test]
+fn test_buf_writer() {
+    let src = r#"numero r = __escritor_buffer("test_e2e_tmp.txt", "contenido");
+imprimir(r);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["exito(true)"]);
+    let _ = std::fs::remove_file("test_e2e_tmp.txt");
+}
+
+#[test]
+fn test_buf_reader() {
+    let src = r#"numero r = __lector_buffer("Cargo.toml");
+imprimir(__deque_longitud(r));
+"#;
+    let output = run_source(src).unwrap();
+    assert!(!output[0].is_empty());
+}
+
+// --- TCP ---
+
+#[test]
+fn test_tcp_connect_refused() {
+    let src = r#"numero r = __tcp_conectar("127.0.0.1:1");
+imprimir(r);
+"#;
+    let result = run_source(src);
+    assert!(result.is_ok() || result.is_err());
+}
+
+// --- HTTP ---
+
+#[test]
+fn test_http_get() {
+    let src = r#"numero r = __http_obtener("https://httpbin.org/get");
+imprimir(r);
+"#;
+    // May fail if no network, so just check it doesn't crash the test runner
+    let _ = run_source(src);
+}
+
+// --- Serial ---
+
+#[test]
+fn test_serial_open() {
+    let src = r#"numero r = __serial_abrir("COM1");
+imprimir(r);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["true"]);
+}
+
+// --- Map keys ---
+
+#[test]
+fn test_map_keys() {
+    let src = r#"numero d = __map_nuevo();
+d = __map_poner(d, "x", 1);
+d = __map_poner(d, "y", 2);
+numero k = __map_claves(d);
+imprimir(k);
+"#;
+    let output = run_source(src).unwrap();
+    assert!(output[0].contains("x") || output[0].contains("y"));
+}
+
+// --- Deque peek/pop empty ---
+
+#[test]
+fn test_deque_empty() {
+    let src = r#"numero dq = __deque_nuevo();
+imprimir(__deque_longitud(dq));
+numero f = __deque_quitar_frente(dq);
+imprimir(f);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["0", "void"]);
+}
+
+// --- Heap empty ---
+
+#[test]
+fn test_heap_empty() {
+    let src = r#"numero h = __monticulo_nuevo();
+imprimir(__monticulo_ver(h));
+imprimir(__monticulo_longitud(h));
+numero p = __monticulo_quitar(h);
+imprimir(p);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["void", "0", "void"]);
+}
+
+// --- Linked list empty ---
+
+#[test]
+fn test_enlazada_empty() {
+    let src = r#"numero ll = __enlazada_nuevo();
+imprimir(__enlazada_longitud(ll));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["0"]);
+}
+
+// --- Combined stress ---
+
+#[test]
+fn test_builtins_stress() {
+    let src = r#"numero m = __map_nuevo();
+m = __map_poner(m, "a", 1);
+m = __map_poner(m, "b", 2);
+imprimir(__map_longitud(m));
+imprimir(__map_contiene(m, "a"));
+numero s = __conjunto_nuevo();
+s = __conjunto_agregar(s, "x");
+s = __conjunto_agregar(s, "y");
+imprimir(__conjunto_tiene(s, "x"));
+imprimir(__regex_coincide("\\w+", "hola"));
+numero bytes = __codificacion_utf8("abc");
+imprimir(bytes);
+imprimir(__str_padding_inicio("7", 3, "0"));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(
+        output,
+        vec!["2", "true", "true", "true", "[97, 98, 99]", "007"]
+    );
+}
+
+// --- Regex captures ---
+
+#[test]
+fn test_regex_captures() {
+    let src = r#"numero caps = __regex_capturar("(\\d+)-(\\w+)", "123-abc");
+imprimir(caps);
+"#;
+    let output = run_source(src).unwrap();
+    assert!(output[0].contains("123-abc") || output[0] == "[]");
+}
+
+// --- Encoding from utf8 ---
+
+#[test]
+fn test_encoding_from_utf8() {
+    let src = r#"numero bytes = __codificacion_utf8("Hola");
+numero dec = __desde_utf8(bytes);
+imprimir(dec);
+"#;
+    let output = run_source(src).unwrap();
+    assert!(!output[0].is_empty());
+}
