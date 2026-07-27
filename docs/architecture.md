@@ -60,9 +60,15 @@ Fuente .nv
 │    VM       │  crates/lumen-vm
 │             │  Stack-based
 │             │  Call frames
-│             │  37 opcodes base
-│             │  + Result/Option/Enum/Tuple (8)
-│             │  + Mod (1)
+│             │  46 opcodes
+│             │  Result/Option/Enum/Tuple/Map
+└─────────────┘
+    │
+    ▼
+┌─────────────┐
+│   Tools     │  CLI (single binary)
+│             │  fmt, repl, lsp, doc, pkg, aot
+│             │  debug, test, lint, install
 └─────────────┘
 ```
 
@@ -76,10 +82,15 @@ crates/
   lumen-ir/        ir.rs, builder.rs
   lumen-codegen/   bytecode.rs, codegen.rs, disasm.rs
   lumen-vm/        vm.rs, value.rs
-  lumen-cli/       main.rs
-  lumen-fmt/      lib.rs
-  lumen-repl/     lib.rs
-  lumen-project/  lib.rs
+  lumen-cli/       main.rs (binario único)
+  lumen-fmt/       lib.rs
+  lumen-repl/      lib.rs
+  lumen-lsp/       main.rs
+  lumen-doc/       lib.rs
+  lumen-aot/       lib.rs
+  lumen-pkg/       lib.rs
+  lumen-project/   lib.rs
+  lumen-bench/     benches/benchmarks.rs
 docs/
   spec/            grammar.ebnf, bytecode-format.md,
                    error-codes.md, vm-spec.md
@@ -89,7 +100,9 @@ docs/
   roadmap.md       Roadmap de desarrollo
   contributing.md  Guía de contribución
 examples/          *.nv (programas de ejemplo)
-tests/             integration_test.rs
+stdlib/            *.nv (biblioteca estándar)
+scripts/           *.ps1 (CI/CD, hooks, installers)
+fuzz/              fuzz targets
 ```
 
 ## Bytecode (.nvc)

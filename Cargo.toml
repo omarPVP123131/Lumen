@@ -14,6 +14,8 @@ members = [
     "crates/lumen-lsp",
     "crates/lumen-doc",
     "crates/lumen-pkg",
+    "crates/lumen-bench",
+    "crates/lumen-plugin",
 ]
 resolver = "2"
 

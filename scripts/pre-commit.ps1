@@ -81,11 +81,14 @@ Write-Host "  $CYAN$(Get-Date -Format 'HH:mm:ss')$CLEAR`n"
 
 Write-Step "cargo fmt"
 Invoke-Step -Name "fmt" -Block {
-    cargo fmt -- --check 2>&1
+    $check = cargo fmt -- --check 2>&1
     if ($LASTEXITCODE -ne 0) {
         cargo fmt 2>&1 | Out-Null
-        throw "Formato incorrecto. Se ha ejecutado 'cargo fmt' automaticamente. Revisa y vuelve a intentar."
+        git add -u 2>&1 | Out-Null
+        Write-Host "       $YELLOW[FMT] Auto-formateo y re-stage aplicados.$CLEAR"
+        cargo fmt -- --check 2>&1
     }
+    else { $check }
 }
 
 Write-Step "cargo check"

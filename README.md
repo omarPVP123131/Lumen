@@ -3,8 +3,8 @@
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-1.6.0-orange)
-![Tests](https://img.shields.io/badge/tests-307%20passing-brightgreen)
-![Fases](https://img.shields.io/badge/fases-0--83%20completadas-blueviolet)
+![Tests](https://img.shields.io/badge/tests-317%20passing-brightgreen)
+![Fases](https://img.shields.io/badge/fases-0--95%20completadas-blueviolet)
 
 > **El primer lenguaje de programación moderno con el español como ciudadano de primera clase.**
 > Pipeline completo escrito en Rust: Lexer → Parser → Sema → IR → Optimizador → Bytecode → VM.
@@ -157,12 +157,12 @@ imprimir(saludo);
 ```
 Lenguaje Core      (Fases 0-60)   ████████████████████ 100%
 Lenguaje Avanzado  (Fases 61-70)  ████████████████████ 100%
-Herramientas       (Fases 71-83)  ███████████████████░  95%
-Distribución       (Fases 86-95)  ████████░░░░░░░░░░░░  40%
+Herramientas       (Fases 71-95)  ████████████████████ 100%
+Distribución       (Fases 96-110) ██░░░░░░░░░░░░░░░░░░  20%
 ```
 
-- ✅ **307 tests** pasando, ~9 warnings
-- ✅ **44 ejemplos** `.nv` funcionales
+- ✅ **317 tests** pasando, ~0 warnings
+- ✅ **45 ejemplos** `.nv` funcionales
 - ✅ **14 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg
 
 ---

@@ -9,13 +9,13 @@
 ```
 Lenguaje Core      [████████████████████████████████████████████] 100% (Fases 0-60)
 Lenguaje Avanzado  [████████████████████████████████████████████] 100% (Fases 61-70)
-Herramientas       [██████████████████████████████████████████░░]  95% (Fases 71-85)
-Distribución       [████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  40% (Fases 86-95)
-Stdlib & Runtime   [██████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  15% (Fases 96-140)
-Concurrencia       [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 141-160)
-GUI & Gráficos     [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 161-175)
-AI/ML & Data       [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 176-195)
-Producción & Cloud [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 196-230)
+Herramientas       [████████████████████████████████████████████] 100% (Fases 71-95)
+Distribución       [██████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  20% (Fases 96-110)
+Stdlib & Runtime   [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 111-130)
+Concurrencia       [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 131-150)
+GUI & Gráficos     [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 151-170)
+AI/ML & Data       [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 171-190)
+Producción & Cloud [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 191-220)
 ```
 
 ---
@@ -98,124 +98,210 @@ Producción & Cloud [░░░░░░░░░░░░░░░░░░░�
 | 63 | **Range Patterns** | `caso 0..10:` — comparación de rango | ✅ |
 | 64 | **String Patterns** | `caso "hola":` — igualdad de string | ✅ |
 | 65 | **Guard Let** | `sea x = expr sino { romper }` | ✅ |
-| 66 | **Operator Overloading** | `impl Suma for MiTipo` | ✅ |
-| 67 | **Extension Methods** | `impl MiRasgo for TipoExterno` | ✅ |
+| 66 | **Operator Overloading** | `impl Suma para MiTipo` | ✅ |
+| 67 | **Extension Methods** | `impl MiRasgo para TipoExterno` | ✅ |
 | 68 | **Associated Types** | `tipo Item;` en traits | ✅ |
-| 69 | **Where Clauses** | `<T> donde T: Comparable` | ⏭️ Salta — ya soportado por `<T: Rasgo>` |
+| 69 | **Where Clauses** | `<T> donde T: Comparable` | ⏭️ Saltado — ya soportado por `<T: Rasgo>` |
 | 70 | **Impl Trait return** | `-> impl Mostrable` | ✅ |
 
 ---
 
-## 🛠️ 3. Herramientas & DX (Fases 71-85)
+## 🛠️ 3. Herramientas & DX (Fases 71-95) — 100% completado
 
 | # | Herramienta | Descripción | Estado |
 |---|-------------|-------------|--------|
-| 71 | **LSP Server** | Diagnósticos en vivo en VS Code | ✅ |
-| 72 | **LSP: Completion** | Autocompletado de símbolos | ✅ |
-| 73 | **LSP: Go-to-def** | Navegación a definiciones | ✅ |
-| 74 | **LSP: Hover** | Información de tipos al pasar el mouse | ✅ |
-| 75 | **lumen doc** | Generación de HTML desde comentarios `///` | ✅ |
-| 76 | **Debugger** | Breakpoints, step, continue, inspect de variables | ✅ |
-| 77 | **lumen fmt avanzado** | `.lumen-fmt.toml` para configurar reglas de formato | ✅ |
-| 78 | **lumen lint** | Análisis estático: código muerto, complejidad ciclomática | ✅ |
+| 71 | **LSP Server** | Diagnósticos en vivo, parseo y sema al vuelo en editores | ✅ |
+| 72 | **LSP: Completion** | Autocompletado de palabras clave y símbolos | ✅ |
+| 73 | **LSP: Go-to-def** | Navegación a definiciones de símbolos | ✅ |
+| 74 | **LSP: Hover** | Información de tipos y documentación al pasar el mouse | ✅ |
+| 75 | **lumen doc** | Generación de HTML estático desde comentarios `///` | ✅ |
+| 76 | **Debugger** | Breakpoints, step/continue, inspección de variables en runtime | ✅ |
+| 77 | **lumen fmt avanzado** | `.lumen-fmt.toml` para indentación y reglas de formato | ✅ |
+| 78 | **lumen lint** | Análisis de código muerto y complejidad ciclomática | ✅ |
 | 79 | **REPL Pro** | Historial persistente, multilínea, resaltado, autocompletado | ✅ |
-| 80 | **Package Manager** | `lumen install`, registry central, lock file | ✅ |
-| 81 | **Build Incremental** | Caché de módulos para builds más rápidos | ✅ |
-| 82 | **Hot Reload** | Recarga automática de módulos en dev con `lumen serve` | ✅ |
-| 83 | **Playground Web** | Editor online con ejecución en navegador | ✅ |
-| 84 | **Benchmarks** | Suite de rendimiento automatizada (criterion) | 📋 |
-| 85 | **Plugins API** | Extensibilidad del compilador vía plugins | 📋 |
+| 80 | **Package Manager** | `lumen install`, registry central, lock file, dependencias | ✅ |
+| 81 | **Build Incremental** | Caché de compilación incremental para módulos sin cambios | ✅ |
+| 82 | **Hot Reload** | Recarga automática de módulos en desarrollo con `lumen serve` | ✅ |
+| 83 | **Playground Web** | Editor online con ejecución en navegador vía WASM | ✅ |
+| 84 | **Benchmarks** | Suite criterion para pipeline completo (lexer→parser→sema→IR→codegen→VM) | 📋 |
+| 85 | **Plugins API** | Sistema de plugins para fases del compilador (pre-parse, post-sema, etc.) | 📋 |
+| 86 | **AOT: C transpiler** | Transpilación a C + compilación con gcc/clang -O3 | ✅ |
+| 87 | **AOT: Cranelift** | Backend nativo directo vía Cranelift JIT/AOT | ✅ |
+| 88 | **AOT: LTO + optimización** | Link-time optimization, dead code stripping, inlining agresivo | 📋 |
+| 89 | **Cross-compilation** | Compilar para Linux/macOS/Windows/ARM desde cualquier SO | 📋 |
+| 90 | **WASM backend** | Compilar a WebAssembly para ejecución en navegadores | 📋 |
+| 91 | **WASM: WASI** | Ejecutar en servidores/serverless vía interfaz WASI | 📋 |
+| 92 | **WASM: JS interop** | Llamar funciones JS desde LÚMEN y viceversa | 📋 |
+| 93 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | 📋 |
+| 94 | **Single binary** | `lumen` como binario único (run, build, check, fmt, repl, doc, lsp, install) | ✅ |
+| 95 | **Installer** | Script de instalación unificado (`curl \| sh` para Unix, `irm \| pwsh` para Windows) | ✅ |
 
 ---
 
-## 📦 4. Distribución & Portabilidad (Fases 86-95)
+## 📦 4. Distribución & Portabilidad (Fases 96-110)
 
 | # | Feature | Descripción | Estado |
 |---|---------|-------------|--------|
-| 86 | **AOT: C transpiler** | Transpilación a C + compilación con gcc/clang -O3 | ✅ |
-| 87 | **AOT: Cranelift** | Backend nativo directo (sin dependencia de gcc) | ✅ (base) |
-| 88 | **AOT: LTO + optimización** | Link-time optimization, dead code stripping | 📋 |
-| 89 | **WASM backend** | Compilar a WebAssembly para navegadores | 📋 |
-| 90 | **WASM: WASI** | Ejecutar en servidores/serverless vía WASI | 📋 |
-| 91 | **WASM: JS interop** | Llamar funciones JS desde LUMEN y viceversa | 📋 |
-| 92 | **Cross-compilation** | Compilar para Linux/macOS/Windows desde cualquier SO | 📋 |
-| 93 | **Self-hosting** | El compilador de LUMEN escrito en LUMEN | 📋 |
-| 94 | **Single binary** | `lumen` como binario único con todos los subcomandos | 📋 |
-| 95 | **Installer** | Script de instalación unificado (`curl \| sh`) | 📋 |
+| 96 | **coleccion::HashMap** | Implementar `HashMap<K,V>` nativo con opcodes `MapNew`, `MapGet`, `MapSet`, `MapKeys`, `MapValues` | 📋 |
+| 97 | **coleccion::HashSet** | Implementar `HashSet<T>` sobre HashMap con operaciones de conjuntos (unión, intersección, diferencia) | 📋 |
+| 98 | **coleccion::VecDeque** | Cola doblemente terminada con `push_front`, `push_back`, `pop_front`, `pop_back` | 📋 |
+| 99 | **coleccion::BinaryHeap** | Cola de prioridad max-heap con `insertar`, `extraer_max`, `peek` | 📋 |
+| 100 | **coleccion::LinkedList** | Lista doblemente enlazada con inserción/eliminación O(1) en ambos extremos | 📋 |
+| 101 | **texto::Regex** | Expresiones regulares vía binding a crate regex — `Regex::new`, `es_coincide`, `capturar`, `reemplazar` | 📋 |
+| 102 | **texto::Unicode** | Normalización Unicode (NFC, NFD, NFKC, NFKD), categorías, case folding | 📋 |
+| 103 | **texto::Format** | Formateo avanzado: padding, alineación, precisión decimal, notación científica | 📋 |
+| 104 | **texto::Encoding** | Codificación UTF-8/16/32, Latin-1, detección automática de encoding | 📋 |
+| 105 | **io::Buffered** | Lector/escritor con buffer — `BufferedReader`, `BufferedWriter`, `LineReader` | 📋 |
+| 106 | **io::Streaming** | Streaming de archivos grandes con chunk reading, progreso y cancelación | 📋 |
+| 107 | **io::SerialPort** | Comunicación por puerto serie (RS-232) con baud rate, parity, stop bits | 📋 |
+| 108 | **red::TCP** | Sockets TCP — `TcpListener`, `TcpStream`, `conectar`, `escuchar`, `aceptar` | 📋 |
+| 109 | **red::HTTP** | Cliente HTTP/1.1 — GET, POST, headers, status codes, body streaming | 📋 |
+| 110 | **red::HTTP_Servidor** | Servidor HTTP básico con routing, middleware, JSON responses | 📋 |
 
 ---
 
-## 📚 5. Stdlib & Runtime (Fases 96-140)
+## 📚 5. Stdlib & Runtime (Fases 111-130)
 
-### 5.1 Colecciones (96-105)
-HashMap, HashSet, VecDeque, BinaryHeap, BTreeMap, BTreeSet, LinkedList, iteradores lazy, ordenamiento avanzado, slices.
-
-### 5.2 Texto (106-110)
-Regex, Unicode normalization, format avanzado, encoding (UTF-8/16/32), parsing de números.
-
-### 5.3 I/O (111-115)
-Buffered I/O, streaming, archivos grandes, pipes, serial ports.
-
-### 5.4 Red (116-120)
-TCP/UDP sockets, HTTP client, HTTP server, WebSocket, TLS/SSL.
-
-### 5.5 JSON/Serde (121-125)
-Serialización/deserialización automática, formatos binarios (MessagePack, Bincode), CSV, YAML.
-
-### 5.6 Base de Datos (126-130)
-SQLite driver nativo, PostgreSQL, MySQL, ORM simple, migraciones.
-
-### 5.7 Sistema (131-135)
-Procesos, variables de entorno, señales, archivos temporales, paths.
-
-### 5.8 DateTime (136-140)
-Zonas horarias, duraciones, formatting, parsing, calendarios.
-
----
-
-## ⚡ 6. Concurrencia & Async (Fases 141-160)
-
-| # | Feature | Estado |
-|---|---------|--------|
-| 141-145 | **Threads**: spawn, join, channels, mutex, atomics | 📋 |
-| 146-150 | **Async runtime real**: event loop, futures, streams, tokio-like | 📋 |
-| 151-155 | **Paralelismo**: parallel iterators, map-reduce, rayon-like | 📋 |
-| 156-160 | **Actores**: actor model, supervisión, message passing | 📋 |
+| # | Feature | Descripción | Estado |
+|---|---------|-------------|--------|
+| 111 | **json::Parser** | Parseo de JSON desde texto a tipos nativos (diccionario, lista, texto, entero, decimal, booleano) | 📋 |
+| 112 | **json::Serializer** | Serialización de tipos nativos LÚMEN a string JSON con indentación | 📋 |
+| 113 | **csv::Reader** | Lector CSV con soporte para delimitador, quoting, headers | 📋 |
+| 114 | **csv::Writer** | Escritor CSV con configuración de formato | 📋 |
+| 115 | **sqlite::Driver** | Binding nativo a SQLite — `abrir`, `ejecutar`, `consultar`, `transaccion` | 📋 |
+| 116 | **sqlite::ORM** | Mapeo objeto-relacional mínimo — tabla → struct, consultas tipadas | 📋 |
+| 117 | **sistema::Procesos** | Lanzar y controlar procesos hijo — `Comando::nuevo`, `args`, `salida`, `esperar` | 📋 |
+| 118 | **sistema::Env** | Variables de entorno — `obtener_var`, `asignar_var`, `listar_vars` | 📋 |
+| 119 | **sistema::Path** | Manipulación de rutas — `unir`, `absoluto`, `extension`, `nombre_archivo` | 📋 |
+| 120 | **sistema::Temp** | Archivos y directorios temporales con limpieza automática | 📋 |
+| 121 | **fecha::ZonaHoraria** | Zonas horarias IANA — `ZonaHoraria::local`, `cambiar_zona`, `desplazamiento_utc` | 📋 |
+| 122 | **fecha::Duracion** | Duración precisa — `Dias`, `Horas`, `Minutos`, `Segundos`, `Milisegundos`, operaciones aritméticas | 📋 |
+| 123 | **fecha::Format** | Formateo y parseo de fechas con patrones tipo strftime — `formatear("YYYY-MM-DD")`, `parsear` | 📋 |
+| 124 | **fecha::Calendario** | Calendarios no gregorianos — islámico, hebreo, chino, persa | 📋 |
+| 125 | **crypto::Hash** | Funciones hash — SHA-256, SHA-512, BLAKE3, HMAC | 📋 |
+| 126 | **crypto::AES** | Cifrado simétrico AES-128/256 en modo CBC, GCM | 📋 |
+| 127 | **crypto::JWT** | Creación y verificación de JSON Web Tokens con HS256, RS256 | 📋 |
+| 128 | **testing::Assert** | Macros de aserción — `afirmar`, `afirmar_eq`, `afirmar_neq`, `afirmar_error` | 📋 |
+| 129 | **testing::Mock** | Sistema de mocks — `crear_mock`, `esperar_llamada`, `verificar` | 📋 |
+| 130 | **testing::Coverage** | Cobertura de código en tests — líneas ejecutadas, ramas, reporte HTML | 📋 |
 
 ---
 
-## 🎨 7. GUI & Gráficos (Fases 161-175)
+## ⚡ 6. Concurrencia & Async (Fases 131-150)
 
-| # | Feature | Estado |
-|---|---------|--------|
-| 161-165 | **TUI**: terminal UI con ventanas, menús, tablas | 📋 |
-| 166-170 | **2D Gráficos**: canvas, sprites, game loop | 📋 |
-| 171-175 | **GUI Nativa**: widgets, layout engine, eventos | 📋 |
+| # | Feature | Descripción | Estado |
+|---|---------|-------------|--------|
+| 131 | **Thread::spawn** | Creación de hilos del sistema — `hilo::lanzar(|| expr)`, `hilo::dormir(ms)` | 📋 |
+| 132 | **Thread::Join** | Esperar a que un hilo termine — `hijo.esperar()` con resultado | 📋 |
+| 133 | **Sync::Mutex** | Exclusión mutua — `Mutex<T>`, `bloquear`, `try_bloquear` | 📋 |
+| 134 | **Sync::RwLock** | Lock de lectura/escritura — múltiples lectores, un escritor | 📋 |
+| 135 | **Sync::Arc** | Conteo de referencias atómico — `Arc<T>`, `clonar` para compartir entre hilos | 📋 |
+| 136 | **Sync::Channel** | Canales de comunicación entre hilos — `canal::nuevo()`, `enviar`, `recibir` | 📋 |
+| 137 | **Async::Runtime** | Runtime asíncrono con event loop — `async_run`, `task::lanzar`, `task::dormir` | 📋 |
+| 138 | **Async::Stream** | Streams asíncronos — `Stream<T>`, `map`, `filter`, `colectar` | 📋 |
+| 139 | **Async::File** | Operaciones de archivo asíncronas — `leer_async`, `escribir_async` | 📋 |
+| 140 | **Async::TCP** | Sockets asíncronos — `TcpListener::aceptar_async`, `TcpStream::leer_async` | 📋 |
+| 141 | **Async::Timer** | Temporizadores asíncronos — `Timer::despues(ms)`, `Timer::intervalo(ms)` | 📋 |
+| 142 | **Async::Select** | Selección de futuros — `seleccionar!(fut1, fut2, fut3)` tipo tokio::select! | 📋 |
+| 143 | **Par::Iterator** | Iteradores paralelos — `par_iter`, `map_par`, `filter_par`, `fold_par` | 📋 |
+| 144 | **Par::Join** | Fork-join paralelo — `par::unir(f1(), f2())`, divide y vencerás | 📋 |
+| 145 | **Act::Actor** | Modelo de actores — `Actor::nuevo`, `enviar`, `manejar_mensaje` | 📋 |
+| 146 | **Act::Supervisor** | Supervisión de actores — reinicio automático en fallo, estrategias one-for-one | 📋 |
+| 147 | **Act::Cluster** | Actores remotos — comunicación entre nodos vía TCP | 📋 |
+| 148 | **Coro::Generator** | Generadores/corutinas — `generador { producir expr }`, iteración lazy | 📋 |
+| 149 | **Coro::AsyncGen** | Generadores asíncronos — `async generador { }` con esperar dentro | 📋 |
+| 150 | **Coro::Structured** | Concurrencia estructurada — ámbitos de tareas con cancelación automática | 📋 |
 
 ---
 
-## 🤖 8. AI/ML & Data Science (Fases 176-195)
+## 🎨 7. GUI & Gráficos (Fases 151-170)
 
-| # | Feature | Estado |
-|---|---------|--------|
-| 176-180 | **Tensores**: operaciones matriciales, autodiff | 📋 |
-| 181-185 | **Redes Neuronales**: capas, optimizadores, entrenamiento | 📋 |
-| 186-190 | **DataFrames**: CSV, Parquet, operaciones tabulares | 📋 |
-| 191-195 | **ML Pipelines**: preprocesamiento, entrenamiento, serving | 📋 |
+| # | Feature | Descripción | Estado |
+|---|---------|-------------|--------|
+| 151 | **TUI::Terminal** | Modo terminal alternativo — `Term::nuevo`, `limpiar`, `cursor_a`, `ocultar_cursor` | 📋 |
+| 152 | **TUI::Ventana** | Ventanas en terminal — bordes, título, redimensionar, mover | 📋 |
+| 153 | **TUI::Input** | Entrada de texto en TUI — campo de texto, teclas navegación, clipboard | 📋 |
+| 154 | **TUI::Tabla** | Tablas renderizadas en terminal con sort, scroll, columnas redimensionables | 📋 |
+| 155 | **TUI::Menu** | Menús desplegables, contexto, barras de herramientas | 📋 |
+| 156 | **TUI::Layout** | Layout engine — Flex, Grid, Stack, Padding, Alignment | 📋 |
+| 157 | **GFX::Canvas** | Lienzo 2D básico — píxeles, líneas, rectángulos, círculos, texto | 📋 |
+| 158 | **GFX::Sprite** | Sprites animados — hojas de sprites, transformaciones, capas | 📋 |
+| 159 | **GFX::GameLoop** | Bucle de juego — fixed timestep, delta time, actualizar/ renderizar separados | 📋 |
+| 160 | **GFX::Input** | Entrada de teclado, mouse, gamepad — eventos, estado, mapeo | 📋 |
+| 161 | **GFX::Audio** | Reproducción de audio WAV/OGG — `Audio::cargar`, `reproducir`, `pausar`, `volumen` | 📋 |
+| 162 | **GFX::Particles** | Sistema de partículas — emisores, fuerzas, colores, vida útil | 📋 |
+| 163 | **GFX::Tilemap** | Mapas de tiles para juegos 2D — capas, colisiones, cámara | 📋 |
+| 164 | **GUI::Widget** | Widgets base — Botón, Etiqueta, CampoTexto, BarraProgreso | 📋 |
+| 165 | **GUI::Window** | Ventanas nativas — título, redimensionar, minimizar, cerrar, icono | 📋 |
+| 166 | **GUI::Canvas2D** | Lienzo 2D en ventana nativa — anti-aliasing, gradientes, clipping | 📋 |
+| 167 | **GUI::Event** | Sistema de eventos — click, teclado, focus, drag, resize | 📋 |
+| 168 | **GUI::Style** | Temas y estilos — CSS-like, herencia, variables de diseño | 📋 |
+| 169 | **GUI::TreeView** | Árbol expandible/contraíble con iconos, drag-drop, multi-selección | 📋 |
+| 170 | **GUI::Chart** | Gráficos — barras, líneas, pastel, áreas, scatter con ejes y leyendas | 📋 |
 
 ---
 
-## 🚀 9. Producción & DevOps (Fases 196-230)
+## 🤖 8. AI/ML & Data Science (Fases 171-190)
 
-| # | Feature | Estado |
-|---|---------|--------|
-| 196-200 | **Testing avanzado**: benchmarks, fuzz, mutation, property | 📋 |
-| 201-205 | **Observabilidad**: logging, tracing, metrics, profiling | 📋 |
-| 206-210 | **Cloud SDKs**: AWS, GCP, Azure | 📋 |
-| 211-215 | **Docker & K8s**: imágenes oficiales, operadores | 📋 |
-| 216-220 | **CI/CD templates**: GitHub Actions, GitLab CI | 📋 |
-| 221-225 | **Seguridad**: crypto, hashing, JWT, OAuth | 📋 |
-| 226-230 | **v3.0 Release**: Documentación final, sitio web, comunidad | 📋 |
+| # | Feature | Descripción | Estado |
+|---|---------|-------------|--------|
+| 171 | **Tens::Tensor** | Tensor N-dimensional con soporte para CPU/GPU — `Tensor::nuevo`, `forma`, `re` | 📋 |
+| 172 | **Tens::Ops** | Operaciones tensoriales — suma, multiplicación, convolución, pooling, softmax | 📋 |
+| 173 | **Tens::Autodiff** | Diferenciación automática — gradientes, cinta de operaciones, backpropagation | 📋 |
+| 174 | **NN::Dense** | Capa densa (fully connected) — `Dense::nuevo(entradas, salidas, activacion)` | 📋 |
+| 175 | **NN::Conv2D** | Capa convolucional 2D — filtros, stride, padding, dilation | 📋 |
+| 176 | **NN::RNN** | Capa recurrente — LSTM, GRU, bidireccional | 📋 |
+| 177 | **NN::Optimizer** | Optimizadores — SGD, Adam, AdamW, RMSprop con learning rate scheduling | 📋 |
+| 178 | **NN::Trainer** | Entrenamiento — batching, epochs, validación, early stopping, checkpoint | 📋 |
+| 179 | **ML::DataFrame** | DataFrame tabular — columnas tipadas, filtros, groupby, join, pivot | 📋 |
+| 180 | **ML::CSV_IO** | Carga/guarda de DataFrames desde/a CSV, Parquet, Arrow | 📋 |
+| 181 | **ML::Preprocess** | Preprocesamiento — normalize, standardize, one-hot encode, fill NA | 📋 |
+| 182 | **ML::Regression** | Regresión lineal, logística, polinomial — `ajustar`, `predecir`, `score` | 📋 |
+| 183 | **ML::Clustering** | Clustering — K-Means, DBSCAN, hierarchical, silhouette score | 📋 |
+| 184 | **ML::PCA** | Reducción de dimensionalidad — PCA, t-SNE, UMAP | 📋 |
+| 185 | **ML::Tree** | Árboles de decisión, Random Forest, Gradient Boosting (XGBoost-like) | 📋 |
+| 186 | **ML::Metrics** | Métricas de evaluación — accuracy, precision, recall, F1, MSE, MAE, R² | 📋 |
+| 187 | **ML::Pipeline** | Pipeline de ML — `Pipeline::nuevo([paso1, paso2])`, `ajustar`, `predecir` | 📋 |
+| 188 | **ML::Serve** | Serving de modelos — API REST para inferencia, versionado | 📋 |
+| 189 | **ML::Dataset** | Datasets integrados — iris, mnist, cifar10, IMDB, cargas desde URL | 📋 |
+| 190 | **ML::NLP** | NLP básico — tokenización, TF-IDF, word embeddings, n-gramas | 📋 |
+
+---
+
+## 🚀 9. Producción & DevOps (Fases 191-220)
+
+| # | Feature | Descripción | Estado |
+|---|---------|-------------|--------|
+| 191 | **Testing::Bench** | Benchmarking de funciones — `cronometrar`, `iteraciones`, `percentiles`, reporte | 📋 |
+| 192 | **Testing::Fuzz** | Fuzzing integrado con AFL/cargo-fuzz para funciones marcadas con `#[fuzz]` | 📋 |
+| 193 | **Testing::Mutation** | Testing de mutaciones — mutar código fuente y verificar que tests fallen | 📋 |
+| 194 | **Obs::Log** | Logging estructurado — niveles (trace, debug, info, warn, error), archivos rotativos | 📋 |
+| 195 | **Obs::Tracing** | Trazado distribuido — spans, eventos, contexto, exportación OpenTelemetry | 📋 |
+| 196 | **Obs::Metrics** | Métricas en tiempo real — contadores, histogramas, gauges, exportación Prometheus | 📋 |
+| 197 | **Obs::Profiler** | Profiler de CPU/memoria — llamádas, tiempo por función, gráfico de llama | 📋 |
+| 198 | **Cloud::S3** | Cliente AWS S3 — `subir`, `descargar`, `listar`, `borrar`, `presigned_url` | 📋 |
+| 199 | **Cloud::Dynamo** | Cliente AWS DynamoDB — `consultar`, `insertar`, `actualizar`, `eliminar` | 📋 |
+| 200 | **Cloud::Lambda** | Funciones Lambda — empaquetado automático, deploy desde `lumen deploy` | 📋 |
+| 201 | **Cloud::GCP_Storage** | Cliente Google Cloud Storage — buckets, objetos, ACLs | 📋 |
+| 202 | **Cloud::Azure_Blob** | Cliente Azure Blob Storage — contenedores, blobs, leases | 📋 |
+| 203 | **Docker::Image** | Imagen Docker oficial — `lumen:latest`, multi-stage, slim, alpine | 📋 |
+| 204 | **Docker::Compose** | Plantilla docker-compose para proyectos LÚMEN con base de datos | 📋 |
+| 205 | **K8s::Operator** | Operador Kubernetes para apps LÚMEN — deploy, scale, health checks | 📋 |
+| 206 | **CI::GitHub** | Template de GitHub Actions — test, lint, build, release para LÚMEN | 📋 |
+| 207 | **CI::GitLab** | Template de GitLab CI — test, lint, build, pages para docs | 📋 |
+| 208 | **Sec::Crypto** | Binding a OpenSSL/LibreSSL — cifrado asimétrico, certificados X.509 | 📋 |
+| 209 | **Sec::OAuth2** | Flujo OAuth 2.0 — authorization code, client credentials, refresh token | 📋 |
+| 210 | **Sec::JWT** | JWT completo — emisión, verificación, expiración, claims personalizados | 📋 |
+| 211 | **Sec::Vault** | Gestión de secretos — cifrado en reposo, rotación, auditoría | 📋 |
+| 212 | **Docs::Web** | Sitio web oficial `lumen-lang.org` con documentación, tutoriales, playground | 📋 |
+| 213 | **Docs::Tutorial** | Tutorial interactivo paso a paso — desde hola mundo hasta programas complejos | 📋 |
+| 214 | **Docs::Book** | Libro oficial de LÚMEN — "El Lenguaje LÚMEN" en español e inglés | 📋 |
+| 215 | **Com::Forum** | Foro/Comunidad — discusiones, preguntas, ejemplos, show & tell | 📋 |
+| 216 | **Com::Extension** | Extensión VS Code oficial con syntax highlighting, snippets, debugging | 📋 |
+| 217 | **Com::Plugin** | Plugin para JetBrains IDEs (IntelliJ, CLion) — resaltado, navegación | 📋 |
+| 218 | **Com::Play** | Playground online en `play.lumen-lang.org` — compilar y ejecutar en navegador | 📋 |
+| 219 | **Com::Package** | Registro público de paquetes — `lumen install paquete` desde registry central | 📋 |
+| 220 | **v3.0.0 Release** | Documentación final, sitio web, comunidad, release oficial v3.0.0 | 📋 |
 
 ---
 
@@ -223,13 +309,13 @@ Zonas horarias, duraciones, formatting, parsing, calendarios.
 
 | Versión | Alcance | Fases | Estado |
 |---------|---------|-------|--------|
-| **v1.0** | Compilador e infraestructura base | 0-20 | ✅ Completado |
-| **v1.2** | Features del lenguaje + stdlib inicial | 21-41 | ✅ Completado |
-| **v1.5** | Sintaxis moderna + genéricos + traits | 42-60 | ✅ Completado |
-| **v1.6** | Lenguaje avanzado + LSP + Herramientas DX | 61-83 | ✅ Completado |
-| **v2.0** | Distribución completa (WASM, cross-compile) + Herramientas Pro | 84-95 | 🏗️ En progreso |
-| **v2.5** | Stdlib madura + Concurrencia real | 96-160 | 📋 Planificado |
-| **v3.0** | GUI + AI/ML + Cloud + Producción — Lenguaje completo | 161-230 | 📋 Planificado |
+| **v1.0** | Compilador e infraestructura base | 0-20 | ✅ |
+| **v1.2** | Features del lenguaje + stdlib inicial | 21-41 | ✅ |
+| **v1.5** | Sintaxis moderna + genéricos + traits | 42-60 | ✅ |
+| **v1.6** | Lenguaje avanzado + LSP + Herramientas DX completas | 61-95 | ✅ |
+| **v2.0** | Stdlib distribuible + Async + Concurrencia | 96-150 | 🏗️ En progreso |
+| **v2.5** | GUI + TUI + Juegos | 151-170 | 📋 |
+| **v3.0** | AI/ML + Cloud + Producción — Lenguaje completo | 171-220 | 📋 |
 
 ---
 

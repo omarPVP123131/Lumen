@@ -117,6 +117,18 @@ Extrae comentarios `///` y genera documentación HTML estática.
 
 ---
 
+### `install` — Gestor de paquetes
+
+```bash
+lumen install coleccion        # Instala desde registry
+lumen install --local ./ruta   # Instala desde directorio local
+lumen install --help           # Ayuda del comando
+```
+
+Gestiona dependencias externas. Requiere conexión a internet para descargar del registry.
+
+---
+
 ### `debug` — Depurador interactivo
 
 ```bash

@@ -7,6 +7,11 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 ## v1.6.0 — Julio 2026
 
 ### Agregado
+- **Fase 94: Single Binary** — `lumen` como binario único integrando `run`, `build`, `check`,
+  `fmt`, `repl`, `doc`, `lsp`, `install` sin spawnear procesos hijos.
+  Creadas libs `lumen_doc`, `lumen_lsp`, `lumen_pkg`.
+- **Fase 95: Installer** — `scripts/install.ps1` (Windows) + `scripts/install.sh` (Unix).
+  Detección de release binaria con fallback a compilación desde fuente.
 - **Fase 65: Guard Let** — `sea patron = expr sino { romper/retornar/continuar }`.
   Desugaring en IR builder a JmpIf/Jmp. `Stmt::GuardLet` en AST + parser + sema.
 - **Fase 66: Operator Overloading** — `impl Suma for Punto` con método `fn sumar(self, otro)`.
@@ -39,8 +44,10 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 ### Cambiado
 - Version bump a 1.6.0 en workspace.
 - Trait impl functions reciben `"self"` como primer parámetro automáticamente.
-- `docs/roadmap.md` expandido de 180 a 237 líneas con tablas detalladas de fases 0-60.
-- `AGENTS.md` actualizado con fases 59-60, 68, 71-87 completadas.
+- `docs/roadmap.md` expandido con tablas detalladas hasta fase 220 (v3.0).
+- `AGENTS.md` actualizado con fases 94-95 completadas.
+- `docs/cli.md` actualizado con comando `install`.
+- `HERRAMIENTAS.md` actualizado con nuevos scripts de instalación.
 
 ### Corregido
 - Encoding UTF-8 en scripts de CI/CD (pre-commit PowerShell).

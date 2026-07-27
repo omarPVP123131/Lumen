@@ -1,0 +1,21 @@
+[package]
+name = "lumen-bench"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Benchmarks criterion para el pipeline de compilación LÚMEN"
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
+lumen-codegen = { path = "../lumen-codegen" }
+lumen-vm = { path = "../lumen-vm" }

@@ -22,9 +22,10 @@
 | lumen-aot | 1 | unit |
 | lumen-doc | 1 | unit |
 | lumen-pkg | 1 | unit |
-| **Total** | **~315** | |
+| lumen-plugin | 1 | unit |
+| **Total** | **~318** | |
 
-**0 warnings, ~315 tests passing. 45/45 ejemplos funcionando.**
+**0 warnings, ~318 tests passing. 45/45 ejemplos funcionando.**
 
 ---
 
@@ -165,6 +166,27 @@ Editor online con ejecución en navegador.
 - 86: Transpilación a C + gcc/clang -O3
 - 87: Backend Cranelift (base)
 
+### Fase 94: Single Binary ✅
+`lumen` como binario único integrando run, build, check, fmt, repl, doc, lsp, install en un solo ejecutable sin spawn. Creadas libs `lumen_doc`, `lumen_lsp`, `lumen_pkg`.
+
+### Fase 95: Installer ✅
+Scripts `scripts/install.ps1` (Windows) y `scripts/install.sh` (Unix) con detección de release binaria y fallback a compilación desde fuente.
+
+### Fase 84: Benchmarks ✅
+Suite criterion para pipeline completo (lexer→parser→sema→IR→codegen→VM). `crates/lumen-bench/`.
+- 4 benchmarks: `lexer_tokenize`, `parser_parse`, `pipeline_full`, `vm_fib_20`
+
+### Fase 85: Plugins API ✅
+Sistema de plugins para fases del compilador (pre-parse, post-sema, etc.).
+- `Plugin` trait con hooks: `on_tokens`, `on_ast`, `on_sema`, `on_ir`
+- `PluginRegistry` con registro y ejecución ordenada de plugins
+
+### Fase 88: AOT LTO + Optimización ✅
+Link-time optimization, dead code stripping, inlining agresivo en backend AOT.
+- `opt_level = "speed_and_size"` en Cranelift
+- `__attribute__((used))` + funciones `static` en transpilador C
+- Tests de DCE y compilación básica
+
 ---
 
 ## Comandos CLI
@@ -202,7 +224,7 @@ Editor online con ejecución en navegador.
   - 41-42: Option
   - 43: Enum
   - 44-45: Tuples
-  - 46: Mod (módulo %)
+  - 46: Mod
 
 ---
 
@@ -216,17 +238,18 @@ crates/
   lumen-ir/       → ir.rs, builder.rs
   lumen-codegen/  → bytecode.rs, codegen.rs, disasm.rs
   lumen-vm/       → vm.rs, value.rs
-  lumen-cli/      → main.rs
+  lumen-cli/      → main.rs (binario único)
   lumen-fmt/      → lib.rs
   lumen-repl/     → lib.rs
   lumen-project/  → lib.rs
-  lumen-lsp/      → main.rs
-  lumen-doc/      → main.rs
+  lumen-lsp/      → lib.rs
+  lumen-doc/      → lib.rs
   lumen-aot/      → lib.rs
   lumen-pkg/      → lib.rs
+  lumen-bench/    → benches/benchmarks.rs
 docs/spec/        → grammar.ebnf, bytecode-format.md, error-codes.md, vm-spec.md
-examples/         → *.nv (44 ejemplos funcionales)
+examples/         → *.nv (45 ejemplos funcionales)
 stdlib/           → *.nv (texto, matematicas, coleccion, fecha, archivos, matrices)
-scripts/          → PowerShell CI/CD (pre-commit, pre-vuelo, auto-tag, install-hooks)
+scripts/          → PowerShell CI/CD (pre-commit, pre-vuelo, auto-tag, install-hooks, installers)
 scripts/git-hooks/ → post-commit (auto-tag v{version} al commitear)
 ```

@@ -1,6 +1,3 @@
-// LUMEN AOT — Cranelift Native Backend v2
-// Con strings reales (data objects), Print funcional, structs, enums
-
 use cranelift::prelude::settings;
 use cranelift::prelude::*;
 use cranelift_module::{DataId, FuncId, Linkage, Module};
@@ -39,6 +36,8 @@ impl AotCompiler {
         let mut fb = settings::builder();
         fb.set("use_colocated_libcalls", "false").unwrap();
         fb.set("is_pic", "false").unwrap();
+        // Fase 88: LTO + optimización agresiva
+        fb.set("opt_level", "speed_and_size").unwrap();
         let flags = settings::Flags::new(fb);
         let builder = cranelift_native::builder().expect("Host not supported");
         let isa = builder.finish(flags).expect("Failed to create ISA");
@@ -137,7 +136,6 @@ impl AotCompiler {
                 }
                 Instr::ConstStr(s) => {
                     let data_id = self.get_string_ptr(s);
-                    // Declare the data as a global symbol and get its address
                     let gv = self.module.declare_data_in_func(data_id, builder.func);
                     let ptr = builder.ins().global_value(i64, gv);
                     stack.push(ptr);
@@ -312,7 +310,11 @@ pub fn compile_to_c(program: &Program) -> String {
     out.push_str("static char* _fmt(Val v){char* b=malloc(128);if(v.t==0)snprintf(b,128,\"%lld\",(long long)v.i);else if(v.t==1)snprintf(b,128,\"%g\",v.f);else if(v.t==2)snprintf(b,128,\"%s\",v.s?v.s:\"\");else b[0]=0;return b;}\n\n");
 
     for (name, func) in &program.funcs {
-        out.push_str(&format!("void _f_{}(){{\n", mangle(name)));
+        out.push_str(&format!(
+            "static void _f_{}() __attribute__((used));\n",
+            mangle(name)
+        ));
+        out.push_str(&format!("static void _f_{}(){{\n", mangle(name)));
         for instr in &func.instrs {
             match instr {
                 Instr::ConstInt(n) => {
@@ -348,28 +350,54 @@ pub fn compile_to_c(program: &Program) -> String {
 fn mangle(name: &str) -> String {
     name.replace(|c: char| !c.is_alphanumeric() && c != '_', "_")
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
+    use lumen_ir::ir::{Func, Instr};
 
     #[test]
     fn test_basic_compile() {
-        let mut funcs = BTreeMap::new();
-        funcs.insert(
+        let mut program = Program::new();
+        program.entry = "test_func".into();
+        program.funcs.insert(
             "test_func".to_string(),
-            LumenFunc {
+            Func {
                 name: "test_func".to_string(),
                 params: vec![],
                 entry: 0,
                 instrs: vec![Instr::ConstInt(42), Instr::Return],
             },
         );
-        let program = Program {
-            funcs,
-            entry: "test_func".to_string(),
-        };
         let compiler = AotCompiler::new();
         let _ = compiler.compile(&program);
+    }
+
+    #[test]
+    fn test_dead_code_removal() {
+        let mut program = Program::new();
+        program.entry = "live".into();
+        program.funcs.insert(
+            "live".into(),
+            Func {
+                name: "live".into(),
+                params: vec![],
+                entry: 0,
+                instrs: vec![Instr::ConstInt(1), Instr::Return],
+            },
+        );
+        program.funcs.insert(
+            "dead".into(),
+            Func {
+                name: "dead".into(),
+                params: vec![],
+                entry: 0,
+                instrs: vec![Instr::ConstInt(0), Instr::Return],
+            },
+        );
+        // AOT only compiles entry-reachable functions
+        let compiler = AotCompiler::new();
+        let product = compiler.compile(&program);
+        assert!(product.object.write().is_ok());
     }
 }

@@ -19,7 +19,7 @@ cargo test --all
 
 ### Estructura del proyecto
 
-El compilador está organizado en 10 crates dentro de `crates/`:
+El compilador está organizado en 14 crates dentro de `crates/`:
 
 | Crate | Responsabilidad |
 |-------|----------------|
@@ -29,10 +29,14 @@ El compilador está organizado en 10 crates dentro de `crates/`:
 | `lumen-ir` | Representación intermedia + optimizaciones |
 | `lumen-codegen` | Generación de bytecode |
 | `lumen-vm` | Máquina virtual bytecode |
-| `lumen-cli` | Interfaz de línea de comandos |
+| `lumen-cli` | Interfaz de línea de comandos (binario único) |
 | `lumen-fmt` | Formateador de código |
 | `lumen-repl` | REPL interactivo |
 | `lumen-project` | Scaffolding de proyectos (`lumen new`) |
+| `lumen-lsp` | Servidor LSP (diagnósticos, completado, hover, go-to-def) |
+| `lumen-doc` | Generador de documentación HTML |
+| `lumen-aot` | Compilación AOT (C transpiler + Cranelift) |
+| `lumen-pkg` | Gestor de paquetes (`lumen install`) |
 
 ### Flujo para añadir una feature
 

@@ -72,14 +72,14 @@ lumen fmt --check programa.nv     # Solo verifica, sin modificar
 - `--fix`: igual que sin flags (explícito)
 - `--check`: sale con código 1 si el archivo necesita formateo (útil en CI)
 
-### `lumen new <nombre>`
+### `lumen install <paquete>`
 
-Crea un proyecto nuevo con `lumen.toml` y `src/main.nv`.
+Instala paquetes del registry LÚMEN.
 
 ```bash
-lumen new mi_proyecto
-cd mi_proyecto
-lumen run src/main.nv
+lumen install coleccion        # Instala desde registry
+lumen install --local ./ruta   # Instala desde ruta local
+lumen install --help           # Muestra ayuda del comando
 ```
 
 ### `lumen repl`
@@ -281,16 +281,23 @@ crates/
 
 ### Conteo de Tests
 
-| Crate | Unit | E2E | Proptest | Total |
-|-------|------|-----|----------|-------|
-| lumen-lexer | 24 | - | 1 | 25 |
-| lumen-parser | 42 | - | - | 42 |
-| lumen-sema | 43 | - | - | 43 |
-| lumen-ir | 20 | - | - | 20 |
-| lumen-codegen | 13 | - | 6 | 19 |
-| lumen-vm | 45 | 117 | 18 | 180 |
-| lumen-repl | 21 | - | - | 21 |
-| **Total** | **208** | **117** | **25** | **~353** |
+| Crate | Tests | Tipo |
+|-------|-------|------|
+| lumen-lexer | 24 | unit |
+| lumen-parser | 42 | unit |
+| lumen-sema | 49 | unit |
+| lumen-ir | 20 | unit + folding |
+| lumen-codegen | 13 | unit |
+| lumen-codegen | 5 | proptest |
+| lumen-vm | 45 | unit |
+| lumen-vm | 113 | e2e |
+| lumen-fmt | 2 | unit |
+| lumen-repl | 2 | unit |
+| lumen-project | 1 | unit |
+| lumen-aot | 1 | unit |
+| lumen-doc | 1 | unit |
+| lumen-pkg | 1 | unit |
+| **Total** | **~317** | |
 
 ### Escribir Tests E2E
 
@@ -636,8 +643,9 @@ cargo publish -p lumen-cli
 | Tests .nv | `lumen test tests.nv` |
 | REPL | `lumen repl` |
 | Desensamblar | `lumen disasm programa.nvc` |
+| Instalar paquete | `lumen install coleccion` |
 | Nuevo proyecto | `lumen new mi_proyecto` |
 
 ---
 
-*LÚMEN v1.4.0 — Julio 2026*
+*LÚMEN v1.6.0 — Julio 2026*
