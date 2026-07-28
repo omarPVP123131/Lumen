@@ -88,6 +88,7 @@ pub struct VM {
     #[cfg(feature = "full")]
     current_coro: Option<String>,
     #[cfg(feature = "full")]
+    #[allow(clippy::type_complexity)]
     main_saved: Option<(Vec<Value>, Vec<HashMap<String, Value>>, usize)>,
     tcp_listener: Option<std::net::TcpListener>,
     #[cfg(feature = "full")]
@@ -1632,7 +1633,7 @@ impl VM {
             let days = timestamp / 86400 + 719163;
             let hijri_year = ((days as f64) / 354.367) as i64 + 1;
             let remaining = days - (((hijri_year - 1) as f64) * 354.367) as i64;
-            let hijri_month = (remaining / 30).min(12).max(1);
+            let hijri_month = (remaining / 30).clamp(1, 12);
             let hijri_day = (remaining % 30 + 1).min(30);
             let result = format!("{}-{:02}-{:02} AH", hijri_year, hijri_month, hijri_day);
             self.push(Value::Str(result));
@@ -3176,6 +3177,7 @@ fn lumen_value_to_json(v: &Value) -> serde_json::Value {
 }
 
 // ── FFI dynamic call helper ─────────────────────────────────────────────
+#[allow(dead_code)]
 fn ffi_call_dynamic(
     func_ptr: *const (),
     _arg_types: &[&str],

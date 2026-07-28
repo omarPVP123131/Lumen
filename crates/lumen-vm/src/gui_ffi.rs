@@ -1,4 +1,5 @@
 #![cfg(feature = "full")]
+#![allow(clippy::missing_safety_doc, clippy::type_complexity)]
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -91,7 +92,7 @@ impl GuiWindow {
             let p = wc.as_mut_ptr();
             *(p as *mut u32) = 80; // cbSize
             *(p.add(4) as *mut u32) = 0x0008 | 0x0020; // style: CS_HREDRAW | CS_VREDRAW
-            *(p.add(8) as *mut i64) = wnd_proc as usize as i64; // lpfnWndProc
+            *(p.add(8) as *mut i64) = wnd_proc as *const () as usize as i64; // lpfnWndProc
             *(p.add(16) as *mut i32) = 0; // cbClsExtra
             *(p.add(20) as *mut i32) = 0; // cbWndExtra
             *(p.add(24) as *mut i64) = hinst as i64; // hInstance
