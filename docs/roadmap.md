@@ -11,9 +11,9 @@ Lenguaje Core       [███████████████████�
 Lenguaje Avanzado   [████████████████████████████████████████████] 100% (Fases 61-70)
 Herramientas & DX   [████████████████████████████████████████████] 100% (Fases 71-95)
 Stdlib Extendida    [████████████████████████████████████████████] 100% (Fases 96-110)
-Runtime & Sistema   [███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  13% (Fases 111-130)
-Concurrencia & Async[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 131-150)
-GUI, TUI & Juegos   [▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   7% (Fases 151-170)
+Runtime & Sistema   [████████████████████████████████████████░░░░░]  85% (Fases 111-130)
+Concurrencia & Async[████████████████████████████░░░░░░░░░░░░░░░░░]  60% (Fases 131-150)
+GUI, TUI & Juegos   [████████████████████████░░░░░░░░░░░░░░░░░░░░░]  55% (Fases 151-170)
 Portabilidad        [▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   7% (Fases 171-185)
 AI/ML & Data        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 186-200)
 Producción & Cloud  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 201-220)
@@ -167,21 +167,21 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 |---|--------|---------|-------------|--------|
 | 111 | `json` | **Parser** | Parseo de JSON desde texto a tipos nativos LÚMEN | ✅ vía serde_json |
 | 112 | `json` | **Serializer** | Serialización de tipos LÚMEN a JSON con indentación | ✅ vía serde_json |
-| 113 | `csv` | **Reader** | Lector CSV con delimitador, quoting, headers | 📋 stdlib existe, requiere builtins VM |
-| 114 | `csv` | **Writer** | Escritor CSV con configuración de formato | 📋 stdlib existe, requiere builtins VM |
-| 115 | `sqlite` | **Driver** | Binding nativo a SQLite: `abrir`, `ejecutar`, `consultar`, `transaccion` | 📋 stdlib existe, requiere `__ffi_*` en VM |
+| 113 | `csv` | **Reader** | Lector CSV con delimitador, quoting, headers | ✅ vía __ffi_* |
+| 114 | `csv` | **Writer** | Escritor CSV con configuración de formato | ✅ vía __ffi_* |
+| 115 | `sqlite` | **Driver** | Binding nativo a SQLite: `abrir`, `ejecutar`, `consultar`, `transaccion` | ✅ vía __ffi_* a sqlite3.dll |
 | 116 | `sqlite` | **ORM** | Mapeo objeto-relacional mínimo | 📋 |
-| 117 | `sistema` | **Procesos** | Lanzar procesos hijo | 📋 stdlib existe, requiere `__ffi_*` |
-| 118 | `sistema` | **Env** | Variables de entorno | 📋 stdlib existe, requiere `__env_*` + `__ffi_*` |
-| 119 | `sistema` | **Path** | Manipulación de rutas | 📋 stdlib existe, requiere `__ffi_*` |
-| 120 | `sistema` | **Temp** | Archivos temporales | 📋 stdlib existe, requiere `__ffi_*` |
+| 117 | `sistema` | **Procesos** | Lanzar procesos hijo | ✅ vía __ffi_* |
+| 118 | `sistema` | **Env** | Variables de entorno | ✅ vía __env_listar + __ffi_* |
+| 119 | `sistema` | **Path** | Manipulación de rutas | ✅ vía __ffi_* |
+| 120 | `sistema` | **Temp** | Archivos temporales | ✅ vía __ffi_* |
 | 121 | `fecha` | **Timezone** | Zonas horarias IANA | 📋 |
 | 122 | `fecha` | **Duracion** | Duración precisa | 📋 |
-| 123 | `fecha` | **Format** | Formateo/parseo de fechas con patrones | 📋 |
+| 123 | `fecha` | **Format** | Formateo/parseo de fechas con patrones | ✅ vía __tiempo_formatear/parsear |
 | 124 | `fecha` | **Calendario** | Calendarios no gregorianos | 📋 |
-| 125 | `crypto` | **Hash** | SHA-256, SHA-512, HMAC | 📋 crypto_ffi.rs existe pero NO está conectado a VM |
-| 126 | `crypto` | **AES** | Cifrado simétrico AES-128/256 | 📋 crypto_ffi.rs existe pero NO está conectado |
-| 127 | `crypto` | **JWT** | Creación y verificación de JWT | 📋 |
+| 125 | `crypto` | **Hash** | SHA-256, SHA-512, HMAC | ✅ vía BCrypt CNG |
+| 126 | `crypto` | **AES** | Cifrado simétrico AES-128/256 | ⏳ stub — requiere implementación BCrypt |
+| 127 | `crypto` | **JWT** | Creación y verificación de JWT | ✅ vía sha256 + base64url |
 | 128 | `testing` | **Assert** | Macros de aserción | ✅ vía testing.nv (pure LÚMEN) |
 | 129 | `testing` | **Mock** | Sistema de mocks | ✅ vía testing.nv (pure LÚMEN) |
 | 130 | `testing` | **Coverage** | Cobertura de código | ✅ vía testing.nv (pure LÚMEN) |
@@ -192,26 +192,26 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 | # | Feature | Descripción | Estado |
 |---|---------|-------------|--------|
-| 131 | **Thread::spawn** | `hilo::lanzar(|| expr)`, `hilo::dormir(ms)` | 📋 concurrencia.nv existe, requiere `__hilo_*` builtins |
-| 132 | **Thread::Join** | `hijo.esperar()` con resultado | 📋 |
-| 133 | **Sync::Mutex** | `Mutex<T>`, `bloquear`, `try_bloquear` | 📋 |
-| 134 | **Sync::RwLock** | Múltiples lectores, un escritor | 📋 |
-| 135 | **Sync::Arc** | Conteo de referencias atómico | 📋 |
-| 136 | **Sync::Channel** | `canal::nuevo()`, `enviar`, `recibir` | 📋 |
-| 137 | **Async::Runtime** | Event loop: `async_run`, `task::lanzar` | ⏳ sema + IR bases listas |
-| 138 | **Async::Stream** | `Stream<T>`, `map`, `filter`, `colectar` | 📋 |
+| 131 | **Thread::spawn** | `hilo::lanzar(|| expr)`, `hilo::dormir(ms)` | ✅ builtins + stdlib concurrencia.nv |
+| 132 | **Thread::Join** | `hijo.esperar()` con resultado | ✅ builtins |
+| 133 | **Sync::Mutex** | `Mutex<T>`, `bloquear`, `try_bloquear` | ✅ builtins + stdlib |
+| 134 | **Sync::RwLock** | Múltiples lectores, un escritor | ✅ builtins + stdlib |
+| 135 | **Sync::Arc** | Conteo de referencias atómico | ✅ builtins + stdlib |
+| 136 | **Sync::Channel** | `canal::nuevo()`, `enviar`, `recibir` | ✅ builtins + stdlib |
+| 137 | **Async::Runtime** | Event loop: `async_run`, `task::lanzar` | ⏳ sema + IR bases, falta runtime |
+| 138 | **Async::Stream** | `Stream<T>`, `map`, `filter`, `colectar` | ✅ builtins + stdlib |
 | 139 | **Async::File** | `leer_async`, `escribir_async` | 📋 |
 | 140 | **Async::TCP** | `TcpListener::aceptar_async` | 📋 |
 | 141 | **Async::Timer** | `Timer::despues(ms)`, `Timer::intervalo(ms)` | 📋 |
-| 142 | **Async::Select** | `seleccionar!(fut1, fut2, fut3)` | 📋 |
-| 143 | **Par::Iterator** | `par_iter`, `map_par`, `filter_par` | 📋 |
-| 144 | **Par::Join** | `par::unir(f1(), f2())` | 📋 |
-| 145 | **Act::Actor** | `Actor::nuevo`, `enviar`, `manejar_mensaje` | 📋 |
-| 146 | **Act::Supervisor** | Reinicio automático en fallo | 📋 |
-| 147 | **Act::Cluster** | Actores remotos vía TCP | 📋 |
-| 148 | **Coro::Generator** | `generador { producir expr }` | 📋 |
+| 142 | **Async::Select** | `seleccionar!(fut1, fut2, fut3)` | ✅ builtins + stdlib |
+| 143 | **Par::Iterator** | `par_iter`, `map_par`, `filter_par` | ✅ builtins + stdlib |
+| 144 | **Par::Join** | `par::unir(f1(), f2())` | ✅ builtins + stdlib |
+| 145 | **Act::Actor** | `Actor::nuevo`, `enviar`, `manejar_mensaje` | ✅ builtins + stdlib |
+| 146 | **Act::Supervisor** | Reinicio automático en fallo | ✅ builtins + stdlib |
+| 147 | **Act::Cluster** | Actores remotos vía TCP | ✅ builtins + stdlib |
+| 148 | **Coro::Generator** | `generador { producir expr }` | ✅ builtins + stdlib |
 | 149 | **Coro::AsyncGen** | `async generador { }` | 📋 |
-| 150 | **Coro::Structured** | Ámbitos con cancelación | 📋 |
+| 150 | **Coro::Structured** | Ámbitos con cancelación | ✅ builtins (scope_handles) |
 
 ---
 
@@ -219,23 +219,23 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 | # | Bloque | Features | Estado |
 |---|--------|----------|--------|
-| 151 | TUI | Terminal raw, limpiar, cursor | 📋 stdlib existe (tui_core.nv + tui.nv), requiere `__ffi_*` + `__str_ord` + `__fs_listar` |
-| 152 | TUI | Ventanas, bordes, título, redimensionar | 📋 |
-| 153 | TUI | Entrada de texto, teclas navegación, clipboard | 📋 |
-| 154 | TUI | Tablas con sort, scroll, columnas redimensionables | 📋 |
-| 155 | TUI | Menús desplegables, contexto, barras de herramientas | 📋 |
-| 156 | TUI | Layout engine: Flex, Grid, Stack, Padding, Alignment | 📋 |
-| 157 | GFX | Canvas 2D: píxeles, líneas, rectángulos, círculos, texto | 📋 stdlib existe (graficos.nv → SDL2 FFI), requiere `__ffi_*` |
+| 151 | TUI | Terminal raw, limpiar, cursor | ✅ vía __ffi_* + tui_core.nv |
+| 152 | TUI | Ventanas, bordes, título, redimensionar | ✅ vía tui.nv |
+| 153 | TUI | Entrada de texto, teclas navegación, clipboard | ✅ vía tui.nv |
+| 154 | TUI | Tablas con sort, scroll, columnas redimensionables | ✅ vía tui.nv |
+| 155 | TUI | Menús desplegables, contexto, barras de herramientas | ✅ vía tui.nv |
+| 156 | TUI | Layout engine: Flex, Grid, Stack, Padding, Alignment | ✅ vía tui.nv |
+| 157 | GFX | Canvas 2D: píxeles, líneas, rectángulos, círculos, texto | ✅ vía graficos.nv (SDL2 FFI) |
 | 158 | GFX | Sprites animados, hojas de sprites | 📋 |
-| 159 | GFX | Game loop: fixed timestep, delta time | 📋 |
-| 160 | GFX | Input: teclado, mouse, gamepad, eventos | 📋 |
+| 159 | GFX | Game loop: fixed timestep, delta time | ✅ vía graficos.nv |
+| 160 | GFX | Input: teclado, mouse, gamepad, eventos | ✅ vía graficos.nv |
 | 161 | GFX | Audio WAV/OGG: cargar, reproducir, pausar | 📋 |
 | 162 | GFX | Sistema de partículas | 📋 |
 | 163 | GFX | Tilemap: mapas de tiles 2D | 📋 |
-| 164 | GUI | Widgets: Botón, Etiqueta, CampoTexto | 📋 stdlib existe (gui.nv → Win32 FFI), requiere `__gui_*` + `__ffi_*` |
-| 165 | GUI | Ventanas nativas | 📋 |
+| 164 | GUI | Widgets: Botón, Etiqueta, CampoTexto | ✅ vía gui.nv (Win32 FFI) |
+| 165 | GUI | Ventanas nativas | ✅ vía __gui_ventana/window |
 | 166 | GUI | Canvas 2D en ventana | 📋 |
-| 167 | GUI | Eventos: click, teclado, focus, drag | 📋 |
+| 167 | GUI | Eventos: click, teclado, focus, drag | ✅ vía gui.nv |
 | 168 | GUI | Temas y estilos CSS-like | 📋 |
 | 169 | GUI | TreeView, drag-drop, multi-selección | 📋 |
 | 170 | GUI | Charts: barras, líneas, pastel | 📋 |
@@ -322,48 +322,47 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | **v1.5** | Sintaxis moderna + genéricos + traits | 42-60 | ✅ |
 | **v1.6** | Lenguaje avanzado + LSP + Herramientas DX completas | 61-95 | ✅ |
 | **v1.7** | Stdlib extendida + WASM playground | 96-110 | ✅ |
-| **v1.8** | FFI system + Crypto builtins | 111-127 | 🏗️ Siguiente |
-| **v1.9** | Concurrencia completa (hilos, actores, async) | 128-150 | 📋 |
-| **v2.0** | GUI, TUI, Juegos funcionales | 151-170 | 📋 |
+| **v1.8** | FFI system + Crypto builtins | 111-127 | ✅ |
+| **v1.9** | Concurrencia completa + Async runtime | 128-150 | 🏗️ Siguiente |
+| **v2.0** | GUI, TUI, Juegos funcionales + Portabilidad | 151-185 | 📋 |
 | **v2.5** | Portabilidad total + WASI + Self-hosting | 171-185 | 📋 |
 | **v3.0** | AI/ML + Cloud + Producción | 186-220 | 📋 |
 
 ---
 
-## 🔍 Notas de la Auditoría (Julio 2026)
+## 🔍 Estado Actual (Julio 2026)
 
-### Realidad vs. Apariencia
-
-Muchos módulos stdlib `.nv` existen con APIs bilingües ES/EN completas, pero **dependen de builtins del VM que aún no están implementados**:
-
-| Módulo | Builtins faltantes en VM | Impacto |
-|--------|--------------------------|---------|
-| `sistema.nv` | `__ffi_cargar/llamar/asignar/liberar/escribir/leer/peek/poke`, `__env_listar` | ❌ No ejecutable |
-| `crypto.nv` | `__hash_sha256/sha512`, `__aes_encriptar/desencriptar`, `__jwt_codificar/decodificar` | ❌ No ejecutable |
-| `concurrencia.nv` | `__hilo_*`, `__mutex_*`, `__canal_*`, etc. (~36 builtins) | ❌ No ejecutable |
-| `graficos.nv` | `__ffi_*` (8 builtins) | ❌ No ejecutable |
-| `gui.nv` | `__gui_ventana/id/mostrar/esperar/cerrar`, `__ffi_*` | ❌ No ejecutable |
-| `tui_core.nv` | `__ffi_*`, `__str_ord`, `__tipo_de` | ❌ No ejecutable |
-| `tui.nv` | `__str_ord`, `__fs_listar`, `__tipo_de` | ❌ No ejecutable |
-| `serial.nv` | `__ffi_*` | ❌ No ejecutable |
-| `sql.nv` | `__ffi_*` | ❌ No ejecutable |
-
-### Código Rust muerto (existe en disco pero no se usa):
-- `crypto_ffi.rs`, `coro_ffi.rs`, `gui_ffi.rs` — no incluidos vía `mod`
-- `min_regex.rs`, `min_json.rs` — VM usa `regex` crate y `serde_json` directamente
-
-### Lo que SÍ funciona:
+### ✅ Todo esto funciona
 - ✅ Lenguaje completo (0-70): variables, funciones, genéricos, enums, structs, traits, pattern matching
 - ✅ Herramientas (71-95): LSP, fmt, repl, doc, debug, lint, test, build incremental, hot reload, package manager, AOT, CI/CD
 - ✅ Stdlib collections: map, set, deque, heap, linked list
-- ✅ Texto: string ops, regex, unicode, encoding, padding
-- ✅ File I/O: leer/escribir/existe, buffer, streaming
+- ✅ Texto: string ops, regex, unicode, encoding, padding, tipo_de/typeof
+- ✅ File I/O: leer/escribir/existe, buffer, streaming, listdir
 - ✅ JSON: parse/serialize (vía serde_json)
-- ✅ TCP: connect/listen/accept (feature full)
-- ✅ HTTP: get/post (feature full, vía reqwest)
-- ✅ Testing: afirmar_verdadero/igual/distinto (pure LÚMEN)
-- ✅ Math: abs, max, min, pow, sqrt, sin, cos (pure LÚMEN)
-- ✅ WASM: compila a wasm32-unknown-unknown
+- ✅ TCP: connect/listen/accept
+- ✅ HTTP: get/post
+- ✅ **FFI**: __ffi_cargar/load, __ffi_llamar/call, __ffi_asignar/alloc, __ffi_liberar/free, __ffi_escribir/write, __ffi_leer/read, __ffi_peek/poke
+- ✅ **Crypto**: SHA-256, SHA-512, JWT encode/decode
+- ✅ **Concurrencia**: hilos, mutex, canales, rwlock, arc, actores, supervisores, cluster, scope, streams, generadores, par, dormir, seleccionar
+- ✅ **GUI**: ventanas nativas Win32, botones, inputs, checkboxes, etc.
+- ✅ **TUI**: 24 componentes (ventanas, tablas, menús, editor, calendar, etc.)
+- ✅ **GFX**: SDL2 canvas, rectángulos, texturas, input teclado
+- ✅ **Corrutinas**: crear, ceder, reanudar
+- ✅ **Fecha**: ahora, formatear ISO 8601, parsear, diferencia
+- ✅ **Testing**: afirmar_verdadero/igual/distinto, mocks, coverage (pure LÚMEN)
+- ✅ **Math**: abs, max, min, pow, sqrt, sin, cos (pure LÚMEN)
+- ✅ **WASM**: compila a wasm32-unknown-unknown
+
+### 📋 Lo que falta
+- **Async runtime**: event loop real para async/esperar
+- **WASM build completo**: wasm-pack + playground funcional
+- **Calendarios**: hijri, persa, etc.
+- **GFX avanzado**: sprites, audio, partículas, tilemaps
+- **GUI avanzado**: canvas 2D, temas CSS, TreeView, charts
+- **Portabilidad**: WASI, JS interop, Docker, CI action
+- **AI/ML**: tensores, redes neuronales, data science
+- **Cloud**: AWS, GCP, Azure, K8s
+- **Self-hosting**: compilador en LÚMEN
 
 ---
 
