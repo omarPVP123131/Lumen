@@ -1159,6 +1159,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumen-api"
+version = "1.6.0"
+dependencies = [
+ "lumen-codegen",
+ "lumen-ir",
+ "lumen-lexer",
+ "lumen-parser",
+ "lumen-sema",
+ "lumen-vm",
+]
+
+[[package]]
 name = "lumen-bench"
 version = "1.6.0"
 dependencies = [

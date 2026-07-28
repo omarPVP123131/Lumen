@@ -11,6 +11,11 @@ entero LOG_DEBUG = 4;
 // Nivel global de logging / Global logging level
 entero nivel_log = LOG_INFO;
 
+// Formato de timestamp / Timestamp format
+texto formato_ts = "[AAAA-MM-DD HH:MM:SS]";
+
+// ── Funciones base / Base functions ──
+
 // Registra un mensaje de error / Log an error message
 funcion void log_error(texto msg) {
     si nivel_log >= LOG_ERROR {
@@ -43,8 +48,193 @@ funcion void debug(texto msg) {
 funcion void establecer_nivel(entero n) {
     nivel_log = n;
 }
+funcion void set_level(entero n) { establecer_nivel(n); }
 
 // Obtiene el nivel actual / Get current level
 funcion entero obtener_nivel() {
     retornar nivel_log;
+}
+funcion entero get_level() { retornar obtener_nivel(); }
+
+// ── Utilidades / Utilities ──
+
+// Obtiene el nombre del nivel / Get level name
+funcion texto nombre_nivel(entero n) {
+    si n == 1 { retornar "ERROR"; }
+    si n == 2 { retornar "WARN"; }
+    si n == 3 { retornar "INFO"; }
+    si n == 4 { retornar "DEBUG"; }
+    retornar "DESCONOCIDO";
+}
+funcion texto level_name(entero n) { retornar nombre_nivel(n); }
+
+// Genera un timestamp simple desde el epoch / Generate simple timestamp from epoch
+funcion texto timestamp_ahora() {
+    entero ts = __tiempo_ahora();
+    retornar a_texto(ts);
+}
+funcion texto timestamp_now() { retornar timestamp_ahora(); }
+
+// Formatea una linea de log / Format a log line
+funcion texto formatear_linea(entero nivel, texto msg) {
+    texto ts = timestamp_ahora();
+    retornar ts + " [" + nombre_nivel(nivel) + "] " + msg;
+}
+funcion texto format_line(entero level, texto msg) { retornar formatear_linea(level, msg); }
+
+// ── Logging a archivo / File logging ──
+
+// Escribe una linea de log a un archivo con rotacion automatica
+// Write a log line to a file with automatic rotation
+funcion void log_a_archivo(entero nivel, texto msg, texto path) {
+    si nivel > nivel_log {
+        retornar;
+    }
+
+    texto linea = formatear_linea(nivel, msg) + "\n";
+
+    // Append: read existing content, append new line, write back
+    // Si el archivo no existe, crear con la nueva linea
+    // If file doesn't exist, create with new line
+    texto contenido = "";
+    cualquiera resultado = __leer_archivo(path);
+    // Pattern match on Resultado/Exito/Error
+    sea Exito(texto existente) = resultado sino {
+        // Archivo no existe o error de lectura, empezar desde cero
+        // File doesn't exist or read error, start from scratch
+        existente = "";
+    };
+    contenido = existente + linea;
+
+    // Escribir el contenido completo / Write full content
+    __escribir_archivo(path, contenido);
+
+    // Rotar si es necesario / Rotate if needed
+    rotar_archivo_si_necesario(path, 10);
+}
+funcion void log_to_file(entero level, texto msg, texto path) {
+    log_a_archivo(level, msg, path);
+}
+
+// Verifica si un archivo existe / Check if a file exists
+funcion booleano archivo_existe(texto path) {
+    retornar __existe_archivo(path);
+}
+funcion booleano file_exists(texto path) { retornar archivo_existe(path); }
+
+// Obtiene el tamano de un archivo en bytes / Get file size in bytes
+funcion entero tamano_archivo(texto path) {
+    cualquiera resultado = __tamano_archivo(path);
+    sea Exito(entero tam) = resultado sino {
+        retornar -1;
+    };
+    retornar tam;
+}
+funcion entero file_size(texto path) { retornar tamano_archivo(path); }
+
+// Rota un archivo si excede el tamano maximo (en MB) / Rotate file if exceeds max size (in MB)
+funcion void rotar_archivo_si_necesario(texto path, entero max_mb) {
+    si !archivo_existe(path) {
+        retornar;
+    }
+
+    entero tam_bytes = tamano_archivo(path);
+    si tam_bytes < 0 {
+        retornar;
+    }
+
+    entero max_bytes = max_mb * 1024 * 1024;
+    si tam_bytes <= max_bytes {
+        retornar;
+    }
+
+    // Realizar la rotacion: renombrar path -> path.1, path.1 -> path.2, etc.
+    // Perform rotation: rename path -> path.1, path.1 -> path.2, etc.
+    entero idx = 5;
+    mientras idx >= 1 {
+        texto ruta_vieja = path;
+        si idx > 1 {
+            ruta_vieja = path + "." + a_texto(idx - 1);
+        }
+        texto ruta_nueva = path + "." + a_texto(idx);
+
+        // Solo rotar si la fuente existe / Only rotate if source exists
+        si archivo_existe(ruta_vieja) {
+            cualquiera res_lectura = __leer_archivo(ruta_vieja);
+            sea Exito(texto contenido) = res_lectura sino {
+                idx = idx - 1;
+                continuar;
+            };
+            __escribir_archivo(ruta_nueva, contenido);
+        }
+
+        idx = idx - 1;
+    }
+
+    // Vaciar el archivo original despues de rotar / Clear original after rotation
+    __escribir_archivo(path, "");
+}
+funcion void rotate_file_if_needed(texto path, entero max_mb) {
+    rotar_archivo_si_necesario(path, max_mb);
+}
+
+// Rota un archivo de log (fuerza la rotacion) / Rotate a log file (force rotation)
+funcion void rotar_archivo(texto path, entero max_mb) {
+    rotar_archivo_si_necesario(path, max_mb);
+}
+funcion void rotate_file(texto path, entero max_mb) { rotar_archivo(path, max_mb); }
+
+// ── Logging por lotes / Batch logging ──
+
+// Lista interna para buffer de logs / Internal buffer for log batching
+lista<texto> buffer_logs = [];
+
+// Agrega un mensaje al buffer / Add a message to the buffer
+funcion void log_buffer_agregar(entero nivel, texto msg) {
+    si nivel > nivel_log {
+        retornar;
+    }
+    texto linea = formatear_linea(nivel, msg);
+    buffer_logs.agregar(linea);
+}
+funcion void log_buffer_add(entero level, texto msg) {
+    log_buffer_agregar(level, msg);
+}
+
+// Vacia el buffer de logs a un archivo / Flush log buffer to a file
+funcion void log_buffer_vaciar(texto path) {
+    entero i = 0;
+    mientras i < largo(buffer_logs) {
+        texto linea = buffer_logs[i] + "\n";
+
+        // Read + append + write
+        texto contenido = "";
+        cualquiera resultado = __leer_archivo(path);
+        sea Exito(texto existente) = resultado sino {
+            existente = "";
+        };
+        contenido = existente + linea;
+        __escribir_archivo(path, contenido);
+
+        i = i + 1;
+    }
+    buffer_logs = [];
+
+    // Rotate after flush
+    rotar_archivo_si_necesario(path, 10);
+}
+funcion void log_buffer_flush(texto path) { log_buffer_vaciar(path); }
+
+// ── Logging estructurado / Structured logging ──
+
+// Registra un mensaje de log con datos adicionales / Log with extra data
+funcion void log_estructurado(entero nivel, texto msg, cualquiera datos) {
+    si nivel > nivel_log {
+        retornar;
+    }
+    texto linea = formatear_linea(nivel, msg) + " datos=" + a_texto(datos);
+    imprimir(linea);
+}
+funcion void log_structured(entero level, texto msg, cualquiera data) {
+    log_estructurado(level, msg, data);
 }

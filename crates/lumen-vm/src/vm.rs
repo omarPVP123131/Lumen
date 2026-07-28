@@ -325,6 +325,31 @@ impl VM {
             return Some(Ok(()));
         }
 
+        if name == "__file_size" || name == "__tamano_archivo" {
+            let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            match std::fs::metadata(&path) {
+                Ok(meta) => self.push(Value::Int(meta.len() as i64)),
+                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__file_append" || name == "__agregar_archivo" {
+            let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            use std::io::Write;
+            match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+                Ok(mut file) => {
+                    match file.write_all(content.as_bytes()) {
+                        Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                }
+                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+            }
+            return Some(Ok(()));
+        }
+
         if name == "__time_now" || name == "__tiempo_ahora" {
             use std::time::{SystemTime, UNIX_EPOCH};
             let now = SystemTime::now()

@@ -443,10 +443,12 @@
     <!-- ── JS Interop Bar ── -->
     <div class="interop-bar">
       <span class="label">🔄 JS ↔ LÚMEN</span>
-      <button id="jsCallDemo" class="small">Llamar JS desde LÚMEN</button>
-      <button id="lumenFromJsBtn" class="small">Llamar LÚMEN desde JS</button>
-      <button id="alertDemo" class="small">alert() bridge</button>
-      <button id="titleDemo" class="small">document.title</button>
+      <button id="jsCallDemo" class="small">LÚMEN → JS</button>
+      <button id="lumenFromJsBtn" class="small">JS → LÚMEN</button>
+      <button id="registerBridgeBtn" class="small">Registrar bridges</button>
+      <button id="testBridgeBtn" class="small">Probar bridges</button>
+      <button id="alertDemo" class="small">alert()</button>
+      <button id="titleDemo" class="small">doc.title</button>
     </div>
   </div>
 
@@ -539,7 +541,7 @@ window.__lumen_call = function(fnName, args) {
   const bridges = {
     console_log: (msg) => {
       console.log('[LÚMEN]', msg);
-      addConsoleEntry('info', msg);
+      addConsoleEntry('info', String(msg));
       return '';
     },
     alert: (msg) => {
@@ -557,14 +559,31 @@ window.__lumen_call = function(fnName, args) {
       addJSEntry('document.title cambiado a: "' + title + '"');
       return '';
     },
+    random_number: (min, max) => {
+      const lo = min !== undefined ? Number(min) : 0;
+      const hi = max !== undefined ? Number(max) : 100;
+      const result = Math.floor(Math.random() * (hi - lo + 1)) + lo;
+      addJSEntry(`random_number(${lo}, ${hi}) = ${result}`);
+      return String(result);
+    },
     add: (a, b) => {
       const result = Number(a) + Number(b);
       addJSEntry(`JS suma: ${a} + ${b} = ${result}`);
       return String(result);
     },
+    multiply: (a, b) => {
+      const result = Number(a) * Number(b);
+      addJSEntry(`JS multiplica: ${a} * ${b} = ${result}`);
+      return String(result);
+    },
     uppercase: (s) => {
       const result = String(s).toUpperCase();
       addJSEntry(`JS uppercase: "${s}" → "${result}"`);
+      return result;
+    },
+    lowercase: (s) => {
+      const result = String(s).toLowerCase();
+      addJSEntry(`JS lowercase: "${s}" → "${result}"`);
       return result;
     },
     random: () => {
@@ -577,6 +596,11 @@ window.__lumen_call = function(fnName, args) {
       addJSEntry(`JS date: ${d}`);
       return d;
     },
+    now_timestamp: () => {
+      const ts = Date.now();
+      addJSEntry(`JS timestamp: ${ts}`);
+      return String(ts);
+    },
     eval_expression: (expr) => {
       try {
         const result = eval(expr);
@@ -587,19 +611,58 @@ window.__lumen_call = function(fnName, args) {
         return 'Error: ' + e.message;
       }
     },
+    get_url: () => {
+      const url = window.location.href;
+      addJSEntry(`URL: ${url}`);
+      return url;
+    },
+    get_user_agent: () => {
+      const ua = navigator.userAgent;
+      addJSEntry(`User Agent: "${ua.substring(0, 60)}..."`);
+      return ua;
+    },
+    sum_array: (...nums) => {
+      const result = nums.reduce((a, b) => Number(a) + Number(b), 0);
+      addJSEntry(`JS sum_array: [${nums}] = ${result}`);
+      return String(result);
+    },
+    json_stringify: (obj) => {
+      try {
+        const parsed = JSON.parse(obj);
+        addJSEntry(`JS JSON.stringify: ${JSON.stringify(parsed)}`);
+        return JSON.stringify(parsed);
+      } catch {
+        addJSEntry(`JS JSON.stringify (raw): "${obj}"`);
+        return JSON.stringify(obj);
+      }
+    },
   };
 
   if (bridges[fnName]) {
     try {
-      return bridges[fnName](...args);
+      const result = bridges[fnName](...args);
+      addBridgeResult(fnName, args, result);
+      return result;
     } catch(e) {
       console.error('[LÚMEN Bridge Error]', fnName, e);
+      addJSEntry(`Bridge error: ${fnName} → ${e.message}`, 'error');
       return 'Bridge error: ' + e.message;
     }
   }
   console.warn('[LÚMEN] Unknown bridge function:', fnName);
+  addJSEntry(`Unknown bridge: ${fnName}`, 'warn');
   return 'Unknown function: ' + fnName;
 };
+
+// ── Bridge results tracker ──────────────────────────────────
+let bridgeResults = [];
+
+function addBridgeResult(fnName, args, result) {
+  bridgeResults.push({ fn: fnName, args, result, time: Date.now() });
+  // Also add to JS pane for visibility
+  const concise = `${fnName}(${(args||[]).map(a => `"${a}"`).join(', ')}) → "${String(result).substring(0, 60)}"`;
+  addJSEntry(concise, 'info');
+}
 
 // ── Console helpers ────────────────────────────────────────
 
@@ -972,20 +1035,40 @@ imprimir("Título cambiado desde LÚMEN!");
 texto suma = __js_call("add", "40", "2");
 imprimir("40 + 2 = ", suma);
 
+// Multiplicar con JS
+texto prod = __js_call("multiply", "6", "7");
+imprimir("6 * 7 = ", prod);
+
 // Mayúsculas con JS
 texto mayus = __js_call("uppercase", "lumen lenguaje");
 imprimir("MAYÚSCULAS: ", mayus);
 
-// Número aleatorio desde JS
-texto rand = __js_call("random", "");
-imprimir("Random JS: ", rand);
+// Minúsculas con JS
+texto minus = __js_call("lowercase", "LUMEN LENGUAJE");
+imprimir("minúsculas: ", minus);
+
+// Número aleatorio con rango
+texto rand = __js_call("random_number", "10", "99");
+imprimir("Random JS (10-99): ", rand);
 
 // Evaluar expresión JS
 texto evalResult = __js_call("eval_expression", "Math.sqrt(144)");
 imprimir("sqrt(144) = ", evalResult);
 
+// URL de la página
+texto url = __js_call("get_url", "");
+imprimir("URL: ", url);
+
+// Timestamp
+texto ts = __js_call("now_timestamp", "");
+imprimir("Timestamp: ", ts);
+
+// Sumar array
+texto arrSum = __js_call("sum_array", "1", "2", "3", "4", "5");
+imprimir("Sum [1,2,3,4,5] = ", arrSum);
+
 // Evaluar JS directamente
-texto r = __js_eval("'Hola desde JS_EVAL: ' + (42 * 2)");
+texto r = __js_eval("'Hola desde JS_EVAL: ' + (42 * 3)");
 imprimir(r);
 
 imprimir("=== Fin JS Interop ===");`
@@ -1248,63 +1331,187 @@ exampleSel.addEventListener('change', () => {
 // ── JS ↔ LÚMEN Interop Buttons ────────────────────────────
 
 $('jsCallDemo').addEventListener('click', () => {
-  // Insert JS interop demo code
-  const demoCode = `// JS Interop Demo
-imprimir("Llamando a JS desde LÚMEN...");
+  // Insert JS interop demo code — LÚMEN calls JS bridges
+  const demoCode = `// LÚMEN → JS: Demo de interop
+imprimir("=== LÚMEN llama a JS ===");
+
+// Llamar a console.log via bridge
 __js_call("console_log", "¡Hola! Este mensaje viene de LÚMEN.");
 
+// Obtener título de la página
 texto titulo = __js_call("get_title", "");
 imprimir("Título actual: ", titulo);
 
+// Cambiar titulo via bridge
 __js_call("set_title", "LÚMEN Playground - JS Interop");
 
+// Operaciones matemáticas en JS
 texto suma = __js_call("add", "100", "23");
 imprimir("100 + 23 = ", suma);
 
+texto mult = __js_call("multiply", "7", "8");
+imprimir("7 * 8 = ", mult);
+
+// Número aleatorio con rango
+texto rn = __js_call("random_number", "1", "100");
+imprimir("Random 1-100: ", rn);
+
+// Transformaciones de texto
 texto mayus = __js_call("uppercase", "javascript interop");
 imprimir("Upper: ", mayus);
 
-texto rand = __js_call("random", "");
-imprimir("Random: ", rand);
+// Obtener información del navegador
+texto url = __js_call("get_url", "");
+imprimir("URL: ", url);
 
+// Evaluar expresión JS
 texto sqrt = __js_call("eval_expression", "Math.sqrt(256)");
 imprimir("sqrt(256) = ", sqrt);
 
-imprimir("¡Interop completado!");`;
+// Timestamp JS
+texto ts = __js_call("now_timestamp", "");
+imprimir("JS Timestamp: ", ts);
+
+// Sumar array en JS
+texto arrSum = __js_call("sum_array", "10", "20", "30", "40");
+imprimir("Sum array: ", arrSum);
+
+imprimir("=== Fin LÚMEN → JS ===");`;
 
   codeEl.value = demoCode;
   updateLineNumbers();
-  showToast('Código JS Interop cargado', 'success');
+  showToast('Demo LÚMEN → JS cargado. Presiona ▶ Ejecutar', 'success');
 });
 
 $('lumenFromJsBtn').addEventListener('click', () => {
-  // Demo: call LÚMEN from JS
-  const jsCode = `
-// Este ejemplo muestra cómo JS puede llamar a LÚMEN
-// Primero definimos una función LÚMEN
-funcion entero factorial(entero n) {
-    si n <= 1 { retornar 1; }
-    retornar n * factorial(n - 1);
-}
+  // JS → LÚMEN: call runtime.run() directly from JS
+  if (!runtime) {
+    showToast('Runtime no cargado aún', 'error');
+    return;
+  }
+  try {
+    const result = runtime.run("imprimir('Called from JS!'); imprimir('JS → LÚMEN funciona correctamente.'); imprimir('__js_call(\"console_log\", \"LÚMEN ejecutado desde JS\")');");
+    outputPane.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.color = 'var(--peach)';
+    div.innerHTML = '<strong>⟵ JS llamó a LÚMEN:</strong>\n' + escapeHtml(result || '(sin salida)');
+    outputPane.appendChild(div);
+    addJSEntry('JS → LÚMEN: runtime.run() completado', 'info');
+    showToast('JS llamó a LÚMEN exitosamente', 'success');
 
-// La llamamos
-imprimir("factorial(5) = ", factorial(5));
+    // Switch to output tab
+    document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
+    document.querySelector('[data-pane="output"]').classList.add('active');
+    outputPane.classList.add('active');
+  } catch(e) {
+    addJSEntry('JS → LÚMEN error: ' + e.message, 'error');
+    showToast('Error: ' + e.message, 'error');
+  }
+});
 
-// Ahora desde JS (vía __js_eval) podemos modificar el DOM
-__js_eval("document.getElementById('output-pane').innerHTML += '\\\\n<span style=\"color:var(--peach)\">➜ JS llamó a LÚMEN y obtuvo: ' + 42 + '</span>'");
-imprimir("JS puede ser llamado desde LÚMEN y viceversa!");
-`;
-  codeEl.value = jsCode.trim();
+$('registerBridgeBtn').addEventListener('click', () => {
+  if (!runtime) {
+    showToast('Runtime no cargado aún', 'error');
+    return;
+  }
+  try {
+    // Register bridge functions via the Rust API
+    runtime.register_js_function("console_log", "(msg) => { console.log('[LÚMEN]', msg); if(window._addConsoleEntry) window._addConsoleEntry('info', String(msg)); return ''; }");
+    runtime.register_js_function("alert", "(msg) => { window.alert('[LÚMEN] ' + msg); return ''; }");
+    runtime.register_js_function("get_title", "() => document.title");
+    runtime.register_js_function("set_title", "(title) => { document.title = '[LÚMEN] ' + title; return ''; }");
+    runtime.register_js_function("random_number", "(min, max) => { return String(Math.floor(Math.random() * (Number(max) - Number(min) + 1)) + Number(min)); }");
+    runtime.register_js_function("add", "(a, b) => String(Number(a) + Number(b))");
+
+    const registered = runtime.list_js_functions();
+    addJSEntry(`Bridges registrados via Rust API: ${registered}`, 'info');
+    outputPane.innerHTML = '<span style="color:var(--green)">✓ Funciones JS registradas desde Rust: ' + registered + '</span>';
+    showToast('Bridges registrados: ' + registered, 'success');
+  } catch(e) {
+    addJSEntry('Error registrando bridges: ' + e.message, 'error');
+    showToast('Error: ' + e.message, 'error');
+  }
+});
+
+$('testBridgeBtn').addEventListener('click', () => {
+  // Test all bridge functions and show results in dedicated panel
+  if (!runtime) {
+    showToast('Runtime no cargado aún', 'error');
+    return;
+  }
+  const testCode = `// Probando TODOS los bridges JS
+imprimir("=== Bridge Test Suite ===");
+
+imprimir("1. console_log:");
+__js_call("console_log", "Test bridge message");
+
+imprimir("2. get_title:");
+texto t = __js_call("get_title", "");
+imprimir("   Título = ", t);
+
+imprimir("3. set_title:");
+__js_call("set_title", "LUMEN Bridge Test");
+
+imprimir("4. random_number(10, 50):");
+texto r1 = __js_call("random_number", "10", "50");
+texto r2 = __js_call("random_number", "10", "50");
+texto r3 = __js_call("random_number", "10", "50");
+imprimir("   ", r1, ", ", r2, ", ", r3);
+
+imprimir("5. add:");
+texto s = __js_call("add", "42", "58");
+imprimir("   42 + 58 = ", s);
+
+imprimir("6. multiply:");
+texto p = __js_call("multiply", "6", "7");
+imprimir("   6 * 7 = ", p);
+
+imprimir("7. uppercase:");
+texto u = __js_call("uppercase", "hello world");
+imprimir("   UPPER: ", u);
+
+imprimir("8. lowercase:");
+texto l = __js_call("lowercase", "HELLO WORLD");
+imprimir("   lower: ", l);
+
+imprimir("9. get_url:");
+texto url = __js_call("get_url", "");
+imprimir("   URL: ", url);
+
+imprimir("10. get_user_agent:");
+texto ua = __js_call("get_user_agent", "");
+imprimir("    UA: ", ua);
+
+imprimir("11. sum_array:");
+texto sa = __js_call("sum_array", "1", "2", "3", "4", "5");
+imprimir("    1+2+3+4+5 = ", sa);
+
+imprimir("12. eval_expression:");
+texto ev = __js_call("eval_expression", "Math.pow(2, 10)");
+imprimir("    2^10 = ", ev);
+
+imprimir("13. now_timestamp:");
+texto ts = __js_call("now_timestamp", "");
+imprimir("    TS: ", ts);
+
+imprimir("14. date:");
+texto dt = __js_call("date", "");
+imprimir("    Date: ", dt);
+
+imprimir("=== Bridge Test Completado ===");`;
+
+  codeEl.value = testCode;
   updateLineNumbers();
-  showToast('Código LÚMEN ↔ JS cargado', 'success');
+  showToast('Suite de pruebas de bridges cargada. Presiona ▶ Ejecutar', 'success');
 });
 
 $('alertDemo').addEventListener('click', () => {
-  const alertCode = `// Demo del bridge alert()
+  const alertCode = `// Demo: bridge alert() con JS ↔ LÚMEN
 imprimir("Llamando a alert() desde LÚMEN...");
-__js_call("alert", "¡Hola desde LÚMEN!\\nEste es un mensaje de alerta.");
-imprimir("¿Viste la alerta?");
-__js_call("console_log", "Alerta mostrada correctamente");
+__js_call("alert", "¡Hola desde LÚMEN!\\\\nEste es un mensaje de alerta JS.");
+imprimir("¿Viste la alerta en el navegador?");
+__js_call("console_log", "Alerta mostrada correctamente desde LÚMEN");
+imprimir("Bridge alert() completado.");
 `;
   codeEl.value = alertCode.trim();
   updateLineNumbers();
@@ -1372,7 +1579,8 @@ async function initRuntime() {
 
     // Register console_log bridge by sending a test message
     addConsoleEntry('info', 'Runtime LÚMEN inicializado (v' + ver + ')');
-    addConsoleEntry('info', 'Puentes JS registrados: console_log, alert, get_title, set_title, add, uppercase, random, date, eval_expression');
+    addConsoleEntry('info', 'Puentes JS: console_log, alert, get_title, set_title, random_number, add, multiply, uppercase, lowercase, random, date, now_timestamp, eval_expression, get_url, get_user_agent, sum_array, json_stringify (17 bridges)');
+    addJSEntry('LÚMEN Runtime v' + ver + ' listo. 17 funciones bridge disponibles.', 'info');
   } catch(e) {
     console.error('Init error:', e);
     vmStatus.textContent = '✗ error';

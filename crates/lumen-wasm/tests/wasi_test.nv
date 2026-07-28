@@ -1,0 +1,97 @@
+// ═══════════════════════════════════════════════════════════════
+// WASI Test — LÚMEN running on wasm32-wasip1
+// ═══════════════════════════════════════════════════════════════
+
+imprimir("╔════════════════════════════════════╗");
+imprimir("║   LÚMEN WASI Test                 ║");
+imprimir("╚════════════════════════════════════╝");
+
+// ── Saludo ────────────────────────────────────────────────
+imprimir("");
+imprimir("Hello WASI!");
+imprimir("¡Hola WASI desde LÚMEN!");
+
+// ── Timestamp ─────────────────────────────────────────────
+imprimir("");
+imprimir("--- Timestamp ---");
+entero ts = __tiempo_ahora();
+imprimir("__tiempo_ahora() = ", ts);
+
+// Convertir a un formato más legible (segundos desde epoch)
+imprimir("Unix timestamp (segundos): ", ts);
+
+// ── Información del entorno ───────────────────────────────
+imprimir("");
+imprimir("--- Información ---");
+imprimir("LÚMEN language versión: 1.7.0");
+imprimir("Runtime: wasm32-wasip1");
+
+// ── Operación de archivo (si es posible via WASI) ────────
+imprimir("");
+imprimir("--- Archivos (WASI) ---");
+
+// Intentar acceder a un archivo (puede no existir en sandbox WASI)
+booleano existe = __existe_archivo("/tmp/lumen_test.txt");
+imprimir("¿Existe /tmp/lumen_test.txt? ", existe);
+
+si existe {
+    Resultado<texto, texto> contenido = __leer_archivo("/tmp/lumen_test.txt");
+    elegir contenido {
+        caso Exito(let txt) { imprimir("Contenido: ", txt); }
+        caso Error(let e)  { imprimir("Error leyendo: ", e); }
+    }
+} sino {
+    imprimir("Creando /tmp/lumen_test.txt...");
+    __escribir_archivo("/tmp/lumen_test.txt", "Hello from LÚMEN WASI!");
+    Resultado<texto, texto> nueva_lectura = __leer_archivo("/tmp/lumen_test.txt");
+    elegir nueva_lectura {
+        caso Exito(let txt) { imprimir("Leído: ", txt); }
+        caso Error(let e)  { imprimir("Error: ", e); }
+    }
+}
+
+// ── Matemáticas básicas ──────────────────────────────────
+imprimir("");
+imprimir("--- Matemáticas ---");
+entero a = 42;
+entero b = 7;
+imprimir("a = ", a, ", b = ", b);
+imprimir("a + b = ", a + b);
+imprimir("a - b = ", a - b);
+imprimir("a * b = ", a * b);
+imprimir("a / b = ", a / b);
+
+// Fibonacci
+funcion entero fib(entero n) {
+    si n <= 1 { retornar n; }
+    retornar fib(n - 1) + fib(n - 2);
+}
+imprimir("fib(10) = ", fib(10));
+
+// ── Strings ───────────────────────────────────────────────
+imprimir("");
+imprimir("--- Strings ---");
+texto nombre = "LÚMEN WASI";
+imprimir("Mayúsculas: ", __str_mayusculas(nombre));
+imprimir("Minúsculas: ", __str_minusculas(nombre));
+imprimir("Longitud: ", __str_longitud(nombre));
+
+// ── Listas ────────────────────────────────────────────────
+imprimir("");
+imprimir("--- Listas ---");
+lista<entero> nums = [1, 2, 3, 4, 5];
+entero suma = 0;
+entero i = 0;
+mientras i < __lista_longitud(nums) {
+    suma = suma + nums[i];
+    i = i + 1;
+}
+imprimir("Lista: [1, 2, 3, 4, 5]");
+imprimir("Suma: ", suma);
+imprimir("Longitud: ", __lista_longitud(nums));
+
+// ── Salida limpia ────────────────────────────────────────
+imprimir("");
+imprimir("╔════════════════════════════════════╗");
+imprimir("║   WASI Test Completado ✅          ║");
+imprimir("╚════════════════════════════════════╝");

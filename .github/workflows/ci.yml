@@ -57,6 +57,19 @@ jobs:
       - run: cargo build --all-targets --verbose
       - run: cargo test --all --verbose
 
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz
+      - run: |
+          for target in fuzz_lexer fuzz_parser fuzz_decoder; do
+            timeout 30 cargo fuzz run $target -- -max_total_time=25 || true
+          done
+        working-directory: fuzz
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
@@ -74,3 +87,25 @@ jobs:
         with:
           files: coverage.json
           fail_ci_if_error: false
+
+  wasm-check:
+    name: WASM Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Check wasm target
+        run: cargo check -p lumen-wasm --target wasm32-unknown-unknown
+
+  wasi-check:
+    name: WASI Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - name: Check WASI target
+        run: cargo check -p lumen-wasm --target wasm32-wasip1 --no-default-features --features wasi

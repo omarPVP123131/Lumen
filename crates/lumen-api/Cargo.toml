@@ -1,0 +1,13 @@
+[package]
+name = "lumen-api"
+version.workspace = true
+edition.workspace = true
+description = "LÚMEN Compiler API — usa LÚMEN desde Rust"
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
+lumen-codegen = { path = "../lumen-codegen" }
+lumen-vm = { path = "../lumen-vm" }

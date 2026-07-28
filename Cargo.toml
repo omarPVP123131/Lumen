@@ -17,6 +17,7 @@ members = [
     "crates/lumen-bench",
     "crates/lumen-plugin",
     "crates/lumen-wasm",
+    "crates/lumen-api",
 ]
 resolver = "2"
 
