@@ -175,6 +175,7 @@ impl Codegen {
                     Op::GreaterEqual => Opcode::Ge,
                     Op::And => Opcode::And,
                     Op::Or => Opcode::Or,
+                    Op::BitOr => Opcode::BitOr,
                     _ => Opcode::Nop,
                 };
                 self.bytecode.instructions.push(Instruction::Simple(opcode));

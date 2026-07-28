@@ -50,6 +50,7 @@ pub enum Opcode {
     TupleNew = 44,
     TupleAccess = 45,
     Mod = 46,
+    BitOr = 47,
 }
 
 impl Opcode {
@@ -102,6 +103,7 @@ impl Opcode {
             44 => Some(Opcode::TupleNew),
             45 => Some(Opcode::TupleAccess),
             46 => Some(Opcode::Mod),
+            47 => Some(Opcode::BitOr),
             _ => None,
         }
     }

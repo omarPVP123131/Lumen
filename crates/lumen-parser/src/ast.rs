@@ -349,6 +349,7 @@ pub enum BinOp {
     GreaterEqual,
     And,
     Or,
+    BitOr,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

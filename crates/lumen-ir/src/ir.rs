@@ -25,6 +25,7 @@ pub enum Op {
     GreaterEqual,
     And,
     Or,
+    BitOr,
     Negate,
     Not,
 }

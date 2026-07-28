@@ -1529,10 +1529,11 @@ impl Parser {
 
     fn parse_addition(&mut self) -> Option<Expr> {
         let mut left = self.parse_multiplication()?;
-        while self.check(&[TokenKind::Plus, TokenKind::Minus]) {
+        while self.check(&[TokenKind::Plus, TokenKind::Minus, TokenKind::Pipe]) {
             let op = match self.peek().kind {
                 TokenKind::Plus => BinOp::Add,
                 TokenKind::Minus => BinOp::Sub,
+                TokenKind::Pipe => BinOp::BitOr,
                 _ => unreachable!(),
             };
             self.advance();

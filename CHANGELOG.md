@@ -7,6 +7,9 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 ## v2.0.0 — Julio 2026
 
 ### Agregado
+- **Operador bitwise `|`**: soporte completo en parser → sema → IR → codegen → VM
+
+### Agregado
 - **Fase 96: WASM Playground** — Compilación a `wasm32-unknown-unknown`.
   - VM refactorizada: `call_core_builtin()` + `call_full_builtin()` extraídas del dispatch masivo.
   - Feature flags `full`/`minimal` en VM con `#[cfg(feature = "full")]` en fields TCP, cluster, scope, FFI.
@@ -38,6 +41,13 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 - Version bump a 2.0.0.
 - Todos los .md sincronizados con estado actual.
 - README reescrito con WASM playground, Docker, sintaxis dual.
+- 66 ejemplos nuevos organizados en jr/sr/real (22 módulos stdlib).
+
+### Corregido
+- `>=` y `<=` verificados funcionales en parser (no requerían workaround)
+- `info` y `debug` NO son keywords reservadas (solo `error` lo es)
+- Bitwise OR `|` implementado como operador de expresión
+- stdlib: restaurados `>=`/`<=` y `|` donde habían sido reemplazados incorrectamente
 
 ---
 

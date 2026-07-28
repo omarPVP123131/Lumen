@@ -644,6 +644,7 @@ impl IRBuilder {
                         BinOp::GreaterEqual => Op::GreaterEqual,
                         BinOp::And => Op::And,
                         BinOp::Or => Op::Or,
+                        BinOp::BitOr => Op::BitOr,
                     }));
                 }
             }

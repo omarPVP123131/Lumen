@@ -2436,6 +2436,14 @@ impl VM {
                 let a = self.pop()?;
                 self.push(Value::Bool(a.is_truthy() || b.is_truthy()));
             }
+            Opcode::BitOr => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                match (&a, &b) {
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a | b)),
+                    _ => return Err(VmError::TypeError("BitOr requires integers".to_string())),
+                }
+            }
             Opcode::Neg => {
                 let a = self.pop()?;
                 match a {

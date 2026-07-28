@@ -558,7 +558,7 @@ impl SemanticAnalyzer {
             BinOp::LessEqual => Some("menor_o_igual"),
             BinOp::Greater => Some("mayor"),
             BinOp::GreaterEqual => Some("mayor_o_igual"),
-            BinOp::And | BinOp::Or => None,
+            BinOp::And | BinOp::Or | BinOp::BitOr => None,
         }
     }
 
@@ -1507,7 +1507,7 @@ impl SemanticAnalyzer {
                         BinOp::LessEqual => "menor_o_igual",
                         BinOp::Greater => "mayor",
                         BinOp::GreaterEqual => "mayor_o_igual",
-                        BinOp::And | BinOp::Or => "",
+                        BinOp::And | BinOp::Or | BinOp::BitOr => "",
                     }
                 };
                 let has_op_overload = |t: &TypeInfo, op: &BinOp| -> bool {
@@ -1534,7 +1534,7 @@ impl SemanticAnalyzer {
                     false
                 };
                 match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::BitOr => {
                         if matches!(op, BinOp::Add)
                             && ((lt == TypeInfo::Texto
                                 && (rt == TypeInfo::Texto

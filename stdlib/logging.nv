@@ -13,28 +13,28 @@ entero nivel_log = LOG_INFO;
 
 // Registra un mensaje de error / Log an error message
 funcion void log_error(texto msg) {
-    si !(nivel_log < LOG_ERROR) {
+    si nivel_log >= LOG_ERROR {
         imprimir("[ERROR] ", msg);
     }
 }
 
 // Registra una advertencia / Log a warning
 funcion void log_warn(texto msg) {
-    si !(nivel_log < LOG_WARN) {
+    si nivel_log >= LOG_WARN {
         imprimir("[WARN]  ", msg);
     }
 }
 
 // Registra un mensaje informativo / Log an info message
-funcion void log_info(texto msg) {
-    si !(nivel_log < LOG_INFO) {
+funcion void info(texto msg) {
+    si nivel_log >= LOG_INFO {
         imprimir("[INFO]  ", msg);
     }
 }
 
 // Registra un mensaje de debug / Log a debug message
-funcion void log_debug(texto msg) {
-    si !(nivel_log < LOG_DEBUG) {
+funcion void debug(texto msg) {
+    si nivel_log >= LOG_DEBUG {
         imprimir("[DEBUG] ", msg);
     }
 }

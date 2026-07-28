@@ -689,6 +689,7 @@ fn fmt_binop(op: &BinOp) -> &'static str {
         BinOp::GreaterEqual => ">=",
         BinOp::And => "&&",
         BinOp::Or => "||",
+        BinOp::BitOr => "|",
     }
 }
 

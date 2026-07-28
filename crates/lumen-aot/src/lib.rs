@@ -156,6 +156,7 @@ impl AotCompiler {
                         Op::Mul => builder.ins().imul(a, b),
                         Op::Div => builder.ins().sdiv(a, b),
                         Op::Mod => builder.ins().srem(a, b),
+                        Op::BitOr => builder.ins().bor(a, b),
                         Op::Equal
                         | Op::NotEqual
                         | Op::Less
