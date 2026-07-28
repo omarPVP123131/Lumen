@@ -221,8 +221,13 @@ Compilación a `wasm32-unknown-unknown` con feature flags. VM refactorizada:
 - **Docker**: Dockerfile multi-stage + docker-compose.yml
 - **Logging**: stdlib/logging.nv con niveles ES/EN
 - **Gráficos avanzados**: sprites, audio SDL2_mixer, partículas en LÚMEN puro
+- **Canvas 2D**: círculos, líneas, triángulos, rectángulos redondeados, gradientes, bitmap font (stdlib/graficos_canvas.nv)
+- **Tilemap**: sistema de mapas con cámara, colisiones, view culling (stdlib/graficos_tilemap.nv)
+- **Charts**: gráficos de barras, líneas, pastel, dispersión (stdlib/graficos_charts.nv)
+- **TUI Temas**: sistema de temas con preset Catppuccin, claro, oscuro, alto contraste (stdlib/tui_temas.nv)
 - **demo_completo.nv**: 33 secciones cubriendo todas las features
 - **WASI**: soporte wasm32-wasip1 target
+- **Skills**: .opencode/agents/lumen-engineer.md + lumen-tester.md
 - **165 e2e tests** (26 nuevos)
 
 ---

@@ -1,0 +1,720 @@
+// Módulo gráficos charts — gráficos estadísticos vía SDL2
+// Charts module — statistical chart rendering via SDL2
+// Uso: importar "graficos_charts.nv"
+// Requiere: graficos_canvas_iniciar(renderer) antes de dibujar
+// Dependencias: graficos_canvas.nv, matematicas.nv
+
+importar "graficos_canvas.nv";
+// matematicas.nv se importa a través de graficos_canvas.nv
+
+// ============================================================
+// ESTRUCTURAS DE DATOS / DATA STRUCTURES
+// ============================================================
+
+/// Serie de datos para gráficos
+estructura Serie {
+    nombre: texto,
+    datos: lista<decimal>,
+    color_r: entero,
+    color_g: entero,
+    color_b: entero,
+}
+/// Series data structure (English alias)
+estructura Series {
+    name: string,
+    data: list<decimal>,
+    color_r: integer,
+    color_g: integer,
+    color_b: integer,
+}
+
+/// Configuración de gráfico
+estructura ChartConfig {
+    titulo: texto,
+    etiqueta_x: texto,
+    etiqueta_y: texto,
+    ancho: entero,
+    alto: entero,
+    mostrar_leyenda: booleano,
+    mostrar_rejilla: booleano,
+    color_fondo_r: entero,
+    color_fondo_g: entero,
+    color_fondo_b: entero,
+}
+/// Chart configuration (English alias)
+estructura ChartConfigEn {
+    title: string,
+    label_x: string,
+    label_y: string,
+    width: integer,
+    height: integer,
+    show_legend: boolean,
+    show_grid: boolean,
+    bg_r: integer,
+    bg_g: integer,
+    bg_b: integer,
+}
+
+/// Crea una configuración con valores por defecto
+funcion ChartConfig config_default(entero ancho, entero alto) {
+    retornar ChartConfig {
+        titulo: "Gráfico",
+        etiqueta_x: "X",
+        etiqueta_y: "Y",
+        ancho: ancho,
+        alto: alto,
+        mostrar_leyenda: verdadero,
+        mostrar_rejilla: verdadero,
+        color_fondo_r: 20,
+        color_fondo_g: 20,
+        color_fondo_b: 30,
+    };
+}
+/// Create a configuration with default values
+funcion ChartConfigEn default_config(integer width, integer height) {
+    ChartConfig c = config_default(width, height);
+    retornar ChartConfigEn {
+        title: c.titulo, label_x: c.etiqueta_x, label_y: c.etiqueta_y,
+        width: c.ancho, height: c.alto,
+        show_legend: c.mostrar_leyenda, show_grid: c.mostrar_rejilla,
+        bg_r: c.color_fondo_r, bg_g: c.color_fondo_g, bg_b: c.color_fondo_b,
+    };
+}
+
+// ============================================================
+// FUNCIONES AUXILIARES / HELPER FUNCTIONS
+// ============================================================
+
+/// Calcula el valor máximo entre todas las series
+funcion decimal __maximo_series(lista<Serie> series) {
+    decimal max = 0.0;
+    entero i = 0;
+    mientras i < largo(series) {
+        entero j = 0;
+        mientras j < largo(series[i].datos) {
+            si series[i].datos[j] > max { max = series[i].datos[j]; }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar max;
+}
+
+/// Calcula el valor mínimo entre todas las series
+funcion decimal __minimo_series(lista<Serie> series) {
+    decimal min = 0.0;
+    booleano first = verdadero;
+    entero i = 0;
+    mientras i < largo(series) {
+        entero j = 0;
+        mientras j < largo(series[i].datos) {
+            si first {
+                min = series[i].datos[j];
+                first = falso;
+            } sino si series[i].datos[j] < min { min = series[i].datos[j]; }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar min;
+}
+
+/// Calcula la cantidad máxima de datos entre todas las series
+funcion entero __max_largo_series(lista<Serie> series) {
+    entero max = 0;
+    entero i = 0;
+    mientras i < largo(series) {
+        entero l = largo(series[i].datos);
+        si l > max { max = l; }
+        i = i + 1;
+    }
+    retornar max;
+}
+
+/// Calcula el total de una serie (para gráfico de pastel)
+funcion decimal __suma_serie(Serie s) {
+    decimal total = 0.0;
+    entero i = 0;
+    mientras i < largo(s.datos) {
+        total = total + s.datos[i];
+        i = i + 1;
+    }
+    retornar total;
+}
+
+/// Dibuja la rejilla de fondo
+funcion void __dibujar_rejilla(entero x0, entero y0, entero x1, entero y1,
+        entero num_x, entero num_y, entero r, entero g, entero b) {
+    // Líneas horizontales
+    entero i = 0;
+    mientras i <= num_y {
+        entero y = y0 + (y1 - y0) * i / num_y;
+        graficos_canvas_linea(x0, y, x1, y, r, g, b, 80);
+        i = i + 1;
+    }
+    // Líneas verticales
+    i = 0;
+    mientras i <= num_x {
+        entero x = x0 + (x1 - x0) * i / num_x;
+        graficos_canvas_linea(x, y0, x, y1, r, g, b, 80);
+        i = i + 1;
+    }
+}
+
+/// Dibuja la leyenda del gráfico
+funcion void __dibujar_leyenda(entero x, entero y, lista<Serie> series,
+        entero r, entero g, entero b) {
+    entero i = 0;
+    mientras i < largo(series) {
+        // Cuadrado de color
+        graficos_canvas_rectangulo_relleno(x, y + i * 14, 10, 10,
+            series[i].color_r, series[i].color_g, series[i].color_b, 255);
+        // Borde del cuadrado
+        graficos_canvas_rectangulo_relleno(x, y + i * 14, 10, 10, r, g, b, 100);
+        // Nombre de la serie
+        graficos_canvas_texto(x + 14, y + i * 14, series[i].nombre, 220, 220, 220, 255);
+        i = i + 1;
+    }
+}
+
+/// Dibuja el título del gráfico
+funcion void __dibujar_titulo(entero x, entero y, texto titulo,
+        entero ancho, entero r, entero g, entero b) {
+    entero tw = graficos_canvas_ancho_texto(titulo);
+    entero tx = x + (ancho - tw) / 2;
+    si tx < x { tx = x; }
+    graficos_canvas_texto(tx, y, titulo, r, g, b, 255);
+}
+
+/// Dibuja etiquetas en el eje X
+funcion void __etiquetas_x(entero x0, entero y1, lista<texto> etiquetas,
+        entero num, entero r, entero g, entero b) {
+    entero paso = (x1 - x0) / num; // x1 not available here, need to compute
+    // This is called from the specific chart functions
+}
+
+/// Convierte valor decimal a texto con 1 decimal
+funcion texto __formatear_valor(decimal val) {
+    entero ent = val como entero;
+    entero dec = ((val - ent como decimal) * 10) como entero;
+    si dec < 0 { dec = -dec; }
+    retornar a_texto(ent) + "." + a_texto(dec);
+}
+
+// ============================================================
+// GRÁFICO DE BARRAS / BAR CHART
+// ============================================================
+
+/// Dibuja un gráfico de barras agrupadas por categoría
+///
+/// x, y = posición esquina superior izquierda
+/// series = lista de series de datos
+/// etiquetas = nombres de categorías
+/// cfg = configuración del gráfico
+funcion void grafico_barras(entero x, entero y,
+        lista<Serie> series, lista<texto> etiquetas,
+        ChartConfig cfg) {
+    // Margen para títulos y etiquetas
+    entero margen_izq = 60;
+    entero margen_inf = 40;
+    entero margen_sup = 20;
+    entero margen_der = 10;
+
+    // Área de dibujo del gráfico
+    entero ax = x + margen_izq;
+    entero ay = y + margen_sup;
+    entero aw = cfg.ancho - margen_izq - margen_der;
+    entero ah = cfg.alto - margen_sup - margen_inf;
+
+    // Fondo
+    graficos_canvas_limpiar_pantalla(
+        cfg.color_fondo_r, cfg.color_fondo_g, cfg.color_fondo_b);
+
+    // Título
+    __dibujar_titulo(x, y, cfg.titulo, cfg.ancho,
+        cfg.color_fondo_r + 200, cfg.color_fondo_g + 200, cfg.color_fondo_b + 200);
+
+    // Ejes
+    graficos_canvas_linea(ax, ay, ax, ay + ah, 200, 200, 200, 200);
+    graficos_canvas_linea(ax, ay + ah, ax + aw, ay + ah, 200, 200, 200, 200);
+
+    // Rejilla
+    si cfg.mostrar_rejilla {
+        __dibujar_rejilla(ax, ay, ax + aw, ay + ah, 5, 4,
+            cfg.color_fondo_r + 80, cfg.color_fondo_g + 80, cfg.color_fondo_b + 80);
+    }
+
+    // Calcular rangos
+    decimal max_val = __maximo_series(series);
+    entero num_cats = largo(etiquetas);
+    entero num_series = largo(series);
+    si max_val == 0.0 { max_val = 1.0; }
+    si num_cats == 0 { retornar; }
+
+    // Ancho de cada grupo de barras y cada barra individual
+    entero ancho_grupo = aw / num_cats;
+    si ancho_grupo < 5 { ancho_grupo = 5; }
+    entero ancho_barra = ancho_grupo / num_series;
+    si ancho_barra < 2 { ancho_barra = 2; }
+
+    // Dibujar barras
+    entero c = 0;
+    mientras c < num_cats {
+        entero cx = ax + c * ancho_grupo;
+        // Dibujar cada serie
+        entero s = 0;
+        mientras s < num_series {
+            si s < largo(series) && c < largo(series[s].datos) {
+                decimal val = series[s].datos[c];
+                entero alto_barra = (val / max_val * (ah - 10) como decimal) como entero;
+                si alto_barra < 1 && val > 0 { alto_barra = 1; }
+                entero bx = cx + s * ancho_barra + 1;
+                entero by = ay + ah - alto_barra;
+                graficos_canvas_rectangulo_relleno(bx, by, ancho_barra - 2, alto_barra,
+                    series[s].color_r, series[s].color_g, series[s].color_b, 220);
+                // Borde de barra
+                graficos_canvas_rectangulo_relleno(bx, by, ancho_barra - 2, alto_barra,
+                    255, 255, 255, 40);
+            }
+            s = s + 1;
+        }
+        // Etiqueta de categoría
+        si c < largo(etiquetas) {
+            texto lbl = etiquetas[c];
+            si lbl.largo() > 6 { lbl = ""; }  // muy largo, omitir
+            entero lx = cx + ancho_grupo / 2 - graficos_canvas_ancho_texto(lbl) / 2;
+            graficos_canvas_texto(lx, ay + ah + 4, lbl, 200, 200, 200, 200);
+        }
+        c = c + 1;
+    }
+
+    // Labels de eje Y
+    entero paso_y = 4;
+    entero i = 0;
+    mientras i <= paso_y {
+        entero ly = ay + ah - (ah * i / paso_y);
+        decimal val = max_val * i como decimal / paso_y como decimal;
+        texto lbl = __formatear_valor(val);
+        entero lx = ax - graficos_canvas_ancho_texto(lbl) - 4;
+        graficos_canvas_texto(lx, ly - 3, lbl, 180, 180, 180, 200);
+        i = i + 1;
+    }
+
+    // Leyenda
+    si cfg.mostrar_leyenda {
+        __dibujar_leyenda(ax, ay, series,
+            cfg.color_fondo_r + 100, cfg.color_fondo_g + 100, cfg.color_fondo_b + 100);
+    }
+
+    // Etiquetas de eje
+    graficos_canvas_texto(cfg.ancho / 2 - graficos_canvas_ancho_texto(cfg.etiqueta_x) / 2,
+        y + cfg.alto - 5, cfg.etiqueta_x, 150, 150, 150, 180);
+    graficos_canvas_texto(x + 2,
+        y + cfg.alto / 2, cfg.etiqueta_y, 150, 150, 150, 180);
+}
+funcion void bar_chart(integer x, integer y,
+        list<Series> series, list<string> labels,
+        ChartConfigEn cfg) {
+    // Convert to internal types
+    lista<Serie> inner = [];
+    entero i = 0;
+    mientras i < largo(series) {
+        lista<decimal> data = [];
+        entero j = 0;
+        mientras j < largo(series[i].data) {
+            data = data ++ [series[i].data[j]];
+            j = j + 1;
+        }
+        Serie s = Serie {
+            nombre: series[i].name,
+            datos: data,
+            color_r: series[i].color_r,
+            color_g: series[i].color_g,
+            color_b: series[i].color_b,
+        };
+        inner = inner ++ [s];
+        i = i + 1;
+    }
+    ChartConfig c = ChartConfig {
+        titulo: cfg.title,
+        etiqueta_x: cfg.label_x,
+        etiqueta_y: cfg.label_y,
+        ancho: cfg.width,
+        alto: cfg.height,
+        mostrar_leyenda: cfg.show_legend,
+        mostrar_rejilla: cfg.show_grid,
+        color_fondo_r: cfg.bg_r,
+        color_fondo_g: cfg.bg_g,
+        color_fondo_b: cfg.bg_b,
+    };
+    grafico_barras(x, y, inner, labels, c);
+}
+
+// ============================================================
+// GRÁFICO DE LÍNEAS / LINE CHART
+// ============================================================
+
+/// Dibuja un gráfico de líneas
+funcion void grafico_lineas(entero x, entero y,
+        lista<Serie> series, lista<texto> etiquetas,
+        ChartConfig cfg) {
+    entero margen_izq = 60;
+    entero margen_inf = 40;
+    entero margen_sup = 20;
+    entero margen_der = 20;
+
+    entero ax = x + margen_izq;
+    entero ay = y + margen_sup;
+    entero aw = cfg.ancho - margen_izq - margen_der;
+    entero ah = cfg.alto - margen_sup - margen_inf;
+
+    // Fondo
+    graficos_canvas_limpiar_pantalla(
+        cfg.color_fondo_r, cfg.color_fondo_g, cfg.color_fondo_b);
+
+    // Título
+    __dibujar_titulo(x, y, cfg.titulo, cfg.ancho,
+        cfg.color_fondo_r + 200, cfg.color_fondo_g + 200, cfg.color_fondo_b + 200);
+
+    // Ejes
+    graficos_canvas_linea(ax, ay, ax, ay + ah, 200, 200, 200, 200);
+    graficos_canvas_linea(ax, ay + ah, ax + aw, ay + ah, 200, 200, 200, 200);
+
+    // Calcular rangos
+    decimal max_val = __maximo_series(series);
+    decimal min_val = __minimo_series(series);
+    si max_val == min_val { max_val = min_val + 1.0; }
+    entero num_puntos = __max_largo_series(series);
+
+    // Rejilla
+    si cfg.mostrar_rejilla {
+        __dibujar_rejilla(ax, ay, ax + aw, ay + ah, 5, 4,
+            cfg.color_fondo_r + 80, cfg.color_fondo_g + 80, cfg.color_fondo_b + 80);
+    }
+
+    // Rango Y
+    decimal rango = max_val - min_val;
+    si rango <= 0.0 { rango = 1.0; }
+
+    // Dibujar líneas para cada serie
+    entero s = 0;
+    mientras s < largo(series) {
+        Serie serie = series[s];
+        entero n = largo(serie.datos);
+        si n > 1 {
+            entero p = 0;
+            mientras p < n - 1 {
+                decimal v1 = serie.datos[p];
+                decimal v2 = serie.datos[p + 1];
+                entero x1 = ax + p * aw / num_puntos;
+                entero x2 = ax + (p + 1) * aw / num_puntos;
+                entero y1 = (ay + ah) - ((v1 - min_val) / rango * (ah - 10) como decimal) como entero;
+                entero y2 = (ay + ah) - ((v2 - min_val) / rango * (ah - 10) como decimal) como entero;
+                graficos_canvas_linea(x1, y1, x2, y2,
+                    serie.color_r, serie.color_g, serie.color_b, 230);
+                p = p + 1;
+            }
+        }
+        // Puntos de datos
+        entero p = 0;
+        mientras p < n {
+            decimal v = serie.datos[p];
+            entero px = ax + p * aw / num_puntos;
+            entero py = (ay + ah) - ((v - min_val) / rango * (ah - 10) como decimal) como entero;
+            graficos_canvas_circulo_relleno(px, py, 3,
+                serie.color_r, serie.color_g, serie.color_b, 255);
+            p = p + 1;
+        }
+        s = s + 1;
+    }
+
+    // Etiquetas X
+    entero c = 0;
+    mientras c < num_puntos && c < largo(etiquetas) {
+        texto lbl = etiquetas[c];
+        si lbl.largo() > 4 { lbl = ""; }
+        entero lx = ax + c * aw / num_puntos - graficos_canvas_ancho_texto(lbl) / 2;
+        graficos_canvas_texto(lx, ay + ah + 4, lbl, 200, 200, 200, 200);
+        c = c + 1;
+    }
+
+    // Labels de eje Y
+    entero paso_y = 4;
+    entero i = 0;
+    mientras i <= paso_y {
+        entero ly = ay + ah - (ah * i / paso_y);
+        decimal val = min_val + rango * i como decimal / paso_y como decimal;
+        texto lbl = __formatear_valor(val);
+        entero lx = ax - graficos_canvas_ancho_texto(lbl) - 4;
+        graficos_canvas_texto(lx, ly - 3, lbl, 180, 180, 180, 200);
+        i = i + 1;
+    }
+
+    // Leyenda
+    si cfg.mostrar_leyenda {
+        __dibujar_leyenda(ax, ay, series,
+            cfg.color_fondo_r + 100, cfg.color_fondo_g + 100, cfg.color_fondo_b + 100);
+    }
+
+    graficos_canvas_texto(cfg.ancho / 2 - graficos_canvas_ancho_texto(cfg.etiqueta_x) / 2,
+        y + cfg.alto - 5, cfg.etiqueta_x, 150, 150, 150, 180);
+    graficos_canvas_texto(x + 2,
+        y + cfg.alto / 2, cfg.etiqueta_y, 150, 150, 150, 180);
+}
+funcion void line_chart(integer x, integer y,
+        list<Series> series, list<string> labels,
+        ChartConfigEn cfg) {
+    lista<Serie> inner = [];
+    entero i = 0;
+    mientras i < largo(series) {
+        lista<decimal> data = [];
+        entero j = 0;
+        mientras j < largo(series[i].data) {
+            data = data ++ [series[i].data[j]];
+            j = j + 1;
+        }
+        inner = inner ++ [Serie{nombre:series[i].name, datos:data,
+            color_r:series[i].color_r, color_g:series[i].color_g, color_b:series[i].color_b}];
+        i = i + 1;
+    }
+    ChartConfig c = ChartConfig{titulo:cfg.title, etiqueta_x:cfg.label_x,
+        etiqueta_y:cfg.label_y, ancho:cfg.width, alto:cfg.height,
+        mostrar_leyenda:cfg.show_legend, mostrar_rejilla:cfg.show_grid,
+        color_fondo_r:cfg.bg_r, color_fondo_g:cfg.bg_g, color_fondo_b:cfg.bg_b};
+    grafico_lineas(x, y, inner, labels, c);
+}
+
+// ============================================================
+// GRÁFICO DE PASTEL / PIE CHART
+// ============================================================
+
+/// Dibuja un gráfico de pastel (usa la primera serie como valores)
+funcion void grafico_pastel(entero x, entero y, entero radio,
+        Serie serie, ChartConfig cfg) {
+    // Fondo
+    graficos_canvas_limpiar_pantalla(
+        cfg.color_fondo_r, cfg.color_fondo_g, cfg.color_fondo_b);
+
+    // Título
+    __dibujar_titulo(x, y, cfg.titulo, cfg.ancho,
+        cfg.color_fondo_r + 200, cfg.color_fondo_g + 200, cfg.color_fondo_b + 200);
+
+    // Centro del pastel
+    entero cx = x + cfg.ancho / 2 - radio;
+    entero cy = y + cfg.alto / 2;
+
+    // Calcular total
+    decimal total = __suma_serie(serie);
+    si total <= 0.0 { total = 1.0; }
+    entero n = largo(serie.datos);
+    si n == 0 { retornar; }
+
+    // Colores predefinidos para segmentos
+    lista<entero> colores_r = [255, 100, 50, 255, 200, 150, 100, 200, 255, 150];
+    lista<entero> colores_g = [100, 200, 150, 255, 100, 50, 200, 150, 200, 100];
+    lista<entero> colores_b = [100, 50, 200, 100, 50, 200, 100, 50, 50, 200];
+
+    // Dibujar segmentos
+    entero ang_actual = 0;
+    entero i = 0;
+    mientras i < n {
+        decimal pct = serie.datos[i] / total;
+        entero ang_seg = (pct * 360) como entero;
+        si ang_seg < 1 && serie.datos[i] > 0 { ang_seg = 1; }
+
+        entero ci = i % 10;
+        entero cr = colores_r[ci];
+        entero cg = colores_g[ci];
+        entero cb = colores_b[ci];
+
+        graficos_canvas_sector(cx, cy, radio, ang_actual, ang_actual + ang_seg,
+            cr, cg, cb, 255);
+
+        // Borde del segmento
+        graficos_canvas_arco(cx, cy, radio, ang_actual, ang_actual + ang_seg,
+            255, 255, 255, 120);
+
+        // Etiqueta (a la mitad del segmento, a 70% del radio)
+        entero ang_medio = ang_actual + ang_seg / 2;
+        decimal ang_rad = ang_medio como decimal * 0.0174533;
+        decimal label_r = radio como decimal * 0.7;
+        entero lx = (cx como decimal + label_r * matematicas_coseno(ang_rad)) como entero;
+        entero ly = (cy como decimal + label_r * matematicas_seno(ang_rad)) como entero;
+        texto lbl = (pct * 100) como entero + "%";
+        graficos_canvas_texto(lx - graficos_canvas_ancho_texto(lbl) / 2,
+            ly - 3, lbl, 255, 255, 255, 230);
+
+        ang_actual = ang_actual + ang_seg;
+        i = i + 1;
+    }
+
+    // Leyenda al lado derecho
+    si cfg.mostrar_leyenda {
+        entero lx = cx + radio + 20;
+        entero ly = cy - radio;
+        i = 0;
+        mientras i < n {
+            entero ci = i % 10;
+            // Nombre del segmento
+            texto nom = "Item " + a_texto(i + 1);
+            si i < largo(serie.nombre) { /* usar nombre si hay más datos */ }
+            graficos_canvas_rectangulo_relleno(lx, ly + i * 14, 10, 10,
+                colores_r[ci], colores_g[ci], colores_b[ci], 255);
+            graficos_canvas_texto(lx + 14, ly + i * 14, nom, 200, 200, 200, 200);
+            i = i + 1;
+        }
+    }
+}
+funcion void pie_chart(integer x, integer y, integer radius,
+        Series series, ChartConfigEn cfg) {
+    lista<decimal> data = [];
+    entero j = 0;
+    mientras j < largo(series.data) {
+        data = data ++ [series.data[j]];
+        j = j + 1;
+    }
+    Serie s = Serie{nombre: series.name, datos: data,
+        color_r: series.color_r, color_g: series.color_g, color_b: series.color_b};
+    ChartConfig c = ChartConfig{titulo:cfg.title, etiqueta_x:cfg.label_x,
+        etiqueta_y:cfg.label_y, ancho:cfg.width, alto:cfg.height,
+        mostrar_leyenda:cfg.show_legend, mostrar_rejilla:cfg.show_grid,
+        color_fondo_r:cfg.bg_r, color_fondo_g:cfg.bg_g, color_fondo_b:cfg.bg_b};
+    grafico_pastel(x, y, radius, s, c);
+}
+
+// ============================================================
+// GRÁFICO DE DISPERSIÓN / SCATTER PLOT
+// ============================================================
+
+/// Dibuja un gráfico de dispersión (scatter plot)
+funcion void grafico_dispersion(entero x, entero y,
+        lista<Serie> series, ChartConfig cfg) {
+    entero margen_izq = 60;
+    entero margen_inf = 40;
+    entero margen_sup = 20;
+    entero margen_der = 20;
+
+    entero ax = x + margen_izq;
+    entero ay = y + margen_sup;
+    entero aw = cfg.ancho - margen_izq - margen_der;
+    entero ah = cfg.alto - margen_sup - margen_inf;
+
+    // Fondo
+    graficos_canvas_limpiar_pantalla(
+        cfg.color_fondo_r, cfg.color_fondo_g, cfg.color_fondo_b);
+
+    // Título
+    __dibujar_titulo(x, y, cfg.titulo, cfg.ancho,
+        cfg.color_fondo_r + 200, cfg.color_fondo_g + 200, cfg.color_fondo_b + 200);
+
+    // Ejes
+    graficos_canvas_linea(ax, ay, ax, ay + ah, 200, 200, 200, 200);
+    graficos_canvas_linea(ax, ay + ah, ax + aw, ay + ah, 200, 200, 200, 200);
+
+    // Calcular rangos para X e Y
+    decimal max_x = 0.0; decimal max_y = 0.0;
+    decimal min_x = 0.0; decimal min_y = 0.0;
+    booleano first = verdadero;
+    entero s = 0;
+    mientras s < largo(series) {
+        entero p = 0;
+        mientras p < largo(series[s].datos) {
+            // En un scatter de verdad usaríamos pares (x,y).
+            // Aquí usamos índice como X y valor como Y para simplicidad.
+            decimal val = series[s].datos[p];
+            si first {
+                max_y = val; min_y = val;
+                first = falso;
+            } sino {
+                si val > max_y { max_y = val; }
+                si val < min_y { min_y = val; }
+            }
+            p = p + 1;
+        }
+        s = s + 1;
+    }
+    max_x = (__max_largo_series(series) - 1) como decimal;
+    si max_x <= 0.0 { max_x = 1.0; }
+    si max_y == min_y { max_y = min_y + 1.0; }
+
+    decimal rango_y = max_y - min_y;
+    si rango_y <= 0.0 { rango_y = 1.0; }
+
+    // Rejilla
+    si cfg.mostrar_rejilla {
+        __dibujar_rejilla(ax, ay, ax + aw, ay + ah, 5, 4,
+            cfg.color_fondo_r + 80, cfg.color_fondo_g + 80, cfg.color_fondo_b + 80);
+    }
+
+    // Dibujar puntos
+    s = 0;
+    mientras s < largo(series) {
+        Serie serie = series[s];
+        entero p = 0;
+        mientras p < largo(serie.datos) {
+            decimal val = serie.datos[p];
+            entero px = ax + (p * aw / (__max_largo_series(series) - 1)) como entero;
+            si __max_largo_series(series) <= 1 { px = ax + aw / 2; }
+            entero py = (ay + ah) - ((val - min_y) / rango_y * (ah - 10) como decimal) como entero;
+            // Punto circular
+            graficos_canvas_circulo_relleno(px, py, 4,
+                serie.color_r, serie.color_g, serie.color_b, 230);
+            // Borde del punto
+            graficos_canvas_circulo(px, py, 4,
+                255, 255, 255, 100);
+            p = p + 1;
+        }
+        s = s + 1;
+    }
+
+    // Labels de eje Y
+    entero paso_y = 4;
+    entero i = 0;
+    mientras i <= paso_y {
+        entero ly = ay + ah - (ah * i / paso_y);
+        decimal val = min_y + rango_y * i como decimal / paso_y como decimal;
+        texto lbl = __formatear_valor(val);
+        entero lx = ax - graficos_canvas_ancho_texto(lbl) - 4;
+        graficos_canvas_texto(lx, ly - 3, lbl, 180, 180, 180, 200);
+        i = i + 1;
+    }
+
+    // Labels de eje X
+    entero paso_x = 5;
+    i = 0;
+    mientras i <= paso_x {
+        entero lx = ax + aw * i / paso_x;
+        decimal val = max_x * i como decimal / paso_x como decimal;
+        texto lbl = __formatear_valor(val);
+        graficos_canvas_texto(lx - graficos_canvas_ancho_texto(lbl) / 2,
+            ay + ah + 4, lbl, 180, 180, 180, 200);
+        i = i + 1;
+    }
+
+    // Leyenda
+    si cfg.mostrar_leyenda {
+        __dibujar_leyenda(ax, ay, series,
+            cfg.color_fondo_r + 100, cfg.color_fondo_g + 100, cfg.color_fondo_b + 100);
+    }
+}
+funcion void scatter_plot(integer x, integer y,
+        list<Series> series, ChartConfigEn cfg) {
+    lista<Serie> inner = [];
+    entero i = 0;
+    mientras i < largo(series) {
+        lista<decimal> data = [];
+        entero j = 0;
+        mientras j < largo(series[i].data) {
+            data = data ++ [series[i].data[j]];
+            j = j + 1;
+        }
+        inner = inner ++ [Serie{nombre:series[i].name, datos:data,
+            color_r:series[i].color_r, color_g:series[i].color_g, color_b:series[i].color_b}];
+        i = i + 1;
+    }
+    ChartConfig c = ChartConfig{titulo:cfg.title, etiqueta_x:cfg.label_x,
+        etiqueta_y:cfg.label_y, ancho:cfg.width, alto:cfg.height,
+        mostrar_leyenda:cfg.show_legend, mostrar_rejilla:cfg.show_grid,
+        color_fondo_r:cfg.bg_r, color_fondo_g:cfg.bg_g, color_fondo_b:cfg.bg_b};
+    grafico_dispersion(x, y, inner, c);
+}

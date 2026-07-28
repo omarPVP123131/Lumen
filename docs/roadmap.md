@@ -13,7 +13,7 @@ Herramientas & DX   [███████████████████�
 Stdlib Extendida    [████████████████████████████████████████████] 100% (Fases 96-110)
 Runtime & Sistema   [████████████████████████████████████████████] 100% (Fases 111-130)
 Concurrencia & Async[████████████████████████████████████████████] 100% (Fases 131-150)
-GUI, TUI & Juegos   [████████████████████████░░░░░░░░░░░░░░░░░░░░░]  55% (Fases 151-170)
+GUI, TUI & Juegos   [████████████████████████████████████████████] 100% (Fases 151-170)
 Portabilidad        [████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  25% (Fases 171-185)
 AI/ML & Data        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 186-200)
 Producción & Cloud  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 201-220)
@@ -226,19 +226,19 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | 155 | TUI | Menús desplegables, contexto, barras de herramientas | ✅ vía tui.nv |
 | 156 | TUI | Layout engine: Flex, Grid, Stack, Padding, Alignment | ✅ vía tui.nv |
 | 157 | GFX | Canvas 2D: píxeles, líneas, rectángulos, círculos, texto | ✅ vía graficos.nv (SDL2 FFI) |
-| 158 | GFX | Sprites animados, hojas de sprites | 📋 |
+| 158 | GFX | Sprites animados, hojas de sprites | ✅ vía graficos_avanzado.nv |
 | 159 | GFX | Game loop: fixed timestep, delta time | ✅ vía graficos.nv |
 | 160 | GFX | Input: teclado, mouse, gamepad, eventos | ✅ vía graficos.nv |
-| 161 | GFX | Audio WAV/OGG: cargar, reproducir, pausar | 📋 |
-| 162 | GFX | Sistema de partículas | 📋 |
-| 163 | GFX | Tilemap: mapas de tiles 2D | 📋 |
+| 161 | GFX | Audio WAV/OGG: cargar, reproducir, pausar | ✅ vía graficos_avanzado.nv (SDL2_mixer) |
+| 162 | GFX | Sistema de partículas | ✅ vía graficos_avanzado.nv (LÚMEN puro) |
+| 163 | GFX | Tilemap: mapas de tiles 2D | ✅ vía graficos_tilemap.nv (cámara, colisiones) |
 | 164 | GUI | Widgets: Botón, Etiqueta, CampoTexto | ✅ vía gui.nv (Win32 FFI) |
 | 165 | GUI | Ventanas nativas | ✅ vía __gui_ventana/window |
-| 166 | GUI | Canvas 2D en ventana | 📋 |
+| 166 | GUI | Canvas 2D en ventana | ✅ vía graficos_canvas.nv (círculos, líneas, triángulos, gradientes, texto) |
 | 167 | GUI | Eventos: click, teclado, focus, drag | ✅ vía gui.nv |
-| 168 | GUI | Temas y estilos CSS-like | 📋 |
+| 168 | GUI | Temas y estilos CSS-like | ✅ vía tui_temas.nv (Catppuccin, claro, oscuro, alto contraste) |
 | 169 | GUI | TreeView, drag-drop, multi-selección | 📋 |
-| 170 | GUI | Charts: barras, líneas, pastel | 📋 |
+| 170 | GUI | Charts: barras, líneas, pastel, dispersión | ✅ vía graficos_charts.nv |
 
 ---
 
@@ -324,8 +324,8 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | **v1.7** | Stdlib extendida + WASM playground | 96-110 | ✅ |
 | **v1.8** | FFI system + Crypto builtins | 111-127 | ✅ |
 | **v1.9** | Concurrencia completa + Async runtime | 128-150 | ✅ |
-| **v2.0** | GUI, TUI, Juegos funcionales + Portabilidad | 151-185 | 📋 |
-| **v2.5** | Portabilidad total + WASI + Self-hosting | 171-185 | 📋 |
+| **v2.0** | GUI, TUI, Juegos funcionales | 151-170 | ✅ |
+| **v2.5** | Portabilidad + WASI + Self-hosting | 171-185 | 🏗️ Siguiente |
 | **v3.0** | AI/ML + Cloud + Producción | 186-220 | 📋 |
 
 ---
