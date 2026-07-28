@@ -1,0 +1,89 @@
+// ==========================================
+// io_real.nv — IO operations (real-world)
+// Uso: lumen run -L stdlib/ examples/real/io_real.nv
+// ==========================================
+
+imprimir("=== IO REAL: File Copier, Log Processor & Stream Filter ===");
+
+// ── Example 1: File Copier ──
+imprimir("--- Ej 1: File Copier ---");
+funcion texto copiar_archivo(texto origen, texto destino) {
+    sea lineas = __lector_buffer(origen);
+    texto contenido = "";
+    entero i = 0;
+    mientras i < lineas.largo() {
+        si i > 0 {
+            contenido = contenido + "\n";
+        }
+        contenido = contenido + lineas[i];
+        i = i + 1;
+    }
+    retornar __escritor_buffer(destino, contenido);
+}
+
+__escritor_buffer("source_real.txt", "Nombre: LUMEN\nVersion: 1.6.0\nLenguaje: ES/EN");
+sea copy_res = copiar_archivo("source_real.txt", "destino_real.txt");
+imprimir("Copy result: ", copy_res);
+
+sea dest_lines = __lector_buffer("destino_real.txt");
+imprimir("Destino [0]: ", dest_lines[0]);
+imprimir("Destino [1]: ", dest_lines[1]);
+
+// ── Example 2: Log Processor ──
+imprimir("--- Ej 2: Log Processor ---");
+texto logs = "INFO: Servidor iniciado\nERROR: Conexion fallida\nINFO: Reintentando\nWARN: Memoria alta\nERROR: Timeout";
+__escritor_buffer("app_real.log", logs);
+
+funcion texto filtrar_errores(texto archivo_log) {
+    sea lineas = __lector_buffer(archivo_log);
+    entero count = 0;
+    entero i = 0;
+    mientras i < lineas.largo() {
+        sea linea = lineas[i];
+        si linea.largo() >= 5 {
+            si linea[0] == "E" {
+                count = count + 1;
+            }
+        }
+        i = i + 1;
+    }
+    retornar "Total errores: " + count;
+}
+
+sea error_report = filtrar_errores("app_real.log");
+imprimir(error_report);
+
+// ── Example 3: Stream Filter (Chunk-based processing) ──
+imprimir("--- Ej 3: Stream Filter ---");
+texto datos = "";
+entero k = 0;
+mientras k < 100 {
+    datos = datos + "DATO-" + (k + 1) + ",";
+    k = k + 1;
+}
+__escritor_buffer("stream_data_real.txt", datos);
+
+sea stream_chunks = __stream_trozos("stream_data_real.txt", 30);
+imprimir("Stream: ", stream_chunks.largo(), " chunks of 30 bytes");
+
+// Pipeline: sum chunk sizes
+entero total_bytes = 0;
+entero c = 0;
+mientras c < stream_chunks.largo() {
+    sea chunk = stream_chunks[c];
+    total_bytes = total_bytes + chunk.largo();
+    c = c + 1;
+}
+imprimir("Total bytes processed: ", total_bytes);
+
+// File statistics
+funcion texto estadisticas_archivo(texto ruta) {
+    sea lineas = __lector_buffer(ruta);
+    sea trozos = __stream_trozos(ruta, 1024);
+    retornar "Archivo: " + ruta + " | Lineas: " + lineas.largo() + " | Chunks: " + trozos.largo();
+}
+
+imprimir(estadisticas_archivo("source_real.txt"));
+imprimir(estadisticas_archivo("app_real.log"));
+
+imprimir("--- FIN IO REAL ---");

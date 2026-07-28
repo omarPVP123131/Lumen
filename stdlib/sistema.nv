@@ -2,7 +2,7 @@
 // System module — pure LÚMEN via FFI, dual ES/EN API
 // Uso: importar "sistema.nv"
 
-cualquiera __libc = __ffi_cargar("msvcrt.dll");
+texto __libc = __ffi_cargar("msvcrt.dll");
 
 // ============================================================
 // PROCESOS / PROCESS
@@ -69,18 +69,19 @@ funcion texto path_absoluto(texto ruta) {
 funcion texto path_absolute(texto path) { retornar path_absoluto(path); }
 
 funcion texto path_extension(texto ruta) {
-    entero i = ruta.largo() - 1;
-    mientras i >= 0 {
-        si ruta[i] == "." {
+    entero pos = ruta.largo() - 1;
+    mientras pos >= 0 {
+        si ruta[pos] == "." {
             texto ext = "";
-            entero j = i + 1;
-            mientras j < ruta.largo() {
-                ext = ext + ruta[j];
-                j = j + 1;
+            entero len = ruta.largo();
+            entero k = pos + 1;
+            mientras (k < len) {
+                ext = ext + ruta[k];
+                k = k + 1;
             }
             retornar ext;
         }
-        i = i - 1;
+        pos = pos - 1;
     }
     retornar "";
 }
@@ -91,7 +92,8 @@ funcion texto path_nombre_archivo(texto ruta) {
         si ruta[i] == "\\" || ruta[i] == "/" {
             texto nom = "";
             entero j = i + 1;
-            mientras j < ruta.largo() {
+            entero rlen = ruta.largo();
+            mientras (j < rlen) {
                 nom = nom + ruta[j];
                 j = j + 1;
             }
@@ -109,7 +111,8 @@ funcion texto path_padre(texto ruta) {
         si ruta[i] == "\\" || ruta[i] == "/" {
             texto padre = "";
             entero j = 0;
-            mientras j < i {
+            entero limite = i;
+            mientras (j < limite) {
                 padre = padre + ruta[j];
                 j = j + 1;
             }

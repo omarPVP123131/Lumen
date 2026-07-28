@@ -1,0 +1,39 @@
+// ==========================================
+// io_jr.nv — IO operations (junior)
+// Uso: lumen run -L stdlib/ examples/jr/io_jr.nv
+// Note: Uses __ builtins for full type safety.
+// ==========================================
+
+imprimir("=== IO JR: File Read, Write & Chunks ===");
+
+// ── Example 1: Read Lines from File ──
+imprimir("--- Ej 1: Read Lines ---");
+__escritor_buffer("test_jr_io.txt", "linea 1\nlinea 2\nlinea 3");
+
+sea lineas = __lector_buffer("test_jr_io.txt");
+imprimir("Archivo leido:");
+imprimir("  Linea 0: ", lineas[0]);
+imprimir("  Linea 1: ", lineas[1]);
+imprimir("  Linea 2: ", lineas[2]);
+
+// ── Example 2: Write Buffer to File ──
+imprimir("--- Ej 2: Write Buffer ---");
+sea res = __escritor_buffer("test_jr_write.txt", "Hola desde Lumen IO!\nSegunda linea.");
+imprimir("Write result: ", res);
+
+sea leido = __lector_buffer("test_jr_write.txt");
+imprimir("Read back [0]: ", leido[0]);
+imprimir("Read back [1]: ", leido[1]);
+
+// ── Example 3: Read Chunks ──
+imprimir("--- Ej 3: Read Chunks ---");
+__escritor_buffer("test_jr_chunks.txt", "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+
+sea trozos = __stream_trozos("test_jr_chunks.txt", 5);
+imprimir("Chunks (size=5): ", trozos.largo(), " chunks");
+imprimir("Chunk 0: ", trozos[0]);
+
+sea trozos2 = __stream_trozos("test_jr_write.txt", 1024);
+imprimir("Chunks (size=1024): ", trozos2.largo(), " chunks");
+
+imprimir("--- FIN IO JR ---");

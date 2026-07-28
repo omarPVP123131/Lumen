@@ -1997,7 +1997,7 @@ impl SemanticAnalyzer {
                                                 .to_string(),
                                         });
                                     }
-                                    TypeInfo::Texto
+                                    TypeInfo::Entero
                                 } else if callee == "__list_reverse"
                                     || callee == "__lista_invertir"
                                     || callee == "__list_sort"
@@ -2275,6 +2275,49 @@ impl SemanticAnalyzer {
                                     || callee == "__tcp_conectar_async"
                                 {
                                     TypeInfo::Texto
+                                } else if callee == "__hilo_esperar" || callee == "__thread_join"
+                                    || callee == "__canal_recibir" || callee == "__channel_recv"
+                                    || callee == "__actor_recibir" || callee == "__actor_recv"
+                                    || callee == "__generador_siguiente" || callee == "__generator_next"
+                                    || callee == "__stream_colectar" || callee == "__stream_collect"
+                                    || callee == "__stream_desde" || callee == "__stream_from"
+                                    || callee == "__stream_mapear" || callee == "__stream_map"
+                                    || callee == "__stream_filtrar" || callee == "__stream_filter"
+                                    || callee == "__par_mapear" || callee == "__par_map"
+                                    || callee == "__par_unir" || callee == "__par_join"
+                                    || callee == "__seleccionar" || callee == "__select"
+                                    || callee == "__mutex_bloquear" || callee == "__mutex_lock"
+                                {
+                                    TypeInfo::Texto
+                                } else if callee == "__hilo_lanzar" || callee == "__thread_spawn"
+                                    || callee == "__canal_nuevo" || callee == "__channel_new"
+                                    || callee == "__mutex_nuevo" || callee == "__mutex_new"
+                                    || callee == "__actor_nuevo" || callee == "__actor_new"
+                                    || callee == "__generador_nuevo" || callee == "__generator_new"
+                                    || callee == "__scope_lanzar" || callee == "__scope_spawn"
+                                    || callee == "__scope_nuevo" || callee == "__scope_new"
+                                    || callee == "__supervisor_nuevo" || callee == "__supervisor_new"
+                                    || callee == "__cluster_conectar" || callee == "__cluster_connect"
+                                    || callee == "__http_servidor" || callee == "__http_server"
+                                    || callee == "__rwlock_nuevo" || callee == "__rwlock_new"
+                                    || callee == "__arc_nuevo" || callee == "__arc_new"
+                                {
+                                    TypeInfo::Texto
+                                } else if callee == "__tcp_conectar" || callee == "__tcp_connect"
+                                    || callee == "__tcp_escuchar" || callee == "__tcp_listen"
+                                    || callee == "__canal_enviar" || callee == "__channel_send"
+                                    || callee == "__actor_enviar" || callee == "__actor_send"
+                                    || callee == "__cluster_enviar" || callee == "__cluster_send"
+                                    || callee == "__tcp_aceptar" || callee == "__tcp_accept"
+                                {
+                                    TypeInfo::Booleano
+                                } else if callee == "__dormir" || callee == "__sleep"
+                                    || callee == "__scope_cancelar" || callee == "__scope_cancel"
+                                    || callee == "__supervisor_agregar" || callee == "__supervisor_add"
+                                    || callee == "__supervisor_iniciar" || callee == "__supervisor_start"
+                                    || callee == "__arc_asignar" || callee == "__arc_set"
+                                {
+                                    TypeInfo::Void
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {
@@ -2518,6 +2561,7 @@ impl SemanticAnalyzer {
                     },
                     "largo" | "len" | "length" => match expr_type {
                         TypeInfo::Lista(_) => TypeInfo::Entero,
+                        TypeInfo::Texto => TypeInfo::Entero,
                         _ => {
                             self.errors.push(SemError {
                                 code: "E047".to_string(),
@@ -2526,7 +2570,7 @@ impl SemanticAnalyzer {
                                     method, expr_type
                                 ),
                                 span: *span,
-                                suggestion: "'largo' solo se puede llamar en listas".to_string(),
+                                suggestion: "'largo' solo se puede llamar en listas y texto".to_string(),
                             });
                             TypeInfo::Entero
                         }

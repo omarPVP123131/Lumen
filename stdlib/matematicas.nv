@@ -42,7 +42,7 @@ funcion numero potencia(numero base, entero exp) {
         i = i + 1;
     }
     si (exp < 0) {
-        retornar 1 / res;
+        retornar 1.0 / res;
     }
     retornar res;
 }
@@ -55,10 +55,10 @@ funcion numero raiz(numero x) {
     si (x == 0) {
         retornar 0;
     }
-    numero aproximacion = x / 2;
+    numero aproximacion = x / 2.0;
     entero i = 0;
     mientras (i < 20) {
-        aproximacion = (aproximacion + x / aproximacion) / 2;
+        aproximacion = (aproximacion + x / aproximacion) / 2.0;
         i = i + 1;
     }
     retornar aproximacion;

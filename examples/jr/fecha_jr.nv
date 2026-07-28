@@ -1,0 +1,47 @@
+// ==========================================
+// fecha_jr.nv — Date/Time operations (junior)
+// Uso: lumen run -L stdlib/ examples/jr/fecha_jr.nv
+// ==========================================
+importar "fecha.nv";
+
+imprimir("=== Fecha JR: Basic Date Operations ===");
+
+// ── Example 1: Current Timestamp ──
+imprimir("--- Ej 1: Ahora (Now) ---");
+sea ts = fecha_ahora();
+imprimir("timestamp actual: ", ts);
+
+// English alias
+sea now_en = fecha_now();
+imprimir("timestamp (en):   ", now_en);
+
+// ── Example 2: Format Date ──
+imprimir("--- Ej 2: Formatear Fecha ---");
+sea hoy = fecha_formatear(ts, "%Y-%m-%d");
+sea hora = fecha_formatear(ts, "%H:%M:%S");
+sea completo = fecha_formatear(ts, "%Y-%m-%d %H:%M:%S");
+
+imprimir("fecha (YYYY-MM-DD): ", hoy);
+imprimir("hora (HH:MM:SS):    ", hora);
+imprimir("completo:            ", completo);
+
+// English alias
+sea iso_en = fecha_format(ts, "%Y-%m-%dT%H:%M:%S");
+imprimir("ISO 8601:            ", iso_en);
+
+// ── Example 3: Parse Date & Age ──
+imprimir("--- Ej 3: Parsear y Calcular Edad ---");
+sea cumple = fecha_parsear("2000-01-15T00:00:00Z", "%Y-%m-%d %H:%M:%S");
+imprimir("fecha nacimiento: 2000-01-15");
+imprimir("timestamp parseado: ", cumple);
+
+sea edad_segs = fecha_diferencia(ts, cumple);
+sea edad_anios = edad_segs / (365.25 * 86400);
+imprimir("edad aproximada: ", edad_anios, " años");
+
+// English alias
+sea birth_en = fecha_parse("1995-06-20T00:00:00Z", "%Y-%m-%d %H:%M:%S");
+sea age_en = fecha_diff(ts, birth_en) / (365.25 * 86400);
+imprimir("age (en): ", age_en, " years");
+
+imprimir("--- FIN FECHA JR ---");

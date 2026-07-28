@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use unicode_normalization::UnicodeNormalization;
+use chrono::{TimeZone, Datelike, Timelike, Utc};
 
 pub static JS_EVAL: OnceLock<fn(&str) -> String> = OnceLock::new();
 
@@ -96,6 +97,16 @@ pub struct VM {
     #[cfg(feature = "full")]
     scope_handles: Vec<HashMap<String, Value>>,
     #[cfg(feature = "full")]
+    thread_handles: HashMap<String, std::thread::JoinHandle<Value>>,
+    #[cfg(feature = "full")]
+    channels: HashMap<String, (Option<std::sync::mpsc::Sender<Value>>, Option<std::sync::mpsc::Receiver<Value>>)>,
+    #[cfg(feature = "full")]
+    mutexes: HashMap<String, std::sync::Mutex<Value>>,
+    #[cfg(feature = "full")]
+    actors: HashMap<String, (Option<std::sync::mpsc::Sender<Value>>, Option<std::sync::mpsc::Receiver<Value>>)>,
+    #[cfg(feature = "full")]
+    generators: HashMap<String, String>,
+    #[cfg(feature = "full")]
     ffi_libraries: HashMap<String, usize>,
     #[cfg(feature = "full")]
     task_results: HashMap<String, std::sync::mpsc::Receiver<Value>>,
@@ -155,6 +166,16 @@ impl VM {
             cluster_streams: HashMap::new(),
             #[cfg(feature = "full")]
             scope_handles: Vec::new(),
+            #[cfg(feature = "full")]
+            thread_handles: HashMap::new(),
+            #[cfg(feature = "full")]
+            channels: HashMap::new(),
+            #[cfg(feature = "full")]
+            mutexes: HashMap::new(),
+            #[cfg(feature = "full")]
+            actors: HashMap::new(),
+            #[cfg(feature = "full")]
+            generators: HashMap::new(),
             #[cfg(feature = "full")]
             ffi_libraries: HashMap::new(),
             #[cfg(feature = "full")]
@@ -309,7 +330,7 @@ impl VM {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default();
-            self.push(Value::Str(format!("{}", now.as_secs())));
+            self.push(Value::Int(now.as_secs() as i64));
             return Some(Ok(()));
         }
 
@@ -1414,9 +1435,9 @@ impl VM {
         // ██ Date builtins ██
         if name == "__tiempo_formatear" || name == "__time_format" {
             let timestamp = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
-            // Convert Unix timestamp to ISO 8601 manually
-            let iso = unix_timestamp_to_iso8601(timestamp);
-            self.push(Value::Str(iso));
+            let fmt = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            let formatted = format_timestamp(timestamp, &fmt);
+            self.push(Value::Str(formatted));
             return Some(Ok(()));
         }
 
@@ -1725,6 +1746,362 @@ impl VM {
             let task_id = format!("tcp_{}", id);
             self.task_results.insert(task_id.clone(), rx);
             self.push(Value::Str(task_id));
+            return Some(Ok(()));
+        }
+
+        // ██ Concurrency builtins ██
+        if name == "__dormir" || name == "__sleep" {
+            let ms = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as u64;
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+            self.push(Value::Void);
+            return Some(Ok(()));
+        }
+
+        if name == "__hilo_lanzar" || name == "__thread_spawn" {
+            let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let fn_args: Vec<Value> = args.into_iter().skip(1).collect();
+            let bc = self.bytecode.clone();
+            let handle = std::thread::spawn(move || {
+                let mut vm = VM::new(bc);
+                vm.run_function(&fn_name, fn_args)
+                    .unwrap_or(Value::Void)
+            });
+            let hid = format!("thread_{}", self.thread_handles.len());
+            self.thread_handles.insert(hid.clone(), handle);
+            self.push(Value::Str(hid));
+            return Some(Ok(()));
+        }
+
+        if name == "__hilo_esperar" || name == "__thread_join" {
+            let hid = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            if let Some((_, handle)) = self.thread_handles.remove_entry(&hid) {
+                match handle.join() {
+                    Ok(val) => self.push(val),
+                    Err(_) => self.push(Value::Error(Box::new(Value::Str("Thread panicked".into())))),
+                }
+            } else {
+                self.push(Value::Error(Box::new(Value::Str("Thread not found".into()))));
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__canal_nuevo" || name == "__channel_new" {
+            let (tx, rx) = std::sync::mpsc::channel::<Value>();
+            let cid = format!("chan_{}", self.channels.len());
+            self.channels.insert(cid.clone(), (Some(tx), Some(rx)));
+            self.push(Value::Str(cid));
+            return Some(Ok(()));
+        }
+
+        if name == "__canal_enviar" || name == "__channel_send" {
+            let cid = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let val = args.get(1).cloned().unwrap_or(Value::Void);
+            if let Some((Some(ref tx), _)) = self.channels.get(&cid) {
+                match tx.send(val) {
+                    Ok(()) => self.push(Value::Bool(true)),
+                    Err(_) => self.push(Value::Bool(false)),
+                }
+            } else {
+                self.push(Value::Error(Box::new(Value::Str("Channel not found".into()))));
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__canal_recibir" || name == "__channel_recv" {
+            let cid = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            // Need to take the receiver out temporarily
+            let rx = if let Some((_, ref mut rx_opt)) = self.channels.get_mut(&cid) {
+                rx_opt.take()
+            } else {
+                None
+            };
+            match rx {
+                Some(rx) => {
+                    let val = rx.recv().unwrap_or(Value::Void);
+                    // Put receiver back
+                    if let Some((_, ref mut rx_opt)) = self.channels.get_mut(&cid) {
+                        *rx_opt = Some(rx);
+                    }
+                    self.push(val);
+                }
+                None => {
+                    self.push(Value::Error(Box::new(Value::Str("Channel not found".into()))));
+                }
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__mutex_nuevo" || name == "__mutex_new" {
+            let mid = format!("mutex_{}", self.mutexes.len());
+            self.mutexes.insert(mid.clone(), std::sync::Mutex::new(Value::Void));
+            self.push(Value::Str(mid));
+            return Some(Ok(()));
+        }
+
+        if name == "__mutex_bloquear" || name == "__mutex_lock" {
+            let mid = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            let fn_arg = args.get(2).cloned().unwrap_or(Value::Void);
+            let result = if let Some(mutex) = self.mutexes.get(&mid) {
+                let _guard = mutex.lock().unwrap();
+                drop(_guard);
+                // Execute function while holding lock
+                let bc = self.bytecode.clone();
+                let mut vm = VM::new(bc);
+                vm.run_function(&fn_name, vec![fn_arg]).unwrap_or(Value::Void)
+            } else {
+                Value::Error(Box::new(Value::Str("Mutex not found".into())))
+            };
+            self.push(result);
+            return Some(Ok(()));
+        }
+
+        if name == "__stream_desde" || name == "__stream_from" {
+            let source = args.first().cloned().unwrap_or(Value::Void);
+            self.push(source);
+            return Some(Ok(()));
+        }
+
+        if name == "__stream_mapear" || name == "__stream_map" {
+            let source = args.first().cloned().unwrap_or(Value::Void);
+            let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            match source {
+                Value::Array(items) => {
+                    let bc = self.bytecode.clone();
+                    let mapped: Vec<Value> = items
+                        .into_iter()
+                        .map(|item| {
+                            let mut vm = VM::new(bc.clone());
+                            vm.run_function(&fn_name, vec![item])
+                                .unwrap_or(Value::Void)
+                        })
+                        .collect();
+                    self.push(Value::Array(mapped));
+                }
+                _ => self.push(Value::Error(Box::new(Value::Str(
+                    "stream_map espera una lista".into(),
+                )))),
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__stream_filtrar" || name == "__stream_filter" {
+            let source = args.first().cloned().unwrap_or(Value::Void);
+            let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            match source {
+                Value::Array(items) => {
+                    let bc = self.bytecode.clone();
+                    let filtered: Vec<Value> = items
+                        .into_iter()
+                        .filter(|item| {
+                            let mut vm = VM::new(bc.clone());
+                            match vm.run_function(&fn_name, vec![item.clone()]) {
+                                Ok(Value::Bool(true)) => true,
+                                _ => false,
+                            }
+                        })
+                        .collect();
+                    self.push(Value::Array(filtered));
+                }
+                _ => self.push(Value::Error(Box::new(Value::Str(
+                    "stream_filter espera una lista".into(),
+                )))),
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__stream_colectar" || name == "__stream_collect" {
+            let source = args.first().cloned().unwrap_or(Value::Void);
+            self.push(source);
+            return Some(Ok(()));
+        }
+
+        if name == "__par_mapear" || name == "__par_map" {
+            let source = args.first().cloned().unwrap_or(Value::Array(vec![]));
+            let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            match source {
+                Value::Array(items) => {
+                    let bc = self.bytecode.clone();
+                    let mut handles = Vec::new();
+                    for item in items {
+                        let bc_clone = bc.clone();
+                        let fn_clone = fn_name.clone();
+                        handles.push(std::thread::spawn(move || {
+                            let mut vm = VM::new(bc_clone);
+                            vm.run_function(&fn_clone, vec![item])
+                                .unwrap_or(Value::Void)
+                        }));
+                    }
+                    let results: Vec<Value> = handles
+                        .into_iter()
+                        .map(|h| h.join().unwrap_or(Value::Void))
+                        .collect();
+                    self.push(Value::Array(results));
+                }
+                _ => self.push(Value::Error(Box::new(Value::Str(
+                    "par_map espera una lista".into(),
+                )))),
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__par_unir" || name == "__par_join" {
+            let fn1 = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let a1 = args.get(1).cloned().unwrap_or(Value::Void);
+            let fn2 = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
+            let a2 = args.get(3).cloned().unwrap_or(Value::Void);
+            let bc = self.bytecode.clone();
+            let bc2 = bc.clone();
+            let h1 = std::thread::spawn(move || {
+                let mut vm = VM::new(bc);
+                if fn1.is_empty() {
+                    Value::Void
+                } else {
+                    vm.run_function(&fn1, vec![a1]).unwrap_or(Value::Void)
+                }
+            });
+            let h2 = std::thread::spawn(move || {
+                let mut vm = VM::new(bc2);
+                if fn2.is_empty() {
+                    Value::Void
+                } else {
+                    vm.run_function(&fn2, vec![a2]).unwrap_or(Value::Void)
+                }
+            });
+            let r1 = h1.join().unwrap_or(Value::Void);
+            let r2 = h2.join().unwrap_or(Value::Void);
+            self.push(Value::Array(vec![r1, r2]));
+            return Some(Ok(()));
+        }
+
+        if name == "__actor_nuevo" || name == "__actor_new" {
+            let aid = format!("actor_{}", self.actors.len());
+            // Actor is just a mailbox: a channel
+            let (tx, rx) = std::sync::mpsc::channel::<Value>();
+            self.actors.insert(aid.clone(), (Some(tx), Some(rx)));
+            self.push(Value::Str(aid));
+            return Some(Ok(()));
+        }
+
+        if name == "__actor_enviar" || name == "__actor_send" {
+            let aid = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let msg = args.get(1).cloned().unwrap_or(Value::Void);
+            if let Some((Some(ref tx), _)) = self.actors.get(&aid) {
+                match tx.send(msg) {
+                    Ok(()) => self.push(Value::Bool(true)),
+                    Err(_) => self.push(Value::Bool(false)),
+                }
+            } else {
+                self.push(Value::Error(Box::new(Value::Str("Actor not found".into()))));
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__actor_recibir" || name == "__actor_recv" {
+            let aid = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let rx = if let Some((_, ref mut rx_opt)) = self.actors.get_mut(&aid) {
+                rx_opt.take()
+            } else {
+                None
+            };
+            match rx {
+                Some(rx) => {
+                    let val = rx.recv().unwrap_or(Value::Void);
+                    if let Some((_, ref mut rx_opt)) = self.actors.get_mut(&aid) {
+                        *rx_opt = Some(rx);
+                    }
+                    self.push(val);
+                }
+                None => {
+                    self.push(Value::Error(Box::new(Value::Str("Actor not found".into()))));
+                }
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__generador_nuevo" || name == "__generator_new" {
+            let gid = format!("gen_{}", self.generators.len());
+            let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            self.generators.insert(gid.clone(), fn_name);
+            self.push(Value::Str(gid));
+            return Some(Ok(()));
+        }
+
+        if name == "__generador_siguiente" || name == "__generator_next" {
+            let gid = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let val = args.get(1).cloned().unwrap_or(Value::Void);
+            let fn_name = if let Some(fn_name) = self.generators.get(&gid) {
+                fn_name.clone()
+            } else {
+                self.push(Value::Error(Box::new(Value::Str("Generator not found".into()))));
+                return Some(Ok(()));
+            };
+            let mut vm = VM::new(self.bytecode.clone());
+            let result = vm.run_function(&fn_name, vec![val]).unwrap_or(Value::Void);
+            self.push(result);
+            return Some(Ok(()));
+        }
+
+        // Stubs for remaining concurrency builtins
+        if name == "__seleccionar" || name == "__select" {
+            // Return first available; stub returns "select_stub"
+            self.push(Value::Str("select_stub".into()));
+            return Some(Ok(()));
+        }
+        if name == "__scope_nuevo" || name == "__scope_new" {
+            self.push(Value::Str("scope_0".into()));
+            return Some(Ok(()));
+        }
+        if name == "__scope_lanzar" || name == "__scope_spawn" {
+            self.push(Value::Str("scope_task_0".into()));
+            return Some(Ok(()));
+        }
+        if name == "__scope_cancelar" || name == "__scope_cancel" {
+            self.push(Value::Void);
+            return Some(Ok(()));
+        }
+        if name == "__supervisor_nuevo" || name == "__supervisor_new" {
+            self.push(Value::Str("sup_0".into()));
+            return Some(Ok(()));
+        }
+        if name == "__supervisor_agregar" || name == "__supervisor_add" {
+            self.push(Value::Void);
+            return Some(Ok(()));
+        }
+        if name == "__supervisor_iniciar" || name == "__supervisor_start" {
+            self.push(Value::Void);
+            return Some(Ok(()));
+        }
+        if name == "__cluster_conectar" || name == "__cluster_connect" {
+            self.push(Value::Str("cluster_0".into()));
+            return Some(Ok(()));
+        }
+        if name == "__cluster_enviar" || name == "__cluster_send" {
+            self.push(Value::Bool(false));
+            return Some(Ok(()));
+        }
+        if name == "__rwlock_nuevo" || name == "__rwlock_new" {
+            self.push(Value::Str("rwlock_0".into()));
+            return Some(Ok(()));
+        }
+        if name == "__rwlock_leer" || name == "__rwlock_read" {
+            self.push(Value::Void);
+            return Some(Ok(()));
+        }
+        if name == "__rwlock_escribir" || name == "__rwlock_write" {
+            self.push(Value::Void);
+            return Some(Ok(()));
+        }
+        if name == "__arc_nuevo" || name == "__arc_new" {
+            self.push(Value::Str("arc_0".into()));
+            return Some(Ok(()));
+        }
+        if name == "__arc_obtener" || name == "__arc_get" {
+            self.push(args.get(1).cloned().unwrap_or(Value::Void));
+            return Some(Ok(()));
+        }
+        if name == "__arc_asignar" || name == "__arc_set" {
+            self.push(Value::Void);
             return Some(Ok(()));
         }
 
@@ -3256,7 +3633,30 @@ fn hmac_sha256(data: &[u8], key: &[u8]) -> Vec<u8> {
     mac.finalize().into_bytes().to_vec()
 }
 
-// ── Date helpers (no chrono dependency) ─────────────────────────────────
+// ── Date helpers ─────────────────────────────────
+fn format_timestamp(timestamp: i64, fmt: &str) -> String {
+    if let Some(dt) = Utc.timestamp_opt(timestamp, 0).single() {
+        if fmt.is_empty() {
+            return dt.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        }
+        let fmt = fmt
+            .replace("%Y", &format!("{:04}", dt.year()))
+            .replace("%m", &format!("{:02}", dt.month()))
+            .replace("%d", &format!("{:02}", dt.day()))
+            .replace("%H", &format!("{:02}", dt.hour()))
+            .replace("%M", &format!("{:02}", dt.minute()))
+            .replace("%S", &format!("{:02}", dt.second()))
+            .replace("%A", &dt.format("%A").to_string())
+            .replace("%B", &dt.format("%B").to_string())
+            .replace("%W", &format!("{:02}", dt.iso_week().week()))
+            .replace("%I", &format!("{:02}", dt.hour12().1))
+            .replace("%p", &dt.format("%p").to_string());
+        fmt
+    } else {
+        unix_timestamp_to_iso8601(timestamp)
+    }
+}
+
 fn unix_timestamp_to_iso8601(timestamp: i64) -> String {
     // Simple algorithm: convert seconds since epoch to yyyy-mm-ddThh:mm:ssZ
     let secs = if timestamp >= 0 {

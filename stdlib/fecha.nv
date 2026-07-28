@@ -9,11 +9,11 @@
 
 /// Obtener timestamp actual (segundos desde Unix epoch)
 /// Get current timestamp (seconds since Unix epoch)
-funcion texto ahora() {
+funcion numero ahora() {
     retornar __tiempo_ahora();
 }
 /// Get current timestamp (English alias)
-funcion texto now() { retornar ahora(); }
+funcion numero now() { retornar ahora(); }
 
 // ============================================================
 // FORMATEAR / FORMAT

@@ -1,0 +1,52 @@
+// ==========================================
+// coleccion_jr.nv — Collections (junior)
+// Uso: lumen run -L stdlib/ examples/jr/coleccion_jr.nv
+// ==========================================
+importar "coleccion.nv";
+
+imprimir("=== Coleccion JR: Basic Collections ===");
+
+// ── Example 1: List Sort ──
+imprimir("--- Ej 1: Ordenar Lista ---");
+lista<numero> nums = [3, 1, 4, 1, 5, 9, 2, 6];
+imprimir("original: ", nums[0], ", ", nums[1], ", ", nums[2], ", ", nums[3], ", ", nums[4], ", ", nums[5], ", ", nums[6], ", ", nums[7]);
+
+lista<numero> ordenada = coleccion_ordenar(nums);
+imprimir("ordenada: ", ordenada[0], ", ", ordenada[1], ", ", ordenada[2], ", ", ordenada[3], ", ", ordenada[4], ", ", ordenada[5], ", ", ordenada[6], ", ", ordenada[7]);
+
+// Reverse
+lista<numero> invertida = coleccion_invertir(nums);
+imprimir("invertida: ", invertida[0], ", ", invertida[1], ", ", invertida[2], ", ", invertida[3], ", ", invertida[4], ", ", invertida[5], ", ", invertida[6], ", ", invertida[7]);
+
+// First and last
+imprimir("primero: ", coleccion_primero(nums));
+imprimir("ultimo:  ", coleccion_ultimo(nums));
+imprimir("contar(1): ", coleccion_contar(nums, 1));
+
+// ── Example 2: Map (Dictionary) ──
+imprimir("--- Ej 2: Mapa (Diccionario) ---");
+sea d = coleccion_mapa_nuevo();
+d = coleccion_mapa_poner(d, "Ana", 30);
+d = coleccion_mapa_poner(d, "Luis", 25);
+d = coleccion_mapa_poner(d, "María", 28);
+
+imprimir("Ana  -> ", coleccion_mapa_obtener(d, "Ana"));
+imprimir("Luis -> ", coleccion_mapa_obtener(d, "Luis"));
+imprimir("longitud: ", coleccion_mapa_longitud(d));
+imprimir("contiene 'Ana':  ", coleccion_mapa_contiene(d, "Ana"));
+imprimir("contiene 'Juan': ", coleccion_mapa_contiene(d, "Juan"));
+
+// ── Example 3: Set (Conjunto) ──
+imprimir("--- Ej 3: Conjunto (Set) ---");
+sea s = coleccion_conjunto_nuevo();
+s = coleccion_conjunto_agregar(s, "manzana");
+s = coleccion_conjunto_agregar(s, "pera");
+s = coleccion_conjunto_agregar(s, "uva");
+// Adding duplicate (should be ignored)
+s = coleccion_conjunto_agregar(s, "manzana");
+
+imprimir("tiene 'manzana': ", coleccion_conjunto_tiene(s, "manzana"));
+imprimir("tiene 'pera':    ", coleccion_conjunto_tiene(s, "pera"));
+imprimir("tiene 'naranja': ", coleccion_conjunto_tiene(s, "naranja"));
+
+imprimir("--- FIN COLECCION JR ---");

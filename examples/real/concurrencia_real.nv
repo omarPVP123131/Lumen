@@ -1,0 +1,66 @@
+// ==========================================
+// concurrencia_real.nv — Concurrency real-world patterns
+// Uso: lumen run -L stdlib/ examples/real/concurrencia_real.nv
+// ==========================================
+
+imprimir("=== Concurrencia REAL: Worker Pool, Map-Reduce & Supervisor ===");
+
+// ── Example 1: Worker Pool (Thread pool) ──
+imprimir("--- Ej 1: Worker Pool ---");
+funcion texto task_worker(entero id) {
+    retornar "worker-" + id + "-listo";
+}
+
+// Spawn multiple workers
+texto worker_outputs = "";
+entero w = 0;
+mientras w < 3 {
+    sea h = __hilo_lanzar("task_worker", w);
+    sea r = __hilo_esperar(h);
+    si w > 0 { worker_outputs = worker_outputs + ", "; }
+    worker_outputs = worker_outputs + r;
+    w = w + 1;
+}
+imprimir("Worker pool results: ", worker_outputs);
+
+// ── Example 2: Parallel Map-Reduce ──
+imprimir("--- Ej 2: Parallel Map-Reduce ---");
+
+funcion texto procesar_item(texto item) {
+    retornar item + "_procesado";
+}
+
+sea items = ["dato1", "dato2", "dato3", "dato4"];
+sea par_results = __par_mapear(items, "procesar_item");
+imprimir("Input:         ", items);
+imprimir("Parallel map:  ", par_results);
+
+// Parallel join: run two independent tasks simultaneously
+funcion texto calcular_metricas() {
+    retornar "metricas: {cpu:45%, mem:2GB}";
+}
+funcion texto consultar_db() {
+    retornar "db: {rows:1500, latency:3ms}";
+}
+
+sea joined = __par_unir("calcular_metricas", "", "consultar_db", "");
+imprimir("Parallel join: ", joined);
+
+// ── Example 3: Supervisor Tree (Fault Tolerance) ──
+imprimir("--- Ej 3: Supervisor Tree ---");
+sea sup = __supervisor_nuevo("one-for-one");
+sea worker_actor = __actor_nuevo();
+
+__supervisor_agregar(sup, worker_actor);
+__supervisor_iniciar(sup);
+
+__actor_enviar(worker_actor, "tarea-critica");
+sea msg = __actor_recibir(worker_actor);
+imprimir("Supervised actor msg: ", msg);
+
+// Scope for structured concurrency
+sea scope = __scope_nuevo();
+sea task_id = __scope_lanzar(scope, "calcular_metricas", "");
+imprimir("Scope task launched: ", task_id);
+
+imprimir("--- FIN CONCURRENCIA REAL ---");

@@ -20,6 +20,7 @@ lumen-codegen = { path = "../lumen-codegen" }
 serde_json.workspace = true
 thiserror.workspace = true
 regex = "1"
+chrono = "0.4"
 reqwest = { version = "0.12", features = ["blocking"], optional = true }
 unicode-normalization = "0.1"
 libloading = { version = "0.8", optional = true }

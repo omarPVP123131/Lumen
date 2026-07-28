@@ -1,0 +1,51 @@
+// ==========================================
+// io_sr.nv — IO operations (senior)
+// Uso: lumen run -L stdlib/ examples/sr/io_sr.nv
+// ==========================================
+
+imprimir("=== IO SR: Chunked Reads, Buffered Writes & Serial ===");
+
+// ── Example 1: Large File Chunked Read ──
+imprimir("--- Ej 1: Chunked Read ---");
+// Create test data with many lines
+texto big_content = "";
+entero n = 0;
+mientras n < 50 {
+    big_content = big_content + "LINEA-" + (n + 1) + "\n";
+    n = n + 1;
+}
+__escritor_buffer("test_big_sr.txt", big_content);
+
+sea chunks = __stream_trozos("test_big_sr.txt", 20);
+imprimir("Big file: ", chunks.largo(), " chunks of 20 bytes");
+imprimir("First chunk bytes count: ", chunks[0].largo());
+imprimir("Last chunk bytes count:  ", chunks[chunks.largo() - 1].largo());
+
+// ── Example 2: Buffered Write ──
+imprimir("--- Ej 2: Buffered Write ---");
+funcion texto construir_csv(texto headers, texto rows) {
+    retornar headers + "\n" + rows;
+}
+
+sea csv_data = construir_csv("nombre,edad,ciudad", "Ana,28,Madrid\nLuis,35,Barcelona");
+sea write_res = __escritor_buffer("test_buffer_sr.csv", csv_data);
+imprimir("CSV write: ", write_res);
+
+sea read_back = __lector_buffer("test_buffer_sr.csv");
+imprimir("CSV has ", read_back.largo(), " lines");
+imprimir("CSV header: ", read_back[0]);
+imprimir("CSV row 1:  ", read_back[1]);
+
+// ── Example 3: Multi-file Operations ──
+imprimir("--- Ej 3: Multi-file Read ---");
+// Read multiple files and combine
+__escritor_buffer("part_a.txt", "AAA-111");
+__escritor_buffer("part_b.txt", "BBB-222");
+
+sea a = __lector_buffer("part_a.txt");
+sea b = __lector_buffer("part_b.txt");
+
+texto combined = a[0] + " + " + b[0];
+imprimir("Combined: ", combined);
+
+imprimir("--- FIN IO SR ---");
