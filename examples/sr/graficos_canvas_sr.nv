@@ -1,0 +1,94 @@
+// ==========================================
+// graficos_canvas_sr.nv — Canvas 2D (intermediate)
+// Tests: triangle math, gradient interpolation, font width calc
+// Uso: lumen run -L stdlib/ examples/sr/graficos_canvas_sr.nv
+// ==========================================
+
+imprimir("=== Graficos Canvas SR: 2D Interpolation ===");
+
+// ── Ej 1: Triangle Scanline Math ──
+// Ej 1: Triangle filling via scanline interpolation
+imprimir("--- Ej 1: Matematicas de Triangulo Relleno ---");
+// Sort 3 vertices by Y ascending
+funcion lista<entero> ordenar_vertices(entero x1, entero y1, entero x2, entero y2, entero x3, entero y3) {
+    // Bubble sort by y: swap pairs
+    entero tx;
+    entero ty;
+    si y1 > y2 {
+        tx = x1; x1 = x2; x2 = tx;
+        ty = y1; y1 = y2; y2 = ty;
+    }
+    si y2 > y3 {
+        tx = x2; x2 = x3; x3 = tx;
+        ty = y2; y2 = y3; y3 = ty;
+    }
+    si y1 > y2 {
+        tx = x1; x1 = x2; x2 = tx;
+        ty = y1; y1 = y2; y2 = ty;
+    }
+    retornar [x1, y1, x2, y2, x3, y3];
+}
+lista<entero> ord = ordenar_vertices(10, 50, 5, 10, 20, 30);
+imprimir("Triangulo: (10,50), (5,10), (20,30)");
+imprimir("Ordenado por Y: v0(", ord[0], ",", ord[1], 
+    ") v1(", ord[2], ",", ord[3], ") v2(", ord[4], ",", ord[5], ")");
+
+// ── Ej 2: Gradient Interpolation ──
+// Ej 2: Linear interpolation for gradient fills
+imprimir("--- Ej 2: Interpolacion de Gradiente ---");
+funcion entero interpolar_color(entero c1, entero c2, numero t) {
+    // c1 + (c2 - c1) * t
+    numero diff = (c2 - c1) como numero;
+    numero result = (c1 como numero) + diff * t;
+    retornar result como entero;
+}
+// Gradient from blue (0,0,255) to red (255,0,0)
+entero steps = 5;
+imprimir("Gradiente vertical: azul -> rojo en ", steps, " pasos");
+entero s = 0;
+mientras s < steps {
+    numero t = (s como numero) / ((steps - 1) como numero);
+    si steps == 1 { t = 0.0; }
+    entero cr = interpolar_color(0, 255, t);
+    entero cg = interpolar_color(0, 0, t);
+    entero cb = interpolar_color(255, 0, t);
+    imprimir("  t=", t, " -> rgb(", cr, ",", cg, ",", cb, ")");
+    s = s + 1;
+}
+// Test with more steps
+imprimir("Gradiente horizontal: verde -> amarillo");
+entero s2 = 0;
+mientras s2 < 4 {
+    numero t = (s2 como numero) / 3.0;
+    entero gr = interpolar_color(0, 255, t);
+    entero gg = interpolar_color(255, 255, t);
+    entero gb = interpolar_color(0, 0, t);
+    imprimir("  t=", t, " -> rgb(", gr, ",", gg, ",", gb, ")");
+    s2 = s2 + 1;
+}
+
+// ── Ej 3: Font Width Calculator ──
+// Ej 3: Bitmap font (5x7) text width calculation
+imprimir("--- Ej 3: Calculo de Ancho de Texto ---");
+// Each character: 5px wide + 1px spacing = 6px
+funcion entero ancho_pixeles(texto s) {
+    retornar s.largo() * 6;
+}
+lista<texto> textos = ["Hola", "LUMEN", "Canvas 2D", "12345", "!@#$%"];
+entero ti = 0;
+mientras ti < largo(textos) {
+    texto t = textos[ti];
+    imprimir("\"", t, "\" -> ", ancho_pixeles(t), "px (", t.largo(), " chars x 6)");
+    ti = ti + 1;
+}
+// Font height is always 7 pixels
+imprimir("Altura de fuente bitmap: 7px (fija)");
+// Grid layout calculation
+funcion entero columnas_caben(entero ancho_pantalla, entero padding) {
+    entero char_w = 6 + padding;
+    retornar ancho_pantalla / char_w;
+}
+imprimir("En pantalla de 640px: ~", columnas_caben(640, 1), " caracteres por linea");
+imprimir("En pantalla de 320px: ~", columnas_caben(320, 1), " caracteres por linea");
+
+imprimir("--- FIN GRAFICOS CANVAS SR ---");

@@ -1,0 +1,99 @@
+// ==========================================
+// tui_sr.nv — TUI Module (intermediate)
+// Tests: window borders, table data, menu builder
+// Uso: lumen run -L stdlib/ examples/sr/tui_sr.nv
+// ==========================================
+
+imprimir("=== TUI SR: Windows & Menus ===");
+
+// ── Ej 1: Window Border Builder ──
+// Ej 1: Draw window borders with box-drawing chars
+imprimir("--- Ej 1: Constructor de Bordes ---");
+funcion texto repetir(texto s, entero n) {
+    texto r = "";
+    entero i = 0;
+    mientras i < n { r = r + s; i = i + 1; }
+    retornar r;
+}
+funcion texto construir_ventana(texto titulo, texto contenido, entero w) {
+    // Build a bordered window as text
+    texto top = "╭" + repetir("─", w - 2) + "╮";
+    texto title_line = "│ " + titulo + repetir(" ", w - 3 - titulo.largo()) + "│";
+    texto sep = "├" + repetir("─", w - 2) + "┤";
+    texto cont_line = "│ " + contenido + repetir(" ", w - 3 - contenido.largo()) + "│";
+    texto bot = "╰" + repetir("─", w - 2) + "╯";
+    retornar top + "\n" + title_line + "\n" + sep + "\n" + cont_line + "\n" + bot;
+}
+texto win = construir_ventana("Mi App TUI", "Bienvenido a LUMEN TUI", 30);
+imprimir(win);
+imprimir("Ventana construida con ", 30, " columnas de ancho");
+
+// ── Ej 2: Table Data Formatter ──
+// Ej 2: Format tabular data with headers
+imprimir("--- Ej 2: Formateo de Tabla ---");
+funcion texto tabla_simple(lista<texto> headers, lista<lista<texto>> filas) {
+    // Calculate column widths
+    lista<entero> widths = [];
+    entero i = 0;
+    mientras i < largo(headers) {
+        widths.agregar(headers[i).largo()];
+        i = i + 1;
+    }
+    entero r = 0;
+    mientras r < largo(filas) {
+        entero c = 0;
+        mientras c < largo(filas[r]) {
+            si filas[r][c].largo() > widths[c] { widths[c] = filas[r][c].largo(); }
+            c = c + 1;
+        }
+        r = r + 1;
+    }
+    // Build table
+    texto res = "";
+    i = 0;
+    mientras i < largo(headers) {
+        res = res + headers[i] + repetir(" ", widths[i] - headers[i].largo() + 2);
+        i = i + 1;
+    }
+    res = res + "\n" + repetir("─", 30) + "\n";
+    r = 0;
+    mientras r < largo(filas) {
+        entero c = 0;
+        mientras c < largo(filas[r]) {
+            res = res + filas[r][c] + repetir(" ", widths[c] - filas[r][c].largo() + 2);
+            c = c + 1;
+        }
+        res = res + "\n";
+        r = r + 1;
+    }
+    retornar res;
+}
+lista<texto> hdrs = ["Nombre", "Edad", "Ciudad"];
+lista<lista<texto>> data = [["Ana", "25", "Madrid"], ["Luis", "30", "Bogota"], ["Eva", "22", "Lima"]];
+imprimir(tabla_simple(hdrs, data));
+
+// ── Ej 3: Menu Builder ──
+// Ej 3: Build interactive menu structure
+imprimir("--- Ej 3: Constructor de Menu ---");
+funcion texto renderizar_menu(lista<texto> opciones, entero seleccion) {
+    texto res = "";
+    entero i = 0;
+    mientras i < largo(opciones) {
+        si i == seleccion {
+            res = res + " > " + opciones[i] + " <\n";
+        } sino {
+            res = res + "   " + opciones[i] + "\n";
+        }
+        i = i + 1;
+    }
+    retornar res;
+}
+lista<texto> ops = ["Nuevo archivo", "Abrir", "Guardar", "Salir"];
+imprimir("Menu con seleccion en opcion 2:");
+imprimir(renderizar_menu(ops, 2));
+imprimir("Menu con seleccion en opcion 0:");
+imprimir(renderizar_menu(ops, 0));
+// Keyboard navigation simulation
+imprimir("Navegacion: UP=subir, DOWN=bajar, ENTER=seleccionar, q=salir");
+
+imprimir("--- FIN TUI SR ---");

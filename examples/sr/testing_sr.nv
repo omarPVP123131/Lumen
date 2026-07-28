@@ -1,0 +1,92 @@
+// ==========================================
+// testing_sr.nv — Testing Module (intermediate)
+// Tests: mock create/call/verify, test runner
+// Uso: lumen run -L stdlib/ examples/sr/testing_sr.nv
+// ==========================================
+
+imprimir("=== Testing SR: Mocks & Test Runner ===");
+
+// ── Ej 1: Mock Create and Call ──
+// Ej 1: Simple mock function tracking
+imprimir("--- Ej 1: Crear y Llamar Mock ---");
+entero mock_count = 0;
+funcion void mock_reset() {
+    mock_count = 0;
+}
+funcion void mock_incrementar() {
+    mock_count = mock_count + 1;
+}
+funcion entero mock_llamadas() {
+    retornar mock_count;
+}
+// Simulate calling a mock function 3 times
+mock_reset();
+imprimir("Mock inicializado, llamadas=", mock_llamadas());
+mock_incrementar();
+mock_incrementar();
+mock_incrementar();
+imprimir("Despues de 3 llamadas:", mock_llamadas());
+// Verify expected count
+si mock_llamadas() - 3 == 0 {
+    imprimir("  PASS: mock llamado exactamente 3 veces");
+} sino {
+    imprimir("  FAIL: se esperaban 3 llamadas, hay ", mock_llamadas());
+}
+
+// ── Ej 2: Mock with Arguments ──
+// Ej 2: Mock that records arguments
+imprimir("--- Ej 2: Mock con Argumentos ---");
+lista<entero> mock_args = [];
+funcion void mock_llamar_con(entero arg) {
+    mock_args.agregar(arg);
+}
+funcion lista<entero> mock_obtener_args() {
+    retornar mock_args;
+}
+mock_args = [];
+mock_llamar_con(10);
+mock_llamar_con(20);
+mock_llamar_con(30);
+lista<entero> args = mock_obtener_args();
+imprimir("Argumentos registrados: ", largo(args), " llamadas");
+entero ai = 0;
+mientras ai < largo(args) {
+    imprimir("  llamada ", ai, ": arg=", args[ai]);
+    ai = ai + 1;
+}
+// Verify specific argument
+si args[1] - 20 == 0 {
+    imprimir("  PASS: segunda llamada con arg=20");
+} sino {
+    imprimir("  FAIL: segunda llamada esperaba 20, obtuvo ", args[1]);
+}
+
+// ── Ej 3: Mini Test Runner ──
+// Ej 3: Run multiple tests and report results
+imprimir("--- Ej 3: Test Runner Mini ---");
+entero tests_pass = 0;
+entero tests_fail = 0;
+funcion void ejecutar_test(texto nombre, booleano resultado) {
+    si resultado {
+        imprimir("  [PASS] ", nombre);
+        tests_pass = tests_pass + 1;
+    } sino {
+        imprimir("  [FAIL] ", nombre);
+        tests_fail = tests_fail + 1;
+    }
+}
+// Run test suite
+tests_pass = 0;
+tests_fail = 0;
+ejecutar_test("suma basica", 2 + 2 - 4 == 0);
+ejecutar_test("multiplicacion", 3 * 5 - 15 == 0);
+ejecutar_test("comparacion", 10 - 5 > 0);
+ejecutar_test("valor negativo", 0 > -1);
+ejecutar_test("test que falla", 1 - 2 == 0);
+// Report
+imprimir("--- Resultados ---");
+imprimir("  Pass: ", tests_pass);
+imprimir("  Fail: ", tests_fail);
+imprimir("  Total: ", tests_pass + tests_fail);
+
+imprimir("--- FIN TESTING SR ---");

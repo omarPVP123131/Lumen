@@ -1,0 +1,103 @@
+// ==========================================
+// graficos_canvas_real.nv — Canvas 2D (real-world)
+// Tests: circle packing math, gradient palette, text layout
+// Uso: lumen run -L stdlib/ examples/real/graficos_canvas_real.nv
+// ==========================================
+
+imprimir("=== Graficos Canvas REAL: Real-World 2D ===");
+
+// ── Ej 1: Circle Packing Algorithm ──
+// Ej 1: Pack circles without overlap (math only)
+imprimir("--- Ej 1: Empaquetado de Circulos ---");
+funcion numero distancia(entero x1, entero y1, entero x2, entero y2) {
+    entero dx = x1 - x2;
+    entero dy = y1 - y2;
+    si dx < 0 { dx = -dx; }
+    si dy < 0 { dy = -dy; }
+    // Use integer sqrt approximation
+    entero sq = dx * dx + dy * dy;
+    // Integer sqrt (Newton)
+    entero root = sq;
+    si root > 1 {
+        entero prev = (root + 1) / 2;
+        mientras prev < root {
+            root = prev;
+            prev = (root + sq / root) / 2;
+        }
+    }
+    retornar root como numero;
+}
+// Test distance between circles
+lista<lista<entero>> centros = [[50, 50], [80, 50], [50, 80], [110, 50]];
+entero ci = 0;
+mientras ci < largo(centros) {
+    entero cj = ci + 1;
+    mientras cj < largo(centros) {
+        numero d = distancia(centros[ci][0], centros[ci][1], centros[cj][0], centros[cj][1]);
+        imprimir("Distancia C", ci, "->C", cj, ": ", d, " (radios suman 20)");
+        cj = cj + 1;
+    }
+    ci = ci + 1;
+}
+imprimir("Circulos no se solapan si distancia > r1+r2");
+
+// ── Ej 2: Gradient Color Palette Generator ──
+// Ej 2: Generate smooth color palette via HSL-like interpolation
+imprimir("--- Ej 2: Generador de Paleta de Colores ---");
+funcion entero interp(entero a, entero b, numero t) {
+    retornar (a como numero + (b - a) como numero * t) como entero;
+}
+// Generate 8-color palette from blue to red
+imprimir("Paleta de 8 colores (azul -> cian -> verde -> amarillo -> rojo):");
+lista<lista<entero>> paleta_ref = [[0,0,255], [0,255,255], [0,255,0], [255,255,0], [255,0,0]];
+entero colores_por_segmento = 2;
+entero pi = 0;
+mientras pi < largo(paleta_ref) - 1 {
+    entero s = 0;
+    mientras s < colores_por_segmento {
+        numero t = (s como numero) / (colores_por_segmento como numero);
+        entero cr = interp(paleta_ref[pi][0], paleta_ref[pi + 1][0], t);
+        entero cg = interp(paleta_ref[pi][1], paleta_ref[pi + 1][1], t);
+        entero cb = interp(paleta_ref[pi][2], paleta_ref[pi + 1][2], t);
+        entero idx = pi * colores_por_segmento + s + 1;
+        imprimir("  Color ", idx, ": rgb(", cr, ",", cg, ",", cb, ")");
+        s = s + 1;
+    }
+    pi = pi + 1;
+}
+
+// ── Ej 3: Text Layout Engine ──
+// Ej 3: Simple text layout with wrapping
+imprimir("--- Ej 3: Motor de Layout de Texto ---");
+funcion lista<texto> envolver_texto(texto s, entero max_chars) {
+    lista<texto> lineas = [];
+    texto actual = "";
+    entero i = 0;
+    mientras i < s.largo() {
+        actual = actual + s[i];
+        si actual.largo() > max_chars - 1 {
+            lineas.agregar(actual);
+            actual = "";
+        }
+        i = i + 1;
+    }
+    si actual.largo() > 0 {
+        lineas.agregar(actual);
+    }
+    retornar lineas;
+}
+texto parrafo = "LUMEN es un lenguaje de programacion en espanol con graficos 2D nativos";
+imprimir("Texto original: ", parrafo);
+imprimir("Ancho maximo: 20 caracteres");
+lista<texto> envuelto = envolver_texto(parrafo, 20);
+imprimir("Lineas resultantes (", largo(envuelto), "):");
+entero li = 0;
+mientras li < largo(envuelto) {
+    imprimir("  [", li, "] \"", envuelto[li], "\" (", envuelto[li].largo(), " chars)");
+    li = li + 1;
+}
+// Calculate total height (7px per line + 2px spacing)
+entero altura_total = largo(envuelto) * 9;
+imprimir("Altura total del texto: ", altura_total, "px");
+
+imprimir("--- FIN GRAFICOS CANVAS REAL ---");

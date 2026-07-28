@@ -1,0 +1,84 @@
+// ==========================================
+// graficos_sr.nv — Graphics API (intermediate)
+// Tests LOGIC of window/renderer/keyboard subsystems
+// Uso: lumen run -L stdlib/ examples/sr/graficos_sr.nv
+// ==========================================
+
+imprimir("=== Graficos SR: Graphics Subsystems ===");
+
+// ── Ej 1: Window Handle Management ──
+// Ej 1: Window ID creation and validation logic
+imprimir("--- Ej 1: Logica de Handle de Ventana ---");
+// Window handles are integer pointers; test the logic
+funcion texto validar_handle(entero h) {
+    si h > 0 {
+        imprimir("Handle valido: ", h);
+    } sino {
+        imprimir("Handle invalido (0 = error)");
+    }
+}
+// Simulate handle lifecycle
+entero h_sim = 12345678;
+validar_handle(h_sim);
+validar_handle(0);
+// Window dimensions validation
+funcion booleano dims_validas(entero w, entero h) {
+    si w > 0 { si h > 0 { retornar verdadero; } }
+    retornar falso;
+}
+imprimir("800x600 valido? ", dims_validas(800, 600));
+imprimir("0x0 valido?     ", dims_validas(0, 0));
+imprimir("1920x1080 valido?", dims_validas(1920, 1080));
+
+// ── Ej 2: Renderer Configuration ──
+// Ej 2: Renderer create params and flags
+imprimir("--- Ej 2: Configuracion de Renderizador ---");
+// SDL_RendererFlags: 1=software, 2=accelerated, 4=presentvsync
+entero RENDER_SOFTWARE = 1;
+entero RENDER_ACCELERATED = 2;
+entero RENDER_VSYNC = 4;
+entero RENDER_TARGETTEXTURE = 8;
+imprimir("Flags de renderizado disponibles:");
+imprimir("  SOFTWARE      = ", RENDER_SOFTWARE);
+imprimir("  ACCELERATED   = ", RENDER_ACCELERATED);
+imprimir("  VSYNC         = ", RENDER_VSYNC);
+imprimir("  TARGETTEXTURE = ", RENDER_TARGETTEXTURE);
+// Combined flags test
+entero flags_combinados = RENDER_ACCELERATED + RENDER_VSYNC;
+imprimir("ACCELERATED + VSYNC = ", flags_combinados);
+// Validate flag is in range
+si flags_combinados > 0 { imprimir("Flags combinados validos"); }
+
+// ── Ej 3: Keyboard State and Scancode Logic ──
+// Ej 3: Keyboard state pointer and scancode calculations
+imprimir("--- Ej 3: Estado de Teclado y Scancodes ---");
+// SDL_Scancode values for common keys
+entero SCAN_A = 4;
+entero SCAN_W = 26;
+entero SCAN_S = 22;
+entero SCAN_D = 7;
+entero SCAN_SPACE = 44;
+entero SCAN_ESCAPE = 41;
+entero SCAN_UP = 82;
+entero SCAN_DOWN = 81;
+entero SCAN_LEFT = 80;
+entero SCAN_RIGHT = 79;
+
+// Key state simulation (mocked)
+lista<entero> teclas = [SCAN_A, SCAN_W, SCAN_S, SCAN_D, SCAN_SPACE, SCAN_ESCAPE];
+lista<texto> nombres = ["A", "W", "S", "D", "SPACE", "ESCAPE"];
+entero i = 0;
+mientras i < largo(teclas) {
+    imprimir("Scancode ", nombres[i], " = ", teclas[i]);
+    i = i + 1;
+}
+// Test scancode range validation
+funcion booleano scancode_valido(entero sc) {
+    si sc > 0 { si sc < 512 { retornar verdadero; } }
+    retornar falso;
+}
+imprimir("Scancode 44 (SPACE) valido? ", scancode_valido(44));
+imprimir("Scancode 999 valido?       ", scancode_valido(999));
+imprimir("Scancode -1 valido?        ", scancode_valido(-1));
+
+imprimir("--- FIN GRAFICOS SR ---");

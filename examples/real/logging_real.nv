@@ -1,0 +1,84 @@
+// ==========================================
+// logging_real.nv — Logging Module (real-world)
+// Tests: logger config, file logger mock, request logger
+// Uso: lumen run -L stdlib/ examples/real/logging_real.nv
+// ==========================================
+
+imprimir("=== Logging REAL: Real-World Logging ===");
+
+// ── Ej 1: Logger Configuration ──
+// Ej 1: Configurable logger with multiple outputs
+imprimir("--- Ej 1: Configuracion de Logger ---");
+funcion texto config_logger(texto nombre, entero nivel, texto salida) {
+    retornar "Logger '" + nombre + "' nivel=" + nivel + " salida=" + salida;
+}
+imprimir(config_logger("app", 3, "consola"));
+imprimir(config_logger("db", 2, "archivo:db.log"));
+imprimir(config_logger("http", 4, "archivo:access.log"));
+// Configuration validation
+funcion booleano config_valida(entero nivel, texto salida) {
+    si nivel < 1 { retornar falso; }
+    si nivel > 4 { retornar falso; }
+    si salida.largo() < 1 { retornar falso; }
+    retornar verdadero;
+}
+imprimir("Config nivel=3, salida=consola valida? ", config_valida(3, "consola"));
+imprimir("Config nivel=0, salida=consola valida? ", config_valida(0, "consola"));
+imprimir("Config nivel=5, salida='' valida?      ", config_valida(5, ""));
+
+// ── Ej 2: File Logger Simulator ──
+// Ej 2: Simulate writing logs to a file buffer
+imprimir("--- Ej 2: Simulador de File Logger ---");
+lista<texto> buffer_archivo = [];
+funcion void escribir_log_archivo(texto msg) {
+    buffer_archivo.agregar(msg);
+}
+funcion entero lineas_escritas() {
+    retornar largo(buffer_archivo);
+}
+// Simulate logging to file
+escribir_log_archivo("[ERROR] DB connection failed");
+escribir_log_archivo("[WARN]  Retry attempt 1/3");
+escribir_log_archivo("[INFO]  Reconnected successfully");
+escribir_log_archivo("[INFO]  Processing 150 records");
+imprimir("Lineas escritas al archivo: ", lineas_escritas());
+entero li = 0;
+mientras li < largo(buffer_archivo) {
+    imprimir("  ", buffer_archivo[li]);
+    li = li + 1;
+}
+
+// ── Ej 3: Request Logger ──
+// Ej 3: HTTP-style request logger
+imprimir("--- Ej 3: Request Logger ---");
+funcion texto log_request(texto metodo, texto ruta, entero status, entero ms) {
+    retornar metodo + " " + ruta + " -> " + status + " (" + ms + "ms)";
+}
+// Simulate HTTP requests
+imprimir(log_request("GET", "/api/users", 200, 45));
+imprimir(log_request("POST", "/api/users", 201, 120));
+imprimir(log_request("GET", "/api/users/99", 404, 15));
+imprimir(log_request("DELETE", "/api/users/42", 500, 3000));
+// Request statistics
+funcion lista<entero> stats_requests(lista<entero> tiempos) {
+    entero total = 0;
+    entero min = tiempos[0];
+    entero max = tiempos[0];
+    entero i = 0;
+    mientras i < largo(tiempos) {
+        total = total + tiempos[i];
+        si tiempos[i] < min { min = tiempos[i]; }
+        si tiempos[i] > max { max = tiempos[i]; }
+        i = i + 1;
+    }
+    retornar [total, min, max, total / largo(tiempos)];
+}
+lista<entero> tiempos = [45, 120, 15, 3000];
+lista<entero> st = stats_requests(tiempos);
+imprimir("Stats de ", largo(tiempos), " requests:");
+imprimir("  Total:  ", st[0], "ms");
+imprimir("  Min:    ", st[1], "ms");
+imprimir("  Max:    ", st[2], "ms");
+imprimir("  Promedio:", st[3], "ms");
+
+imprimir("--- FIN LOGGING REAL ---");

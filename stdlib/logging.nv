@@ -1,57 +1,50 @@
-/// Módulo de logging para LÚMEN
-/// Uso: importar "logging.nv";
-///       logging_info("mensaje");
-///       logging_error("error");
+// Modulo de logging para LUMEN
+// Logging module for LUMEN - dual ES/EN API
+// Uso: importar "logging.nv"
 
-/// Niveles de logging
-const NIVEL_ERROR = 1;
-const NIVEL_WARN = 2;
-const NIVEL_INFO = 3;
-const NIVEL_DEBUG = 4;
+// Niveles de logging / Logging levels
+entero LOG_ERROR = 1;
+entero LOG_WARN = 2;
+entero LOG_INFO = 3;
+entero LOG_DEBUG = 4;
 
-/// Nivel global de logging (cambiar según necesidad)
-entero nivel_log = NIVEL_INFO;
+// Nivel global de logging / Global logging level
+entero nivel_log = LOG_INFO;
 
-/// Registra un mensaje de error
-funcion void error(texto msg) {
-    si nivel_log >= NIVEL_ERROR {
+// Registra un mensaje de error / Log an error message
+funcion void log_error(texto msg) {
+    si !(nivel_log < LOG_ERROR) {
         imprimir("[ERROR] ", msg);
     }
 }
-funcion void error(string msg) { error(msg); }
 
-/// Registra una advertencia
-funcion void advertencia(texto msg) {
-    si nivel_log >= NIVEL_WARN {
+// Registra una advertencia / Log a warning
+funcion void log_warn(texto msg) {
+    si !(nivel_log < LOG_WARN) {
         imprimir("[WARN]  ", msg);
     }
 }
-funcion void warn(string msg) { advertencia(msg); }
 
-/// Registra un mensaje informativo
-funcion void info(texto msg) {
-    si nivel_log >= NIVEL_INFO {
+// Registra un mensaje informativo / Log an info message
+funcion void log_info(texto msg) {
+    si !(nivel_log < LOG_INFO) {
         imprimir("[INFO]  ", msg);
     }
 }
-funcion void info(string msg) { info(msg); }
 
-/// Registra un mensaje de debug
-funcion void debug(texto msg) {
-    si nivel_log >= NIVEL_DEBUG {
+// Registra un mensaje de debug / Log a debug message
+funcion void log_debug(texto msg) {
+    si !(nivel_log < LOG_DEBUG) {
         imprimir("[DEBUG] ", msg);
     }
 }
-funcion void debug(string msg) { debug(msg); }
 
-/// Establece el nivel de logging
+// Establece el nivel de logging / Set the logging level
 funcion void establecer_nivel(entero n) {
     nivel_log = n;
 }
-funcion void set_level(integer n) { establecer_nivel(n); }
 
-/// Formatea y registra un mensaje con formato
-funcion void formato(texto fmt, texto a1) {
-    info(fmt + a1);
+// Obtiene el nivel actual / Get current level
+funcion entero obtener_nivel() {
+    retornar nivel_log;
 }
-funcion void format(string fmt, string a1) { formato(fmt, a1); }

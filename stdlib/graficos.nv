@@ -99,10 +99,10 @@ funcion entero __i32_le(entero val, entero buf, entero off) {
     entero o1 = off + 1;
     entero o2 = off + 2;
     entero o3 = off + 3;
-    __ffi_poke(buf, o0, val & 255);
-    __ffi_poke(buf, o1, (val >> 8) & 255);
-    __ffi_poke(buf, o2, (val >> 16) & 255);
-    __ffi_poke(buf, o3, (val >> 24) & 255);
+    __ffi_poke(buf, o0, val && 255);
+    __ffi_poke(buf, o1, (val >> 8) && 255);
+    __ffi_poke(buf, o2, (val >> 16) && 255);
+    __ffi_poke(buf, o3, (val >> 24) && 255);
     retornar 0;
 }
 

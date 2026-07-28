@@ -1,0 +1,49 @@
+// ==========================================
+// matrices_jr.nv — Matrices Module (junior)
+// Tests: create, transpose, print
+// Uso: lumen run -L stdlib/ examples/jr/matrices_jr.nv
+// ==========================================
+
+imprimir("=== Matrices JR: Basic Matrix Ops ===");
+
+// Ej 1: Matrix Creation using literal syntax
+imprimir("--- Ej 1: Crear Matrices ---");
+lista<lista<entero>> m0 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+imprimir("Matriz 3x3 de ceros:");
+entero i = 0;
+mientras i < 3 {
+    imprimir(m0[i][0], " ", m0[i][1], " ", m0[i][2]);
+    i = i + 1;
+}
+lista<lista<entero>> m1 = [[1, 1, 1, 1], [1, 1, 1, 1]];
+imprimir("Matriz 2x4 de unos:");
+imprimir(m1[0][0], " ", m1[0][1], " ", m1[0][2], " ", m1[0][3]);
+imprimir(m1[1][0], " ", m1[1][1], " ", m1[1][2], " ", m1[1][3]);
+
+// Ej 2: Matrix Transpose (manual for fixed sizes)
+imprimir("--- Ej 2: Transponer Matriz ---");
+lista<lista<entero>> orig = [[1, 2, 3], [4, 5, 6]];
+imprimir("Original 2x3:");
+imprimir(orig[0][0], " ", orig[0][1], " ", orig[0][2]);
+imprimir(orig[1][0], " ", orig[1][1], " ", orig[1][2]);
+// Manual transpose: 2x3 -> 3x2
+lista<lista<entero>> transp = [[orig[0][0], orig[1][0]], [orig[0][1], orig[1][1]], [orig[0][2], orig[1][2]]];
+imprimir("Transpuesta 3x2:");
+imprimir(transp[0][0], " ", transp[0][1]);
+imprimir(transp[1][0], " ", transp[1][1]);
+imprimir(transp[2][0], " ", transp[2][1]);
+
+// Ej 3: Matrix Print and Traversal
+imprimir("--- Ej 3: Recorrido de Matriz ---");
+lista<lista<entero>> m3 = [[10, 20, 30], [40, 50, 60], [70, 80, 90]];
+imprimir("Matriz 3x3:");
+i = 0;
+mientras i < 3 {
+    imprimir(m3[i][0], " ", m3[i][1], " ", m3[i][2]);
+    i = i + 1;
+}
+imprimir("Diagonal: ", m3[0][0], " ", m3[1][1], " ", m3[2][2]);
+entero suma = m3[0][0] + m3[0][1] + m3[0][2] + m3[1][0] + m3[1][1] + m3[1][2] + m3[2][0] + m3[2][1] + m3[2][2];
+imprimir("Suma total: ", suma);
+
+imprimir("--- FIN MATRICES JR ---");

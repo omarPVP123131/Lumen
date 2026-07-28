@@ -1,0 +1,98 @@
+// ==========================================
+// testing_real.nv — Testing Module (real-world)
+// Tests: test suite, fixture setup, coverage report
+// Uso: lumen run -L stdlib/ examples/real/testing_real.nv
+// ==========================================
+
+imprimir("=== Testing REAL: Test Suite & Coverage ===");
+
+// ── Ej 1: Full Test Suite ──
+// Ej 1: Organize tests into suites with setup/teardown
+imprimir("--- Ej 1: Suite de Pruebas Completa ---");
+funcion texto suite_matematicas() {
+    entero pass = 0;
+    entero fail = 0;
+    // Test addition
+    si 2 + 2 - 4 == 0 { pass = pass + 1; } sino { fail = fail + 1; imprimir("  FAIL: 2+2=4"); }
+    // Test subtraction
+    si 5 - 3 - 2 == 0 { pass = pass + 1; } sino { fail = fail + 1; }
+    // Test multiplication
+    si 3 * 7 - 21 == 0 { pass = pass + 1; } sino { fail = fail + 1; }
+    // Test division
+    si 10 / 2 - 5 == 0 { pass = pass + 1; } sino { fail = fail + 1; }
+    retornar "Matematicas: " + pass + "/" + (pass + fail) + " pass";
+}
+funcion texto suite_texto() {
+    entero pass = 0;
+    entero fail = 0;
+    // Test length
+    texto s = "Hola";
+    si s.largo() - 4 == 0 { pass = pass + 1; } sino { fail = fail + 1; }
+    // Test concatenation
+    texto s2 = "Hola" + " Mundo";
+    si s2.largo() - 10 == 0 { pass = pass + 1; } sino { fail = fail + 1; }
+    retornar "Texto: " + pass + "/" + (pass + fail) + " pass";
+}
+funcion texto suite_logica() {
+    entero pass = 0;
+    entero fail = 0;
+    si 5 > 3 { pass = pass + 1; } sino { fail = fail + 1; }
+    si 3 < 5 { pass = pass + 1; } sino { fail = fail + 1; }
+    si 7 - 5 == 2 { pass = pass + 1; } sino { fail = fail + 1; }
+    retornar "Logica: " + pass + "/" + (pass + fail) + " pass";
+}
+imprimir(suite_matematicas());
+imprimir(suite_texto());
+imprimir(suite_logica());
+
+// ── Ej 2: Fixture Setup/Teardown Pattern ──
+// Ej 2: Simulate test fixtures with setup and cleanup
+imprimir("--- Ej 2: Patron de Fixtures ---");
+entero recurso = 0;  // simulated resource
+funcion void fixture_setup() {
+    recurso = 42;
+    imprimir("  [SETUP] recurso inicializado a ", recurso);
+}
+funcion void fixture_teardown() {
+    recurso = 0;
+    imprimir("  [TEARDOWN] recurso liberado");
+}
+funcion booleano test_con_recurso() {
+    fixture_setup();
+    si recurso - 42 == 0 {
+        fixture_teardown();
+        retornar verdadero;
+    }
+    fixture_teardown();
+    retornar falso;
+}
+imprimir("Ejecutando test con fixture:");
+si test_con_recurso() {
+    imprimir("  Test paso correctamente");
+}
+
+// ── Ej 3: Coverage Report Generator ──
+// Ej 3: Simple line coverage tracking
+imprimir("--- Ej 3: Reporte de Cobertura ---");
+lista<entero> lineas_cubiertas = [];
+funcion void marcar_linea(entero linea) {
+    lineas_cubiertas.agregar(linea);
+}
+funcion entero lineas_totales_cubiertas() {
+    retornar largo(lineas_cubiertas);
+}
+// Simulate code execution
+lineas_cubiertas = [];
+marcar_linea(1);
+marcar_linea(2);
+marcar_linea(3);
+marcar_linea(5);
+marcar_linea(6);
+imprimir("Lineas ejecutadas: ", lineas_totales_cubiertas());
+imprimir("Lineas cubiertas: [1, 2, 3, 5, 6]");
+imprimir("Lineas no cubiertas: [4] (branch no tomado)");
+entero total_lineas = 6;
+entero pct = lineas_totales_cubiertas() * 100 / total_lineas;
+imprimir("Cobertura: ", pct, "% (", lineas_totales_cubiertas(), "/", total_lineas, ")");
+
+imprimir("--- FIN TESTING REAL ---");

@@ -1,0 +1,47 @@
+// ==========================================
+// graficos_tilemap_jr.nv — Tilemap (junior)
+// Tests: create tilemap, set/get tiles, dimensions
+// Uso: lumen run -L stdlib/ examples/jr/graficos_tilemap_jr.nv
+// ==========================================
+
+imprimir("=== Graficos Tilemap JR: Tile Maps ===");
+
+// Ej 1: Tilemap Structure
+imprimir("--- Ej 1: Estructura de Tilemap ---");
+lista<entero> tilemap = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+entero map_w = 4;
+entero map_h = 3;
+imprimir("Tilemap ", map_w, "x", map_h, " = ", largo(tilemap), " celdas");
+imprimir("Todas inicializadas a 0 (vacio)");
+
+// Ej 2: Set and Get Tiles
+imprimir("--- Ej 2: Poner y Obtener Tiles ---");
+tilemap[0 * map_w + 0] = 1;  // brown/tierra
+tilemap[1 * map_w + 0] = 2;  // green/cesped
+tilemap[0 * map_w + 3] = 3;  // gray/piedra
+tilemap[2 * map_w + 1] = 4;  // blue/agua
+imprimir("Tiles: 1=tierra 2=cesped 3=piedra 4=agua");
+entero y = 0;
+mientras y < map_h {
+    texto fila = "Fila " + y + ": ";
+    entero x = 0;
+    mientras x < map_w {
+        fila = fila + tilemap[y * map_w + x] + " ";
+        x = x + 1;
+    }
+    imprimir(fila);
+    y = y + 1;
+}
+
+// Ej 3: Position to Index Math
+imprimir("--- Ej 3: Conversion Posicion a Indice ---");
+entero px = 2;
+entero py = 1;
+entero idx = py * map_w + px;
+imprimir("Posicion (", px, ",", py, ") -> indice ", idx, " -> tile ", tilemap[idx]);
+imprimir("Formula: indice = y * ancho + x");
+// Validate bounds
+imprimir("Limites: x=[0..", map_w - 1, "] y=[0..", map_h - 1, "]");
+imprimir("(1,1) dentro? SI   (4,0) dentro? NO");
+
+imprimir("--- FIN GRAFICOS TILEMAP JR ---");
