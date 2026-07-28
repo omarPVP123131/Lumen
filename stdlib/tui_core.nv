@@ -1,0 +1,222 @@
+// tui_core.nv — Terminal FFI cross-platform (Windows/Linux/macOS)
+// Raw mode, teclas, tamaño, escritura stdout — vía FFI directo al OS
+// No usa builtins de Rust. Usa bitwise ops (& | ~ ^ << >>) y __str_ord.
+
+cualquiera _sys_lib = ninguno;
+entero _is_windows = -1;
+
+funcion booleano _cargar() {
+    si __tipo_de(_sys_lib) == "texto" { retornar verdadero; }
+    _sys_lib = __ffi_cargar("kernel32.dll");
+    si __tipo_de(_sys_lib) == "texto" { _is_windows = 1; retornar verdadero; }
+    _sys_lib = __ffi_cargar("libc.so.6");
+    si __tipo_de(_sys_lib) == "texto" { _is_windows = 0; retornar verdadero; }
+    _sys_lib = __ffi_cargar("libSystem.dylib");
+    si __tipo_de(_sys_lib) == "texto" { _is_windows = 0; retornar verdadero; }
+    retornar falso;
+}
+
+funcion entero _leer_dword(entero buf) {
+    entero b0 = __ffi_peek(buf, 0);
+    entero b1 = __ffi_peek(buf, 1);
+    entero b2 = __ffi_peek(buf, 2);
+    entero b3 = __ffi_peek(buf, 3);
+    retornar b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+
+funcion entero _leer_word(entero buf, entero off) {
+    entero b0 = __ffi_peek(buf, off);
+    entero b1 = __ffi_peek(buf, off + 1);
+    retornar b0 | (b1 << 8);
+}
+
+// ============================================================
+// RAW MODE
+// ============================================================
+
+funcion booleano _tc_raw(booleano enable) {
+    si !_cargar() { retornar falso; }
+    si _is_windows == 1 {
+        entero hOut = __ffi_llamar(_sys_lib, "GetStdHandle", "entero", [-11], "entero");
+        entero mode = 3; // ENABLE_PROCESSED_OUTPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT
+        si enable { mode = 7; } // + ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        retornar __ffi_llamar(_sys_lib, "SetConsoleMode", "entero,entero", [hOut, mode], "entero") == 0;
+    } sino {
+        entero term = __ffi_asignar(60);
+        entero rc = __ffi_llamar(_sys_lib, "tcgetattr", "entero,entero", [0, term], "entero");
+        si rc == 0 {
+            si enable { __ffi_llamar(_sys_lib, "cfmakeraw", "entero", [term], "void"); }
+            rc = __ffi_llamar(_sys_lib, "tcsetattr", "entero,entero,entero", [0, 0, term], "entero");
+        }
+        __ffi_liberar(term, 60);
+        retornar rc == 0;
+    }
+}
+
+// ============================================================
+// TAMAÑO
+// ============================================================
+
+funcion lista<entero> _tc_size() {
+    si !_cargar() { retornar [80, 24]; }
+    si _is_windows == 1 {
+        entero hOut = __ffi_llamar(_sys_lib, "GetStdHandle", "entero", [-11], "entero");
+        entero buf = __ffi_asignar(24);
+        entero rc = __ffi_llamar(_sys_lib, "GetConsoleScreenBufferInfo", "entero,entero", [hOut, buf], "entero");
+        si rc == 0 {
+            entero w = _leer_word(buf, 4);
+            entero h = _leer_word(buf, 6);
+            __ffi_liberar(buf, 24);
+            retornar [w, h];
+        }
+        __ffi_liberar(buf, 24);
+        retornar [80, 24];
+    } sino {
+        entero buf = __ffi_asignar(8);
+        entero rc = __ffi_llamar(_sys_lib, "ioctl", "entero,entero,entero", [0, 21523, buf], "entero");
+        si rc == 0 {
+            entero h = _leer_word(buf, 0);
+            entero w = _leer_word(buf, 2);
+            __ffi_liberar(buf, 8);
+            retornar [w, h];
+        }
+        __ffi_liberar(buf, 8);
+        retornar [80, 24];
+    }
+}
+
+// ============================================================
+// ESCRITURA
+// ============================================================
+
+funcion booleano _tc_write(texto s) {
+    si !_cargar() { retornar falso; }
+    entero len = s.largo();
+    entero buf = __ffi_asignar(len);
+    __ffi_escribir(buf, 0, s);
+    entero rc = -1;
+    si _is_windows == 1 {
+        entero h = __ffi_llamar(_sys_lib, "GetStdHandle", "entero", [-11], "entero");
+        entero wbuf = __ffi_asignar(4);
+        rc = __ffi_llamar(_sys_lib, "WriteConsoleA", "entero,entero,entero,entero,entero", [h, buf, len, wbuf, 0], "entero");
+        __ffi_liberar(wbuf, 4);
+    } sino {
+        rc = __ffi_llamar(_sys_lib, "write", "entero,entero,entero", [1, buf, len], "entero");
+    }
+    __ffi_liberar(buf, len);
+    retornar rc == 0;
+}
+
+funcion booleano _tc_escribir(texto s, entero x, entero y) {
+    retornar _tc_write("\033[" + (y + 1) + ";" + (x + 1) + "H" + s);
+}
+
+funcion booleano _tc_limpiar() {
+    retornar _tc_write("\033[2J\033[H");
+}
+
+funcion booleano _tc_color(texto fg, texto bg) {
+    texto ansi = "\033[0m";
+    si fg == "rojo" || fg == "red" { ansi = "\033[31m"; }
+    sino si fg == "verde" || fg == "green" { ansi = "\033[32m"; }
+    sino si fg == "amarillo" || fg == "yellow" { ansi = "\033[33m"; }
+    sino si fg == "azul" || fg == "blue" { ansi = "\033[34m"; }
+    sino si fg == "magenta" || fg == "purple" { ansi = "\033[35m"; }
+    sino si fg == "cyan" { ansi = "\033[36m"; }
+    sino si fg == "blanco" || fg == "white" { ansi = "\033[37m"; }
+    si bg == "rojo" || bg == "red" { ansi = ansi + "\033[41m"; }
+    sino si bg == "verde" || bg == "green" { ansi = ansi + "\033[42m"; }
+    sino si bg == "azul" || bg == "blue" { ansi = ansi + "\033[44m"; }
+    sino si bg == "magenta" || bg == "purple" { ansi = ansi + "\033[45m"; }
+    sino si bg == "cyan" { ansi = ansi + "\033[46m"; }
+    sino si bg == "blanco" || bg == "white" { ansi = ansi + "\033[47m"; }
+    retornar _tc_write(ansi);
+}
+
+// ============================================================
+// LECTURA DE TECLAS
+// ============================================================
+
+funcion texto _tc_fmt_hex(entero n) {
+    texto chars = "0123456789abcdef";
+    retornar chars[(n >> 4) & 15] + chars[n & 15];
+}
+
+funcion texto _tc_leer_byte() {
+    si !_cargar() { retornar ""; }
+    si _is_windows == 1 {
+        entero hIn = __ffi_llamar(_sys_lib, "GetStdHandle", "entero", [-10], "entero");
+        entero buf = __ffi_asignar(24);
+        entero cnt = __ffi_asignar(4);
+        entero rc = __ffi_llamar(_sys_lib, "ReadConsoleInputW", "entero,entero,entero,entero", [hIn, buf, 1, cnt], "entero");
+        si rc != 0 && _leer_word(buf, 0) == 1 {
+            entero key_down = __ffi_peek(buf, 4);
+            entero vk = _leer_word(buf, 8);
+            entero uni = _leer_word(buf, 12);
+            __ffi_liberar(cnt, 4);
+            __ffi_liberar(buf, 24);
+            si key_down == 0 { retornar ""; }
+            si uni > 0 && uni < 256 { retornar __str_from(uni); }
+            si vk == 37 { retornar "LEFT"; } sino si vk == 38 { retornar "UP"; }
+            si vk == 39 { retornar "RIGHT"; } sino si vk == 40 { retornar "DOWN"; }
+            si vk == 33 { retornar "PGUP"; } sino si vk == 34 { retornar "PGDN"; }
+            si vk == 36 { retornar "HOME"; } sino si vk == 35 { retornar "END"; }
+            si vk == 27 { retornar "ESC"; } sino si vk == 13 { retornar "\n"; }
+            si vk == 8 { retornar "BACKSPACE"; } sino si vk == 9 { retornar "\t"; }
+            si vk == 46 { retornar "DEL"; } sino si vk == 45 { retornar "INS"; }
+            si vk >= 112 && vk <= 135 { retornar "F" + (vk - 111); }
+        }
+        __ffi_liberar(cnt, 4);
+        __ffi_liberar(buf, 24);
+        retornar "";
+    } sino {
+        // Unix: read one byte, parse escape sequences
+        entero buf = __ffi_asignar(8);
+        entero rc = __ffi_llamar(_sys_lib, "read", "entero,entero,entero", [0, buf, 1], "entero");
+        si rc <= 0 { __ffi_liberar(buf, 8); retornar ""; }
+        entero b = __ffi_peek(buf, 0);
+        __ffi_liberar(buf, 8);
+        si b == 27 {
+            entero buf2 = __ffi_asignar(8);
+            entero rc2 = __ffi_llamar(_sys_lib, "read", "entero,entero,entero", [0, buf2, 1], "entero");
+            si rc2 <= 0 { __ffi_liberar(buf2, 8); retornar "ESC"; }
+            entero b2 = __ffi_peek(buf2, 0);
+            si b2 == 79 { // ESC O
+                entero b3 = 0; __ffi_llamar(_sys_lib, "read", "entero,entero,entero", [0, buf2, 1], "entero");
+                b3 = __ffi_peek(buf2, 0);
+                __ffi_liberar(buf2, 8);
+                retornar "F" + (b3 - 80 + 1); // F1-F4: OP-OQ-OR-OS
+            }
+            si b2 == 91 { // ESC [
+                texto seq = "";
+                mientras verdadero {
+                    entero b3 = 0;
+                    entero rc3 = __ffi_llamar(_sys_lib, "read", "entero,entero,entero", [0, buf2, 1], "entero");
+                    si rc3 <= 0 { romper; }
+                    b3 = __ffi_peek(buf2, 0);
+                    si b3 >= 65 && b3 <= 90 { // A-Z = end of sequence
+                        seq = seq + __str_from(b3);
+                        romper;
+                    }
+                    si b3 >= 48 && b3 <= 57 { seq = seq + __str_from(b3); }
+                    sino si b3 == 126 { seq = seq + "~"; romper; }
+                    sino { romper; }
+                }
+                __ffi_liberar(buf2, 8);
+                si seq == "A" { retornar "UP"; } sino si seq == "B" { retornar "DOWN"; }
+                si seq == "C" { retornar "RIGHT"; } sino si seq == "D" { retornar "LEFT"; }
+                si seq == "H" { retornar "HOME"; } sino si seq == "F" { retornar "END"; }
+                si seq == "2~" { retornar "INS"; } sino si seq == "3~" { retornar "DEL"; }
+                si seq == "5~" { retornar "PGUP"; } sino si seq == "6~" { retornar "PGDN"; }
+                si seq == "Z" { retornar "\t"; }
+                retornar seq;
+            }
+            __ffi_liberar(buf2, 8);
+            retornar "ESC";
+        }
+        si b == 10 || b == 13 { retornar "\n"; }
+        si b == 9 { retornar "\t"; }
+        si b == 127 { retornar "BACKSPACE"; }
+        retornar __str_from(b);
+    }
+}

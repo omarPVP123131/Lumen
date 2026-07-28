@@ -1,0 +1,16 @@
+// Ejemplo TUI Básico (Fase 152-153)
+// Uso: lumen run examples/tui_jr.nv
+imprimir("=== TUI Básico ===");
+sea tui_ok = __tui_iniciar();
+imprimir("init: ", tui_ok);
+
+sea w = __tui_ventana("Mi Ventana", "Hola Lumen TUI!", verdadero);
+imprimir("window: ", w);
+sea r = __tui_dibujar();
+imprimir("render: ", r);
+
+sea k = __tui_tecla();
+imprimir("key: ", k);
+
+sea c = __tui_cerrar();
+imprimir("close: ", c);

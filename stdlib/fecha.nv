@@ -1,8 +1,52 @@
-// Módulo fecha — funciones para tiempo y fechas
-// Uso: importar "fecha.nv"
-// Las funciones se importan con prefijo fecha_
+/// Módulo fecha — funciones para tiempo y fechas
+/// Date module — timestamps, formatting, parsing, differences
+/// Uso: importar "fecha.nv"
+/// Todas las funciones tienen alias en inglés / All functions have English aliases
 
-// Obtener timestamp actual (segundos desde Unix epoch)
+// ============================================================
+// AHORA / NOW
+// ============================================================
+
+/// Obtener timestamp actual (segundos desde Unix epoch)
+/// Get current timestamp (seconds since Unix epoch)
 funcion texto ahora() {
     retornar __tiempo_ahora();
 }
+/// Get current timestamp (English alias)
+funcion texto now() { retornar ahora(); }
+
+// ============================================================
+// FORMATEAR / FORMAT
+// ============================================================
+
+/// Formatea un timestamp Unix como texto ISO 8601
+/// Format a Unix timestamp as ISO 8601 string
+funcion texto formatear(numero timestamp, texto formato) {
+    retornar __tiempo_formatear(timestamp, formato);
+}
+/// Format a Unix timestamp (English alias)
+funcion texto format(numero timestamp, texto format_str) { retornar formatear(timestamp, format_str); }
+
+// ============================================================
+// PARSEAR / PARSE
+// ============================================================
+
+/// Convierte un texto de fecha ISO 8601 a timestamp Unix
+/// Parse an ISO 8601 date string to Unix timestamp
+funcion entero parsear(texto fecha, texto formato) {
+    retornar __tiempo_parsear(fecha, formato);
+}
+/// Parse a date string to Unix timestamp (English alias)
+funcion entero parse(texto date, texto format_str) { retornar parsear(date, format_str); }
+
+// ============================================================
+// DIFERENCIA / DIFF
+// ============================================================
+
+/// Calcula la diferencia en segundos entre dos timestamps
+/// Calculate the difference in seconds between two timestamps
+funcion entero diferencia(numero t1, numero t2) {
+    retornar __tiempo_diferencia(t1, t2);
+}
+/// Calculate the difference between two timestamps (English alias)
+funcion entero diff(numero t1, numero t2) { retornar diferencia(t1, t2); }

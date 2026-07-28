@@ -1,0 +1,100 @@
+// Módulo testing — aserciones en LÚMEN puro
+// Testing module — pure LÚMEN, dual ES/EN API
+// Uso: importar "testing.nv"
+
+funcion booleano afirmar_verdadero(cualquiera val) {
+    si val == verdadero {
+        retornar verdadero;
+    } sino {
+        imprimir("ERROR: afirmar_verdadero falló - el valor no es verdadero");
+        retornar falso;
+    }
+}
+funcion booleano assert_true(cualquiera val) { retornar afirmar_verdadero(val); }
+
+funcion booleano afirmar_igual(cualquiera a, cualquiera b) {
+    si a == b {
+        retornar verdadero;
+    } sino {
+        imprimir("ERROR: afirmar_igual falló - ", a, " != ", b);
+        retornar falso;
+    }
+}
+funcion booleano assert_eq(cualquiera a, cualquiera b) { retornar afirmar_igual(a, b); }
+
+funcion booleano afirmar_distinto(cualquiera a, cualquiera b) {
+    si a != b {
+        retornar verdadero;
+    } sino {
+        imprimir("ERROR: afirmar_distinto falló - ", a, " == ", b);
+        retornar falso;
+    }
+}
+funcion booleano assert_neq(cualquiera a, cualquiera b) { retornar afirmar_distinto(a, b); }
+
+// ============================================================
+// MOCK — contador de llamadas en LÚMEN puro
+// ============================================================
+
+cualquiera __mock_registro = __map_nuevo();
+entero __mock_next_id = 0;
+
+funcion entero mock_crear(texto nombre) {
+    entero id = __mock_next_id;
+    __mock_registro = __map_poner(__mock_registro, id, __map_nuevo());
+    __mock_registro = __map_poner(__mock_registro, nombre, id);
+    __mock_next_id = __mock_next_id + 1;
+    retornar id;
+}
+funcion entero mock_new(texto name) { retornar mock_crear(name); }
+
+funcion cualquiera mock_llamar(entero id) {
+    cualquiera m = __map_obtener(__mock_registro, id);
+    cualquiera count = __map_obtener(m, "count");
+    entero c = 0;
+    si count != ninguno { c = count; }
+    m = __map_poner(m, "count", c + 1);
+    __mock_registro = __map_poner(__mock_registro, id, m);
+    retornar c + 1;
+}
+funcion cualquiera mock_call(entero id) { retornar mock_llamar(id); }
+
+funcion booleano mock_verificar(entero id, entero esperado) {
+    cualquiera m = __map_obtener(__mock_registro, id);
+    cualquiera count = __map_obtener(m, "count");
+    entero c = 0;
+    si count != ninguno { c = count; }
+    retornar c == esperado;
+}
+funcion booleano mock_verify(entero id, entero expected) { retornar mock_verificar(id, expected); }
+
+// ============================================================
+// COBERTURA / COVERAGE — tracking de hits en LÚMEN puro
+// ============================================================
+
+cualquiera __cov_registro = __map_nuevo();
+entero __cov_next_id = 0;
+
+funcion entero coverage_iniciar() {
+    entero id = __cov_next_id;
+    __cov_registro = __map_poner(__cov_registro, id, __map_nuevo());
+    __cov_next_id = __cov_next_id + 1;
+    retornar id;
+}
+funcion entero coverage_start() { retornar coverage_iniciar(); }
+
+funcion entero coverage_marcar(entero id, entero linea) {
+    cualquiera m = __map_obtener(__cov_registro, id);
+    cualquiera hits = __map_obtener(m, linea);
+    entero h = 0;
+    si hits != ninguno { h = hits; }
+    m = __map_poner(m, linea, h + 1);
+    __cov_registro = __map_poner(__cov_registro, id, m);
+    retornar h + 1;
+}
+funcion entero coverage_mark(entero id, entero line) { retornar coverage_marcar(id, line); }
+
+funcion cualquiera coverage_reporte(entero id) {
+    retornar __map_obtener(__cov_registro, id);
+}
+funcion cualquiera coverage_report(entero id) { retornar coverage_reporte(id); }

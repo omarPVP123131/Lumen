@@ -8,6 +8,10 @@ repository.workspace = true
 description = "Máquina virtual stack-based para el lenguaje LÚMEN — ejecuta bytecode .nvc"
 keywords = ["lumen", "language", "vm", "virtual-machine", "educational"]
 
+[features]
+default = ["full"]
+full = ["reqwest", "libloading", "base64", "hmac", "sha2"]
+
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("full"))'] }
 
@@ -16,8 +20,12 @@ lumen-codegen = { path = "../lumen-codegen" }
 serde_json.workspace = true
 thiserror.workspace = true
 regex = "1"
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking"], optional = true }
 unicode-normalization = "0.1"
+libloading = { version = "0.8", optional = true }
+base64 = { version = "0.22", optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
 
 [dev-dependencies]
 lumen-lexer = { path = "../lumen-lexer" }

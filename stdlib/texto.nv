@@ -1,68 +1,148 @@
-// Módulo texto — funciones para manipulación de strings
-// Uso: importar "texto.nv"
+/// Módulo texto — funciones para manipulación de strings
+/// Text module — string manipulation, regex, unicode, encoding
+/// Uso: importar "texto.nv"
+/// Todas las funciones tienen alias en inglés / All functions have English aliases
 
-// --- Básico ---
+// ============================================================
+// TIPO_DE / TYPEOF
+// ============================================================
 
+/// Obtiene el tipo de un valor como texto ("entero", "texto", "lista", ...)
+/// Get the type of a value as string ("integer", "string", "list", ...)
+funcion texto tipo_de<T>(T valor) {
+    retornar __tipo_de(valor);
+}
+/// Get the type of a value (English alias)
+funcion texto typeof<T>(T value) { retornar tipo_de(value); }
+
+// ============================================================
+// BÁSICO / BASIC
+// ============================================================
+
+/// Retorna la longitud de un texto
+/// Return the length of a string
 funcion entero longitud(texto s) {
     retornar __str_longitud(s);
 }
+/// Return the length of a string (English alias)
+funcion entero length(texto s) { retornar longitud(s); }
 
+/// Convierte un texto a mayúsculas
+/// Convert a string to uppercase
 funcion texto mayusculas(texto s) {
     retornar __str_mayusculas(s);
 }
+/// Convert a string to uppercase (English alias)
+funcion texto uppercase(texto s) { retornar mayusculas(s); }
 
+/// Convierte un texto a minúsculas
+/// Convert a string to lowercase
 funcion texto minusculas(texto s) {
     retornar __str_minusculas(s);
 }
+/// Convert a string to lowercase (English alias)
+funcion texto lowercase(texto s) { retornar minusculas(s); }
 
+/// Elimina espacios en blanco al inicio y final
+/// Trim whitespace from both ends
 funcion texto recortar(texto s) {
     retornar __str_recortar(s);
 }
+/// Trim whitespace (English alias)
+funcion texto trim(texto s) { retornar recortar(s); }
 
+/// Divide un texto usando un delimitador
+/// Split a string using a delimiter
 funcion lista<texto> dividir(texto s, texto delimitador) {
     retornar __str_dividir(s, delimitador);
 }
+/// Split a string using a delimiter (English alias)
+funcion lista<texto> split(texto s, texto delimiter) { retornar dividir(s, delimiter); }
 
+/// Verifica si un texto contiene una subcadena
+/// Check if a string contains a substring
 funcion booleano contiene(texto s, texto subcadena) {
     retornar __str_contiene(s, subcadena);
 }
+/// Check if a string contains a substring (English alias)
+funcion booleano contains(texto s, texto substring) { retornar contiene(s, substring); }
 
-// --- Padding ---
+// ============================================================
+// PADDING
+// ============================================================
 
+/// Agrega caracteres al inicio hasta alcanzar el largo deseado
+/// Pad the start of a string to reach desired length
 funcion texto padding_inicio(texto s, entero largo, texto caracter) {
     retornar __str_padding_inicio(s, largo, caracter);
 }
+/// Pad the start of a string (English alias)
+funcion texto pad_start(texto s, entero length, texto char) { retornar padding_inicio(s, length, char); }
 
+/// Agrega caracteres al final hasta alcanzar el largo deseado
+/// Pad the end of a string to reach desired length
 funcion texto padding_fin(texto s, entero largo, texto caracter) {
     retornar __str_padding_fin(s, largo, caracter);
 }
+/// Pad the end of a string (English alias)
+funcion texto pad_end(texto s, entero length, texto char) { retornar padding_fin(s, length, char); }
 
-// --- Regex ---
+// ============================================================
+// REGEX
+// ============================================================
 
+/// Verifica si un texto coincide con un patrón regex
+/// Check if a string matches a regex pattern
 funcion booleano regex_coincide(texto patron, texto s) {
     retornar __regex_coincide(patron, s);
 }
+/// Check if a string matches a regex pattern (English alias)
+funcion booleano regex_match(texto pattern, texto s) { retornar regex_coincide(pattern, s); }
 
+/// Captura grupos de una expresión regular
+/// Capture groups from a regex pattern
 funcion T regex_capturar<T>(texto patron, texto s) {
     retornar __regex_capturar(patron, s);
 }
+/// Capture regex groups (English alias)
+funcion T regex_capture<T>(texto pattern, texto s) { retornar regex_capturar(pattern, s); }
 
+/// Reemplaza ocurrencias de un patrón regex
+/// Replace occurrences matching a regex pattern
 funcion texto regex_reemplazar(texto patron, texto s, texto reemplazo) {
     retornar __regex_reemplazar(patron, s, reemplazo);
 }
+/// Replace regex matches (English alias)
+funcion texto regex_replace(texto pattern, texto s, texto replacement) { retornar regex_reemplazar(pattern, s, replacement); }
 
-// --- Unicode ---
+// ============================================================
+// UNICODE
+// ============================================================
 
+/// Normaliza un texto Unicode (formas: NFC, NFD, NFKC, NFKD)
+/// Normalize a Unicode string (forms: NFC, NFD, NFKC, NFKD)
 funcion texto unicode_normalizar(texto s, texto forma) {
     retornar __unicode_normalizar(s, forma);
 }
+/// Normalize a Unicode string (English alias)
+funcion texto unicode_normalize(texto s, texto form) { retornar unicode_normalizar(s, form); }
 
-// --- Encoding ---
+// ============================================================
+// ENCODING / CODIFICACIÓN
+// ============================================================
 
+/// Codifica un texto como UTF-8 (retorna bytes)
+/// Encode a string as UTF-8 (returns bytes)
 funcion T codificar_utf8<T>(texto s) {
     retornar __codificacion_utf8(s);
 }
+/// Encode a string as UTF-8 (English alias)
+funcion T encode_utf8<T>(texto s) { retornar codificar_utf8(s); }
 
+/// Decodifica bytes UTF-8 a texto
+/// Decode UTF-8 bytes to string
 funcion texto decodificar_utf8(numero bytes) {
     retornar __desde_utf8(bytes);
 }
+/// Decode UTF-8 bytes to string (English alias)
+funcion texto decode_utf8(numero bytes) { retornar decodificar_utf8(bytes); }

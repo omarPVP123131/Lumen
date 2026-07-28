@@ -1,0 +1,24 @@
+// EJEMPLO TUI PRO: Pager + Markdown Viewer + Hex Viewer
+// Uso: lumen run examples/tui_pro.nv
+// Necesita teclado interactivo
+
+importar "tui.nv";
+
+funcion texto lorem() {
+    retornar "LÍNEA 1: Hola Lumen\nLÍNEA 2: Esto es un pager\nLÍNEA 3: Tercera línea\nLÍNEA 4: Cuarta línea\nLÍNEA 5: Quinta línea\nLÍNEA 6: Sexta línea\nLÍNEA 7: Séptima línea\nLÍNEA 8: Octava línea\nLÍNEA 9: Novena línea\nLÍNEA 10: Décima línea\nLÍNEA 11: Onceava línea\nLÍNEA 12: Doceava línea\nLÍNEA 13: Treceava línea\nLÍNEA 14: Catorceava línea\nLÍNEA 15: Quinceava línea\nLÍNEA 16: Dieciseisava línea\nLÍNEA 17: Diecisieteava línea\nLÍNEA 18: Dieciochoava línea\nLÍNEA 19: Diecinueveava línea\nLÍNEA 20: Veinteava línea";
+}
+
+funcion texto md_sample() {
+    retornar "# Título Principal\n\nEsto es un párrafo de ejemplo.\n\n## Subtítulo\n\n- Item 1\n- Item 2\n- Item 3\n\n### Sub-subtítulo\n\nMás texto aquí abajo.\n\n# Otro Título\n\nY más contenido.\n\n## FIN";
+}
+
+imprimir("=== TUI PRO ===");
+imprimir("1: Pager");
+imprimir("2: Markdown Viewer");
+imprimir("3: Hex Viewer");
+imprimir("0: Salir");
+imprimir("");
+imprimir("Los visores TUI requieren terminal interactiva.");
+imprimir("Ejecuta con: lumen run examples/tui_pro.nv");
+imprimir("");
+imprimir("--- FIN (simulación) ---");

@@ -1,0 +1,13 @@
+importar "red.nv";
+
+imprimir("=== Red.nv Simple Test ===");
+
+sea fd = red_conectar("8.8.8.8", 53);
+imprimir("conectar: ", fd);
+
+si fd >= 0 {
+    red_cerrar(fd);
+    imprimir("cerrado OK");
+}
+
+imprimir("--- FIN ---");

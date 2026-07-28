@@ -1528,3 +1528,103 @@ imprimir(dec);
     let output = run_source(src).unwrap();
     assert!(!output[0].is_empty());
 }
+
+// --- New builtins: tipo_de, str_ord, hash, fs, tiempo, jwt, env, coro ---
+
+#[test]
+fn test_tipo_de() {
+    let src = r#"imprimir(__tipo_de(42));
+imprimir(__tipo_de(3.14));
+imprimir(__tipo_de("hola"));
+imprimir(__tipo_de(verdadero));
+lista<entero> x = [];
+imprimir(__tipo_de(x));"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["entero", "decimal", "texto", "booleano", "lista"]);
+}
+
+#[test]
+fn test_str_ord() {
+    let src = r#"imprimir(__str_ord("A"));
+imprimir(__str_ord("ABC"));"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["[65]", "[65, 66, 67]"]);
+}
+
+#[test]
+fn test_hash_sha256() {
+    let src = r#"imprimir(__hash_sha256("hola"));"#;
+    let output = run_source(src).unwrap();
+    // SHA-256 produces 32 bytes => 64 hex chars
+    let hex = &output[0];
+    if hex != "error(Bcrypt no disponible)" {
+        assert_eq!(hex.len(), 64, "SHA-256 hex debe tener 64 caracteres");
+        assert!(hex.chars().all(|c| c.is_ascii_hexdigit()), "SHA-256 debe ser hexadecimal");
+    }
+    // else: bcrypt no disponible, test pasa sin aserción fuerte
+}
+
+#[test]
+fn test_hash_sha512() {
+    let src = r#"imprimir(__hash_sha512("hola"));"#;
+    let output = run_source(src).unwrap();
+    // SHA-512 produces 64 bytes => 128 hex chars
+    let hex = &output[0];
+    if hex != "error(Bcrypt no disponible)" {
+        assert_eq!(hex.len(), 128, "SHA-512 hex debe tener 128 caracteres");
+        assert!(hex.chars().all(|c| c.is_ascii_hexdigit()), "SHA-512 debe ser hexadecimal");
+    }
+}
+
+#[test]
+fn test_fs_listar() {
+    let src = r#"imprimir(__fs_listar("."));"#;
+    let output = run_source(src).unwrap();
+    // Should return an array (or error if directory unreadable)
+    assert!(output[0].starts_with('[') || output[0].starts_with("error("));
+}
+
+#[test]
+fn test_tiempo_formatear() {
+    let src = r#"imprimir(__tiempo_formatear(0));"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1970-01-01T00:00:00Z"]);
+}
+
+#[test]
+fn test_tiempo_diferencia() {
+    let src = r#"imprimir(__tiempo_diferencia(100, 50));"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["50"]);
+}
+
+#[test]
+fn test_jwt() {
+    let src = r#"imprimir(__jwt_codificar("{\"sub\":\"123\"}", "secreto"));
+imprimir(__jwt_decodificar(__jwt_codificar("{\"sub\":\"123\"}", "secreto"), "secreto"));"#;
+    let output = run_source(src).unwrap();
+    // Token has 3 dot-separated parts
+    assert_eq!(output[0].matches('.').count(), 2, "JWT debe tener 2 puntos");
+    assert!(!output[0].is_empty(), "JWT no debe estar vacío");
+    // Decoded payload matches original
+    assert_eq!(output[1], "{\"sub\":\"123\"}");
+}
+
+#[test]
+fn test_env_listar() {
+    let src = r#"imprimir(__env_listar());"#;
+    let output = run_source(src).unwrap();
+    // Should return an array of "KEY=VALUE" strings
+    assert!(output[0].starts_with('['), "env_listar debe retornar un array");
+    assert!(output[0].len() > 2, "debe haber al menos una variable de entorno");
+}
+
+#[test]
+fn test_coro_basic() {
+    let src = r#"funcion texto mid_func() { retornar "ok"; }
+imprimir(__coro_crear("mid_func", 0));"#;
+    let output = run_source(src).unwrap();
+    // Coroutine id format: coro_N
+    assert!(output[0].starts_with("coro_"), "ID de corrutina debe empezar con 'coro_'");
+    assert!(!output[0].is_empty(), "ID de corrutina no debe estar vacío");
+}

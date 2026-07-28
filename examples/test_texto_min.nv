@@ -1,0 +1,9 @@
+importar "texto.nv";
+
+// Basic
+imprimir("largo: ", texto_largo("Hola"));
+imprimir("mayus: ", texto_mayusculas("hola"));
+
+// Split
+lista<texto> partes = texto_dividir("a,b,c", ",");
+imprimir("split: ", partes.largo());

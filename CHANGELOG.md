@@ -13,13 +13,24 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
   - Stubs para crypto_ffi, gui_ffi, coro_ffi en modo minimal.
   - crate `lumen-wasm` con playground web HTML.
   - `Display` impl para `VmError`.
+- **Fases 97-130: ~70 builtins nuevos** (FFI, crypto, concurrencia, GUI, corrutinas, utilidades, fecha):
+  - FFI: `__ffi_cargar/load`, `__ffi_llamar/call`, `__ffi_asignar/alloc`, `__ffi_liberar/free`, `__ffi_escribir/write`, `__ffi_leer/read`, `__ffi_peek`, `__ffi_poke`
+  - Crypto: `__hash_sha256`, `__hash_sha512`, `__aes_encriptar/encrypt`, `__aes_desencriptar/decrypt`, `__jwt_codificar/encode`, `__jwt_decodificar/decode`
+  - Concurrencia: hilos, mutex, canales, rwlock, arc, tareas, streams, actores, generadores, supervisores, cluster, scope, par, dormir, seleccionar (~36 builtins)
+  - GUI: `__gui_ventana/window`, `__gui_mostrar/show`, `__gui_cerrar/close`, `__gui_id/hwnd`, `__gui_esperar/poll`
+  - Corrutinas: `__coro_crear/create`, `__coro_ceder/yield`, `__coro_reanudar/resume`
+  - Utilidades: `__tipo_de/typeof`, `__fs_listar/listdir`, `__env_listar/list`
+  - Fecha: `__tiempo_formatear/format`, `__tiempo_parsear/parse`, `__tiempo_diferencia/diff`
 - Nuevo crate: `lumen-wasm` (runtime WASM + playground web).
-- VM: 139 e2e tests (26 nuevos desde v1.6.0).
-- VM: 0 dependencias externas obligatorias (solo `libloading` con feature flag).
+- **Stdlib dual ES/EN**: `texto.nv`, `fecha.nv`, `io.nv`, `crypto.nv` actualizados con aliases inglés.
+- **149 e2e tests** (10 nuevos desde v1.6.0, +10 desde v1.7.0alpha).
 
 ### Cambiado
 - Version bump a 1.7.0 en workspace.
 - VM struct fields con `#[cfg(feature = "full")]` para compilación WASM.
+- `crypto_ffi.rs`, `gui_ffi.rs`, `coro_ffi.rs` ahora incluidos vía `mod` en lib.rs.
+- Dependencias `base64`, `hmac`, `sha2` añadidas para JWT.
+- `reqwest` y `libloading` movidos a `full` feature opcional.
 - `AGENTS.md` actualizado con fases completadas y test counts.
 
 ---

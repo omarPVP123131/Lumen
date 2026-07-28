@@ -1,0 +1,18 @@
+importar "io.nv";
+
+imprimir("=== IO Test via FFI ===");
+
+sea escrito = io_file_write("test_ffi_io.txt", "Hola Lumen desde FFI!");
+imprimir("escrito: ", escrito);
+
+sea contenido = io_file_read("test_ffi_io.txt");
+imprimir("leido: ", contenido);
+
+sea fp = io_abrir("test_ffi_io.txt", "rb");
+imprimir("fp: ", fp);
+sea data = io_fread(fp, 20);
+imprimir("data: ", data);
+io_cerrar(fp);
+imprimir("cerrado OK");
+
+imprimir("--- FIN ---");

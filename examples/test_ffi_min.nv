@@ -1,0 +1,11 @@
+imprimir("=== FFI Simple Test ===");
+
+// Cargar msvcrt.dll
+sea lib = __ffi_cargar("msvcrt.dll");
+imprimir("lib: ", lib);
+
+// Llamar _getpid() - no args, retorna entero
+sea pid = __ffi_llamar(lib, "_getpid", "", [], "entero");
+imprimir("pid: ", pid);
+
+imprimir("--- FIN ---");

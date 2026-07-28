@@ -1,0 +1,13 @@
+imprimir("=== FFI Debug ===");
+sea lib = __ffi_cargar("msvcrt.dll");
+imprimir("lib: ", lib);
+
+// 0 args, retorna entero - funciona
+sea pid = __ffi_llamar(lib, "_getpid", "", [], "entero");
+imprimir("_getpid: ", pid);
+
+// 1 arg entero, retorna entero
+sea abs = __ffi_llamar(lib, "abs", "entero", [-42], "entero");
+imprimir("abs: ", abs);
+
+imprimir("--- FIN ---");

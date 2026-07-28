@@ -1,0 +1,12 @@
+importar "csv.nv";
+
+imprimir("=== CSV Test ===");
+
+sea csv_data = "nombre,edad,ciudad\nAna,30,Madrid\nLuis,25,Barcelona";
+sea parsed = csv_parsear(csv_data);
+imprimir("parsed: ", parsed);
+
+sea back = csv_serializar(parsed);
+imprimir("stringified: ", back);
+
+imprimir("--- FIN ---");

@@ -1,0 +1,18 @@
+#!/bin/sh
+# pre-commit hook - Ejecuta tests y build antes de cada commit
+
+echo "=== pre-commit: Running cargo build ==="
+cargo build 2>&1
+if [ $? -ne 0 ]; then
+    echo "ERROR: cargo build falló. Commit cancelado."
+    exit 1
+fi
+
+echo "=== pre-commit: Running cargo test ==="
+cargo test 2>&1
+if [ $? -ne 0 ]; then
+    echo "ERROR: cargo test falló. Commit cancelado."
+    exit 1
+fi
+
+echo "=== pre-commit: All checks passed ==="

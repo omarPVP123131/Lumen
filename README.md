@@ -3,8 +3,8 @@
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-1.7.0-orange)
-![Tests](https://img.shields.io/badge/tests-345%20passing-brightgreen)
-![Fases](https://img.shields.io/badge/fases-0--96%20completadas-blueviolet)
+![Tests](https://img.shields.io/badge/tests-355%20passing-brightgreen)
+![Fases](https://img.shields.io/badge/fases-0--130%20completadas-blueviolet)
 
 > **El primer lenguaje de programación moderno con el español como ciudadano de primera clase.**
 > Pipeline completo escrito en Rust: Lexer → Parser → Sema → IR → Optimizador → Bytecode → VM.

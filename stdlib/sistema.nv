@@ -1,0 +1,146 @@
+// Módulo sistema — procesos, entorno, rutas y temp vía FFI
+// System module — pure LÚMEN via FFI, dual ES/EN API
+// Uso: importar "sistema.nv"
+
+cualquiera __libc = __ffi_cargar("msvcrt.dll");
+
+// ============================================================
+// PROCESOS / PROCESS
+// ============================================================
+
+funcion texto ejecutar(texto cmd) {
+    texto res = "";
+    // system() ejecuta y retorna código de salida
+    entero r = __ffi_llamar(__libc, "system", "texto", [cmd], "entero");
+    retornar a_texto(r);
+}
+funcion texto run(texto cmd) { retornar ejecutar(cmd); }
+
+// ============================================================
+// ENTORNO / ENVIRONMENT
+// ============================================================
+
+funcion texto env_obtener(texto clave) {
+    entero ptr = __ffi_llamar(__libc, "getenv", "texto", [clave], "entero");
+    si ptr == 0 { retornar ""; }
+    entero len = 0;
+    mientras __ffi_peek(ptr, len) != 0 { len = len + 1; }
+    retornar __ffi_leer(ptr, 0, len);
+}
+funcion texto env_get(texto key) { retornar env_obtener(key); }
+
+funcion booleano env_asignar(texto clave, texto valor) {
+    texto entrada = clave + "=" + valor;
+    entero r = __ffi_llamar(__libc, "_putenv", "texto", [entrada], "entero");
+    retornar r == 0;
+}
+funcion booleano env_set(texto key, texto value) { retornar env_asignar(key, value); }
+
+funcion cualquiera env_listar() {
+    retornar __env_listar();
+}
+funcion cualquiera env_list() { retornar env_listar(); }
+
+// ============================================================
+// RUTAS / PATH (manipulación de strings pura)
+// ============================================================
+
+funcion texto path_unir(texto a, texto b) {
+    retornar a + "\\" + b;
+}
+funcion texto path_join(texto a, texto b) { retornar path_unir(a, b); }
+
+funcion texto path_absoluto(texto ruta) {
+    entero buf = __ffi_asignar(260);
+    entero r = __ffi_llamar(__libc, "_fullpath", "entero,texto,entero", [buf, ruta, 260], "entero");
+    texto res = "";
+    si r != 0 {
+        entero i = 0;
+        mientras verdadero {
+            entero b = __ffi_peek(buf, i);
+            si b == 0 { romper; }
+            res = res + __str_from(b);
+            i = i + 1;
+        }
+    }
+    __ffi_liberar(buf, 260);
+    retornar res;
+}
+funcion texto path_absolute(texto path) { retornar path_absoluto(path); }
+
+funcion texto path_extension(texto ruta) {
+    entero i = ruta.largo() - 1;
+    mientras i >= 0 {
+        si ruta[i] == "." {
+            texto ext = "";
+            entero j = i + 1;
+            mientras j < ruta.largo() {
+                ext = ext + ruta[j];
+                j = j + 1;
+            }
+            retornar ext;
+        }
+        i = i - 1;
+    }
+    retornar "";
+}
+
+funcion texto path_nombre_archivo(texto ruta) {
+    entero i = ruta.largo() - 1;
+    mientras i >= 0 {
+        si ruta[i] == "\\" || ruta[i] == "/" {
+            texto nom = "";
+            entero j = i + 1;
+            mientras j < ruta.largo() {
+                nom = nom + ruta[j];
+                j = j + 1;
+            }
+            retornar nom;
+        }
+        i = i - 1;
+    }
+    retornar ruta;
+}
+funcion texto path_filename(texto path) { retornar path_nombre_archivo(path); }
+
+funcion texto path_padre(texto ruta) {
+    entero i = ruta.largo() - 1;
+    mientras i >= 0 {
+        si ruta[i] == "\\" || ruta[i] == "/" {
+            texto padre = "";
+            entero j = 0;
+            mientras j < i {
+                padre = padre + ruta[j];
+                j = j + 1;
+            }
+            retornar padre;
+        }
+        i = i - 1;
+    }
+    retornar "";
+}
+funcion texto path_parent(texto path) { retornar path_padre(path); }
+
+// ============================================================
+// TEMP
+// ============================================================
+
+funcion texto temp_directorio() {
+    texto res = env_obtener("TEMP");
+    si res == "" {
+        res = env_obtener("TMP");
+    }
+    si res == "" {
+        res = "C:\\Windows\\Temp";
+    }
+    retornar res;
+}
+funcion texto temp_dir() { retornar temp_directorio(); }
+
+funcion texto temp_archivo() {
+    texto dir = temp_directorio();
+    entero pid = __ffi_llamar(__libc, "_getpid", "", [], "entero");
+    entero ts = __tiempo_ahora();
+    retornar dir + "\\lumen_" + ts + "_" + pid;
+}
+funcion texto temp_file() { retornar temp_archivo(); }

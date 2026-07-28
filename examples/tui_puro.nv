@@ -1,0 +1,15 @@
+importar "tui.nv";
+
+imprimir("=== TUI en LÚMEN puro ===");
+tui_iniciar();
+tui_limpiar();
+tui_ventana("Hola Lumen", "Esto es TUI en LUMEN puro!");
+tui_escribir("Presiona ESC para salir", 0, 8);
+
+texto k = "";
+mientras k != "esc" {
+    k = tui_tecla();
+}
+
+tui_cerrar();
+imprimir("--- FIN ---");

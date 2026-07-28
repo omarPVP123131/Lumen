@@ -1,0 +1,18 @@
+// EJEMPLO GUI — Ventana nativa con bucle de eventos
+// Uso: lumen run examples/gui_ventana.nv
+// NOTA: Solo Windows. Abre una ventana Win32 nativa.
+
+importar "gui.nv";
+
+imprimir("=== GUI Nativa ===");
+imprimir("Creando ventana...");
+
+texto id = gui_ventana("Hola LÚMEN", 640, 480);
+imprimir("ID: ", id);
+
+imprimir("Iniciando bucle de eventos...");
+imprimir("Cierra la ventana para continuar.");
+
+gui_bucle(id);
+
+imprimir("Ventana cerrada. OK.");

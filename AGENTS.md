@@ -15,7 +15,7 @@
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 139 | e2e |
+| lumen-vm | 149 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
@@ -23,9 +23,9 @@
 | lumen-doc | 1 | unit |
 | lumen-pkg | 1 | unit |
 | lumen-plugin | 1 | unit |
-| **Total** | **~345** | |
+| **Total** | **~355** | |
 
-**0 warnings, ~345 tests passing. 45/45 ejemplos funcionando. 139 e2e, 45 unit.**
+**0 warnings, ~355 tests passing. 45/45 ejemplos funcionando. 149 e2e, 45 unit.**
 
 ---
 
@@ -194,6 +194,19 @@ Compilación a `wasm32-unknown-unknown` con feature flags. VM refactorizada:
 - `#[cfg(feature = "full")]` en fields TCP, cluster, scope, FFI de VM
 - Stubs para crypto_ffi, gui_ffi, coro_ffi en modo minimal
 - crate `lumen-wasm` con playground web en HTML
+
+### Fases 97-130: Builtins Faltantes Implementados ✅
+~70 builtins nuevos añadidos al VM (FFI, crypto, concurrencia, GUI, corrutinas, utilidades, fecha):
+- **FFI**: `__ffi_cargar/load`, `__ffi_llamar/call`, `__ffi_asignar/alloc`, `__ffi_liberar/free`, `__ffi_escribir/write`, `__ffi_leer/read`, `__ffi_peek`, `__ffi_poke`
+- **Crypto**: `__hash_sha256`, `__hash_sha512`, `__aes_encriptar/encrypt`, `__aes_desencriptar/decrypt`, `__jwt_codificar/encode`, `__jwt_decodificar/decode`
+- **Concurrencia**: `__hilo_lanzar/spawn`, `__hilo_esperar/join`, `__mutex_nuevo/new`, `__mutex_bloquear/lock`, `__canal_nuevo/new`, `__canal_enviar/send`, `__canal_recibir/recv`, `__rwlock_nuevo/new`, `__rwlock_leer/read`, `__rwlock_escribir/write`, `__arc_nuevo/new`, `__arc_obtener/get`, `__arc_asignar/set`, `__tarea_lanzar/spawn`, `__tarea_esperar/await`, `__stream_desde/from`, `__stream_mapear/map`, `__stream_filtrar/filter`, `__stream_colectar/collect`, `__actor_nuevo/new`, `__actor_enviar/send`, `__actor_recibir/recv`, `__generador_nuevo/new`, `__generador_siguiente/next`, `__supervisor_nuevo/new`, `__supervisor_agregar/add`, `__supervisor_iniciar/start`, `__cluster_conectar/connect`, `__cluster_enviar/send`, `__scope_nuevo/new`, `__scope_lanzar/spawn`, `__scope_cancelar/cancel`, `__par_mapear/map`, `__par_unir/join`, `__dormir/sleep`, `__seleccionar/select`
+- **GUI**: `__gui_ventana/window`, `__gui_mostrar/show`, `__gui_cerrar/close`, `__gui_id/hwnd`, `__gui_esperar/poll`
+- **Corrutinas**: `__coro_crear/create`, `__coro_ceder/yield`, `__coro_reanudar/resume`
+- **Utilidades**: `__tipo_de/typeof`, `__fs_listar/listdir`, `__env_listar/list`
+- **Fecha**: `__tiempo_formatear/format`, `__tiempo_parsear/parse`, `__tiempo_diferencia/diff`
+- **Conexión**: `crypto_ffi.rs`, `gui_ffi.rs`, `coro_ffi.rs` ahora incluidos vía `mod` en lib.rs
+- **Stdlib dual ES/EN**: `texto.nv`, `fecha.nv`, `io.nv`, `crypto.nv` actualizados con aliases inglés
+- **149 e2e tests** (10 nuevos)
 
 ---
 

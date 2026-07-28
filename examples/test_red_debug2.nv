@@ -1,0 +1,20 @@
+importar "red.nv";
+
+imprimir("=== Red Debug ===");
+
+sea r = red_socket();
+imprimir("socket directo: ", r);
+
+// Llamar paso a paso
+sea w = __ffi_cargar("ws2_32.dll");
+imprimir("ws2_32: ", w);
+
+sea wsa = __ffi_asignar(400);
+sea sr = __ffi_llamar(w, "WSAStartup", "entero,entero", [514, wsa], "entero");
+imprimir("WSAStartup: ", sr);
+__ffi_liberar(wsa, 400);
+
+sea fd = __ffi_llamar(w, "socket", "entero,entero,entero", [2, 1, 0], "entero");
+imprimir("socket: ", fd);
+
+imprimir("--- FIN ---");

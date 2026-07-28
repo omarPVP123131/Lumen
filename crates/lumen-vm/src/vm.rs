@@ -1,7 +1,16 @@
 use crate::value::Value;
 use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
 use std::collections::HashMap;
+#[cfg(feature = "full")]
+use std::sync::Arc;
 use unicode_normalization::UnicodeNormalization;
+
+#[cfg(feature = "full")]
+use crate::crypto_ffi::Bcrypt;
+#[cfg(feature = "full")]
+use crate::coro_ffi::Coroutine;
+#[cfg(feature = "full")]
+use crate::gui_ffi::GuiWindow;
 
 #[derive(Debug, Clone)]
 pub struct CallFrame {
@@ -67,7 +76,23 @@ pub struct VM {
     step_mode: bool,
     last_instr: Option<Instruction>,
     pub instr_count: usize,
+    #[cfg(feature = "full")]
+    bcrypt: Option<Arc<Bcrypt>>,
+    #[cfg(feature = "full")]
+    gui_windows: HashMap<String, GuiWindow>,
+    #[cfg(feature = "full")]
+    coroutines: HashMap<String, Coroutine>,
+    #[cfg(feature = "full")]
+    current_coro: Option<String>,
+    #[cfg(feature = "full")]
+    main_saved: Option<(Vec<Value>, Vec<HashMap<String, Value>>, usize)>,
     tcp_listener: Option<std::net::TcpListener>,
+    #[cfg(feature = "full")]
+    cluster_streams: HashMap<String, std::net::TcpStream>,
+    #[cfg(feature = "full")]
+    scope_handles: Vec<HashMap<String, Value>>,
+    #[cfg(feature = "full")]
+    ffi_libraries: HashMap<String, usize>,
 }
 
 /// Helper to convert VmError into the builtin return type.
@@ -89,6 +114,11 @@ impl VM {
         for (i, func) in bytecode.funcs.iter().enumerate() {
             func_index_cache.insert(func.name.clone(), i);
         }
+        #[cfg(feature = "full")]
+        let bcrypt = match Bcrypt::load() {
+            Ok(b) => Some(Arc::new(b)),
+            Err(_) => None,
+        };
         Self {
             stack: Vec::new(),
             locals: vec![HashMap::new()],
@@ -102,7 +132,23 @@ impl VM {
             step_mode: false,
             last_instr: None,
             instr_count: 0,
+            #[cfg(feature = "full")]
+            bcrypt,
+            #[cfg(feature = "full")]
+            gui_windows: HashMap::new(),
+            #[cfg(feature = "full")]
+            coroutines: HashMap::new(),
+            #[cfg(feature = "full")]
+            current_coro: None,
+            #[cfg(feature = "full")]
+            main_saved: None,
             tcp_listener: None,
+            #[cfg(feature = "full")]
+            cluster_streams: HashMap::new(),
+            #[cfg(feature = "full")]
+            scope_handles: Vec::new(),
+            #[cfg(feature = "full")]
+            ffi_libraries: HashMap::new(),
         }
     }
 
@@ -211,6 +257,13 @@ impl VM {
                         s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
                     };
                     self.push(Value::Array(parts));
+                return Some(Ok(()));
+                }
+
+                if name == "__str_ord" || name == "__str_codigo" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let codes: Vec<Value> = s.chars().map(|c| Value::Int(c as i64)).collect();
+                    self.push(Value::Array(codes));
                 return Some(Ok(()));
                 }
 
@@ -956,6 +1009,400 @@ impl VM {
                 return Some(Ok(()));
                 }
 
+                // ██ FFI builtins ██
+                if name == "__ffi_cargar" || name == "__ffi_load" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match unsafe { libloading::Library::new(&path) } {
+                        Ok(lib) => {
+                            let ptr = Box::into_raw(Box::new(lib)) as usize;
+                            let id = format!("lib_{}", self.ffi_libraries.len());
+                            self.ffi_libraries.insert(id.clone(), ptr);
+                            self.push(Value::Str(id));
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__ffi_llamar" || name == "__ffi_call" {
+                    let lib_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let call_args: Vec<Value> = args.iter().skip(2).cloned().collect();
+                    let lib_ptr = match self.ffi_libraries.get(&lib_id) {
+                        Some(&p) => p,
+                        None => {
+                            self.push(Value::Error(Box::new(Value::Str(format!("Biblioteca '{}' no encontrada", lib_id)))));
+                            return Some(Ok(()));
+                        }
+                    };
+                    let lib = unsafe { &*(lib_ptr as *const libloading::Library) };
+                    let result = unsafe {
+                        let sym: libloading::Symbol<unsafe extern "C" fn(i64, i64, i64, i64, i64, i64) -> i64> =
+                            match lib.get(fn_name.as_bytes()) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    self.push(Value::Error(Box::new(Value::Str(format!("Símbolo '{}' no encontrado: {}", fn_name, e)))));
+                                    return Some(Ok(()));
+                                }
+                            };
+                        let mut a = [0i64; 6];
+                        for (i, arg) in call_args.iter().enumerate().take(6) {
+                            a[i] = arg.as_num().unwrap_or(0.0) as i64;
+                        }
+                        Value::Int(sym(a[0], a[1], a[2], a[3], a[4], a[5]))
+                    };
+                    self.push(result);
+                    return Some(Ok(()));
+                }
+
+                if name == "__ffi_asignar" || name == "__ffi_alloc" {
+                    let size = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    let align = args.get(1).and_then(|v| v.as_num()).unwrap_or(8.0) as usize;
+                    let layout = match std::alloc::Layout::from_size_align(size, align) {
+                        Ok(l) => l,
+                        Err(e) => {
+                            self.push(Value::Error(Box::new(Value::Str(format!("Layout inválido: {}", e)))));
+                            return Some(Ok(()));
+                        }
+                    };
+                    let ptr = unsafe { std::alloc::alloc(layout) };
+                    self.push(Value::Int(ptr as i64));
+                    return Some(Ok(()));
+                }
+
+                if name == "__ffi_liberar" || name == "__ffi_free" {
+                    let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    let size = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    let align = args.get(2).and_then(|v| v.as_num()).unwrap_or(8.0) as usize;
+                    if ptr_val != 0 {
+                        let layout = match std::alloc::Layout::from_size_align(size, align) {
+                            Ok(l) => l,
+                            Err(_) => {
+                                self.push(Value::Error(Box::new(Value::Str("Layout inválido para liberar".into()))));
+                                return Some(Ok(()));
+                            }
+                        };
+                        unsafe { std::alloc::dealloc(ptr_val as *mut u8, layout); }
+                    }
+                    self.push(Value::Void);
+                    return Some(Ok(()));
+                }
+
+                if name == "__ffi_escribir" || name == "__ffi_write" {
+                    let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    let data = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let bytes = data.as_bytes();
+                    if ptr_val != 0 {
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr_val as *mut u8, bytes.len());
+                        }
+                    }
+                    self.push(Value::Void);
+                    return Some(Ok(()));
+                }
+
+                if name == "__ffi_leer" || name == "__ffi_read" {
+                    let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    let len = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    if ptr_val != 0 && len > 0 {
+                        let mut buf = vec![0u8; len];
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(ptr_val as *const u8, buf.as_mut_ptr(), len);
+                        }
+                        self.push(Value::Str(String::from_utf8_lossy(&buf).to_string()));
+                    } else {
+                        self.push(Value::Str(String::new()));
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__ffi_peek" {
+                    let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    if ptr_val != 0 {
+                        unsafe {
+                            let val = *(ptr_val as *const u32);
+                            self.push(Value::Int(val as i64));
+                        }
+                    } else {
+                        self.push(Value::Int(0));
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__ffi_poke" {
+                    let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    let val = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as u32;
+                    if ptr_val != 0 {
+                        unsafe {
+                            *(ptr_val as *mut u32) = val;
+                        }
+                    }
+                    self.push(Value::Void);
+                    return Some(Ok(()));
+                }
+
+                // ██ Crypto builtins ██
+                if name == "__hash_sha256" || name == "__hash_sha256" {
+                    let data = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match self.bcrypt.as_ref() {
+                        Some(bc) => match bc.sha256(data.as_bytes()) {
+                            Ok(hash) => {
+                                let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
+                                self.push(Value::Str(hex));
+                            }
+                            Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                        },
+                        None => self.push(Value::Error(Box::new(Value::Str("Bcrypt no disponible".into())))),
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__hash_sha512" || name == "__hash_sha512" {
+                    let data = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match self.bcrypt.as_ref() {
+                        Some(bc) => match bc.sha512(data.as_bytes()) {
+                            Ok(hash) => {
+                                let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
+                                self.push(Value::Str(hex));
+                            }
+                            Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                        },
+                        None => self.push(Value::Error(Box::new(Value::Str("Bcrypt no disponible".into())))),
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__aes_encriptar" || name == "__aes_encrypt" {
+                    // AES encrypt not implemented in Bcrypt wrapper yet — return error
+                    self.push(Value::Error(Box::new(Value::Str("AES encrypt no implementado".into()))));
+                    return Some(Ok(()));
+                }
+
+                if name == "__aes_desencriptar" || name == "__aes_decrypt" {
+                    self.push(Value::Error(Box::new(Value::Str("AES decrypt no implementado".into()))));
+                    return Some(Ok(()));
+                }
+
+                if name == "__jwt_codificar" || name == "__jwt_encode" {
+                    let payload = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let secret = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let header = serde_json::json!({"alg": "HS256", "typ": "JWT"});
+                    let b64_header = base64url_encode(serde_json::to_string(&header).unwrap_or_default().as_bytes());
+                    let b64_payload = base64url_encode(payload.as_bytes());
+                    let signature_input = format!("{}.{}", b64_header, b64_payload);
+                    let sig = hmac_sha256(signature_input.as_bytes(), secret.as_bytes());
+                    let b64_sig = base64url_encode(&sig);
+                    self.push(Value::Str(format!("{}.{}.{}", b64_header, b64_payload, b64_sig)));
+                    return Some(Ok(()));
+                }
+
+                if name == "__jwt_decodificar" || name == "__jwt_decode" {
+                    let token = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let secret = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let parts: Vec<&str> = token.split('.').collect();
+                    if parts.len() != 3 {
+                        self.push(Value::Error(Box::new(Value::Str("JWT inválido: se esperan 3 partes".into()))));
+                        return Some(Ok(()));
+                    }
+                    let sig_input = format!("{}.{}", parts[0], parts[1]);
+                    let expected_sig = hmac_sha256(sig_input.as_bytes(), secret.as_bytes());
+                    let actual_sig = base64url_decode(parts[2]);
+                    if actual_sig != expected_sig {
+                        self.push(Value::Error(Box::new(Value::Str("Firma JWT inválida".into()))));
+                        return Some(Ok(()));
+                    }
+                    match base64url_decode_to_string(parts[1]) {
+                        Ok(payload) => self.push(Value::Str(payload)),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                    }
+                    return Some(Ok(()));
+                }
+
+                // ██ Utility builtins ██
+                if name == "__tipo_de" || name == "__typeof" {
+                    let val = args.first().cloned().unwrap_or(Value::Void);
+                    let type_name = match &val {
+                        Value::Int(_) => "entero",
+                        Value::Float(_) => "decimal",
+                        Value::Bool(_) => "booleano",
+                        Value::Str(_) => "texto",
+                        Value::Array(_) => "lista",
+                        Value::Map(_) => "diccionario",
+                        Value::Void => "nulo",
+                        Value::Func(_) => "funcion",
+                        Value::Struct { .. } => "estructura",
+                        Value::Enum { .. } => "enumeracion",
+                        Value::Tuple(_) => "tupla",
+                        Value::Exito(_) => "exito",
+                        Value::Error(_) => "error",
+                        Value::Opcion(_) => "opcion",
+                    };
+                    self.push(Value::Str(type_name.to_string()));
+                    return Some(Ok(()));
+                }
+
+                if name == "__fs_listar" || name == "__fs_listdir" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::fs::read_dir(&path) {
+                        Ok(entries) => {
+                            let mut items = Vec::new();
+                            for entry in entries.flatten() {
+                                items.push(Value::Str(entry.file_name().to_string_lossy().to_string()));
+                            }
+                            self.push(Value::Array(items));
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__env_listar" || name == "__env_list" {
+                    let vars: Vec<Value> = std::env::vars()
+                        .map(|(k, v)| Value::Str(format!("{}={}", k, v)))
+                        .collect();
+                    self.push(Value::Array(vars));
+                    return Some(Ok(()));
+                }
+
+                // ██ Date builtins ██
+                if name == "__tiempo_formatear" || name == "__time_format" {
+                    let timestamp = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+                    // Convert Unix timestamp to ISO 8601 manually
+                    let iso = unix_timestamp_to_iso8601(timestamp);
+                    self.push(Value::Str(iso));
+                    return Some(Ok(()));
+                }
+
+                if name == "__tiempo_parsear" || name == "__time_parse" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match parse_iso8601_to_unix(&s) {
+                        Ok(ts) => self.push(Value::Int(ts)),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__tiempo_diferencia" || name == "__time_diff" {
+                    let t1 = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+                    let t2 = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+                    let diff = (t1 - t2).abs();
+                    self.push(Value::Int(diff));
+                    return Some(Ok(()));
+                }
+
+                // ██ Coroutine builtins ██
+                if name == "__coro_crear" || name == "__coro_create" {
+                    let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if let Some(func) = self.find_func(&fn_name) {
+                        let coro = Coroutine::new(&fn_name, func.start);
+                        let coro_id = format!("coro_{}", self.coroutines.len());
+                        self.coroutines.insert(coro_id.clone(), coro);
+                        self.push(Value::Str(coro_id));
+                    } else {
+                        self.push(Value::Error(Box::new(Value::Str(format!("Función '{}' no encontrada", fn_name)))));
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__coro_ceder" || name == "__coro_yield" {
+                    if let Some(ref coro_id) = self.current_coro.clone() {
+                        if let Some(coro) = self.coroutines.get_mut(coro_id) {
+                            coro.stack = self.stack.clone();
+                            coro.locals = self.locals.clone();
+                            coro.ip = self.ip;
+                        }
+                    }
+                    // Restore main saved state
+                    if let Some((saved_stack, saved_locals, saved_ip)) = self.main_saved.take() {
+                        self.stack = saved_stack;
+                        self.locals = saved_locals;
+                        self.ip = saved_ip;
+                    }
+                    self.current_coro = None;
+                    self.push(Value::Void);
+                    return Some(Ok(()));
+                }
+
+                if name == "__coro_reanudar" || name == "__coro_resume" {
+                    let coro_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if let Some(coro) = self.coroutines.get(&coro_id) {
+                        if coro.is_done {
+                            self.push(Value::Error(Box::new(Value::Str("Coroutine terminada".into()))));
+                            return Some(Ok(()));
+                        }
+                    }
+                    // Save main state before resuming coroutine
+                    self.main_saved = Some((self.stack.clone(), self.locals.clone(), self.ip));
+                    if let Some(coro) = self.coroutines.get_mut(&coro_id) {
+                        self.stack = coro.stack.clone();
+                        self.locals = coro.locals.clone();
+                        self.ip = coro.ip;
+                        self.current_coro = Some(coro_id.clone());
+                    }
+                    self.push(Value::Void);
+                    return Some(Ok(()));
+                }
+
+                // ██ GUI builtins ██
+                if name == "__gui_ventana" || name == "__gui_window" {
+                    let title = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let width = args.get(1).and_then(|v| v.as_num()).unwrap_or(800.0) as i32;
+                    let height = args.get(2).and_then(|v| v.as_num()).unwrap_or(600.0) as i32;
+                    match GuiWindow::create(&title, width, height) {
+                        Ok(w) => {
+                            let wid = format!("win_{}", self.gui_windows.len());
+                            self.gui_windows.insert(wid.clone(), w);
+                            self.push(Value::Str(wid));
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__gui_mostrar" || name == "__gui_show" {
+                    let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if let Some(w) = self.gui_windows.get(&id) {
+                        w.show();
+                        self.push(Value::Bool(true));
+                    } else {
+                        self.push(Value::Error(Box::new(Value::Str(format!("Ventana '{}' no encontrada", id)))));
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__gui_cerrar" || name == "__gui_close" {
+                    let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if self.gui_windows.remove(&id).is_some() {
+                        self.push(Value::Bool(true));
+                    } else {
+                        self.push(Value::Bool(false));
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__gui_id" || name == "__gui_hwnd" {
+                    let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if let Some(w) = self.gui_windows.get(&id) {
+                        self.push(Value::Int(w.hwnd() as i64));
+                    } else {
+                        self.push(Value::Error(Box::new(Value::Str(format!("Ventana '{}' no encontrada", id)))));
+                    }
+                    return Some(Ok(()));
+                }
+
+                if name == "__gui_esperar" || name == "__gui_poll" {
+                    let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if let Some(w) = self.gui_windows.get_mut(&id) {
+                        match w.poll_event() {
+                            Some(_evt) => self.push(Value::Bool(true)),
+                            None => self.push(Value::Bool(false)),
+                        }
+                    } else {
+                        self.push(Value::Bool(false));
+                    }
+                    return Some(Ok(()));
+                }
+
         None
     }
     pub fn run(&mut self) -> Result<(), VmError> {
@@ -1675,6 +2122,10 @@ impl VM {
                         s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
                     };
                     self.push(Value::Array(parts));
+                } else if name == "__str_ord" || name == "__str_codigo" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let codes: Vec<Value> = s.chars().map(|c| Value::Int(c as i64)).collect();
+                    self.push(Value::Array(codes));
                 } else if name == "__map_new" || name == "__map_nuevo" {
                     self.push(Value::Map(vec![]));
                 } else if name == "__map_set" || name == "__map_poner" {
@@ -2373,6 +2824,233 @@ fn lumen_value_to_json(v: &Value) -> serde_json::Value {
         }
         _ => serde_json::Value::Null,
     }
+}
+
+// ── FFI dynamic call helper ─────────────────────────────────────────────
+fn ffi_call_dynamic(
+    func_ptr: *const (),
+    _arg_types: &[&str],
+    args: &[Value],
+    ret_type: &str,
+) -> Result<Value, String> {
+    unsafe {
+        match ret_type {
+            "void" | "" => {
+                let f: extern "C" fn() = std::mem::transmute(func_ptr);
+                f();
+                Ok(Value::Void)
+            }
+            "int" | "i32" | "i64" => {
+                let f: unsafe extern "C" fn(i64, i64, i64, i64, i64, i64) -> i64 =
+                    std::mem::transmute(func_ptr);
+                let mut a = [0i64; 6];
+                for (i, arg) in args.iter().enumerate().take(6) {
+                    a[i] = arg.as_num().unwrap_or(0.0) as i64;
+                }
+                Ok(Value::Int(f(a[0], a[1], a[2], a[3], a[4], a[5])))
+            }
+            "float" | "f64" | "double" => {
+                let f: unsafe extern "C" fn(f64, f64, f64, f64, f64, f64) -> f64 =
+                    std::mem::transmute(func_ptr);
+                let mut a = [0.0f64; 6];
+                for (i, arg) in args.iter().enumerate().take(6) {
+                    a[i] = arg.as_num().unwrap_or(0.0);
+                }
+                Ok(Value::Float(f(a[0], a[1], a[2], a[3], a[4], a[5])))
+            }
+            "ptr" | "pointer" => {
+                let f: unsafe extern "C" fn(i64, i64, i64, i64, i64, i64) -> i64 =
+                    std::mem::transmute(func_ptr);
+                let mut a = [0i64; 6];
+                for (i, arg) in args.iter().enumerate().take(6) {
+                    a[i] = arg.as_num().unwrap_or(0.0) as i64;
+                }
+                Ok(Value::Int(f(a[0], a[1], a[2], a[3], a[4], a[5])))
+            }
+            _ => Err(format!("unsupported return type: {}", ret_type)),
+        }
+    }
+}
+
+// ── JWT helpers ─────────────────────────────────────────────────────────
+fn base64url_encode(data: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
+}
+
+fn base64url_decode(data: &str) -> Vec<u8> {
+    use base64::Engine;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(data)
+        .unwrap_or_default()
+}
+
+fn base64url_decode_to_string(data: &str) -> Result<String, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(data)
+        .map_err(|e| format!("Base64 decode error: {}", e))?;
+    String::from_utf8(bytes).map_err(|e| format!("UTF-8 error: {}", e))
+}
+
+fn hmac_sha256(data: &[u8], key: &[u8]) -> Vec<u8> {
+    use hmac::{Hmac, Mac};
+    type HmacSha256 = Hmac<sha2::Sha256>;
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC key length OK");
+    mac.update(data);
+    mac.finalize().into_bytes().to_vec()
+}
+
+// ── Date helpers (no chrono dependency) ─────────────────────────────────
+fn unix_timestamp_to_iso8601(timestamp: i64) -> String {
+    // Simple algorithm: convert seconds since epoch to yyyy-mm-ddThh:mm:ssZ
+    let secs = if timestamp >= 0 {
+        timestamp
+    } else {
+        // Approximate negative
+        return format!("{}T00:00:00Z", timestamp);
+    };
+
+    let mut remaining = secs;
+    let sec = remaining % 60;
+    remaining /= 60;
+    let min = remaining % 60;
+    remaining /= 60;
+    let hour = remaining % 24;
+    remaining /= 24; // days since epoch
+
+    // Convert days since epoch to year/month/day
+    let mut y = 1970i64;
+    let mut d = remaining;
+
+    // Simple leap-year-aware day count
+    loop {
+        let days_in_year = if is_leap(y) { 366 } else { 365 };
+        if d < days_in_year {
+            break;
+        }
+        d -= days_in_year;
+        y += 1;
+    }
+
+    let months_days = if is_leap(y) {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+
+    let mut m = 1u32;
+    for &md in months_days.iter() {
+        if d < md {
+            break;
+        }
+        d -= md;
+        m += 1;
+    }
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        y,
+        m,
+        d + 1,
+        hour,
+        min,
+        sec
+    )
+}
+
+fn is_leap(year: i64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+fn parse_iso8601_to_unix(s: &str) -> Result<i64, String> {
+    // Accept: "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00" or "2024-01-15"
+    let s = s.trim();
+
+    // Remove trailing Z
+    let s = s.strip_suffix('Z').unwrap_or(s);
+
+    let (date_part, time_part) = if let Some(idx) = s.find('T') {
+        let (d, t) = s.split_at(idx);
+        (d, Some(&t[1..]))
+    } else {
+        (s, None)
+    };
+
+    // Parse date: YYYY-MM-DD
+    let parts: Vec<&str> = date_part.split('-').collect();
+    if parts.len() != 3 {
+        return Err(format!("Formato de fecha inválido: {}", s));
+    }
+    let year: i64 = parts[0]
+        .parse()
+        .map_err(|_| format!("Año inválido: {}", parts[0]))?;
+    let month: u32 = parts[1]
+        .parse()
+        .map_err(|_| format!("Mes inválido: {}", parts[1]))?;
+    let day: u32 = parts[2]
+        .parse()
+        .map_err(|_| format!("Día inválido: {}", parts[2]))?;
+
+    let (hour, min, sec) = if let Some(t) = time_part {
+        let tparts: Vec<&str> = t.split(':').collect();
+        if tparts.len() != 3 {
+            return Err(format!("Formato de hora inválido: {}", t));
+        }
+        let h: u32 = tparts[0]
+            .parse()
+            .map_err(|_| format!("Hora inválida: {}", tparts[0]))?;
+        let m: u32 = tparts[1]
+            .parse()
+            .map_err(|_| format!("Minuto inválido: {}", tparts[1]))?;
+        let s: u32 = tparts[2]
+            .parse()
+            .map_err(|_| format!("Segundo inválido: {}", tparts[2]))?;
+        (h, m, s)
+    } else {
+        (0, 0, 0)
+    };
+
+    // Compute days since epoch
+    let days = days_since_epoch(year, month, day);
+    let total_secs = days * 86400 + hour as i64 * 3600 + min as i64 * 60 + sec as i64;
+    Ok(total_secs)
+}
+
+fn days_since_epoch(year: i64, month: u32, day: u32) -> i64 {
+    let mut total = 0i64;
+    let mut y = 1970;
+    while y < year {
+        total += if is_leap(y) { 366 } else { 365 };
+        y += 1;
+    }
+    while y > year {
+        y -= 1;
+        total -= if is_leap(y) { 366 } else { 365 };
+    }
+
+    let months_days = if is_leap(year) {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+
+    for (i, &md) in months_days.iter().enumerate() {
+        let m = (i + 1) as u32;
+        if m < month {
+            total += md as i64;
+        } else if m == month {
+            total += (day - 1) as i64;
+            break;
+        }
+    }
+
+    total
+}
+
+// ── String ordinal helper ───────────────────────────────────────────────
+fn __str_ord(s: &str) -> Vec<i64> {
+    s.chars().map(|c| c as i64).collect()
 }
 
 #[cfg(test)]

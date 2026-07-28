@@ -1,0 +1,4 @@
+funcion texto rep(texto a, entero b) {
+    retornar a;
+}
+imprimir(rep("x", 5));

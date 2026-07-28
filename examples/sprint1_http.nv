@@ -1,0 +1,11 @@
+importar "red.nv";
+
+imprimir("=== HTTP Test ===");
+
+sea body = red_http_get("httpbin.org", 80, "/get");
+imprimir("GET status: ", body.largo() > 0);
+
+sea body2 = red_http_post("httpbin.org", 80, "/post", "{\"test\":42}");
+imprimir("POST status: ", body2.largo() > 0);
+
+imprimir("--- FIN ---");

@@ -1,0 +1,13 @@
+[package]
+name = "lumen-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Terminal UI (TUI) para LÚMEN — bindings a ratatui + crossterm"
+keywords = ["lumen", "tui", "terminal", "ratatui", "crossterm"]
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
