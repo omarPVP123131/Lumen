@@ -14,7 +14,7 @@ Stdlib Extendida    [███████████████████�
 Runtime & Sistema   [████████████████████████████████████████████] 100% (Fases 111-130)
 Concurrencia & Async[████████████████████████████████████████████] 100% (Fases 131-150)
 GUI, TUI & Juegos   [████████████████████████████████████████████] 100% (Fases 151-170)
-Portabilidad        [████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  25% (Fases 171-185)
+Portabilidad        [█████████████████████████████████░░░░░░░░]  75% (Fases 171-185)
 AI/ML & Data        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 186-200)
 Producción & Cloud  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 201-220)
 ```
@@ -247,20 +247,20 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | # | Feature | Descripción | Estado |
 |---|---------|-------------|--------|
 | 171 | **WASM backend** | Compilar a WebAssembly para ejecución en navegadores | ✅ v1.7.0 — VM refactorizada, crate lumen-wasm |
-| 172 | **WASM: WASI** | Ejecutar en servidores/serverless vía WASI | 📋 |
-| 173 | **WASM: JS interop** | Llamar funciones JS desde LÚMEN y viceversa | 📋 |
+| 172 | **WASM: WASI** | Ejecutar en servidores/serverless vía WASI | ✅ build + CI + test |
+| 173 | **WASM: JS interop** | Llamar funciones JS desde LÚMEN y viceversa | ✅ 17 bridge functions |
 | 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | 📋 |
 | 175 | **Docker Image** | `lumen:latest`, multi-stage, slim | ✅ Dockerfile |
 | 176 | **Docker Compose** | Servicios lumen + lumen-repl | ✅ docker-compose.yml |
 | 177 | **GitHub Action** | CI build/test/clippy/fmt/coverage | ✅ .github/workflows/ |
 | 178 | **Testing::Bench** | Suite criterion en lumen-bench | ✅ |
-| 179 | **Testing::Fuzz** | Fuzzing integrado para funciones | 📋 |
+| 179 | **Testing::Fuzz** | Fuzzing integrado para funciones | ✅ CI job con cargo-fuzz |
 | 180 | **Testing::Mutation** | Mutar código y verificar tests | 📋 |
-| 181 | **Obs::Log** | Logging: niveles | ✅ logging.nv |
+| 181 | **Obs::Log** | Logging: niveles, archivos rotativos | ✅ logging.nv + rotación + buffer |
 | 182 | **Obs::Tracing** | Trazado distribuido | 📋 |
-| 183 | **Obs::Metrics** | Contadores, histogramas | 📋 |
+| 183 | **Obs::Metrics** | Contadores, histogramas | ✅ stdlib/metrics.nv |
 | 184 | **Obs::Profiler** | CPU/memoria | 📋 |
-| 185 | **Compiler API** | Usar LÚMEN como biblioteca | 📋 |
+| 185 | **Compiler API** | Usar LÚMEN como biblioteca | ✅ crate lumen-api |
 
 ---
 
@@ -325,7 +325,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | **v1.8** | FFI system + Crypto builtins | 111-127 | ✅ |
 | **v1.9** | Concurrencia completa + Async runtime | 128-150 | ✅ |
 | **v2.0** | GUI, TUI, Juegos funcionales | 151-170 | ✅ |
-| **v2.5** | Portabilidad + WASI + Self-hosting | 171-185 | 🏗️ Siguiente |
+| **v2.5** | Portabilidad + WASI + Self-hosting | 171-185 | 🏗️ 75% |
 | **v3.0** | AI/ML + Cloud + Producción | 186-220 | 📋 |
 
 ---
