@@ -14,7 +14,7 @@ Stdlib Extendida    [███████████████████�
 Runtime & Sistema   [████████████████████████████████████████████] 100% (Fases 111-130)
 Concurrencia & Async[████████████████████████████████████████████] 100% (Fases 131-150)
 GUI, TUI & Juegos   [████████████████████████░░░░░░░░░░░░░░░░░░░░░]  55% (Fases 151-170)
-Portabilidad        [▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   7% (Fases 171-185)
+Portabilidad        [████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  25% (Fases 171-185)
 AI/ML & Data        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 186-200)
 Producción & Cloud  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 201-220)
 ```
@@ -250,17 +250,17 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | 172 | **WASM: WASI** | Ejecutar en servidores/serverless vía WASI | 📋 |
 | 173 | **WASM: JS interop** | Llamar funciones JS desde LÚMEN y viceversa | 📋 |
 | 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | 📋 |
-| 175 | **Docker Image** | `lumen:latest`, multi-stage, slim, alpine | 📋 |
-| 176 | **Docker Compose** | Plantilla docker-compose con base de datos | 📋 |
-| 177 | **GitHub Action** | Action reutilizable para CI de proyectos LÚMEN | 📋 |
-| 178 | **Testing::Bench** | `cronometrar`, `iteraciones`, `percentiles`, reporte | 📋 |
-| 179 | **Testing::Fuzz** | Fuzzing integrado para funciones marcadas con `#[fuzz]` | 📋 |
-| 180 | **Testing::Mutation** | Mutar código y verificar que tests fallen | 📋 |
-| 181 | **Obs::Log** | Logging: niveles, archivos rotativos | 📋 |
-| 182 | **Obs::Tracing** | Trazado distribuido: spans, OpenTelemetry | 📋 |
-| 183 | **Obs::Metrics** | Contadores, histogramas, Prometheus | 📋 |
-| 184 | **Obs::Profiler** | CPU/memoria: llamadas, tiempo, gráfico de llama | 📋 |
-| 185 | **Compiler API** | Usar LÚMEN como biblioteca desde Rust/Python/JS | 📋 |
+| 175 | **Docker Image** | `lumen:latest`, multi-stage, slim | ✅ Dockerfile |
+| 176 | **Docker Compose** | Servicios lumen + lumen-repl | ✅ docker-compose.yml |
+| 177 | **GitHub Action** | CI build/test/clippy/fmt/coverage | ✅ .github/workflows/ |
+| 178 | **Testing::Bench** | Suite criterion en lumen-bench | ✅ |
+| 179 | **Testing::Fuzz** | Fuzzing integrado para funciones | 📋 |
+| 180 | **Testing::Mutation** | Mutar código y verificar tests | 📋 |
+| 181 | **Obs::Log** | Logging: niveles | ✅ logging.nv |
+| 182 | **Obs::Tracing** | Trazado distribuido | 📋 |
+| 183 | **Obs::Metrics** | Contadores, histogramas | 📋 |
+| 184 | **Obs::Profiler** | CPU/memoria | 📋 |
+| 185 | **Compiler API** | Usar LÚMEN como biblioteca | 📋 |
 
 ---
 
