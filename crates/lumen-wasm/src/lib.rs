@@ -32,7 +32,9 @@ impl LumenRuntime {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         let _ = lumen_vm::vm::JS_EVAL.set(js_eval);
-        LumenRuntime { output: String::new() }
+        LumenRuntime {
+            output: String::new(),
+        }
     }
 
     /// Ejecuta código fuente LÚMEN y devuelve la salida.
@@ -58,7 +60,11 @@ impl LumenRuntime {
         if !errors.is_empty() {
             return format!("Error: {}", errors[0].message);
         }
-        tokens.iter().map(|t| format!("{:?}", t)).collect::<Vec<_>>().join("\n")
+        tokens
+            .iter()
+            .map(|t| format!("{:?}", t))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -72,7 +78,9 @@ pub struct LumenRuntime {
 impl LumenRuntime {
     pub fn new() -> Self {
         let _ = lumen_vm::vm::JS_EVAL.set(js_eval);
-        LumenRuntime { output: String::new() }
+        LumenRuntime {
+            output: String::new(),
+        }
     }
 
     pub fn run(&mut self, source: &str) -> String {
@@ -94,7 +102,11 @@ impl LumenRuntime {
         if !errors.is_empty() {
             return format!("Error: {}", errors[0].message);
         }
-        tokens.iter().map(|t| format!("{:?}", t)).collect::<Vec<_>>().join("\n")
+        tokens
+            .iter()
+            .map(|t| format!("{:?}", t))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -106,15 +118,20 @@ pub fn run_lumen(source: &str) -> String {
     let lexer = lumen_lexer::Lexer::new(source);
     let (tokens, lex_errors) = lexer.tokenize();
     if !lex_errors.is_empty() {
-        return format!("Error léxico [{}:{}]: {}",
-            lex_errors[0].pos.line, lex_errors[0].pos.col, lex_errors[0].message);
+        return format!(
+            "Error léxico [{}:{}]: {}",
+            lex_errors[0].pos.line, lex_errors[0].pos.col, lex_errors[0].message
+        );
     }
 
     // Parser
     let parser = lumen_parser::Parser::new(tokens);
     let (mut program, parse_errors) = parser.parse();
     if !parse_errors.is_empty() {
-        return format!("Error sintáctico [{}]: {}", parse_errors[0].span.start.line, parse_errors[0].message);
+        return format!(
+            "Error sintáctico [{}]: {}",
+            parse_errors[0].span.start.line, parse_errors[0].message
+        );
     }
 
     // Semantic analysis
@@ -144,14 +161,19 @@ pub fn check_lumen(source: &str) -> Option<String> {
     let lexer = lumen_lexer::Lexer::new(source);
     let (tokens, lex_errors) = lexer.tokenize();
     if !lex_errors.is_empty() {
-        return Some(format!("Error léxico [{}:{}]: {}",
-            lex_errors[0].pos.line, lex_errors[0].pos.col, lex_errors[0].message));
+        return Some(format!(
+            "Error léxico [{}:{}]: {}",
+            lex_errors[0].pos.line, lex_errors[0].pos.col, lex_errors[0].message
+        ));
     }
 
     let parser = lumen_parser::Parser::new(tokens);
     let (mut program, parse_errors) = parser.parse();
     if !parse_errors.is_empty() {
-        return Some(format!("Error sintáctico [{}]: {}", parse_errors[0].span.start.line, parse_errors[0].message));
+        return Some(format!(
+            "Error sintáctico [{}]: {}",
+            parse_errors[0].span.start.line, parse_errors[0].message
+        ));
     }
 
     let sema = lumen_sema::SemanticAnalyzer::new();

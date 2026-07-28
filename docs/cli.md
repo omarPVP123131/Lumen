@@ -1,4 +1,4 @@
-# Referencia CLI de LÚMEN — v1.6.0
+# Referencia CLI de LÚMEN — v2.0.0
 
 ## Uso General
 

@@ -1,6 +1,6 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v1.7.0 — Released: Julio 2026**
+**v2.0.0 — Released: Julio 2026**
 
 ---
 

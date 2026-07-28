@@ -26,13 +26,14 @@ unsafe impl Sync for Bcrypt {}
 
 impl Bcrypt {
     pub fn load() -> Result<Self, String> {
-        let lib = unsafe { Library::new("bcrypt.dll") }
-            .map_err(|e| format!("bcrypt.dll: {e}"))?;
+        let lib = unsafe { Library::new("bcrypt.dll") }.map_err(|e| format!("bcrypt.dll: {e}"))?;
 
         unsafe {
-            let open: Symbol<unsafe extern "C" fn(*mut usize, *const u16, *const u16, i32) -> NTSTATUS> =
-                lib.get(b"BCryptOpenAlgorithmProvider\0")
-                    .map_err(|e| format!("BCryptOpen: {e}"))?;
+            let open: Symbol<
+                unsafe extern "C" fn(*mut usize, *const u16, *const u16, i32) -> NTSTATUS,
+            > = lib
+                .get(b"BCryptOpenAlgorithmProvider\0")
+                .map_err(|e| format!("BCryptOpen: {e}"))?;
 
             let mut sha256 = 0usize;
             let mut sha512 = 0usize;
@@ -52,7 +53,12 @@ impl Bcrypt {
                 return Err("BCryptOpen AES failed".into());
             }
 
-            Ok(Bcrypt { lib, sha256, sha512, aes })
+            Ok(Bcrypt {
+                lib,
+                sha256,
+                sha512,
+                aes,
+            })
         }
     }
 
@@ -60,41 +66,102 @@ impl Bcrypt {
         unsafe {
             // BCryptEncrypt signature:
             // NTSTATUS BCryptEncrypt(hKey, pbInput, cbInput, pPaddingInfo, pbIV, cbIV, pbOutput, cbOutput, pcbResult, dwFlags)
-            let encrypt: Symbol<unsafe extern "C" fn(usize, *const u8, i32, *mut c_void, *mut u8, i32, *mut u8, i32, *mut i32, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptEncrypt\0").map_err(|e| e.to_string())?;
+            let encrypt: Symbol<
+                unsafe extern "C" fn(
+                    usize,
+                    *const u8,
+                    i32,
+                    *mut c_void,
+                    *mut u8,
+                    i32,
+                    *mut u8,
+                    i32,
+                    *mut i32,
+                    i32,
+                ) -> NTSTATUS,
+            > = self
+                .lib
+                .get(b"BCryptEncrypt\0")
+                .map_err(|e| e.to_string())?;
 
             // BCryptGenerateSymmetricKey signature:
             // NTSTATUS BCryptGenerateSymmetricKey(hAlgorithm, phKey, pbKeyObject, cbKeyObject, pbSecret, cbSecret, dwFlags)
-            let gen_key: Symbol<unsafe extern "C" fn(usize, *mut usize, *mut u8, i32, *const u8, i32, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptGenerateSymmetricKey\0").map_err(|e| e.to_string())?;
+            let gen_key: Symbol<
+                unsafe extern "C" fn(
+                    usize,
+                    *mut usize,
+                    *mut u8,
+                    i32,
+                    *const u8,
+                    i32,
+                    i32,
+                ) -> NTSTATUS,
+            > = self
+                .lib
+                .get(b"BCryptGenerateSymmetricKey\0")
+                .map_err(|e| e.to_string())?;
 
             // BCryptDestroyKey signature
-            let destroy: Symbol<unsafe extern "C" fn(usize, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptDestroyKey\0").map_err(|e| e.to_string())?;
+            let destroy: Symbol<unsafe extern "C" fn(usize, i32) -> NTSTATUS> = self
+                .lib
+                .get(b"BCryptDestroyKey\0")
+                .map_err(|e| e.to_string())?;
 
             // Set chaining mode to CBC via BCryptSetProperty
-            let set_prop: Symbol<unsafe extern "C" fn(usize, *const u16, *const u8, i32, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptSetProperty\0").map_err(|e| e.to_string())?;
+            let set_prop: Symbol<
+                unsafe extern "C" fn(usize, *const u16, *const u8, i32, i32) -> NTSTATUS,
+            > = self
+                .lib
+                .get(b"BCryptSetProperty\0")
+                .map_err(|e| e.to_string())?;
             let chain_mode = uc16!("ChainingMode");
             let cbc = uc16!("ChainingModeCBC");
-            if set_prop(self.aes, chain_mode.as_ptr(), cbc.as_ptr() as *const u8, (cbc.len() * 2) as i32, 0) != STATUS_SUCCESS {
+            if set_prop(
+                self.aes,
+                chain_mode.as_ptr(),
+                cbc.as_ptr() as *const u8,
+                (cbc.len() * 2) as i32,
+                0,
+            ) != STATUS_SUCCESS
+            {
                 return Err("BCryptSetProperty CBC failed".into());
             }
 
             // Get key object size via BCryptGetProperty
-            let get_prop: Symbol<unsafe extern "C" fn(usize, *const u16, *mut u8, i32, *mut i32, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptGetProperty\0").map_err(|e| e.to_string())?;
+            let get_prop: Symbol<
+                unsafe extern "C" fn(usize, *const u16, *mut u8, i32, *mut i32, i32) -> NTSTATUS,
+            > = self
+                .lib
+                .get(b"BCryptGetProperty\0")
+                .map_err(|e| e.to_string())?;
             let obj_len_prop = uc16!("ObjectLength");
             let mut obj_len = 0i32;
             let mut result_len = 0i32;
-            if get_prop(self.aes, obj_len_prop.as_ptr(), &mut obj_len as *mut i32 as *mut u8, 4, &mut result_len, 0) != STATUS_SUCCESS {
+            if get_prop(
+                self.aes,
+                obj_len_prop.as_ptr(),
+                &mut obj_len as *mut i32 as *mut u8,
+                4,
+                &mut result_len,
+                0,
+            ) != STATUS_SUCCESS
+            {
                 return Err("BCryptGetProperty ObjectLength failed".into());
             }
 
             // Allocate key object and generate key handle
             let mut key_obj = vec![0u8; obj_len as usize];
             let mut key_handle: usize = 0;
-            if gen_key(self.aes, &mut key_handle, key_obj.as_mut_ptr(), obj_len, key.as_ptr(), key.len() as i32, 0) != STATUS_SUCCESS {
+            if gen_key(
+                self.aes,
+                &mut key_handle,
+                key_obj.as_mut_ptr(),
+                obj_len,
+                key.as_ptr(),
+                key.len() as i32,
+                0,
+            ) != STATUS_SUCCESS
+            {
                 return Err("BCryptGenerateSymmetricKey failed".into());
             }
 
@@ -154,35 +221,96 @@ impl Bcrypt {
 
     pub fn aes_decrypt(&self, key: &[u8], data: &[u8]) -> Result<Vec<u8>, String> {
         unsafe {
-            let decrypt: Symbol<unsafe extern "C" fn(usize, *const u8, i32, *mut c_void, *mut u8, i32, *mut u8, i32, *mut i32, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptDecrypt\0").map_err(|e| e.to_string())?;
+            let decrypt: Symbol<
+                unsafe extern "C" fn(
+                    usize,
+                    *const u8,
+                    i32,
+                    *mut c_void,
+                    *mut u8,
+                    i32,
+                    *mut u8,
+                    i32,
+                    *mut i32,
+                    i32,
+                ) -> NTSTATUS,
+            > = self
+                .lib
+                .get(b"BCryptDecrypt\0")
+                .map_err(|e| e.to_string())?;
 
-            let gen_key: Symbol<unsafe extern "C" fn(usize, *mut usize, *mut u8, i32, *const u8, i32, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptGenerateSymmetricKey\0").map_err(|e| e.to_string())?;
+            let gen_key: Symbol<
+                unsafe extern "C" fn(
+                    usize,
+                    *mut usize,
+                    *mut u8,
+                    i32,
+                    *const u8,
+                    i32,
+                    i32,
+                ) -> NTSTATUS,
+            > = self
+                .lib
+                .get(b"BCryptGenerateSymmetricKey\0")
+                .map_err(|e| e.to_string())?;
 
-            let destroy: Symbol<unsafe extern "C" fn(usize, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptDestroyKey\0").map_err(|e| e.to_string())?;
+            let destroy: Symbol<unsafe extern "C" fn(usize, i32) -> NTSTATUS> = self
+                .lib
+                .get(b"BCryptDestroyKey\0")
+                .map_err(|e| e.to_string())?;
 
-            let set_prop: Symbol<unsafe extern "C" fn(usize, *const u16, *const u8, i32, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptSetProperty\0").map_err(|e| e.to_string())?;
+            let set_prop: Symbol<
+                unsafe extern "C" fn(usize, *const u16, *const u8, i32, i32) -> NTSTATUS,
+            > = self
+                .lib
+                .get(b"BCryptSetProperty\0")
+                .map_err(|e| e.to_string())?;
             let chain_mode = uc16!("ChainingMode");
             let cbc = uc16!("ChainingModeCBC");
-            if set_prop(self.aes, chain_mode.as_ptr(), cbc.as_ptr() as *const u8, (cbc.len() * 2) as i32, 0) != STATUS_SUCCESS {
+            if set_prop(
+                self.aes,
+                chain_mode.as_ptr(),
+                cbc.as_ptr() as *const u8,
+                (cbc.len() * 2) as i32,
+                0,
+            ) != STATUS_SUCCESS
+            {
                 return Err("BCryptSetProperty CBC failed".into());
             }
 
-            let get_prop: Symbol<unsafe extern "C" fn(usize, *const u16, *mut u8, i32, *mut i32, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptGetProperty\0").map_err(|e| e.to_string())?;
+            let get_prop: Symbol<
+                unsafe extern "C" fn(usize, *const u16, *mut u8, i32, *mut i32, i32) -> NTSTATUS,
+            > = self
+                .lib
+                .get(b"BCryptGetProperty\0")
+                .map_err(|e| e.to_string())?;
             let obj_len_prop = uc16!("ObjectLength");
             let mut obj_len = 0i32;
             let mut result_len = 0i32;
-            if get_prop(self.aes, obj_len_prop.as_ptr(), &mut obj_len as *mut i32 as *mut u8, 4, &mut result_len, 0) != STATUS_SUCCESS {
+            if get_prop(
+                self.aes,
+                obj_len_prop.as_ptr(),
+                &mut obj_len as *mut i32 as *mut u8,
+                4,
+                &mut result_len,
+                0,
+            ) != STATUS_SUCCESS
+            {
                 return Err("BCryptGetProperty ObjectLength failed".into());
             }
 
             let mut key_obj = vec![0u8; obj_len as usize];
             let mut key_handle: usize = 0;
-            if gen_key(self.aes, &mut key_handle, key_obj.as_mut_ptr(), obj_len, key.as_ptr(), key.len() as i32, 0) != STATUS_SUCCESS {
+            if gen_key(
+                self.aes,
+                &mut key_handle,
+                key_obj.as_mut_ptr(),
+                obj_len,
+                key.as_ptr(),
+                key.len() as i32,
+                0,
+            ) != STATUS_SUCCESS
+            {
                 return Err("BCryptGenerateSymmetricKey failed".into());
             }
 
@@ -244,10 +372,20 @@ impl Bcrypt {
 
     pub fn sha256(&self, data: &[u8]) -> Result<Vec<u8>, String> {
         unsafe {
-            let h: Symbol<unsafe extern "C" fn(usize, *mut u8, i32, *const u8, i32, *mut u8, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptHash\0").map_err(|e| e.to_string())?;
+            let h: Symbol<
+                unsafe extern "C" fn(usize, *mut u8, i32, *const u8, i32, *mut u8, i32) -> NTSTATUS,
+            > = self.lib.get(b"BCryptHash\0").map_err(|e| e.to_string())?;
             let mut hash = vec![0u8; 32];
-            if h(self.sha256, std::ptr::null_mut(), 0, data.as_ptr(), data.len() as i32, hash.as_mut_ptr(), 32) != STATUS_SUCCESS {
+            if h(
+                self.sha256,
+                std::ptr::null_mut(),
+                0,
+                data.as_ptr(),
+                data.len() as i32,
+                hash.as_mut_ptr(),
+                32,
+            ) != STATUS_SUCCESS
+            {
                 return Err("BCryptHash SHA256 fail".into());
             }
             Ok(hash)
@@ -256,10 +394,20 @@ impl Bcrypt {
 
     pub fn sha512(&self, data: &[u8]) -> Result<Vec<u8>, String> {
         unsafe {
-            let h: Symbol<unsafe extern "C" fn(usize, *mut u8, i32, *const u8, i32, *mut u8, i32) -> NTSTATUS> =
-                self.lib.get(b"BCryptHash\0").map_err(|e| e.to_string())?;
+            let h: Symbol<
+                unsafe extern "C" fn(usize, *mut u8, i32, *const u8, i32, *mut u8, i32) -> NTSTATUS,
+            > = self.lib.get(b"BCryptHash\0").map_err(|e| e.to_string())?;
             let mut hash = vec![0u8; 64];
-            if h(self.sha512, std::ptr::null_mut(), 0, data.as_ptr(), data.len() as i32, hash.as_mut_ptr(), 64) != STATUS_SUCCESS {
+            if h(
+                self.sha512,
+                std::ptr::null_mut(),
+                0,
+                data.as_ptr(),
+                data.len() as i32,
+                hash.as_mut_ptr(),
+                64,
+            ) != STATUS_SUCCESS
+            {
                 return Err("BCryptHash SHA512 fail".into());
             }
             Ok(hash)

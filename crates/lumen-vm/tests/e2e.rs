@@ -1540,7 +1540,10 @@ imprimir(__tipo_de(verdadero));
 lista<entero> x = [];
 imprimir(__tipo_de(x));"#;
     let output = run_source(src).unwrap();
-    assert_eq!(output, vec!["entero", "decimal", "texto", "booleano", "lista"]);
+    assert_eq!(
+        output,
+        vec!["entero", "decimal", "texto", "booleano", "lista"]
+    );
 }
 
 #[test]
@@ -1559,7 +1562,10 @@ fn test_hash_sha256() {
     let hex = &output[0];
     if hex != "error(Bcrypt no disponible)" {
         assert_eq!(hex.len(), 64, "SHA-256 hex debe tener 64 caracteres");
-        assert!(hex.chars().all(|c| c.is_ascii_hexdigit()), "SHA-256 debe ser hexadecimal");
+        assert!(
+            hex.chars().all(|c| c.is_ascii_hexdigit()),
+            "SHA-256 debe ser hexadecimal"
+        );
     }
     // else: bcrypt no disponible, test pasa sin aserción fuerte
 }
@@ -1572,7 +1578,10 @@ fn test_hash_sha512() {
     let hex = &output[0];
     if hex != "error(Bcrypt no disponible)" {
         assert_eq!(hex.len(), 128, "SHA-512 hex debe tener 128 caracteres");
-        assert!(hex.chars().all(|c| c.is_ascii_hexdigit()), "SHA-512 debe ser hexadecimal");
+        assert!(
+            hex.chars().all(|c| c.is_ascii_hexdigit()),
+            "SHA-512 debe ser hexadecimal"
+        );
     }
 }
 
@@ -1615,8 +1624,14 @@ fn test_env_listar() {
     let src = r#"imprimir(__env_listar());"#;
     let output = run_source(src).unwrap();
     // Should return an array of "KEY=VALUE" strings
-    assert!(output[0].starts_with('['), "env_listar debe retornar un array");
-    assert!(output[0].len() > 2, "debe haber al menos una variable de entorno");
+    assert!(
+        output[0].starts_with('['),
+        "env_listar debe retornar un array"
+    );
+    assert!(
+        output[0].len() > 2,
+        "debe haber al menos una variable de entorno"
+    );
 }
 
 #[test]
@@ -1625,7 +1640,10 @@ fn test_coro_basic() {
 imprimir(__coro_crear("mid_func", 0));"#;
     let output = run_source(src).unwrap();
     // Coroutine id format: coro_N
-    assert!(output[0].starts_with("coro_"), "ID de corrutina debe empezar con 'coro_'");
+    assert!(
+        output[0].starts_with("coro_"),
+        "ID de corrutina debe empezar con 'coro_'"
+    );
     assert!(!output[0].is_empty(), "ID de corrutina no debe estar vacío");
 }
 
@@ -1693,7 +1711,9 @@ imprimir(res);";
     let output = run_source(src).unwrap();
     // The nonexistent function returns Void in the spawned task
     // Void prints as "void" on the output
-    assert!(output[0].contains("void") || output[0].contains("error") || output[0].contains("Error"));
+    assert!(
+        output[0].contains("void") || output[0].contains("error") || output[0].contains("Error")
+    );
 }
 
 #[test]
@@ -1760,7 +1780,11 @@ imprimir(h);
 "#;
     let output = run_source(src).unwrap();
     // Epoch 1970-01-01 → ~1391 AH
-    assert!(output[0].contains("AH"), "Expected Hijri date, got: {}", output[0]);
+    assert!(
+        output[0].contains("AH"),
+        "Expected Hijri date, got: {}",
+        output[0]
+    );
 }
 
 #[test]
@@ -1770,7 +1794,11 @@ imprimir(p);
 "#;
     let output = run_source(src).unwrap();
     // Epoch 1970-01-01 → ~1348 AP
-    assert!(output[0].contains("AP"), "Expected Persian date, got: {}", output[0]);
+    assert!(
+        output[0].contains("AP"),
+        "Expected Persian date, got: {}",
+        output[0]
+    );
 }
 
 #[test]
@@ -1781,7 +1809,10 @@ imprimir(content);
 "#;
     let output = run_source(src).unwrap();
     assert!(!output[0].is_empty(), "Should read Cargo.toml content");
-    assert!(output[0].contains("lumen-vm"), "Should contain package name");
+    assert!(
+        output[0].contains("lumen-vm"),
+        "Should contain package name"
+    );
 }
 
 #[test]

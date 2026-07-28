@@ -2,132 +2,101 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.7.0-orange)
-![Tests](https://img.shields.io/badge/tests-355%20passing-brightgreen)
-![Fases](https://img.shields.io/badge/fases-0--130%20completadas-blueviolet)
+![Version](https://img.shields.io/badge/version-2.0.0-orange)
+![Tests](https://img.shields.io/badge/tests-371%20passing-brightgreen)
+![Fases](https://img.shields.io/badge/fases-0--170%20completadas-blueviolet)
 
 > **El primer lenguaje de programación moderno con el español como ciudadano de primera clase.**
 > Pipeline completo escrito en Rust: Lexer → Parser → Sema → IR → Optimizador → Bytecode → VM.
+> Compila a WASM. Corre en navegador, terminal y Docker.
 
 ---
 
 ## 🚀 Inicio Rápido
 
-### Instalación (binario)
-
-1. Descarga el ejecutable en [Releases](https://github.com/omarPVP123131/Lumen/releases)
-2. Agrégalo a tu `PATH` y ejecuta:
-
+### Con Docker
 ```bash
-lumen run mi_programa.nv
+docker compose up lumen
+```
+
+### Playground Web
+```bash
+cd crates/lumen-wasm
+python serve.py
+# Abrir http://localhost:8080/web/index.html
 ```
 
 ### Compilar desde fuente
-
 ```bash
 git clone https://github.com/omarPVP123131/Lumen.git
 cd Lumen
 cargo build --release
-./target/release/lumen --help
+./target/release/lumen run examples/demo_completo.nv
 ```
 
 ---
-
 ## 💡 El Lenguaje en un Vistazo
 
-### Hola Mundo
+### Sintaxis Dual ES/EN
+
+| Español | English |
+|---------|---------|
+| `funcion entero suma(entero a, entero b)` | `function integer sum(integer a, integer b)` |
+| `imprimir("hola")` | `print("hello")` |
+| `si x > 5 { } sino { }` | `if x > 5 { } else { }` |
+| `mientras cond { }` | `while cond { }` |
+| `para x en lista { }` | `for x in list { }` |
+
+### Variables y Tipos
 
 ```nv
-imprimir("¡Hola, LÚMEN!");
+entero a = 42;
+decimal pi = 3.14159;
+texto saludo = "Hola LÚMEN";
+booleano activo = verdadero;
+lista<entero> nums = [1, 2, 3];
+diccionario<texto, entero> edades;
 ```
 
-### Variables e Inferencia de Tipos
+### Funciones, Genéricos, Traits
 
 ```nv
-x = 42;             // entero (inferido)
-nombre = "Ana";     // texto (inferido)
-activo = verdadero; // booleano (inferido)
-```
-
-### Funciones, Genéricos y Traits
-
-```nv
-rasgo Mostrable {
-    funcion texto mostrar(este);
-}
-
-funcion T identidad<T>(T valor) {
-    retornar valor;
-}
-
+funcion T identidad<T>(T valor) { retornar valor; }
 imprimir(identidad<entero>(42));
-imprimir(identidad<texto>("LÚMEN"));
+
+rasgo Mostrable { funcion texto mostrar(este); }
+impl Mostrable para entero {
+    funcion texto mostrar(este) { retornar "Entero: " + a_texto(este); }
+}
 ```
 
-### Enums con Datos y Pattern Matching
+### Enums + Pattern Matching
 
 ```nv
-enum Forma {
-    Circulo(decimal),
-    Rectangulo(decimal, decimal)
-}
-
-funcion decimal area(Forma f) {
-    elegir f {
-        caso Forma::Circulo(r)       { retornar 3.14159 * r * r; }
-        caso Forma::Rectangulo(b, h) { retornar b * h; }
+enum Color { Rojo, Verde, Azul }
+funcion texto describir(Color c) {
+    elegir (c) {
+        caso Color::Rojo: retornar "rojo";
+        caso Color::Verde: retornar "verde";
+        caso Color::Azul: retornar "azul";
     }
 }
-
-Forma mi_forma = Forma::Circulo(5.0);
-imprimir("Área: ", area(mi_forma)); // 78.53975
 ```
 
-### Guard Let
+### Async / Tasks
 
 ```nv
-sea Algun(valor) = obtener_config() sino {
-    imprimir("Sin configuración, usando defaults");
-    retornar;
-}
-imprimir("Config cargada: ", valor);
+funcion entero trabajo() { retornar 42; }
+texto tid = __tarea_lanzar("trabajo");
+entero res = __tarea_esperar(tid);
+imprimir(res);
 ```
 
-### Sobrecarga de Operadores
+### JS Interop (WASM)
 
 ```nv
-estructura Vector2D { x: decimal, y: decimal }
-
-impl Suma para Vector2D {
-    funcion Vector2D sumar(Vector2D self, Vector2D otro) {
-        retornar Vector2D { x: self.x + otro.x, y: self.y + otro.y };
-    }
-}
-
-Vector2D a = Vector2D { x: 1.0, y: 2.0 };
-Vector2D b = Vector2D { x: 3.0, y: 4.0 };
-Vector2D c = a + b; // { x: 4.0, y: 6.0 }
-```
-
-### Tipos Asociados en Traits
-
-```nv
-rasgo Contenedor {
-    tipo Item;
-    funcion Item obtener(este);
-}
-
-impl Contenedor para Caja {
-    tipo Item = entero;
-    funcion entero obtener(este) { retornar este.valor; }
-}
-```
-
-### String Interpolation
-
-```nv
-texto saludo = "Hola {nombre}, tienes {edad} años.";
-imprimir(saludo);
+__js_call("console_log", "Hola desde LÚMEN!");
+texto titulo = __js_eval("document.title");
 ```
 
 ---
@@ -148,25 +117,58 @@ imprimir(saludo);
 | `lumen doc <archivo>` | Genera HTML desde comentarios `///` |
 | `lumen debug <archivo>` | Depurador con breakpoints e inspección |
 | `lumen serve` | Servidor de desarrollo con hot reload |
-| `lumen lsp` | Servidor LSP para VS Code (diagnostics, completion, hover, go-to-def) |
+| `lumen lsp` | Servidor LSP (diagnostics, completion, hover, go-to-def) |
 | `lumen install <paquete>` | Instala paquetes del registry |
-| `lumen doc <archivo>` | Genera documentación HTML desde `///` |
-| `lumen run --target wasm` | Ejecuta en playground WebAssembly experimental |
 
 ---
 
-## 📊 Estado del Proyecto (v1.7.0)
+## 🌐 Playground WebAssembly
+
+```bash
+cd crates/lumen-wasm
+wasm-pack build --target web --out-dir pkg
+python serve.py
+# http://localhost:8080/web/index.html
+```
+
+El playground incluye:
+- Editor con 19 ejemplos interactivos
+- Consola JS para interop LÚMEN ↔ JavaScript
+- Ejecución en tiempo real
+- Temas oscuro Catppuccin
+
+---
+
+## 🐳 Docker
+
+```bash
+docker build -t lumen:latest .
+docker run -it lumen:latest run examples/demo_completo.nv
+docker compose up  # Incluye lumen + lumen-repl
+```
+
+---
+
+## 📊 Estado del Proyecto (v2.0.0)
 
 ```
-Lenguaje Core      (Fases 0-60)   ████████████████████ 100%
-Lenguaje Avanzado  (Fases 61-70)  ████████████████████ 100%
-Herramientas       (Fases 71-95)  ████████████████████ 100%
-Distribución       (Fases 96-110) ███░░░░░░░░░░░░░░░░░  25%
+Lenguaje Core         ████████████████████ 100% (0-60)
+Lenguaje Avanzado     ████████████████████ 100% (61-70)
+Herramientas & DX     ████████████████████ 100% (71-95)
+Stdlib Extendida      ████████████████████ 100% (96-110)
+Runtime & Sistema     ████████████████████ 100% (111-130)
+Concurrencia & Async  ████████████████████ 100% (131-150)
+GUI, TUI & Juegos     ████████████████████ 100% (151-170)
+Portabilidad          █████░░░░░░░░░░░░░░░  25% (171-185)
+AI/ML & Cloud         ░░░░░░░░░░░░░░░░░░░░   0% (186-220)
 ```
 
-- ✅ **345 tests** pasando, ~0 warnings
-- ✅ **45 ejemplos** `.nv` funcionales
+- ✅ **371 tests** pasando, ~0 warnings
+- ✅ **45+ ejemplos** `.nv` funcionales
 - ✅ **15 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg, wasm
+- ✅ **Docker** multi-stage + docker-compose
+- ✅ **WASM** playground con JS interop integrado
+- ✅ **Sintaxis dual ES/EN** en todo el stdlib
 
 ---
 
@@ -174,7 +176,7 @@ Distribución       (Fases 96-110) ███░░░░░░░░░░░░
 
 | Documento | Descripción |
 |-----------|-------------|
-| [LENGUAJE.md](LENGUAJE.md) | Manual completo del lenguaje — la Biblia de LÚMEN |
+| [LENGUAJE.md](LENGUAJE.md) | Manual completo del lenguaje |
 | [HERRAMIENTAS.md](HERRAMIENTAS.md) | Guía de herramientas, CI/CD y flujo de trabajo |
 | [docs/language.md](docs/language.md) | Referencia rápida de sintaxis |
 | [docs/cli.md](docs/cli.md) | Referencia completa de comandos CLI |
@@ -188,6 +190,7 @@ Distribución       (Fases 96-110) ███░░░░░░░░░░░░
 ## ❤️ Contribuir
 
 Abre un *Issue* o *Pull Request*. Consulta [CONTRIBUTING.md](docs/contributing.md) para la guía completa.
+Skills de desarrollo en `.opencode/agents/lumen-engineer.md` y `.opencode/agents/lumen-tester.md`.
 
 ---
 

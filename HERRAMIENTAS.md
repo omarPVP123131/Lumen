@@ -1,6 +1,6 @@
 # LÚMEN — Herramientas y Desarrollo
 
-**v1.6.0 — Guía del Desarrollador**
+**v2.0.0 — Guía del Desarrollador**
 
 Guía completa de herramientas, comandos, CI/CD y flujo de trabajo.
 
@@ -32,6 +32,17 @@ Ejecuta código fuente `.nv` o bytecode compilado `.nvc`.
 lumen run programa.nv
 lumen run programa.nvc
 ```
+
+### WASM Playground
+
+```bash
+cd crates/lumen-wasm
+wasm-pack build --target web --out-dir pkg
+python serve.py
+# Abrir http://localhost:8080/web/index.html
+```
+
+Incluye editor con 19 ejemplos, consola JS interop, modo oscuro Catppuccin.
 
 ### `lumen build <archivo>`
 

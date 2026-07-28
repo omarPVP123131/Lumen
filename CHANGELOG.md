@@ -4,7 +4,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
-## v1.7.0 — Julio 2026
+## v2.0.0 — Julio 2026
 
 ### Agregado
 - **Fase 96: WASM Playground** — Compilación a `wasm32-unknown-unknown`.
@@ -25,13 +25,19 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 - **Stdlib dual ES/EN**: `texto.nv`, `fecha.nv`, `io.nv`, `crypto.nv` actualizados con aliases inglés.
 - **149 e2e tests** (10 nuevos desde v1.6.0, +10 desde v1.7.0alpha).
 
+### v2.0 — GUI/TUI/Juegos 100% (Julio 2026)
+- **Canvas 2D**: círculos, líneas, triángulos, rectángulos redondeados, gradientes, bitmap font
+- **Tilemap**: sistema de mapas 2D con cámara, colisiones AABB, view culling
+- **Charts**: gráficos de barras, líneas, pastel, dispersión con ejes automáticos
+- **TUI Temas**: 4 presets (Catppuccin, claro, oscuro, alto contraste)
+- **Demo completo**: 33 secciones cubriendo todas las features del lenguaje
+- **Skills**: `.opencode/agents/lumen-engineer.md` + `lumen-tester.md`
+- **Roadmap**: GUI/TUI/Juegos 55%→100%
+
 ### Cambiado
-- Version bump a 1.7.0 en workspace.
-- VM struct fields con `#[cfg(feature = "full")]` para compilación WASM.
-- `crypto_ffi.rs`, `gui_ffi.rs`, `coro_ffi.rs` ahora incluidos vía `mod` en lib.rs.
-- Dependencias `base64`, `hmac`, `sha2` añadidas para JWT.
-- `reqwest` y `libloading` movidos a `full` feature opcional.
-- `AGENTS.md` actualizado con fases completadas y test counts.
+- Version bump a 2.0.0.
+- Todos los .md sincronizados con estado actual.
+- README reescrito con WASM playground, Docker, sintaxis dual.
 
 ---
 
