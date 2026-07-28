@@ -216,6 +216,13 @@ Compilación a `wasm32-unknown-unknown` con feature flags. VM refactorizada:
 - **Async File I/O**: `__leer/escribir_archivo_async`
 - **Async Timer**: `__timer_delay`
 - **Async TCP**: `__tcp_connect_async`
+- **JS Interop**: `__js_eval/evaluar` y `__js_call/llamar` vía `JS_EVAL` static callback. `js-sys` en WASM runtime.
+- **WASM Playground**: build con `wasm-pack`, playground web con ejemplos.
+- **Docker**: Dockerfile multi-stage + docker-compose.yml
+- **Logging**: stdlib/logging.nv con niveles ES/EN
+- **Gráficos avanzados**: sprites, audio SDL2_mixer, partículas en LÚMEN puro
+- **demo_completo.nv**: 33 secciones cubriendo todas las features
+- **WASI**: soporte wasm32-wasip1 target
 - **165 e2e tests** (26 nuevos)
 
 ---

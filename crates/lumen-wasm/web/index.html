@@ -3,126 +3,1390 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LÚMEN Playground</title>
+<title>LÚMEN Playground — v1.7.0</title>
 <style>
+  /* ── Catppuccin Mocha Palette ───────────────────────────── */
+  :root {
+    --base:      #1e1e2e;
+    --mantle:    #181825;
+    --crust:     #11111b;
+    --surface0:  #313244;
+    --surface1:  #45475a;
+    --surface2:  #585b70;
+    --overlay0:  #6c7086;
+    --overlay1:  #7f849c;
+    --text:      #cdd6f4;
+    --subtext0:  #a6adc8;
+    --subtext1:  #bac2de;
+    --blue:      #89b4fa;
+    --lavender:  #b4befe;
+    --mauve:     #cba6f7;
+    --green:     #a6e3a1;
+    --yellow:    #f9e2af;
+    --red:       #f38ba8;
+    --peach:     #fab387;
+    --teal:      #94e2d5;
+    --sky:       #89dceb;
+    --pink:      #f5c2e7;
+    --flamingo:  #f2cdcd;
+    --rosewater: #f5e0dc;
+    --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    --font-ui:   'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; display: flex; flex-direction: column; }
-  header { background: #181825; padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #313244; }
-  header h1 { font-size: 18px; color: #cba6f7; }
-  header span { font-size: 12px; color: #6c7086; }
-  .container { display: flex; flex: 1; gap: 0; }
-  .panel { flex: 1; display: flex; flex-direction: column; }
-  .panel-header { background: #181825; padding: 8px 16px; font-size: 12px; color: #a6adc8; border-bottom: 1px solid #313244; }
-  textarea { flex: 1; background: #1e1e2e; color: #cdd6f4; border: none; padding: 16px; font-family: 'JetBrains Mono', 'Cascadia Code', monospace; font-size: 14px; resize: none; outline: none; tab-size: 2; }
-  textarea::placeholder { color: #585b70; }
-  #output { flex: 1; background: #11111b; color: #a6e3a1; padding: 16px; font-family: 'JetBrains Mono', 'Cascadia Code', monospace; font-size: 14px; overflow-y: auto; white-space: pre-wrap; }
-  .toolbar { display: flex; gap: 8px; padding: 8px 16px; background: #181825; border-top: 1px solid #313244; }
-  button { background: #cba6f7; color: #1e1e2e; border: none; padding: 8px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-  button:hover { background: #b4befe; }
-  button.secondary { background: #313244; color: #cdd6f4; }
-  button.secondary:hover { background: #45475a; }
-  #status { font-size: 12px; color: #6c7086; padding: 8px 16px; }
-  .divider { width: 1px; background: #313244; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-ui);
+    background: var(--base);
+    color: var(--text);
+  }
+
+  /* ── Scrollbar ──────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--crust); }
+  ::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--surface2); }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  header {
+    background: var(--mantle);
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--surface0);
+    flex-shrink: 0;
+    height: 48px;
+  }
+  header .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  header .logo h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--mauve);
+    letter-spacing: 1px;
+  }
+  header .logo .badge {
+    font-size: 11px;
+    background: var(--surface0);
+    color: var(--overlay1);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  header .spacer { flex: 1; }
+  header .header-status {
+    font-size: 12px;
+    color: var(--overlay0);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  header .header-status .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  header .header-status .dot.ready { background: var(--green); }
+  header .header-status .dot.busy  { background: var(--yellow); }
+  header .header-status .dot.error { background: var(--red); }
+
+  /* ── Main Layout ────────────────────────────────────────── */
+  .main-container {
+    display: flex;
+    flex: 1;
+    height: calc(100vh - 48px - 28px); /* header + statusbar */
+    overflow: hidden;
+  }
+
+  /* ── Panels ─────────────────────────────────────────────── */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .panel.code-panel { flex: 1; }
+  .panel.output-panel { flex: 1; border-left: 1px solid var(--surface0); }
+
+  .panel-header {
+    background: var(--mantle);
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--subtext0);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--surface0);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .panel-header .panel-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+  }
+
+  /* ── Code Editor ────────────────────────────────────────── */
+  #code {
+    flex: 1;
+    background: var(--base);
+    color: var(--text);
+    border: none;
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    tab-size: 2;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
+  }
+  #code::placeholder { color: var(--surface2); }
+
+  /* ── Toolbar ────────────────────────────────────────────── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--mantle);
+    border-top: 1px solid var(--surface0);
+    flex-shrink: 0;
+  }
+  .toolbar .separator {
+    width: 1px;
+    height: 24px;
+    background: var(--surface0);
+    margin: 0 4px;
+  }
+
+  button {
+    background: var(--surface0);
+    color: var(--text);
+    border: none;
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font-ui);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  button:hover { background: var(--surface1); }
+  button:active { transform: scale(0.97); }
+  button.primary {
+    background: var(--mauve);
+    color: var(--base);
+  }
+  button.primary:hover { background: var(--lavender); }
+  button.danger {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--red);
+  }
+  button.danger:hover { background: var(--red); color: var(--base); }
+  button.small {
+    padding: 3px 10px;
+    font-size: 11px;
+  }
+
+  select.example-select {
+    background: var(--surface0);
+    color: var(--text);
+    border: 1px solid var(--surface1);
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    outline: none;
+    max-width: 180px;
+  }
+  select.example-select:hover { border-color: var(--overlay0); }
+  select.example-select option { background: var(--mantle); color: var(--text); }
+
+  /* ── Output Tabs ────────────────────────────────────────── */
+  .output-tabs {
+    display: flex;
+    background: var(--mantle);
+    border-bottom: 1px solid var(--surface0);
+    flex-shrink: 0;
+  }
+  .output-tab {
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--overlay0);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .output-tab:hover { color: var(--subtext0); }
+  .output-tab.active {
+    color: var(--mauve);
+    border-bottom-color: var(--mauve);
+  }
+  .output-tab .count {
+    background: var(--surface0);
+    color: var(--overlay1);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 4px;
+  }
+  .output-tab.active .count {
+    background: var(--mauve);
+    color: var(--base);
+  }
+
+  .output-content {
+    flex: 1;
+    background: var(--crust);
+    overflow-y: auto;
+    position: relative;
+  }
+  .output-pane {
+    display: none;
+    padding: 14px 16px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    height: 100%;
+    overflow-y: auto;
+  }
+  .output-pane.active { display: block; }
+
+  #output-pane { color: var(--green); }
+  #console-pane { color: var(--text); }
+  #js-pane { color: var(--peach); }
+
+  .console-entry {
+    padding: 2px 0;
+    display: flex;
+    gap: 8px;
+  }
+  .console-entry .prefix {
+    color: var(--overlay0);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .console-entry.info .prefix { color: var(--blue); }
+  .console-entry.warn .prefix { color: var(--yellow); }
+  .console-entry.error .prefix { color: var(--red); }
+
+  /* ── Status Bar ─────────────────────────────────────────── */
+  .statusbar {
+    background: var(--mantle);
+    border-top: 1px solid var(--surface0);
+    padding: 4px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--overlay0);
+    flex-shrink: 0;
+    height: 28px;
+  }
+  .statusbar .status-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .statusbar .status-item .label { color: var(--surface2); }
+  .statusbar .spacer { flex: 1; }
+  .statusbar .version { color: var(--overlay1); }
+
+  /* ── JS Interop Demo ────────────────────────────────────── */
+  .interop-bar {
+    background: var(--mantle);
+    border-top: 1px solid var(--surface0);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .interop-bar .label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--overlay0);
+    letter-spacing: 0.5px;
+  }
+  .interop-bar button {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  /* ── Responsive ─────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .main-container { flex-direction: column; }
+    .panel.output-panel { border-left: none; border-top: 1px solid var(--surface0); }
+    .toolbar { flex-wrap: wrap; }
+    select.example-select { max-width: 140px; }
+  }
+
+  /* ── Error highlight ────────────────────────────────────── */
+  .error-highlight {
+    background: rgba(243, 139, 168, 0.15);
+    border-left: 3px solid var(--red);
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 0 4px 4px 0;
+    color: var(--red);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  /* ── Toast ──────────────────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 48px;
+    right: 20px;
+    background: var(--surface0);
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.25s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error { border-left: 3px solid var(--red); }
+
+  /* ── Line numbers (simple) ──────────────────────────────── */
+  .editor-wrapper {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  .line-numbers {
+    background: var(--mantle);
+    color: var(--surface2);
+    padding: 16px 8px 16px 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: right;
+    user-select: none;
+    min-width: 40px;
+    overflow: hidden;
+  }
 </style>
 </head>
 <body>
+
+<!-- ═══ HEADER ═══ -->
 <header>
-  <h1>LÚMEN</h1>
-  <span>Playground Web v1.7.0</span>
+  <div class="logo">
+    <h1>◈ LÚMEN</h1>
+    <span class="badge">Playground</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="header-status">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Inicializando...</span>
+  </div>
 </header>
 
-<div class="container">
-  <div class="panel">
-    <div class="panel-header">📝 Código (.nv)</div>
-    <textarea id="code" spellcheck="false">imprimir("¡Hola, LÚMEN desde el navegador!");
-
-// Prueba con variables
-texto nombre = "Mundo";
-entero año = 2026;
-imprimir("Hola ", nombre, " en ", año);
-
-// Prueba matemáticas
-entero a = 42;
-entero b = 10;
-imprimir("42 + 10 = ", a + b);
-imprimir("42 & 10 = ", a & b);
-
-// Prueba función
-funcion texto saludo(texto n) {
-    retornar "¡Hola " + n + "!";
-}
-imprimir(saludo("LÚMEN"));
-</textarea>
+<!-- ═══ MAIN ═══ -->
+<div class="main-container">
+  <!-- ── Code Panel ── -->
+  <div class="panel code-panel">
+    <div class="panel-header">
+      <span>📝 Código fuente (.nv)</span>
+      <div class="panel-actions">
+        <select id="exampleSelect" class="example-select">
+          <option value="">— Cargar ejemplo —</option>
+        </select>
+      </div>
+    </div>
+    <div class="editor-wrapper">
+      <div class="line-numbers" id="lineNumbers">1</div>
+      <textarea id="code" spellcheck="false"
+        placeholder="// Escribe código LÚMEN aquí...&#10;&#10;imprimir(&quot;¡Hola, LÚMEN!&quot;);&#10;&#10;// Presiona Ctrl+Enter para ejecutar"></textarea>
+    </div>
     <div class="toolbar">
-      <button id="runBtn">▶ Ejecutar</button>
-      <button id="clearBtn" class="secondary">🗑 Limpiar</button>
-      <button id="examplesBtn" class="secondary">📂 Ejemplos</button>
-      <span id="status">✓ Listo</span>
+      <button id="runBtn" class="primary">▶ Ejecutar</button>
+      <button id="clearBtn">🗑 Limpiar salida</button>
+      <div class="separator"></div>
+      <button id="checkBtn">✓ Verificar</button>
+      <button id="tokensBtn">🔤 Tokens</button>
+      <div class="separator"></div>
+      <span style="font-size:11px;color:var(--overlay0);">
+        <kbd style="background:var(--surface0);padding:1px 5px;border-radius:3px;font-size:10px;">Ctrl+Enter</kbd>
+      </span>
+    </div>
+    <!-- ── JS Interop Bar ── -->
+    <div class="interop-bar">
+      <span class="label">🔄 JS ↔ LÚMEN</span>
+      <button id="jsCallDemo" class="small">Llamar JS desde LÚMEN</button>
+      <button id="lumenFromJsBtn" class="small">Llamar LÚMEN desde JS</button>
+      <button id="alertDemo" class="small">alert() bridge</button>
+      <button id="titleDemo" class="small">document.title</button>
     </div>
   </div>
 
-  <div class="divider"></div>
-
-  <div class="panel">
-    <div class="panel-header">🖥️ Salida</div>
-    <div id="output">Presiona "Ejecutar" para correr el código...</div>
+  <!-- ── Output Panel ── -->
+  <div class="panel output-panel">
+    <div class="panel-header">
+      <span>🖥️ Salida</span>
+    </div>
+    <div class="output-tabs">
+      <div class="output-tab active" data-pane="output">Salida</div>
+      <div class="output-tab" data-pane="console">
+        Consola <span class="count" id="consoleCount">0</span>
+      </div>
+      <div class="output-tab" data-pane="js">JS Interop</div>
+    </div>
+    <div class="output-content">
+      <div id="output-pane" class="output-pane active">
+        Presiona <strong>▶ Ejecutar</strong> para correr el código...
+      </div>
+      <div id="console-pane" class="output-pane">
+        <div class="console-entry info">
+          <span class="prefix">➜</span>
+          <span>Consola de LÚMEN. Los mensajes de <code>console.log</code> aparecen aquí.</span>
+        </div>
+      </div>
+      <div id="js-pane" class="output-pane">
+        <div class="console-entry info">
+          <span class="prefix">⟷</span>
+          <span>Interacciones JS ↔ LÚMEN aparecen aquí.</span>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
+<!-- ═══ STATUSBAR ═══ -->
+<div class="statusbar">
+  <span class="status-item">
+    <span class="label">VM:</span>
+    <span id="vmStatus">—</span>
+  </span>
+  <span class="status-item">
+    <span class="label">Estado:</span>
+    <span id="runStatus">listo</span>
+  </span>
+  <span class="spacer"></span>
+  <span class="status-item">
+    <span class="label">Tiempo:</span>
+    <span id="execTime">—</span>
+  </span>
+  <span class="version" id="versionDisplay">v—</span>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div id="toast" class="toast"></div>
+
+<!-- ═══ JS ═══ -->
 <script type="module">
 import init, { LumenRuntime } from '../pkg/lumen_wasm.js';
 
+// ── State ──────────────────────────────────────────────────
 let runtime = null;
+let consoleLogs = [];
 
-async function init_runtime() {
+// ── DOM refs ───────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const codeEl      = $('code');
+const lineNumEl   = $('lineNumbers');
+const outputPane  = $('output-pane');
+const consolePane = $('console-pane');
+const jsPane      = $('js-pane');
+const statusText  = $('statusText');
+const statusDot   = $('statusDot');
+const vmStatus    = $('vmStatus');
+const runStatus   = $('runStatus');
+const execTime    = $('execTime');
+const versionDisp = $('versionDisplay');
+const exampleSel  = $('exampleSelect');
+const toastEl     = $('toast');
+const consoleCnt  = $('consoleCount');
+
+// ── Register JS bridge functions ───────────────────────────
+
+/**
+ * Global __lumen_call handler: the VM generates
+ *   __lumen_call('fnName', ['arg1', 'arg2', ...])
+ * which gets eval'd by js_sys::eval.
+ */
+window.__lumen_call = function(fnName, args) {
+  const bridges = {
+    console_log: (msg) => {
+      console.log('[LÚMEN]', msg);
+      addConsoleEntry('info', msg);
+      return '';
+    },
+    alert: (msg) => {
+      window.alert('[LÚMEN] ' + msg);
+      addJSEntry('alert() llamado con: ' + msg);
+      return '';
+    },
+    get_title: () => {
+      const t = document.title;
+      addJSEntry('document.title consultado: "' + t + '"');
+      return t;
+    },
+    set_title: (title) => {
+      document.title = '[LÚMEN] ' + title;
+      addJSEntry('document.title cambiado a: "' + title + '"');
+      return '';
+    },
+    add: (a, b) => {
+      const result = Number(a) + Number(b);
+      addJSEntry(`JS suma: ${a} + ${b} = ${result}`);
+      return String(result);
+    },
+    uppercase: (s) => {
+      const result = String(s).toUpperCase();
+      addJSEntry(`JS uppercase: "${s}" → "${result}"`);
+      return result;
+    },
+    random: () => {
+      const r = Math.random();
+      addJSEntry(`JS random: ${r}`);
+      return String(r);
+    },
+    date: () => {
+      const d = new Date().toISOString();
+      addJSEntry(`JS date: ${d}`);
+      return d;
+    },
+    eval_expression: (expr) => {
+      try {
+        const result = eval(expr);
+        addJSEntry(`JS eval("${expr}") = ${result}`);
+        return String(result);
+      } catch(e) {
+        addJSEntry(`JS eval error: ${e.message}`, 'error');
+        return 'Error: ' + e.message;
+      }
+    },
+  };
+
+  if (bridges[fnName]) {
+    try {
+      return bridges[fnName](...args);
+    } catch(e) {
+      console.error('[LÚMEN Bridge Error]', fnName, e);
+      return 'Bridge error: ' + e.message;
+    }
+  }
+  console.warn('[LÚMEN] Unknown bridge function:', fnName);
+  return 'Unknown function: ' + fnName;
+};
+
+// ── Console helpers ────────────────────────────────────────
+
+function addConsoleEntry(level, msg) {
+  const entry = document.createElement('div');
+  entry.className = 'console-entry ' + level;
+  const icon = { info: '➜', warn: '⚠', error: '✗' }[level] || '•';
+  entry.innerHTML = `<span class="prefix">${icon}</span><span>${escapeHtml(msg)}</span>`;
+  consolePane.appendChild(entry);
+  consolePane.scrollTop = consolePane.scrollHeight;
+  consoleLogs.push({ level, msg });
+  consoleCnt.textContent = consoleLogs.length;
+}
+
+function addJSEntry(msg, level) {
+  level = level || 'info';
+  const entry = document.createElement('div');
+  entry.className = 'console-entry ' + level;
+  const icon = { info: '⟷', warn: '⚠', error: '✗' }[level] || '•';
+  entry.innerHTML = `<span class="prefix">${icon}</span><span>${escapeHtml(msg)}</span>`;
+  jsPane.appendChild(entry);
+  jsPane.scrollTop = jsPane.scrollHeight;
+}
+
+function clearConsole() {
+  consolePane.innerHTML = '';
+  consoleLogs = [];
+  consoleCnt.textContent = '0';
+}
+
+function clearOutput() {
+  outputPane.innerHTML = '';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Toast ──────────────────────────────────────────────────
+
+function showToast(msg, type) {
+  toastEl.textContent = msg;
+  toastEl.className = 'toast ' + (type || '') + ' show';
+  clearTimeout(toastEl._hide);
+  toastEl._hide = setTimeout(() => toastEl.classList.remove('show'), 2500);
+}
+
+// ── Line numbers ───────────────────────────────────────────
+
+function updateLineNumbers() {
+  const lines = codeEl.value.split('\n');
+  const nums = lines.map((_, i) => i + 1).join('\n');
+  lineNumEl.textContent = nums;
+}
+
+codeEl.addEventListener('input', updateLineNumbers);
+codeEl.addEventListener('scroll', () => {
+  lineNumEl.scrollTop = codeEl.scrollTop;
+});
+
+// ── Tab switching ──────────────────────────────────────────
+
+document.querySelectorAll('.output-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
+    tab.classList.add('active');
+    const pane = document.getElementById(tab.dataset.pane + '-pane');
+    if (pane) pane.classList.add('active');
+  });
+});
+
+// ── Run ────────────────────────────────────────────────────
+
+function setStatus(state, msg) {
+  statusDot.className = 'dot ' + state;
+  statusText.textContent = msg;
+}
+
+async function runCode() {
+  if (!runtime) {
+    showToast('VM no cargada aún. Espera un momento...', 'error');
+    return;
+  }
+
+  const code = codeEl.value.trim();
+  if (!code) {
+    showToast('No hay código para ejecutar.', 'error');
+    return;
+  }
+
+  setStatus('busy', 'Ejecutando...');
+  runStatus.textContent = '⚡ ejecutando';
+  outputPane.innerHTML = 'Ejecutando...';
+
+  const start = performance.now();
+
+  // Use setTimeout to let the UI update before blocking
+  await new Promise(r => setTimeout(r, 30));
+
   try {
-    await init();
-    runtime = new LumenRuntime();
-    document.getElementById('status').textContent = '✓ VM cargada';
+    const result = runtime.run(code);
+    const elapsed = (performance.now() - start).toFixed(1);
+    execTime.textContent = elapsed + 'ms';
+
+    outputPane.innerHTML = '';
+    if (result) {
+      // Check if result has error-like prefix
+      if (result.startsWith('Error')) {
+        const div = document.createElement('div');
+        div.className = 'error-highlight';
+        div.textContent = result;
+        outputPane.appendChild(div);
+        setStatus('error', 'Error');
+        runStatus.textContent = '✗ error';
+        showToast('Error de ejecución', 'error');
+      } else {
+        outputPane.textContent = result;
+        setStatus('ready', 'Completado');
+        runStatus.textContent = '✓ completado';
+        showToast('Ejecución completada', 'success');
+      }
+    } else {
+      outputPane.textContent = '(sin salida)';
+      setStatus('ready', 'Completado (sin salida)');
+      runStatus.textContent = '✓ completado';
+    }
   } catch(e) {
-    document.getElementById('status').textContent = '✗ Error: ' + e;
-    document.getElementById('output').textContent = 'Error al cargar la VM: ' + e;
+    const elapsed = (performance.now() - start).toFixed(1);
+    execTime.textContent = elapsed + 'ms';
+    const div = document.createElement('div');
+    div.className = 'error-highlight';
+    div.textContent = 'Error: ' + e.message;
+    outputPane.appendChild(div);
+    setStatus('error', 'Error: ' + e.message);
+    runStatus.textContent = '✗ error';
+    showToast('Error: ' + e.message, 'error');
   }
 }
 
-document.getElementById('runBtn').addEventListener('click', () => {
-  if (!runtime) { document.getElementById('output').textContent = 'VM no cargada aún...'; return; }
-  const code = document.getElementById('code').value;
-  document.getElementById('output').textContent = 'Ejecutando...';
-  document.getElementById('status').textContent = '⚡ ejecutando';
-  
+function checkCode() {
+  if (!runtime) { showToast('VM no cargada', 'error'); return; }
+  const code = codeEl.value.trim();
+  if (!code) { showToast('No hay código.', 'error'); return; }
+
+  outputPane.innerHTML = 'Verificando...';
+  setStatus('busy', 'Verificando...');
+
   setTimeout(() => {
-    const result = runtime.run(code);
-    document.getElementById('output').textContent = result || '(sin salida)';
-    document.getElementById('status').textContent = '✓ completado';
+    try {
+      const err = runtime.check(code);
+      if (err) {
+        const div = document.createElement('div');
+        div.className = 'error-highlight';
+        div.textContent = err;
+        outputPane.innerHTML = '';
+        outputPane.appendChild(div);
+        setStatus('error', 'Error encontrado');
+        showToast('Error de verificación', 'error');
+      } else {
+        outputPane.innerHTML = '✓ Código válido — sin errores léxicos, sintácticos ni semánticos.';
+        setStatus('ready', 'Código válido');
+        showToast('Código válido ✓', 'success');
+      }
+    } catch(e) {
+      showToast('Error: ' + e.message, 'error');
+    }
   }, 50);
+}
+
+function showTokens() {
+  if (!runtime) { showToast('VM no cargada', 'error'); return; }
+  const code = codeEl.value.trim();
+  if (!code) { showToast('No hay código.', 'error'); return; }
+
+  try {
+    const tokens = runtime.tokenize(code);
+    // Switch to output pane
+    document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
+    document.querySelector('[data-pane="output"]').classList.add('active');
+    outputPane.classList.add('active');
+    outputPane.textContent = tokens;
+    showToast('Tokens generados', 'success');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// ── Examples ───────────────────────────────────────────────
+
+const EXAMPLES = [
+  {
+    name: 'Hola Mundo',
+    code: `imprimir("¡Hola, LÚMEN!");
+imprimir("Este es el playground interactivo.");
+imprimir("Versión: ", __tipo_de(version));`
+  },
+  {
+    name: 'Matemáticas',
+    code: `// Operaciones matemáticas básicas
+entero a = 42;
+entero b = 10;
+decimal c = 3.14;
+
+imprimir("a = ", a);
+imprimir("b = ", b);
+imprimir("a + b = ", a + b);
+imprimir("a - b = ", a - b);
+imprimir("a * b = ", a * b);
+imprimir("a / b = ", a / b);  // División entera
+imprimir("a & b = ", a & b);  // AND binario
+imprimir("a << 2 = ", a << 2);
+imprimir("c * 2 = ", c * 2);
+imprimir("entero(3.14) = ", entero(3.14));`
+  },
+  {
+    name: 'Fibonacci recursivo',
+    code: `// Fibonacci recursivo
+funcion entero fib(entero n) {
+    si n <= 1 {
+        retornar n;
+    }
+    retornar fib(n - 1) + fib(n - 2);
+}
+
+entero n = 20;
+imprimir("fib(", n, ") = ", fib(n));
+
+// Bucle para mostrar serie
+imprimir("Serie:"));
+entero i = 0;
+mientras i <= 10 {
+    imprimir("  fib(", i, ") = ", fib(i));
+    i = i + 1;
+}`
+  },
+  {
+    name: 'Struct + Métodos',
+    code: `// Definición de estructura
+estructura Punto {
+    x: entero,
+    y: entero
+}
+
+// Métodos
+impl Punto {
+    funcion texto mostrar() {
+        retornar "Punto(" + texto(x) + ", " + texto(y) + ")";
+    }
+
+    funcion entero suma() {
+        retornar x + y;
+    }
+}
+
+// Uso
+Punto p = Punto { x: 3, y: 4 };
+imprimir(p.mostrar());
+imprimir("Suma de coordenadas: ", p.suma());
+imprimir("Acceso directo: p.x = ", p.x, ", p.y = ", p.y);`
+  },
+  {
+    name: 'Enum + Match',
+    code: `// Enumeración con variantes
+enum Color {
+    Rojo,
+    Verde,
+    Azul,
+    Amarillo
+}
+
+// Función con pattern matching exhaustivo
+funcion texto describir(Color c) {
+    elegir c {
+        caso Color::Rojo     { retornar "rojo como el fuego"; }
+        caso Color::Verde    { retornar "verde como la naturaleza"; }
+        caso Color::Azul     { retornar "azul como el cielo"; }
+        caso Color::Amarillo { retornar "amarillo como el sol"; }
+    }
+}
+
+// Probamos
+imprimir(describir(Color::Rojo));
+imprimir(describir(Color::Verde));
+imprimir(describir(Color::Azul));
+imprimir(describir(Color::Amarillo));`
+  },
+  {
+    name: 'Genéricos',
+    code: `// Función genérica identidad
+funcion T identidad<T>(T x) {
+    retornar x;
+}
+
+// Función genérica con dos parámetros
+funcion T maximo<T>(T a, T b) {
+    si a > b { retornar a; }
+    retornar b;
+}
+
+imprimir(identidad<entero>(42));
+imprimir(identidad<texto>("hola"));
+imprimir(identidad<decimal>(3.1416));
+imprimir("Máximo: ", maximo(10, 20));
+imprimir("Máximo texto: ", maximo("pera", "manzana"));`
+  },
+  {
+    name: 'Closures',
+    code: `// Closure que captura una variable
+entero factor = 2;
+funcion(entero) -> entero duplicar = fn(entero x) -> entero {
+    retornar x * factor;
+};
+
+// Usamos el closure
+imprimir("10 * 2 = ", duplicar(10));
+imprimir("7 * 2 = ", duplicar(7));
+
+// Otro closure
+texto prefijo = "Valor: ";
+funcion(entero) -> texto formatear = fn(entero n) -> texto {
+    retornar prefijo + texto(n);
+};
+imprimir(formatear(42));`
+  },
+  {
+    name: 'Rangos + Bucles',
+    code: `// Rangos
+imprimir("Rango 0..5:");
+entero i = 0;
+mientras i <= 5 {
+    imprimir("  ", i);
+    i = i + 1;
+}
+
+// For-each sobre lista
+imprimir("Lista:");
+lista<entero> nums = [10, 20, 30, 40, 50];
+para entero n en nums {
+    imprimir("  ", n);
+}
+
+// Rango con paso (simulado)
+imprimir("Pares del 0 al 10:");
+entero j = 0;
+mientras j <= 10 {
+    imprimir("  ", j);
+    j = j + 2;
+}`
+  },
+  {
+    name: 'JS Interop',
+    code: `// LLAMAR a JS desde LÚMEN
+imprimir("=== JS Interop Demo ===");
+
+// Llamar console.log bridge
+imprimir("Llamando a JS console.log...");
+__js_call("console_log", "¡Hola desde LÚMEN!");
+
+// Obtener título de la página
+texto titulo = __js_call("get_title", "");
+imprimir("Título de página: ", titulo);
+
+// Cambiar título
+__js_call("set_title", "LÚMEN Rocks!");
+imprimir("Título cambiado desde LÚMEN!");
+
+// Sumar con JS
+texto suma = __js_call("add", "40", "2");
+imprimir("40 + 2 = ", suma);
+
+// Mayúsculas con JS
+texto mayus = __js_call("uppercase", "lumen lenguaje");
+imprimir("MAYÚSCULAS: ", mayus);
+
+// Número aleatorio desde JS
+texto rand = __js_call("random", "");
+imprimir("Random JS: ", rand);
+
+// Evaluar expresión JS
+texto evalResult = __js_call("eval_expression", "Math.sqrt(144)");
+imprimir("sqrt(144) = ", evalResult);
+
+// Evaluar JS directamente
+texto r = __js_eval("'Hola desde JS_EVAL: ' + (42 * 2)");
+imprimir(r);
+
+imprimir("=== Fin JS Interop ===");`
+  },
+  {
+    name: 'Tipos y Conversiones',
+    code: `// Tipo de cada valor
+imprimir("__tipo_de:");
+imprimir("  42         → ", __tipo_de(42));
+imprimir("  \"hola\"     → ", __tipo_de("hola"));
+imprimir("  verdadero  → ", __tipo_de(verdadero));
+imprimir("  [1,2,3]    → ", __tipo_de([1, 2, 3]));
+imprimir("  3.14       → ", __tipo_de(3.14));
+
+// Conversiones
+imprimir("");
+imprimir("Conversiones:");
+imprimir("  42 a texto: ", a_texto(42));
+imprimir("  \"123\" a entero: ", a_entero("123"));
+imprimir("  \"3.14\" a decimal: ", a_decimal("3.14"));
+imprimir("  3.99 a entero: ", entero(3.99));`
+  },
+  {
+    name: 'Diccionarios',
+    code: `// Diccionario básico
+diccionario<texto, entero> edades = {};
+edades["Ana"] = 25;
+edades["Bob"] = 30;
+edades["Carlos"] = 35;
+
+imprimir("Edad de Ana: ", edades["Ana"]);
+imprimir("Edad de Bob: ", edades["Bob"]);
+
+// Diccionario con distintos tipos
+diccionario<texto, texto> capitales = {
+    "México": "CDMX",
+    "España": "Madrid",
+    "Argentina": "Buenos Aires"
+};
+imprimir("Capital de España: ", capitales["España"]);
+
+// Verificar existencia
+texto clave = "Francia";
+si capitales[clave] != nada {
+    imprimir("Capital de Francia: ", capitales[clave]);
+} sino {
+    imprimir("Francia no está en el diccionario");
+}`
+  },
+  {
+    name: 'String Interpolation',
+    code: `// Variables para interpolar
+texto nombre = "Ana";
+entero edad = 28;
+texto ciudad = "Buenos Aires";
+
+// Interpolación básica
+imprimir("Hola, me llamo {nombre} y tengo {edad} años.");
+
+// Interpolación con expresiones
+imprimir("El año que viene tendré {edad + 1} años.");
+
+// Interpolación con llamadas
+imprimir("Hoy es {__js_call(\"date\", \"\")}");
+
+// Concatenación tradicional
+entero a = 5;
+entero b = 3;
+imprimir("La suma de " + a + " y " + b + " es " + (a + b));`
+  },
+  {
+    name: 'Ternario',
+    code: `// Operador ternario
+entero x = 42;
+texto resultado = x > 18 ? "mayor de edad" : "menor de edad";
+imprimir(x, " es ", resultado);
+
+entero nota = 85;
+texto calif = nota >= 90 ? "Excelente" :
+              nota >= 80 ? "Bien" :
+              nota >= 70 ? "Regular" :
+              "Necesita mejorar";
+imprimir("Nota ", nota, ": ", calif);
+
+// Ternario anidado
+entero a = 10;
+entero b = 20;
+texto mayor = a > b ? "a es mayor" :
+              b > a ? "b es mayor" :
+              "son iguales";
+imprimir(mayor);`
+  },
+  {
+    name: 'Resultado<T,E>',
+    code: `// Función que retorna Resultado
+funcion Resultado<entero, texto> dividir(entero a, entero b) {
+    si b == 0 {
+        retornar Error("No se puede dividir por cero");
+    }
+    retornar Exito(a / b);
+}
+
+// Uso con elegir
+entero x = 10;
+entero y = 2;
+Resultado<entero, texto> res = dividir(x, y);
+
+elegir res {
+    caso Exito(let v) { imprimir(x, " / ", y, " = ", v); }
+    caso Error(let e) { imprimir("Error: ", e); }
+}
+
+// Con error
+Resultado<entero, texto> res2 = dividir(10, 0);
+elegir res2 {
+    caso Exito(let v) { imprimir("Resultado: ", v); }
+    caso Error(let e) { imprimir("Error capturado: ", e); }
+}`
+  },
+  {
+    name: 'Opcion<T>',
+    code: `// Opcion puede ser Algo o Nada
+funcion Opcion<entero> buscar(lista<entero> lst, entero target) {
+    para entero n en lst {
+        si n == target {
+            retornar Algo(n);
+        }
+    }
+    retornar Nada;
+}
+
+lista<entero> nums = [1, 2, 3, 4, 5];
+
+// Búsqueda exitosa
+Opcion<entero> encontrado = buscar(nums, 3);
+elegir encontrado {
+    caso Algo(let v) { imprimir("Encontrado: ", v); }
+    caso Nada { imprimir("No encontrado"); }
+}
+
+// Búsqueda fallida
+Opcion<entero> noEncontrado = buscar(nums, 99);
+elegir noEncontrado {
+    caso Algo(let v) { imprimir("Encontrado: ", v); }
+    caso Nada { imprimir("No encontrado (como esperado)"); }
+}`
+  },
+  {
+    name: 'Constantes',
+    code: `// Constantes
+const entero MAX_INTENTOS = 5;
+const texto SALUDO = "Bienvenido a LÚMEN";
+const decimal PI = 3.1415926535;
+
+imprimir(SALUDO);
+imprimir("PI = ", PI);
+imprimir("Máximo de intentos: ", MAX_INTENTOS);
+
+// Uso en cálculos
+entero radio = 10;
+decimal area = PI * radio * radio;
+imprimir("Área del círculo (radio=10): ", area);
+
+// Constante booleana
+const booleano DEBUG = verdadero;
+si DEBUG {
+    imprimir("Modo depuración activado");
+}`
+  },
+  {
+    name: 'Tuplas + Destructuring',
+    code: `// Tuplas
+tupla<entero, texto, decimal> t = (1, "hola", 3.14);
+imprimir("Tupla completa: ", t);
+
+// Acceso por índice
+imprimir("Primer elemento: ", t.0);
+imprimir("Segundo elemento: ", t.1);
+
+// Destructuring
+entero a;
+texto b;
+decimal c;
+(a, b, c) = t;
+imprimir("Destructured: ", a, ", ", b, ", ", c);
+
+// Tupla en función
+funcion tupla<entero, entero> suma_y_resta(entero x, entero y) {
+    retornar (x + y, x - y);
+}
+
+tupla<entero, entero> res = suma_y_resta(10, 3);
+imprimir("Suma y resta de 10 y 3: ", res);`
+  },
+  {
+    name: 'For-Each',
+    code: `// For-each sobre lista
+lista<texto> frutas = ["manzana", "pera", "uva", "naranja", "plátano"];
+imprimir("Frutas:");
+para texto f en frutas {
+    imprimir("  - ", f);
+}
+
+// Con números
+lista<entero> cuadrados = [];
+entero i = 1;
+mientras i <= 5 {
+    cuadrados = cuadrados + [i * i];
+    i = i + 1;
+}
+imprimir("Cuadrados del 1 al 5:");
+para entero c en cuadrados {
+    imprimir("  ", c);
+}`
+  },
+  {
+    name: 'Async/Await (JS via __js_call)',
+    code: `// Simulación de async usando JS Promise via __js_call
+// Nota: en el navegador, podemos llamar setTimeout desde JS
+
+imprimir("=== Async Demo via JS Bridge ===");
+
+// Llamada JS que simula una operación asíncrona
+texto fecha = __js_call("date", "");
+imprimir("Fecha actual (JS): ", fecha);
+
+// Evaluar una promesa desde JS (simplificado)
+texto prom = __js_eval("" +
+    "new Promise(r => setTimeout(() => r('Datos cargados!'), 100))" +
+    ".then(r => { window.__lumen_call('console_log', [r]); return r; })"
+);
+imprimir("Resultado promesa: ", prom);`
+  }
+];
+
+// Populate example selector
+EXAMPLES.forEach((ex, i) => {
+  const opt = document.createElement('option');
+  opt.value = i;
+  opt.textContent = ex.name;
+  exampleSel.appendChild(opt);
 });
 
-document.getElementById('clearBtn').addEventListener('click', () => {
-  document.getElementById('output').textContent = '';
-});
-
-document.getElementById('examplesBtn').addEventListener('click', () => {
-  const examples = [
-    { name: 'Hola Mundo', code: 'imprimir("¡Hola, LÚMEN!");' },
-    { name: 'Matemáticas', code: 'entero x = 42;\nentero y = 10;\nimprimir("x + y = ", x + y);\nimprimir("x & y = ", x & y);\nimprimir("x << 2 = ", x << 2);' },
-    { name: 'Fibonacci', code: 'funcion entero fib(entero n) {\n    si n <= 1 { retornar n; }\n    retornar fib(n - 1) + fib(n - 2);\n}\nimprimir(fib(10));' },
-    { name: 'Bucle', code: 'entero i = 0;\nmientras i < 10 {\n    imprimir(i);\n    i = i + 1;\n}' },
-    { name: 'Struct', code: 'estructura Punto { x: entero, y: entero }\nPunto p = Punto { x: 3, y: 4 };\nimprimir(p.x + p.y);' },
-    { name: 'JS Eval', code: 'texto r = __js_eval("1 + 1");\nimprimir(r);' },
-  ];
-  
-  let menu = "EJEMPLOS:\n\n";
-  examples.forEach((ex, i) => { menu += (i+1) + ". " + ex.name + "\n"; });
-  menu += "\nSelecciona un número (0=cancelar):";
-  const sel = prompt(menu);
-  const idx = parseInt(sel) - 1;
-  if (idx >= 0 && idx < examples.length) {
-    document.getElementById('code').value = examples[idx].code;
+exampleSel.addEventListener('change', () => {
+  const idx = parseInt(exampleSel.value);
+  if (!isNaN(idx) && idx >= 0 && idx < EXAMPLES.length) {
+    codeEl.value = EXAMPLES[idx].code;
+    updateLineNumbers();
+    showToast('Ejemplo cargado: ' + EXAMPLES[idx].name, 'success');
+    // Switch to output pane so user can see what they're running
+    document.querySelectorAll('.output-tab').forEach(el => el.classList.remove('active'));
+    document.querySelector('[data-pane="output"]').classList.add('active');
+    // Remove old active pane and set output active
+    document.querySelectorAll('.output-pane').forEach(el => el.classList.remove('active'));
+    outputPane.classList.add('active');
+    outputPane.innerHTML = 'Ejemplo <strong>' + EXAMPLES[idx].name + '</strong> cargado. Presiona <strong>▶ Ejecutar</strong> o <kbd>Ctrl+Enter</kbd>.';
   }
 });
 
-init_runtime();
+// ── JS ↔ LÚMEN Interop Buttons ────────────────────────────
+
+$('jsCallDemo').addEventListener('click', () => {
+  // Insert JS interop demo code
+  const demoCode = `// JS Interop Demo
+imprimir("Llamando a JS desde LÚMEN...");
+__js_call("console_log", "¡Hola! Este mensaje viene de LÚMEN.");
+
+texto titulo = __js_call("get_title", "");
+imprimir("Título actual: ", titulo);
+
+__js_call("set_title", "LÚMEN Playground - JS Interop");
+
+texto suma = __js_call("add", "100", "23");
+imprimir("100 + 23 = ", suma);
+
+texto mayus = __js_call("uppercase", "javascript interop");
+imprimir("Upper: ", mayus);
+
+texto rand = __js_call("random", "");
+imprimir("Random: ", rand);
+
+texto sqrt = __js_call("eval_expression", "Math.sqrt(256)");
+imprimir("sqrt(256) = ", sqrt);
+
+imprimir("¡Interop completado!");`;
+
+  codeEl.value = demoCode;
+  updateLineNumbers();
+  showToast('Código JS Interop cargado', 'success');
+});
+
+$('lumenFromJsBtn').addEventListener('click', () => {
+  // Demo: call LÚMEN from JS
+  const jsCode = `
+// Este ejemplo muestra cómo JS puede llamar a LÚMEN
+// Primero definimos una función LÚMEN
+funcion entero factorial(entero n) {
+    si n <= 1 { retornar 1; }
+    retornar n * factorial(n - 1);
+}
+
+// La llamamos
+imprimir("factorial(5) = ", factorial(5));
+
+// Ahora desde JS (vía __js_eval) podemos modificar el DOM
+__js_eval("document.getElementById('output-pane').innerHTML += '\\\\n<span style=\"color:var(--peach)\">➜ JS llamó a LÚMEN y obtuvo: ' + 42 + '</span>'");
+imprimir("JS puede ser llamado desde LÚMEN y viceversa!");
+`;
+  codeEl.value = jsCode.trim();
+  updateLineNumbers();
+  showToast('Código LÚMEN ↔ JS cargado', 'success');
+});
+
+$('alertDemo').addEventListener('click', () => {
+  const alertCode = `// Demo del bridge alert()
+imprimir("Llamando a alert() desde LÚMEN...");
+__js_call("alert", "¡Hola desde LÚMEN!\\nEste es un mensaje de alerta.");
+imprimir("¿Viste la alerta?");
+__js_call("console_log", "Alerta mostrada correctamente");
+`;
+  codeEl.value = alertCode.trim();
+  updateLineNumbers();
+  showToast('Demo de alert() cargado', 'success');
+});
+
+$('titleDemo').addEventListener('click', () => {
+  const titleCode = `// Demo de document.title bridge
+texto tituloActual = __js_call("get_title", "");
+imprimir("Título actual de la página: ", tituloActual);
+
+// Cambiar el título
+__js_call("set_title", "¡Título cambiado por LÚMEN!");
+imprimir("Título cambiado. Mira la pestaña del navegador.");
+
+// Verificar el cambio
+texto nuevoTitulo = __js_call("get_title", "");
+imprimir("Nuevo título: ", nuevoTitulo);
+
+// Restaurar después de 3 segundos (simulado)
+imprimir("Esperando 3 segundos para restaurar...");
+__js_eval("setTimeout(() => { document.title = 'LÚMEN Playground — v1.7.0'; window.__lumen_call('console_log', ['Título restaurado']); }, 3000)");
+imprimir("Título se restaurará en 3 segundos.");
+`;
+  codeEl.value = titleCode.trim();
+  updateLineNumbers();
+  showToast('Demo de document.title cargado', 'success');
+});
+
+// ── Event Listeners ───────────────────────────────────────
+
+$('runBtn').addEventListener('click', runCode);
+$('clearBtn').addEventListener('click', () => {
+  clearOutput();
+  clearConsole();
+  // Clear JS pane too
+  jsPane.innerHTML = '';
+  addJSEntry('Panel limpiado.', 'info');
+  showToast('Salida limpiada', 'success');
+});
+$('checkBtn').addEventListener('click', checkCode);
+$('tokensBtn').addEventListener('click', showTokens);
+
+// Ctrl+Enter to run
+codeEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    runCode();
+  }
+});
+
+// ── Init ───────────────────────────────────────────────────
+
+async function initRuntime() {
+  try {
+    await init();
+    runtime = new LumenRuntime();
+    const ver = LumenRuntime.version();
+    versionDisp.textContent = 'v' + ver;
+    vmStatus.textContent = '✓ cargada';
+    setStatus('ready', 'Listo');
+    runStatus.textContent = 'listo';
+    outputPane.innerHTML = '✅ VM cargada correctamente.<br>Escribe código LÚMEN y presiona <strong>▶ Ejecutar</strong> o <kbd>Ctrl+Enter</kbd>.';
+    showToast('LÚMEN v' + ver + ' cargado', 'success');
+
+    // Register console_log bridge by sending a test message
+    addConsoleEntry('info', 'Runtime LÚMEN inicializado (v' + ver + ')');
+    addConsoleEntry('info', 'Puentes JS registrados: console_log, alert, get_title, set_title, add, uppercase, random, date, eval_expression');
+  } catch(e) {
+    console.error('Init error:', e);
+    vmStatus.textContent = '✗ error';
+    setStatus('error', 'Error de carga');
+    outputPane.innerHTML = '<div class="error-highlight">Error al cargar la VM: ' + escapeHtml(e.message || e) + '</div>';
+    showToast('Error al cargar: ' + e.message, 'error');
+  }
+}
+
+// Initialize line numbers
+updateLineNumbers();
+
+// Start
+initRuntime();
 </script>
 </body>
 </html>
