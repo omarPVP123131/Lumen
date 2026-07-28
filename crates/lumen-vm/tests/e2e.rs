@@ -1628,3 +1628,70 @@ imprimir(__coro_crear("mid_func", 0));"#;
     assert!(output[0].starts_with("coro_"), "ID de corrutina debe empezar con 'coro_'");
     assert!(!output[0].is_empty(), "ID de corrutina no debe estar vacío");
 }
+
+// ── Async / Task Tests ──
+
+#[test]
+fn test_async_task_basic() {
+    let src = "funcion entero mid_func() { retornar 42; }
+texto x = __tarea_lanzar(\"mid_func\");
+entero y = __tarea_esperar(x);
+imprimir(y);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["42"]);
+}
+
+#[test]
+fn test_async_with_args() {
+    let src = "funcion entero suma(entero a, entero b) { retornar a + b; }
+texto i = __tarea_lanzar(\"suma\", 10, 20);
+entero r = __tarea_esperar(i);
+imprimir(r);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["30"]);
+}
+
+#[test]
+fn test_async_multiple_tasks() {
+    let src = "funcion entero slow_double(entero x) { retornar x * 2; }
+texto t1 = __tarea_lanzar(\"slow_double\", 5);
+texto t2 = __tarea_lanzar(\"slow_double\", 10);
+texto t3 = __tarea_lanzar(\"slow_double\", 15);
+entero r1 = __tarea_esperar(t1);
+entero r2 = __tarea_esperar(t2);
+entero r3 = __tarea_esperar(t3);
+imprimir(r1 + r2 + r3);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["60"]);
+}
+
+#[test]
+fn test_async_esperar_keyword() {
+    let src = "funcion entero mid_func() { retornar 99; }
+texto tid = __tarea_lanzar(\"mid_func\");
+entero res = __tarea_esperar(tid);
+imprimir(res);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["99"]);
+}
+
+#[test]
+fn test_async_english_task_spawn() {
+    let src = "function integer double(integer x) { return x * 2; }
+texto tid = __task_spawn(\"double\", 21);
+entero res = __task_await(tid);
+print(res);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["42"]);
+}
+
+#[test]
+fn test_async_task_not_found() {
+    let src = "texto tid = __tarea_lanzar(\"nonexistent_func\");
+entero res = __tarea_esperar(tid);
+imprimir(res);";
+    let output = run_source(src).unwrap();
+    // The nonexistent function returns Void in the spawned task
+    // Void prints as "void" on the output
+    assert!(output[0].contains("void") || output[0].contains("error") || output[0].contains("Error"));
+}

@@ -2112,6 +2112,36 @@ impl SemanticAnalyzer {
                                         });
                                     }
                                     TypeInfo::Void
+                                } else if callee == "__tarea_lanzar" || callee == "__task_spawn" {
+                                    if args.len() < 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera al menos 1 argumento (nombre de función), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa el nombre de la función como primer argumento".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Texto
+                                } else if callee == "__tarea_esperar" || callee == "__task_await" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera 1 argumento (task ID), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa el ID de la tarea como único argumento".to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!("'{}' espera un texto (task ID), no '{:?}'", callee, got),
+                                                span: *span,
+                                                suggestion: "Pasa un valor de tipo texto como task ID".to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Entero
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {

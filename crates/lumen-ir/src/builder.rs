@@ -1105,6 +1105,7 @@ impl IRBuilder {
             }
             Expr::Esperar { expr, .. } => {
                 self.gen_expr(expr);
+                self.emit(Instr::Call("__tarea_esperar".to_string(), 1));
             }
         }
     }

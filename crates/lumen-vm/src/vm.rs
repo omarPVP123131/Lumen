@@ -93,6 +93,10 @@ pub struct VM {
     scope_handles: Vec<HashMap<String, Value>>,
     #[cfg(feature = "full")]
     ffi_libraries: HashMap<String, usize>,
+    #[cfg(feature = "full")]
+    task_results: HashMap<String, std::sync::mpsc::Receiver<Value>>,
+    #[cfg(feature = "full")]
+    task_counter: usize,
 }
 
 /// Helper to convert VmError into the builtin return type.
@@ -149,6 +153,10 @@ impl VM {
             scope_handles: Vec::new(),
             #[cfg(feature = "full")]
             ffi_libraries: HashMap::new(),
+            #[cfg(feature = "full")]
+            task_results: HashMap::new(),
+            #[cfg(feature = "full")]
+            task_counter: 0,
         }
     }
 
@@ -1403,6 +1411,38 @@ impl VM {
                     return Some(Ok(()));
                 }
 
+                // ██ Async/Task builtins ██
+                if name == "__tarea_lanzar" || name == "__task_spawn" {
+                    let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let fn_args: Vec<Value> = args.into_iter().skip(1).collect();
+                    let bc = self.bytecode.clone();
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let id = self.task_counter;
+                    self.task_counter += 1;
+                    std::thread::spawn(move || {
+                        let mut vm = VM::new(bc);
+                        let result = vm.run_function(&fn_name, fn_args);
+                        let _ = tx.send(result.unwrap_or(Value::Void));
+                    });
+                    let task_id = format!("task_{}", id);
+                    self.task_results.insert(task_id.clone(), rx);
+                    self.push(Value::Str(task_id));
+                    return Some(Ok(()));
+                }
+
+                if name == "__tarea_esperar" || name == "__task_await" {
+                    let task_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if let Some(rx) = self.task_results.remove(&task_id) {
+                        match rx.recv() {
+                            Ok(val) => self.push(val),
+                            Err(_) => self.push(Value::Error(Box::new(Value::Str("Task failed".into())))),
+                        }
+                    } else {
+                        self.push(Value::Error(Box::new(Value::Str("Task not found".into()))));
+                    }
+                    return Some(Ok(()));
+                }
+
         None
     }
     pub fn run(&mut self) -> Result<(), VmError> {
@@ -1465,6 +1505,31 @@ impl VM {
 
     pub fn call_stack(&self) -> &[CallFrame] {
         &self.call_stack
+    }
+
+    /// Run a specific function by name with given args, returning its result.
+    /// Used by spawned task threads to execute a function in isolation.
+    pub fn run_function(&mut self, name: &str, args: Vec<Value>) -> Result<Value, VmError> {
+        if let Some(func) = self.find_func(name) {
+            let func_start = func.start;
+            let func_params = func.params.clone();
+            let mut scope = HashMap::new();
+            for (i, param_name) in func_params.iter().enumerate() {
+                if let Some(arg) = args.get(i) {
+                    scope.insert(param_name.clone(), arg.clone());
+                }
+            }
+            self.locals.push(scope);
+            self.call_stack.push(CallFrame {
+                func_name: name.to_string(),
+                return_ip: self.bytecode.instructions.len(), // Past end → run() loop breaks
+            });
+            self.ip = func_start;
+            self.run()?;
+            Ok(self.pop().unwrap_or(Value::Void))
+        } else {
+            Err(VmError::UndefinedFunction(name.to_string()))
+        }
     }
 
     fn execute(&mut self, instr: &Instruction) -> Result<(), VmError> {

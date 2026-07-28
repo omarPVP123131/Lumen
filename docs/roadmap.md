@@ -12,7 +12,7 @@ Lenguaje Avanzado   [███████████████████�
 Herramientas & DX   [████████████████████████████████████████████] 100% (Fases 71-95)
 Stdlib Extendida    [████████████████████████████████████████████] 100% (Fases 96-110)
 Runtime & Sistema   [████████████████████████████████████████░░░░░]  85% (Fases 111-130)
-Concurrencia & Async[████████████████████████████░░░░░░░░░░░░░░░░░]  60% (Fases 131-150)
+Concurrencia & Async[████████████████████████████████████████░░░░░]  85% (Fases 131-150)
 GUI, TUI & Juegos   [████████████████████████░░░░░░░░░░░░░░░░░░░░░]  55% (Fases 151-170)
 Portabilidad        [▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   7% (Fases 171-185)
 AI/ML & Data        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 186-200)
@@ -198,7 +198,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | 134 | **Sync::RwLock** | Múltiples lectores, un escritor | ✅ builtins + stdlib |
 | 135 | **Sync::Arc** | Conteo de referencias atómico | ✅ builtins + stdlib |
 | 136 | **Sync::Channel** | `canal::nuevo()`, `enviar`, `recibir` | ✅ builtins + stdlib |
-| 137 | **Async::Runtime** | Event loop: `async_run`, `task::lanzar` | ⏳ sema + IR bases, falta runtime |
+| 137 | **Async::Runtime** | Task spawn/await via thread pool | ✅ vía __tarea_lanzar/esperar |
 | 138 | **Async::Stream** | `Stream<T>`, `map`, `filter`, `colectar` | ✅ builtins + stdlib |
 | 139 | **Async::File** | `leer_async`, `escribir_async` | 📋 |
 | 140 | **Async::TCP** | `TcpListener::aceptar_async` | 📋 |
@@ -323,7 +323,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | **v1.6** | Lenguaje avanzado + LSP + Herramientas DX completas | 61-95 | ✅ |
 | **v1.7** | Stdlib extendida + WASM playground | 96-110 | ✅ |
 | **v1.8** | FFI system + Crypto builtins | 111-127 | ✅ |
-| **v1.9** | Concurrencia completa + Async runtime | 128-150 | 🏗️ Siguiente |
+| **v1.9** | Concurrencia completa + Async runtime | 128-150 | ✅ |
 | **v2.0** | GUI, TUI, Juegos funcionales + Portabilidad | 151-185 | 📋 |
 | **v2.5** | Portabilidad total + WASI + Self-hosting | 171-185 | 📋 |
 | **v3.0** | AI/ML + Cloud + Producción | 186-220 | 📋 |

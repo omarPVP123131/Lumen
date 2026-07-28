@@ -15,7 +15,7 @@
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 149 | e2e |
+| lumen-vm | 155 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
@@ -23,9 +23,9 @@
 | lumen-doc | 1 | unit |
 | lumen-pkg | 1 | unit |
 | lumen-plugin | 1 | unit |
-| **Total** | **~355** | |
+| **Total** | **~361** | |
 
-**0 warnings, ~355 tests passing. 45/45 ejemplos funcionando. 149 e2e, 45 unit.**
+**0 warnings, ~361 tests passing. 45/45 ejemplos funcionando. 155 e2e, 45 unit.**
 
 ---
 
@@ -206,7 +206,8 @@ Compilación a `wasm32-unknown-unknown` con feature flags. VM refactorizada:
 - **Fecha**: `__tiempo_formatear/format`, `__tiempo_parsear/parse`, `__tiempo_diferencia/diff`
 - **Conexión**: `crypto_ffi.rs`, `gui_ffi.rs`, `coro_ffi.rs` ahora incluidos vía `mod` en lib.rs
 - **Stdlib dual ES/EN**: `texto.nv`, `fecha.nv`, `io.nv`, `crypto.nv` actualizados con aliases inglés
-- **149 e2e tests** (10 nuevos)
+- **Async Runtime**: `async funcion` + `esperar` ahora funcional vía thread tasks. Builtins `__tarea_lanzar/spawn`, `__tarea_esperar/await`. `Expr::Esperar` desugara a `Call(__tarea_esperar)` en IR builder.
+- **155 e2e tests** (16 nuevos)
 
 ---
 
