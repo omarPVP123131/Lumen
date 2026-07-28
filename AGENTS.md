@@ -1,6 +1,6 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v1.6.0 — Released: Julio 2026**
+**v1.7.0 — Released: Julio 2026**
 
 ---
 
@@ -15,7 +15,7 @@
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 113 | e2e |
+| lumen-vm | 139 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
@@ -23,9 +23,9 @@
 | lumen-doc | 1 | unit |
 | lumen-pkg | 1 | unit |
 | lumen-plugin | 1 | unit |
-| **Total** | **~318** | |
+| **Total** | **~345** | |
 
-**0 warnings, ~318 tests passing. 45/45 ejemplos funcionando. ~70 builtins nuevos.**
+**0 warnings, ~345 tests passing. 45/45 ejemplos funcionando. 139 e2e, 45 unit.**
 
 ---
 
@@ -186,6 +186,14 @@ Link-time optimization, dead code stripping, inlining agresivo en backend AOT.
 - `opt_level = "speed_and_size"` en Cranelift
 - `__attribute__((used))` + funciones `static` en transpilador C
 - Tests de DCE y compilación básica
+
+### Fase 96: WASM Playground ✅
+Compilación a `wasm32-unknown-unknown` con feature flags. VM refactorizada:
+- `call_core_builtin()` + `call_full_builtin()` extraídas del dispatch masivo
+- Display impl para VmError
+- `#[cfg(feature = "full")]` en fields TCP, cluster, scope, FFI de VM
+- Stubs para crypto_ffi, gui_ffi, coro_ffi en modo minimal
+- crate `lumen-wasm` con playground web en HTML
 
 ---
 

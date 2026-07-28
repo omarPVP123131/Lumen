@@ -19,6 +19,19 @@ pub enum VmError {
     TypeError(String),
 }
 
+impl std::fmt::Display for VmError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VmError::Runtime(s) => write!(f, "Error runtime: {}", s),
+            VmError::StackUnderflow => write!(f, "Error: Stack underflow"),
+            VmError::UndefinedVariable(s) => write!(f, "Error: Variable '{}' no definida", s),
+            VmError::UndefinedFunction(s) => write!(f, "Error: Función '{}' no definida", s),
+            VmError::DivisionByZero => write!(f, "Error: División por cero"),
+            VmError::TypeError(s) => write!(f, "Error de tipo: {}", s),
+        }
+    }
+}
+
 impl VmError {
     pub fn with_stack(self, stack: &[CallFrame]) -> String {
         let msg = match &self {
@@ -55,6 +68,11 @@ pub struct VM {
     last_instr: Option<Instruction>,
     pub instr_count: usize,
     tcp_listener: Option<std::net::TcpListener>,
+}
+
+/// Helper to convert VmError into the builtin return type.
+fn builtin_err(err: VmError) -> Option<Result<(), VmError>> {
+    Some(Err(err))
 }
 
 impl VM {
@@ -94,6 +112,852 @@ impl VM {
             .and_then(|&idx| self.bytecode.funcs.get(idx))
     }
 
+    fn call_core_builtin(&mut self, name: &str, args: &[Value]) -> Option<Result<(), VmError>> {
+        let args = args.to_vec();
+                if name == "imprimir" || name == "print" {
+                    for arg in args {
+                        let s = format!("{}", arg);
+                        self.output.push(s);
+                    }
+                    self.push(Value::Void);
+                return Some(Ok(()));
+                }
+
+                if name == "leer" || name == "read" {
+                    self.push(Value::Str(String::new()));
+                return Some(Ok(()));
+                }
+
+                if name == "a_texto" || name == "to_texto" || name == "__str_from" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s));
+                return Some(Ok(()));
+                }
+
+                if name == "largo" || name == "len" {
+                    match args.clone().into_iter().next() {
+                        Some(Value::Array(v)) => self.push(Value::Int(v.len() as i64)),
+                        Some(Value::Str(s)) => self.push(Value::Int(s.chars().count() as i64)),
+                        Some(other) => {
+                            return builtin_err(VmError::TypeError(format!(
+                                "'largo' espera lista o texto, no {:?}",
+                                other
+                            )))
+                        }
+                        None => {
+                            return builtin_err(VmError::TypeError(
+                                "'largo' espera 1 argumento".to_string(),
+                            ))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "agregar" || name == "push" {
+                    let mut iter = args.clone().into_iter();
+                    let list = iter.next().unwrap_or(Value::Array(vec![]));
+                    let item = iter.next().unwrap_or(Value::Void);
+                    match list {
+                        Value::Array(mut v) => {
+                            v.push(item);
+                            self.push(Value::Array(v));
+                        }
+                        _ => {
+                            return builtin_err(VmError::TypeError(
+                                "'agregar' espera una lista".to_string(),
+                            ))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__str_len" || name == "__str_longitud" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Int(s.len() as i64));
+                return Some(Ok(()));
+                }
+
+                if name == "__str_upper" || name == "__str_mayusculas" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.to_uppercase()));
+                return Some(Ok(()));
+                }
+
+                if name == "__str_lower" || name == "__str_minusculas" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.to_lowercase()));
+                return Some(Ok(()));
+                }
+
+                if name == "__str_trim" || name == "__str_recortar" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.trim().to_string()));
+                return Some(Ok(()));
+                }
+
+                if name == "__str_contains" || name == "__str_contiene" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let sub = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Bool(s.contains(&sub)));
+                return Some(Ok(()));
+                }
+
+                if name == "__str_split" || name == "__str_dividir" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let delim = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let parts: Vec<Value> = if delim.is_empty() {
+                        s.chars().map(|c| Value::Str(c.to_string())).collect()
+                    } else {
+                        s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
+                    };
+                    self.push(Value::Array(parts));
+                return Some(Ok(()));
+                }
+
+                if name == "__file_read" || name == "__leer_archivo" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::fs::read_to_string(&path) {
+                        Ok(content) => self.push(Value::Exito(Box::new(Value::Str(content)))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__file_write" || name == "__escribir_archivo" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::fs::write(&path, &content) {
+                        Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__file_exists" || name == "__existe_archivo" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Bool(std::path::Path::new(&path).exists()));
+                return Some(Ok(()));
+                }
+
+                if name == "__time_now" || name == "__tiempo_ahora" {
+                    use std::time::{SystemTime, UNIX_EPOCH};
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default();
+                    self.push(Value::Str(format!("{}", now.as_secs())));
+                return Some(Ok(()));
+                }
+
+                if name == "__list_reverse" || name == "__lista_invertir" {
+                    let mut arr = match args.clone().into_iter().next() {
+                        Some(Value::Array(v)) => v,
+                        Some(other) => {
+                            return builtin_err(VmError::TypeError(format!(
+                                "__list_reverse espera una lista, no {:?}",
+                                other
+                            )))
+                        }
+                        None => {
+                            return builtin_err(VmError::TypeError(
+                                "__list_reverse espera 1 argumento".to_string(),
+                            ))
+                        }
+                    };
+                    arr.reverse();
+                    self.push(Value::Array(arr));
+                return Some(Ok(()));
+                }
+
+                if name == "__list_sort" || name == "__lista_ordenar" {
+                    let mut arr = match args.clone().into_iter().next() {
+                        Some(Value::Array(v)) => v,
+                        Some(other) => {
+                            return builtin_err(VmError::TypeError(format!(
+                                "__list_sort espera una lista, no {:?}",
+                                other
+                            )))
+                        }
+                        None => {
+                            return builtin_err(VmError::TypeError(
+                                "__list_sort espera 1 argumento".to_string(),
+                            ))
+                        }
+                    };
+                    arr.sort_by(|a, b| {
+                        let an = a.as_num().unwrap_or(f64::MAX);
+                        let bn = b.as_num().unwrap_or(f64::MAX);
+                        an.partial_cmp(&bn).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    self.push(Value::Array(arr));
+                return Some(Ok(()));
+                }
+
+                if name == "__map_new" || name == "__map_nuevo" {
+                    self.push(Value::Map(vec![]));
+                return Some(Ok(()));
+                }
+
+                if name == "__map_set" || name == "__map_poner" {
+                    let mut it = args.clone().into_iter();
+                    let m = it.next().unwrap_or(Value::Map(vec![]));
+                    let k = it.next().unwrap_or(Value::Void);
+                    let v = it.next().unwrap_or(Value::Void);
+                    match m {
+                        Value::Map(mut p) => {
+                            if let Some(pos) = p.iter().position(|(pk, _)| *pk == k) {
+                                p[pos] = (k, v);
+                            } else {
+                                p.push((k, v));
+                            }
+                            self.push(Value::Map(p));
+                        }
+                        _ => return builtin_err(VmError::TypeError("__map_set espera diccionario".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__map_get" || name == "__map_obtener" {
+                    let mut it = args.clone().into_iter();
+                    let m = it.next().unwrap_or(Value::Map(vec![]));
+                    let k = it.next().unwrap_or(Value::Void);
+                    match m {
+                        Value::Map(p) => {
+                            if let Some((_, v)) = p.iter().find(|(pk, _)| *pk == k) {
+                                self.push(v.clone());
+                            } else {
+                                self.push(Value::Void);
+                            }
+                        }
+                        _ => return builtin_err(VmError::TypeError("__map_get espera diccionario".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__map_len" || name == "__map_longitud" {
+                    let m = args.clone().into_iter().next().unwrap_or(Value::Map(vec![]));
+                    match m {
+                        Value::Map(p) => self.push(Value::Int(p.len() as i64)),
+                        _ => return builtin_err(VmError::TypeError("__map_len espera diccionario".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__map_keys" || name == "__map_claves" {
+                    let m = args.clone().into_iter().next().unwrap_or(Value::Map(vec![]));
+                    match m {
+                        Value::Map(p) => {
+                            self.push(Value::Array(p.into_iter().map(|(k, _)| k).collect()))
+                        }
+                        _ => {
+                            return builtin_err(VmError::TypeError("__map_keys espera diccionario".into()))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__map_contains" || name == "__map_contiene" {
+                    let mut it = args.clone().into_iter();
+                    let m = it.next().unwrap_or(Value::Map(vec![]));
+                    let k = it.next().unwrap_or(Value::Void);
+                    match m {
+                        Value::Map(p) => self.push(Value::Bool(p.iter().any(|(pk, _)| *pk == k))),
+                        _ => {
+                            return builtin_err(VmError::TypeError(
+                                "__map_contains espera diccionario".into(),
+                            ))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__set_new" || name == "__conjunto_nuevo" {
+                    self.push(Value::Map(vec![]));
+                return Some(Ok(()));
+                }
+
+                if name == "__set_add" || name == "__conjunto_agregar" {
+                    let mut it = args.clone().into_iter();
+                    let s = it.next().unwrap_or(Value::Map(vec![]));
+                    let item = it.next().unwrap_or(Value::Void);
+                    match s {
+                        Value::Map(mut p) => {
+                            if !p.iter().any(|(k, _)| *k == item) {
+                                p.push((item, Value::Bool(true)));
+                            }
+                            self.push(Value::Map(p));
+                        }
+                        _ => return builtin_err(VmError::TypeError("__set_add espera conjunto".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__set_has" || name == "__conjunto_tiene" {
+                    let mut it = args.clone().into_iter();
+                    let s = it.next().unwrap_or(Value::Map(vec![]));
+                    let item = it.next().unwrap_or(Value::Void);
+                    match s {
+                        Value::Map(p) => self.push(Value::Bool(p.iter().any(|(k, _)| *k == item))),
+                        _ => return builtin_err(VmError::TypeError("__set_has espera conjunto".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__set_union" || name == "__conjunto_unir" {
+                    let mut it = args.clone().into_iter();
+                    let a = it.next().unwrap_or(Value::Map(vec![]));
+                    let b = it.next().unwrap_or(Value::Map(vec![]));
+                    match (a, b) {
+                        (Value::Map(p1), Value::Map(p2)) => {
+                            let mut m = p1;
+                            for (k, v) in p2 {
+                                if !m.iter().any(|(mk, _)| *mk == k) {
+                                    m.push((k, v));
+                                }
+                            }
+                            self.push(Value::Map(m));
+                        }
+                        _ => return builtin_err(VmError::TypeError("__set_union espera conjuntos".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__set_inter" || name == "__conjunto_interseccion" {
+                    let mut it = args.clone().into_iter();
+                    let a = it.next().unwrap_or(Value::Map(vec![]));
+                    let b = it.next().unwrap_or(Value::Map(vec![]));
+                    match (a, b) {
+                        (Value::Map(p1), Value::Map(p2)) => {
+                            let r: Vec<_> = p1
+                                .into_iter()
+                                .filter(|(k, _)| p2.iter().any(|(k2, _)| *k2 == *k))
+                                .collect();
+                            self.push(Value::Map(r));
+                        }
+                        _ => return builtin_err(VmError::TypeError("__set_inter espera conjuntos".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__set_diff" || name == "__conjunto_diferencia" {
+                    let mut it = args.clone().into_iter();
+                    let a = it.next().unwrap_or(Value::Map(vec![]));
+                    let b = it.next().unwrap_or(Value::Map(vec![]));
+                    match (a, b) {
+                        (Value::Map(p1), Value::Map(p2)) => {
+                            let r: Vec<_> = p1
+                                .into_iter()
+                                .filter(|(k, _)| !p2.iter().any(|(k2, _)| *k2 == *k))
+                                .collect();
+                            self.push(Value::Map(r));
+                        }
+                        _ => return builtin_err(VmError::TypeError("__set_diff espera conjuntos".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__deque_new" || name == "__deque_nuevo" {
+                    self.push(Value::Array(vec![]));
+                return Some(Ok(()));
+                }
+
+                if name == "__deque_push_front" || name == "__deque_agregar_frente" {
+                    let mut it = args.clone().into_iter();
+                    let d = it.next().unwrap_or(Value::Array(vec![]));
+                    let item = it.next().unwrap_or(Value::Void);
+                    match d {
+                        Value::Array(mut v) => {
+                            v.insert(0, item);
+                            self.push(Value::Array(v));
+                        }
+                        _ => {
+                            return builtin_err(VmError::TypeError(
+                                "__deque_push_front espera deque".into(),
+                            ))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__deque_push_back" || name == "__deque_agregar_final" {
+                    let mut it = args.clone().into_iter();
+                    let d = it.next().unwrap_or(Value::Array(vec![]));
+                    let item = it.next().unwrap_or(Value::Void);
+                    match d {
+                        Value::Array(mut v) => {
+                            v.push(item);
+                            self.push(Value::Array(v));
+                        }
+                        _ => {
+                            return builtin_err(VmError::TypeError("__deque_push_back espera deque".into()))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__deque_pop_front" || name == "__deque_quitar_frente" {
+                    let d = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match d {
+                        Value::Array(mut v) => self.push(if v.is_empty() {
+                            Value::Void
+                        } else {
+                            v.remove(0)
+                        }),
+                        _ => {
+                            return builtin_err(VmError::TypeError("__deque_pop_front espera deque".into()))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__deque_pop_back" || name == "__deque_quitar_final" {
+                    let d = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match d {
+                        Value::Array(mut v) => self.push(if v.is_empty() {
+                            Value::Void
+                        } else {
+                            v.pop().unwrap_or(Value::Void)
+                        }),
+                        _ => {
+                            return builtin_err(VmError::TypeError("__deque_pop_back espera deque".into()))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__deque_len" || name == "__deque_longitud" {
+                    let d = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match d {
+                        Value::Array(v) => self.push(Value::Int(v.len() as i64)),
+                        _ => return builtin_err(VmError::TypeError("__deque_len espera deque".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__heap_new" || name == "__monticulo_nuevo" {
+                    self.push(Value::Array(vec![]));
+                return Some(Ok(()));
+                }
+
+                if name == "__heap_push" || name == "__monticulo_agregar" {
+                    let mut it = args.clone().into_iter();
+                    let h = it.next().unwrap_or(Value::Array(vec![]));
+                    let item = it.next().unwrap_or(Value::Void);
+                    match h {
+                        Value::Array(mut v) => {
+                            v.push(item);
+                            v.sort_by(|a, b| {
+                                let an = a.as_num().unwrap_or(f64::MIN);
+                                let bn = b.as_num().unwrap_or(f64::MIN);
+                                bn.partial_cmp(&an).unwrap_or(std::cmp::Ordering::Equal)
+                            });
+                            self.push(Value::Array(v));
+                        }
+                        _ => return builtin_err(VmError::TypeError("__heap_push espera heap".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__heap_pop" || name == "__monticulo_quitar" {
+                    let h = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match h {
+                        Value::Array(mut v) => self.push(if v.is_empty() {
+                            Value::Void
+                        } else {
+                            v.remove(0)
+                        }),
+                        _ => return builtin_err(VmError::TypeError("__heap_pop espera heap".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__heap_peek" || name == "__monticulo_ver" {
+                    let h = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match h {
+                        Value::Array(v) => self.push(if v.is_empty() {
+                            Value::Void
+                        } else {
+                            v[0].clone()
+                        }),
+                        _ => return builtin_err(VmError::TypeError("__heap_peek espera heap".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__heap_len" || name == "__monticulo_longitud" {
+                    let h = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match h {
+                        Value::Array(v) => self.push(Value::Int(v.len() as i64)),
+                        _ => return builtin_err(VmError::TypeError("__heap_len espera heap".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__linked_new" || name == "__enlazada_nuevo" {
+                    self.push(Value::Array(vec![]));
+                return Some(Ok(()));
+                }
+
+                if name == "__linked_push_front" || name == "__enlazada_agregar_frente" {
+                    let mut it = args.clone().into_iter();
+                    let l = it.next().unwrap_or(Value::Array(vec![]));
+                    let item = it.next().unwrap_or(Value::Void);
+                    match l {
+                        Value::Array(mut v) => {
+                            v.insert(0, item);
+                            self.push(Value::Array(v));
+                        }
+                        _ => {
+                            return builtin_err(VmError::TypeError(
+                                "__linked_push_front espera linked".into(),
+                            ))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__linked_push_back" || name == "__enlazada_agregar_final" {
+                    let mut it = args.clone().into_iter();
+                    let l = it.next().unwrap_or(Value::Array(vec![]));
+                    let item = it.next().unwrap_or(Value::Void);
+                    match l {
+                        Value::Array(mut v) => {
+                            v.push(item);
+                            self.push(Value::Array(v));
+                        }
+                        _ => {
+                            return builtin_err(VmError::TypeError(
+                                "__linked_push_back espera linked".into(),
+                            ))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__linked_pop_front" || name == "__enlazada_quitar_frente" {
+                    let l = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match l {
+                        Value::Array(mut v) => self.push(if v.is_empty() {
+                            Value::Void
+                        } else {
+                            v.remove(0)
+                        }),
+                        _ => {
+                            return builtin_err(VmError::TypeError(
+                                "__linked_pop_front espera linked".into(),
+                            ))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__linked_pop_back" || name == "__enlazada_quitar_final" {
+                    let l = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match l {
+                        Value::Array(mut v) => self.push(if v.is_empty() {
+                            Value::Void
+                        } else {
+                            v.pop().unwrap_or(Value::Void)
+                        }),
+                        _ => {
+                            return builtin_err(VmError::TypeError(
+                                "__linked_pop_back espera linked".into(),
+                            ))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__linked_len" || name == "__enlazada_longitud" {
+                    let l = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match l {
+                        Value::Array(v) => self.push(Value::Int(v.len() as i64)),
+                        _ => return builtin_err(VmError::TypeError("__linked_len espera linked".into())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__regex_new" || name == "__regex_nuevo" {
+                    let pat = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match regex::Regex::new(&pat) {
+                        Ok(_) => self.push(Value::Bool(true)),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__regex_is_match" || name == "__regex_coincide" {
+                    let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    match regex::Regex::new(&re_s) {
+                        Ok(r) => self.push(Value::Bool(r.is_match(&text))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__regex_captures" || name == "__regex_capturar" {
+                    let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    match regex::Regex::new(&re_s) {
+                        Ok(r) => {
+                            if let Some(caps) = r.captures(&text) {
+                                let vs: Vec<Value> = caps
+                                    .iter()
+                                    .map(|m| {
+                                        Value::Str(
+                                            m.map(|x| x.as_str().to_string()).unwrap_or_default(),
+                                        )
+                                    })
+                                    .collect();
+                                self.push(Value::Array(vs));
+                            } else {
+                                self.push(Value::Array(vec![]));
+                            }
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__regex_replace" || name == "__regex_reemplazar" {
+                    let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let rep = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
+                    match regex::Regex::new(&re_s) {
+                        Ok(r) => {
+                            self.push(Value::Str(r.replace_all(&text, rep.as_str()).to_string()))
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__unicode_normalize" || name == "__unicode_normalizar" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let form = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let nf: String = match form.as_str() {
+                        "NFC" => s.nfc().collect(),
+                        "NFD" => s.nfd().collect(),
+                        "NFKC" => s.nfkc().collect(),
+                        "NFKD" => s.nfkd().collect(),
+                        _ => s.nfc().collect(),
+                    };
+                    self.push(Value::Str(nf));
+                return Some(Ok(()));
+                }
+
+                if name == "__str_pad_start" || name == "__str_padding_inicio" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let len = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    let ch = args
+                        .get(2)
+                        .map(|v| format!("{}", v))
+                        .unwrap_or_default()
+                        .chars()
+                        .next()
+                        .unwrap_or(' ');
+                    self.push(Value::Str(format!(
+                        "{}{}",
+                        ch.to_string().repeat(len.saturating_sub(s.len())),
+                        s
+                    )));
+                return Some(Ok(()));
+                }
+
+                if name == "__str_pad_end" || name == "__str_padding_fin" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let len = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+                    let ch = args
+                        .get(2)
+                        .map(|v| format!("{}", v))
+                        .unwrap_or_default()
+                        .chars()
+                        .next()
+                        .unwrap_or(' ');
+                    self.push(Value::Str(format!(
+                        "{}{}",
+                        s,
+                        ch.to_string().repeat(len.saturating_sub(s.len()))
+                    )));
+                return Some(Ok(()));
+                }
+
+                if name == "__encoding_utf8" || name == "__codificacion_utf8" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Array(
+                        s.bytes().map(|b| Value::Int(b as i64)).collect(),
+                    ));
+                return Some(Ok(()));
+                }
+
+                if name == "__encoding_from_utf8" || name == "__desde_utf8" {
+                    let arr = args.clone().into_iter().next().unwrap_or(Value::Array(vec![]));
+                    match arr {
+                        Value::Array(v) => {
+                            let bytes: Vec<u8> = v
+                                .iter()
+                                .filter_map(|x| {
+                                    if let Value::Int(n) = x {
+                                        Some(*n as u8)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            self.push(Value::Str(String::from_utf8_lossy(&bytes).to_string()));
+                        }
+                        _ => self.push(Value::Str(String::new())),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__buf_reader" || name == "__lector_buffer" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::fs::read_to_string(&path) {
+                        Ok(c) => {
+                            let lines: Vec<Value> =
+                                c.lines().map(|l| Value::Str(l.to_string())).collect();
+                            self.push(Value::Array(lines));
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__buf_writer" || name == "__escritor_buffer" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::fs::write(&path, &content) {
+                        Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__stream_chunks" || name == "__stream_trozos" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let size = args.get(1).and_then(|v| v.as_num()).unwrap_or(4096.0) as usize;
+                    match std::fs::read(&path) {
+                        Ok(data) => {
+                            let chunks: Vec<Value> = data
+                                .chunks(size)
+                                .map(|c| {
+                                    Value::Array(c.iter().map(|&b| Value::Int(b as i64)).collect())
+                                })
+                                .collect();
+                            self.push(Value::Array(chunks));
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__http_server" || name == "__http_servidor" {
+                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(format!("HTTP server on {}", addr)));
+                return Some(Ok(()));
+                }
+
+                if name == "__serial_open" || name == "__serial_abrir" {
+                    self.push(Value::Bool(true));
+                return Some(Ok(()));
+                }
+
+                if name == "__json_parse" || name == "__json_parsear" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match serde_json::from_str::<serde_json::Value>(&s) {
+                        Ok(v) => self.push(json_value_to_lumen(v)),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__json_stringify" || name == "__json_texto" {
+                    let val = args.first().cloned().unwrap_or(Value::Void);
+                    let json = lumen_value_to_json(&val);
+                    self.push(Value::Str(serde_json::to_string(&json).unwrap_or_default()));
+                return Some(Ok(()));
+                }
+
+        None
+    }
+
+    #[cfg(feature = "full")]
+    fn call_full_builtin(&mut self, name: &str, args: &[Value]) -> Option<Result<(), VmError>> {
+        let args = args.to_vec();
+                if name == "__tcp_connect" || name == "__tcp_conectar" {
+                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::net::TcpStream::connect(&addr) {
+                        Ok(_) => self.push(Value::Bool(true)),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__tcp_listen" || name == "__tcp_escuchar" {
+                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match std::net::TcpListener::bind(&addr) {
+                        Ok(l) => {
+                            self.tcp_listener = Some(l);
+                            self.push(Value::Bool(true));
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__tcp_accept" || name == "__tcp_aceptar" {
+                    match &self.tcp_listener {
+                        Some(l) => match l.accept() {
+                            Ok((_stream, _)) => {
+                                let addr = _stream
+                                    .peer_addr()
+                                    .map(|a| a.to_string())
+                                    .unwrap_or_default();
+                                self.push(Value::Str(addr));
+                            }
+                            Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        },
+                        None => {
+                            self.push(Value::Error(Box::new(Value::Str("Sin listener".into()))))
+                        }
+                    }
+                return Some(Ok(()));
+                }
+
+                #[cfg(feature = "full")]
+                if name == "__http_get" || name == "__http_obtener" {
+                    let url = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    match reqwest::blocking::get(&url) {
+                        Ok(resp) => {
+                            let body = resp.text().unwrap_or_default();
+                            self.push(Value::Str(body));
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+                #[cfg(feature = "full")]
+                if name == "__http_post" || name == "__http_enviar" {
+                    let url = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let body = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    match reqwest::blocking::Client::new()
+                        .post(&url)
+                        .body(body)
+                        .send()
+                    {
+                        Ok(resp) => {
+                            let text = resp.text().unwrap_or_default();
+                            self.push(Value::Str(text));
+                        }
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    }
+                return Some(Ok(()));
+                }
+
+        None
+    }
     pub fn run(&mut self) -> Result<(), VmError> {
         loop {
             if self.ip >= self.bytecode.instructions.len() {
@@ -729,640 +1593,14 @@ impl VM {
                     args.push(self.pop()?);
                 }
                 args.reverse();
-                if name == "imprimir" || name == "print" {
-                    for arg in args {
-                        let s = format!("{}", arg);
-                        self.output.push(s);
-                    }
-                    self.push(Value::Void);
-                } else if name == "leer" || name == "read" {
-                    self.push(Value::Str(String::new()));
-                } else if name == "a_texto" || name == "to_texto" || name == "__str_from" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s));
-                } else if name == "largo" || name == "len" {
-                    match args.into_iter().next() {
-                        Some(Value::Array(v)) => self.push(Value::Int(v.len() as i64)),
-                        Some(Value::Str(s)) => self.push(Value::Int(s.chars().count() as i64)),
-                        Some(other) => {
-                            return Err(VmError::TypeError(format!(
-                                "'largo' espera lista o texto, no {:?}",
-                                other
-                            )))
-                        }
-                        None => {
-                            return Err(VmError::TypeError(
-                                "'largo' espera 1 argumento".to_string(),
-                            ))
-                        }
-                    }
-                } else if name == "agregar" || name == "push" {
-                    let mut iter = args.into_iter();
-                    let list = iter.next().unwrap_or(Value::Array(vec![]));
-                    let item = iter.next().unwrap_or(Value::Void);
-                    match list {
-                        Value::Array(mut v) => {
-                            v.push(item);
-                            self.push(Value::Array(v));
-                        }
-                        _ => {
-                            return Err(VmError::TypeError(
-                                "'agregar' espera una lista".to_string(),
-                            ))
-                        }
-                    }
-                } else if name == "__str_len" || name == "__str_longitud" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Int(s.len() as i64));
-                } else if name == "__str_upper" || name == "__str_mayusculas" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s.to_uppercase()));
-                } else if name == "__str_lower" || name == "__str_minusculas" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s.to_lowercase()));
-                } else if name == "__str_trim" || name == "__str_recortar" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s.trim().to_string()));
-                } else if name == "__str_contains" || name == "__str_contiene" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let sub = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Bool(s.contains(&sub)));
-                } else if name == "__str_split" || name == "__str_dividir" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let delim = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    let parts: Vec<Value> = if delim.is_empty() {
-                        s.chars().map(|c| Value::Str(c.to_string())).collect()
-                    } else {
-                        s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
-                    };
-                    self.push(Value::Array(parts));
-                } else if name == "__file_read" || name == "__leer_archivo" {
-                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match std::fs::read_to_string(&path) {
-                        Ok(content) => self.push(Value::Exito(Box::new(Value::Str(content)))),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__file_write" || name == "__escribir_archivo" {
-                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    match std::fs::write(&path, &content) {
-                        Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__file_exists" || name == "__existe_archivo" {
-                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Bool(std::path::Path::new(&path).exists()));
-                } else if name == "__time_now" || name == "__tiempo_ahora" {
-                    use std::time::{SystemTime, UNIX_EPOCH};
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default();
-                    self.push(Value::Str(format!("{}", now.as_secs())));
-                } else if name == "__list_reverse" || name == "__lista_invertir" {
-                    let mut arr = match args.into_iter().next() {
-                        Some(Value::Array(v)) => v,
-                        Some(other) => {
-                            return Err(VmError::TypeError(format!(
-                                "__list_reverse espera una lista, no {:?}",
-                                other
-                            )))
-                        }
-                        None => {
-                            return Err(VmError::TypeError(
-                                "__list_reverse espera 1 argumento".to_string(),
-                            ))
-                        }
-                    };
-                    arr.reverse();
-                    self.push(Value::Array(arr));
-                } else if name == "__list_sort" || name == "__lista_ordenar" {
-                    let mut arr = match args.into_iter().next() {
-                        Some(Value::Array(v)) => v,
-                        Some(other) => {
-                            return Err(VmError::TypeError(format!(
-                                "__list_sort espera una lista, no {:?}",
-                                other
-                            )))
-                        }
-                        None => {
-                            return Err(VmError::TypeError(
-                                "__list_sort espera 1 argumento".to_string(),
-                            ))
-                        }
-                    };
-                    arr.sort_by(|a, b| {
-                        let an = a.as_num().unwrap_or(f64::MAX);
-                        let bn = b.as_num().unwrap_or(f64::MAX);
-                        an.partial_cmp(&bn).unwrap_or(std::cmp::Ordering::Equal)
-                    });
-                    self.push(Value::Array(arr));
-                } else if name == "__map_new" || name == "__map_nuevo" {
-                    self.push(Value::Map(vec![]));
-                } else if name == "__map_set" || name == "__map_poner" {
-                    let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(vec![]));
-                    let k = it.next().unwrap_or(Value::Void);
-                    let v = it.next().unwrap_or(Value::Void);
-                    match m {
-                        Value::Map(mut p) => {
-                            if let Some(pos) = p.iter().position(|(pk, _)| *pk == k) {
-                                p[pos] = (k, v);
-                            } else {
-                                p.push((k, v));
-                            }
-                            self.push(Value::Map(p));
-                        }
-                        _ => return Err(VmError::TypeError("__map_set espera diccionario".into())),
-                    }
-                } else if name == "__map_get" || name == "__map_obtener" {
-                    let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(vec![]));
-                    let k = it.next().unwrap_or(Value::Void);
-                    match m {
-                        Value::Map(p) => {
-                            if let Some((_, v)) = p.iter().find(|(pk, _)| *pk == k) {
-                                self.push(v.clone());
-                            } else {
-                                self.push(Value::Void);
-                            }
-                        }
-                        _ => return Err(VmError::TypeError("__map_get espera diccionario".into())),
-                    }
-                } else if name == "__map_len" || name == "__map_longitud" {
-                    let m = args.into_iter().next().unwrap_or(Value::Map(vec![]));
-                    match m {
-                        Value::Map(p) => self.push(Value::Int(p.len() as i64)),
-                        _ => return Err(VmError::TypeError("__map_len espera diccionario".into())),
-                    }
-                } else if name == "__map_keys" || name == "__map_claves" {
-                    let m = args.into_iter().next().unwrap_or(Value::Map(vec![]));
-                    match m {
-                        Value::Map(p) => {
-                            self.push(Value::Array(p.into_iter().map(|(k, _)| k).collect()))
-                        }
-                        _ => {
-                            return Err(VmError::TypeError("__map_keys espera diccionario".into()))
-                        }
-                    }
-                } else if name == "__map_contains" || name == "__map_contiene" {
-                    let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(vec![]));
-                    let k = it.next().unwrap_or(Value::Void);
-                    match m {
-                        Value::Map(p) => self.push(Value::Bool(p.iter().any(|(pk, _)| *pk == k))),
-                        _ => {
-                            return Err(VmError::TypeError(
-                                "__map_contains espera diccionario".into(),
-                            ))
-                        }
-                    }
-                } else if name == "__set_new" || name == "__conjunto_nuevo" {
-                    self.push(Value::Map(vec![]));
-                } else if name == "__set_add" || name == "__conjunto_agregar" {
-                    let mut it = args.into_iter();
-                    let s = it.next().unwrap_or(Value::Map(vec![]));
-                    let item = it.next().unwrap_or(Value::Void);
-                    match s {
-                        Value::Map(mut p) => {
-                            if !p.iter().any(|(k, _)| *k == item) {
-                                p.push((item, Value::Bool(true)));
-                            }
-                            self.push(Value::Map(p));
-                        }
-                        _ => return Err(VmError::TypeError("__set_add espera conjunto".into())),
-                    }
-                } else if name == "__set_has" || name == "__conjunto_tiene" {
-                    let mut it = args.into_iter();
-                    let s = it.next().unwrap_or(Value::Map(vec![]));
-                    let item = it.next().unwrap_or(Value::Void);
-                    match s {
-                        Value::Map(p) => self.push(Value::Bool(p.iter().any(|(k, _)| *k == item))),
-                        _ => return Err(VmError::TypeError("__set_has espera conjunto".into())),
-                    }
-                } else if name == "__set_union" || name == "__conjunto_unir" {
-                    let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(vec![]));
-                    let b = it.next().unwrap_or(Value::Map(vec![]));
-                    match (a, b) {
-                        (Value::Map(p1), Value::Map(p2)) => {
-                            let mut m = p1;
-                            for (k, v) in p2 {
-                                if !m.iter().any(|(mk, _)| *mk == k) {
-                                    m.push((k, v));
-                                }
-                            }
-                            self.push(Value::Map(m));
-                        }
-                        _ => return Err(VmError::TypeError("__set_union espera conjuntos".into())),
-                    }
-                } else if name == "__set_inter" || name == "__conjunto_interseccion" {
-                    let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(vec![]));
-                    let b = it.next().unwrap_or(Value::Map(vec![]));
-                    match (a, b) {
-                        (Value::Map(p1), Value::Map(p2)) => {
-                            let r: Vec<_> = p1
-                                .into_iter()
-                                .filter(|(k, _)| p2.iter().any(|(k2, _)| *k2 == *k))
-                                .collect();
-                            self.push(Value::Map(r));
-                        }
-                        _ => return Err(VmError::TypeError("__set_inter espera conjuntos".into())),
-                    }
-                } else if name == "__set_diff" || name == "__conjunto_diferencia" {
-                    let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(vec![]));
-                    let b = it.next().unwrap_or(Value::Map(vec![]));
-                    match (a, b) {
-                        (Value::Map(p1), Value::Map(p2)) => {
-                            let r: Vec<_> = p1
-                                .into_iter()
-                                .filter(|(k, _)| !p2.iter().any(|(k2, _)| *k2 == *k))
-                                .collect();
-                            self.push(Value::Map(r));
-                        }
-                        _ => return Err(VmError::TypeError("__set_diff espera conjuntos".into())),
-                    }
-                } else if name == "__deque_new" || name == "__deque_nuevo" {
-                    self.push(Value::Array(vec![]));
-                } else if name == "__deque_push_front" || name == "__deque_agregar_frente" {
-                    let mut it = args.into_iter();
-                    let d = it.next().unwrap_or(Value::Array(vec![]));
-                    let item = it.next().unwrap_or(Value::Void);
-                    match d {
-                        Value::Array(mut v) => {
-                            v.insert(0, item);
-                            self.push(Value::Array(v));
-                        }
-                        _ => {
-                            return Err(VmError::TypeError(
-                                "__deque_push_front espera deque".into(),
-                            ))
-                        }
-                    }
-                } else if name == "__deque_push_back" || name == "__deque_agregar_final" {
-                    let mut it = args.into_iter();
-                    let d = it.next().unwrap_or(Value::Array(vec![]));
-                    let item = it.next().unwrap_or(Value::Void);
-                    match d {
-                        Value::Array(mut v) => {
-                            v.push(item);
-                            self.push(Value::Array(v));
-                        }
-                        _ => {
-                            return Err(VmError::TypeError("__deque_push_back espera deque".into()))
-                        }
-                    }
-                } else if name == "__deque_pop_front" || name == "__deque_quitar_frente" {
-                    let d = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match d {
-                        Value::Array(mut v) => self.push(if v.is_empty() {
-                            Value::Void
-                        } else {
-                            v.remove(0)
-                        }),
-                        _ => {
-                            return Err(VmError::TypeError("__deque_pop_front espera deque".into()))
-                        }
-                    }
-                } else if name == "__deque_pop_back" || name == "__deque_quitar_final" {
-                    let d = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match d {
-                        Value::Array(mut v) => self.push(if v.is_empty() {
-                            Value::Void
-                        } else {
-                            v.pop().unwrap_or(Value::Void)
-                        }),
-                        _ => {
-                            return Err(VmError::TypeError("__deque_pop_back espera deque".into()))
-                        }
-                    }
-                } else if name == "__deque_len" || name == "__deque_longitud" {
-                    let d = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match d {
-                        Value::Array(v) => self.push(Value::Int(v.len() as i64)),
-                        _ => return Err(VmError::TypeError("__deque_len espera deque".into())),
-                    }
-                } else if name == "__heap_new" || name == "__monticulo_nuevo" {
-                    self.push(Value::Array(vec![]));
-                } else if name == "__heap_push" || name == "__monticulo_agregar" {
-                    let mut it = args.into_iter();
-                    let h = it.next().unwrap_or(Value::Array(vec![]));
-                    let item = it.next().unwrap_or(Value::Void);
-                    match h {
-                        Value::Array(mut v) => {
-                            v.push(item);
-                            v.sort_by(|a, b| {
-                                let an = a.as_num().unwrap_or(f64::MIN);
-                                let bn = b.as_num().unwrap_or(f64::MIN);
-                                bn.partial_cmp(&an).unwrap_or(std::cmp::Ordering::Equal)
-                            });
-                            self.push(Value::Array(v));
-                        }
-                        _ => return Err(VmError::TypeError("__heap_push espera heap".into())),
-                    }
-                } else if name == "__heap_pop" || name == "__monticulo_quitar" {
-                    let h = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match h {
-                        Value::Array(mut v) => self.push(if v.is_empty() {
-                            Value::Void
-                        } else {
-                            v.remove(0)
-                        }),
-                        _ => return Err(VmError::TypeError("__heap_pop espera heap".into())),
-                    }
-                } else if name == "__heap_peek" || name == "__monticulo_ver" {
-                    let h = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match h {
-                        Value::Array(v) => self.push(if v.is_empty() {
-                            Value::Void
-                        } else {
-                            v[0].clone()
-                        }),
-                        _ => return Err(VmError::TypeError("__heap_peek espera heap".into())),
-                    }
-                } else if name == "__heap_len" || name == "__monticulo_longitud" {
-                    let h = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match h {
-                        Value::Array(v) => self.push(Value::Int(v.len() as i64)),
-                        _ => return Err(VmError::TypeError("__heap_len espera heap".into())),
-                    }
-                } else if name == "__linked_new" || name == "__enlazada_nuevo" {
-                    self.push(Value::Array(vec![]));
-                } else if name == "__linked_push_front" || name == "__enlazada_agregar_frente" {
-                    let mut it = args.into_iter();
-                    let l = it.next().unwrap_or(Value::Array(vec![]));
-                    let item = it.next().unwrap_or(Value::Void);
-                    match l {
-                        Value::Array(mut v) => {
-                            v.insert(0, item);
-                            self.push(Value::Array(v));
-                        }
-                        _ => {
-                            return Err(VmError::TypeError(
-                                "__linked_push_front espera linked".into(),
-                            ))
-                        }
-                    }
-                } else if name == "__linked_push_back" || name == "__enlazada_agregar_final" {
-                    let mut it = args.into_iter();
-                    let l = it.next().unwrap_or(Value::Array(vec![]));
-                    let item = it.next().unwrap_or(Value::Void);
-                    match l {
-                        Value::Array(mut v) => {
-                            v.push(item);
-                            self.push(Value::Array(v));
-                        }
-                        _ => {
-                            return Err(VmError::TypeError(
-                                "__linked_push_back espera linked".into(),
-                            ))
-                        }
-                    }
-                } else if name == "__linked_pop_front" || name == "__enlazada_quitar_frente" {
-                    let l = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match l {
-                        Value::Array(mut v) => self.push(if v.is_empty() {
-                            Value::Void
-                        } else {
-                            v.remove(0)
-                        }),
-                        _ => {
-                            return Err(VmError::TypeError(
-                                "__linked_pop_front espera linked".into(),
-                            ))
-                        }
-                    }
-                } else if name == "__linked_pop_back" || name == "__enlazada_quitar_final" {
-                    let l = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match l {
-                        Value::Array(mut v) => self.push(if v.is_empty() {
-                            Value::Void
-                        } else {
-                            v.pop().unwrap_or(Value::Void)
-                        }),
-                        _ => {
-                            return Err(VmError::TypeError(
-                                "__linked_pop_back espera linked".into(),
-                            ))
-                        }
-                    }
-                } else if name == "__linked_len" || name == "__enlazada_longitud" {
-                    let l = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match l {
-                        Value::Array(v) => self.push(Value::Int(v.len() as i64)),
-                        _ => return Err(VmError::TypeError("__linked_len espera linked".into())),
-                    }
-                } else if name == "__regex_new" || name == "__regex_nuevo" {
-                    let pat = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match regex::Regex::new(&pat) {
-                        Ok(_) => self.push(Value::Bool(true)),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__regex_is_match" || name == "__regex_coincide" {
-                    let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    match regex::Regex::new(&re_s) {
-                        Ok(r) => self.push(Value::Bool(r.is_match(&text))),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__regex_captures" || name == "__regex_capturar" {
-                    let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    match regex::Regex::new(&re_s) {
-                        Ok(r) => {
-                            if let Some(caps) = r.captures(&text) {
-                                let vs: Vec<Value> = caps
-                                    .iter()
-                                    .map(|m| {
-                                        Value::Str(
-                                            m.map(|x| x.as_str().to_string()).unwrap_or_default(),
-                                        )
-                                    })
-                                    .collect();
-                                self.push(Value::Array(vs));
-                            } else {
-                                self.push(Value::Array(vec![]));
-                            }
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__regex_replace" || name == "__regex_reemplazar" {
-                    let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    let rep = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
-                    match regex::Regex::new(&re_s) {
-                        Ok(r) => {
-                            self.push(Value::Str(r.replace_all(&text, rep.as_str()).to_string()))
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__unicode_normalize" || name == "__unicode_normalizar" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let form = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    let nf: String = match form.as_str() {
-                        "NFC" => s.nfc().collect(),
-                        "NFD" => s.nfd().collect(),
-                        "NFKC" => s.nfkc().collect(),
-                        "NFKD" => s.nfkd().collect(),
-                        _ => s.nfc().collect(),
-                    };
-                    self.push(Value::Str(nf));
-                } else if name == "__str_pad_start" || name == "__str_padding_inicio" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let len = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
-                    let ch = args
-                        .get(2)
-                        .map(|v| format!("{}", v))
-                        .unwrap_or_default()
-                        .chars()
-                        .next()
-                        .unwrap_or(' ');
-                    self.push(Value::Str(format!(
-                        "{}{}",
-                        ch.to_string().repeat(len.saturating_sub(s.len())),
-                        s
-                    )));
-                } else if name == "__str_pad_end" || name == "__str_padding_fin" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let len = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
-                    let ch = args
-                        .get(2)
-                        .map(|v| format!("{}", v))
-                        .unwrap_or_default()
-                        .chars()
-                        .next()
-                        .unwrap_or(' ');
-                    self.push(Value::Str(format!(
-                        "{}{}",
-                        s,
-                        ch.to_string().repeat(len.saturating_sub(s.len()))
-                    )));
-                } else if name == "__encoding_utf8" || name == "__codificacion_utf8" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Array(
-                        s.bytes().map(|b| Value::Int(b as i64)).collect(),
-                    ));
-                } else if name == "__encoding_from_utf8" || name == "__desde_utf8" {
-                    let arr = args.into_iter().next().unwrap_or(Value::Array(vec![]));
-                    match arr {
-                        Value::Array(v) => {
-                            let bytes: Vec<u8> = v
-                                .iter()
-                                .filter_map(|x| {
-                                    if let Value::Int(n) = x {
-                                        Some(*n as u8)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-                            self.push(Value::Str(String::from_utf8_lossy(&bytes).to_string()));
-                        }
-                        _ => self.push(Value::Str(String::new())),
-                    }
-                } else if name == "__buf_reader" || name == "__lector_buffer" {
-                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match std::fs::read_to_string(&path) {
-                        Ok(c) => {
-                            let lines: Vec<Value> =
-                                c.lines().map(|l| Value::Str(l.to_string())).collect();
-                            self.push(Value::Array(lines));
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__buf_writer" || name == "__escritor_buffer" {
-                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    match std::fs::write(&path, &content) {
-                        Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__stream_chunks" || name == "__stream_trozos" {
-                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let size = args.get(1).and_then(|v| v.as_num()).unwrap_or(4096.0) as usize;
-                    match std::fs::read(&path) {
-                        Ok(data) => {
-                            let chunks: Vec<Value> = data
-                                .chunks(size)
-                                .map(|c| {
-                                    Value::Array(c.iter().map(|&b| Value::Int(b as i64)).collect())
-                                })
-                                .collect();
-                            self.push(Value::Array(chunks));
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__tcp_connect" || name == "__tcp_conectar" {
-                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match std::net::TcpStream::connect(&addr) {
-                        Ok(_) => self.push(Value::Bool(true)),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__tcp_listen" || name == "__tcp_escuchar" {
-                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match std::net::TcpListener::bind(&addr) {
-                        Ok(l) => {
-                            self.tcp_listener = Some(l);
-                            self.push(Value::Bool(true));
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__tcp_accept" || name == "__tcp_aceptar" {
-                    match &self.tcp_listener {
-                        Some(l) => match l.accept() {
-                            Ok((_stream, _)) => {
-                                let addr = _stream
-                                    .peer_addr()
-                                    .map(|a| a.to_string())
-                                    .unwrap_or_default();
-                                self.push(Value::Str(addr));
-                            }
-                            Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                        },
-                        None => {
-                            self.push(Value::Error(Box::new(Value::Str("Sin listener".into()))))
-                        }
-                    }
-                } else if name == "__http_get" || name == "__http_obtener" {
-                    let url = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match reqwest::blocking::get(&url) {
-                        Ok(resp) => {
-                            let body = resp.text().unwrap_or_default();
-                            self.push(Value::Str(body));
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__http_post" || name == "__http_enviar" {
-                    let url = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let body = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    match reqwest::blocking::Client::new()
-                        .post(&url)
-                        .body(body)
-                        .send()
-                    {
-                        Ok(resp) => {
-                            let text = resp.text().unwrap_or_default();
-                            self.push(Value::Str(text));
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__http_server" || name == "__http_servidor" {
-                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(format!("HTTP server on {}", addr)));
-                } else if name == "__serial_open" || name == "__serial_abrir" {
-                    self.push(Value::Bool(true));
-                } else if name == "__json_parse" || name == "__json_parsear" {
-                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match serde_json::from_str::<serde_json::Value>(&s) {
-                        Ok(v) => self.push(json_value_to_lumen(v)),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__json_stringify" || name == "__json_texto" {
-                    let val = args.first().cloned().unwrap_or(Value::Void);
-                    let json = lumen_value_to_json(&val);
-                    self.push(Value::Str(serde_json::to_string(&json).unwrap_or_default()));
-                } else if let Some(func) = self.find_func(&name) {
+                if let Some(result) = self.call_core_builtin(&name, &args) {
+                    return result;
+                }
+                #[cfg(feature = "full")]
+                if let Some(result) = self.call_full_builtin(&name, &args) {
+                    return result;
+                }
+                if let Some(func) = self.find_func(&name) {
                     let func_start = func.start;
                     let func_params = func.params.clone();
                     self.call_stack.push(CallFrame {
@@ -1904,29 +2142,6 @@ impl VM {
                         None => {
                             self.push(Value::Error(Box::new(Value::Str("Sin listener".into()))))
                         }
-                    }
-                } else if name == "__http_get" || name == "__http_obtener" {
-                    let url = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match reqwest::blocking::get(&url) {
-                        Ok(resp) => {
-                            let body = resp.text().unwrap_or_default();
-                            self.push(Value::Str(body));
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
-                    }
-                } else if name == "__http_post" || name == "__http_enviar" {
-                    let url = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let body = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    match reqwest::blocking::Client::new()
-                        .post(&url)
-                        .body(body)
-                        .send()
-                    {
-                        Ok(resp) => {
-                            let text = resp.text().unwrap_or_default();
-                            self.push(Value::Str(text));
-                        }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
                     }
                 } else if name == "__http_server" || name == "__http_servidor" {
                     let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();

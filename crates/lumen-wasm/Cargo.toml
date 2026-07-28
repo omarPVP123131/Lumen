@@ -1,0 +1,18 @@
+[package]
+name = "lumen-wasm"
+version.workspace = true
+edition.workspace = true
+description = "LÚMEN WebAssembly runtime — ejecuta LÚMEN en el navegador"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
+lumen-codegen = { path = "../lumen-codegen" }
+lumen-vm = { path = "../lumen-vm", default-features = false, features = [] }

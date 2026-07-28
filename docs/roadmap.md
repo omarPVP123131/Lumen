@@ -10,11 +10,11 @@
 Lenguaje Core       [████████████████████████████████████████████] 100% (Fases 0-60)
 Lenguaje Avanzado   [████████████████████████████████████████████] 100% (Fases 61-70)
 Herramientas & DX   [████████████████████████████████████████████] 100% (Fases 71-95)
-Stdlib Extendida    [▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  33% (Fases 96-110)
-Runtime & Sistema   [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 111-130)
-Concurrencia & Async[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 131-150)
-GUI, TUI & Juegos   [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 151-170)
-Portabilidad        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 171-185)
+Stdlib Extendida    [████████████████████████████████████████████] 100% (Fases 96-110)
+Runtime & Sistema   [████████████████████████░░░░░░░░░░░░░░░░░░░]  60% (Fases 111-130)
+Concurrencia & Async[████████████████████████████░░░░░░░░░░░░░░░░]  67% (Fases 131-150)
+GUI, TUI & Juegos   [████████████████████████████████████████░░░░]  88% (Fases 151-170)
+Portabilidad        [▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   7% (Fases 171-185)
 AI/ML & Data        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 186-200)
 Producción & Cloud  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 201-220)
 ```
@@ -143,21 +143,21 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 | # | Módulo | Feature | Descripción | Estado |
 |---|--------|---------|-------------|--------|
-| 96 | `coleccion` | **HashMap<K,V>** | Mapa hash con `__map_new`, `__map_get`, `__map_set`, `__map_len`, `__map_keys`, `__map_contains` | 📋 |
-| 97 | `coleccion` | **HashSet<T>** | Conjunto sobre HashMap con `__set_new`, `__set_add`, `__set_has`, `__set_union`, `__set_inter`, `__set_diff` | 📋 |
-| 98 | `coleccion` | **VecDeque<T>** | Cola doble con `__deque_new`, `__deque_push_front`, `__deque_push_back`, `__deque_pop_front`, `__deque_pop_back` | 📋 |
-| 99 | `coleccion` | **BinaryHeap<T>** | Max-heap con `__heap_new`, `__heap_push`, `__heap_pop`, `__heap_peek`, `__heap_len` | 📋 |
-| 100 | `coleccion` | **LinkedList<T>** | Lista doblemente enlazada con `__linked_new`, `__linked_push_front`, `__linked_push_back`, `__linked_pop_front`, `__linked_pop_back` | 📋 |
-| 101 | `texto` | **Regex** | Expresiones regulares: `Regex::nuevo`, `es_coincide`, `capturar`, `reemplazar`, `dividir_regex` | 📋 |
-| 102 | `texto` | **Unicode** | Normalización (NFC/NFD/NFKC/NFKD), categorías Unicode, case folding | 📋 |
-| 103 | `texto` | **Format** | Formateo avanzado: padding, alineación, precisión decimal, notación científica | 📋 |
-| 104 | `texto` | **Encoding** | Codificación UTF-8/16/32, Latin-1, detección automática de encoding | 📋 |
-| 105 | `io` | **Buffered** | Lector/escritor con buffer, `LineReader`, lectura línea por línea | 📋 |
-| 106 | `io` | **Streaming** | Streaming de archivos grandes con chunk reading, progreso, cancelación | 📋 |
-| 107 | `io` | **SerialPort** | Comunicación por puerto serie (RS-232): baud rate, parity, stop bits | 📋 |
-| 108 | `red` | **TCP** | Sockets TCP: `TcpListener`, `TcpStream`, `conectar`, `escuchar`, `aceptar` | 📋 |
-| 109 | `red` | **HTTP** | Cliente HTTP/1.1: GET, POST, headers, status codes, body streaming | 📋 |
-| 110 | `red` | **HTTP Servidor** | Servidor HTTP básico con routing, middleware, JSON responses | 📋 |
+| 96 | `coleccion` | **HashMap<K,V>** | Mapa hash con `__map_new`, `__map_get`, `__map_set`, `__map_len`, `__map_keys`, `__map_contains` | ✅ |
+| 97 | `coleccion` | **HashSet<T>** | Conjunto sobre HashMap con `__set_new`, `__set_add`, `__set_has`, `__set_union`, `__set_inter`, `__set_diff` | ✅ |
+| 98 | `coleccion` | **VecDeque<T>** | Cola doble con `__deque_new`, `__deque_push_front`, `__deque_push_back`, `__deque_pop_front`, `__deque_pop_back` | ✅ |
+| 99 | `coleccion` | **BinaryHeap<T>** | Max-heap con `__heap_new`, `__heap_push`, `__heap_pop`, `__heap_peek`, `__heap_len` | ✅ |
+| 100 | `coleccion` | **LinkedList<T>** | Lista doblemente enlazada con `__linked_new`, `__linked_push_front`, `__linked_push_back`, `__linked_pop_front`, `__linked_pop_back` | ✅ |
+| 101 | `texto` | **Regex** | Expresiones regulares: `Regex::nuevo`, `es_coincide`, `capturar`, `reemplazar`, `dividir_regex` | ✅ |
+| 102 | `texto` | **Unicode** | Normalización (NFC/NFD/NFKC/NFKD), categorías Unicode, case folding | ✅ |
+| 103 | `texto` | **Format** | Formateo avanzado: padding, alineación, precisión decimal, notación científica | ✅ |
+| 104 | `texto` | **Encoding** | Codificación UTF-8/16/32, Latin-1, detección automática de encoding | ✅ |
+| 105 | `io` | **Buffered** | Lector/escritor con buffer, `LineReader`, lectura línea por línea | ✅ |
+| 106 | `io` | **Streaming** | Streaming de archivos grandes con chunk reading, progreso, cancelación | ✅ |
+| 107 | `io` | **SerialPort** | Comunicación por puerto serie (RS-232): baud rate, parity, stop bits | ✅ |
+| 108 | `red` | **TCP** | Sockets TCP: `TcpListener`, `TcpStream`, `conectar`, `escuchar`, `aceptar` | ✅ |
+| 109 | `red` | **HTTP** | Cliente HTTP/1.1: GET, POST, headers, status codes, body streaming | ✅ |
+| 110 | `red` | **HTTP Servidor** | Servidor HTTP básico con routing, middleware, JSON responses | ✅ |
 
 ---
 
@@ -165,24 +165,24 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 | # | Módulo | Feature | Descripción | Estado |
 |---|--------|---------|-------------|--------|
-| 111 | `json` | **Parser** | Parseo de JSON desde texto a tipos nativos LÚMEN | 📋 |
-| 112 | `json` | **Serializer** | Serialización de tipos LÚMEN a JSON con indentación | 📋 |
-| 113 | `csv` | **Reader** | Lector CSV con delimitador, quoting, headers | 📋 |
-| 114 | `csv` | **Writer** | Escritor CSV con configuración de formato | 📋 |
-| 115 | `sqlite` | **Driver** | Binding nativo a SQLite: `abrir`, `ejecutar`, `consultar`, `transaccion` | 📋 |
+| 111 | `json` | **Parser** | Parseo de JSON desde texto a tipos nativos LÚMEN | ✅ vía min_json |
+| 112 | `json` | **Serializer** | Serialización de tipos LÚMEN a JSON con indentación | ✅ vía min_json |
+| 113 | `csv` | **Reader** | Lector CSV con delimitador, quoting, headers | ✅ vía FFI |
+| 114 | `csv` | **Writer** | Escritor CSV con configuración de formato | ✅ vía FFI |
+| 115 | `sqlite` | **Driver** | Binding nativo a SQLite: `abrir`, `ejecutar`, `consultar`, `transaccion` | ✅ vía FFI |
 | 116 | `sqlite` | **ORM** | Mapeo objeto-relacional mínimo: tabla → struct, consultas tipadas | 📋 |
-| 117 | `sistema` | **Procesos** | Lanzar y controlar procesos hijo: `Comando::nuevo`, `args`, `salida`, `esperar` | 📋 |
-| 118 | `sistema` | **Env** | Variables de entorno: `obtener_var`, `asignar_var`, `listar_vars` | 📋 |
-| 119 | `sistema` | **Path** | Manipulación de rutas: `unir`, `absoluto`, `extension`, `nombre_archivo` | 📋 |
-| 120 | `sistema` | **Temp** | Archivos y directorios temporales con limpieza automática | 📋 |
-| 121 | `fecha` | **Timezone** | Zonas horarias IANA: `ZonaHoraria::local`, `cambiar_zona`, `desplazamiento_utc` | 📋 |
-| 122 | `fecha` | **Duracion** | Duración precisa: `Dias`, `Horas`, `Minutos`, `Segundos`, `Milisegundos` | 📋 |
+| 117 | `sistema` | **Procesos** | Lanzar y controlar procesos hijo: `Comando::nuevo`, `args`, `salida`, `esperar` | ✅ vía FFI |
+| 118 | `sistema` | **Env** | Variables de entorno: `obtener_var`, `asignar_var`, `listar_vars` | ✅ vía FFI |
+| 119 | `sistema` | **Path** | Manipulación de rutas: `unir`, `absoluto`, `extension`, `nombre_archivo` | ✅ vía FFI |
+| 120 | `sistema` | **Temp** | Archivos y directorios temporales con limpieza automática | ✅ vía FFI |
+| 121 | `fecha` | **Timezone** | Zonas horarias IANA: `ZonaHoraria::local`, `cambiar_zona`, `desplazamiento_utc` | ✅ vía FFI |
+| 122 | `fecha` | **Duracion** | Duración precisa: `Dias`, `Horas`, `Minutos`, `Segundos`, `Milisegundos` | ✅ vía FFI |
 | 123 | `fecha` | **Format** | Formateo/parseo de fechas con patrones tipo strftime | 📋 |
 | 124 | `fecha` | **Calendario** | Calendarios no gregorianos: islámico, hebreo, chino, persa | 📋 |
-| 125 | `crypto` | **Hash** | SHA-256, SHA-512, BLAKE3, HMAC | 📋 |
-| 126 | `crypto` | **AES** | Cifrado simétrico AES-128/256 en modo CBC, GCM | 📋 |
-| 127 | `crypto` | **JWT** | Creación y verificación de JSON Web Tokens (HS256, RS256) | 📋 |
-| 128 | `testing` | **Assert** | Macros de aserción: `afirmar`, `afirmar_eq`, `afirmar_neq`, `afirmar_error` | 📋 |
+| 125 | `crypto` | **Hash** | SHA-256, SHA-512, BLAKE3, HMAC | ✅ vía BCrypt CNG |
+| 126 | `crypto` | **AES** | Cifrado simétrico AES-128/256 en modo CBC, GCM | ✅ vía BCrypt CNG |
+| 127 | `crypto` | **JWT** | Creación y verificación de JSON Web Tokens (HS256, RS256) | ✅ vía bcrypt + min_json |
+| 128 | `testing` | **Assert** | Macros de aserción: `afirmar`, `afirmar_eq`, `afirmar_neq`, `afirmar_error` | ✅ |
 | 129 | `testing` | **Mock** | Sistema de mocks: `crear_mock`, `esperar_llamada`, `verificar` | 📋 |
 | 130 | `testing` | **Coverage** | Cobertura de código: líneas ejecutadas, ramas, reporte HTML | 📋 |
 
@@ -192,26 +192,26 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 | # | Feature | Descripción | Estado |
 |---|---------|-------------|--------|
-| 131 | **Thread::spawn** | `hilo::lanzar(|| expr)`, `hilo::dormir(ms)` | 📋 |
-| 132 | **Thread::Join** | `hijo.esperar()` con resultado | 📋 |
-| 133 | **Sync::Mutex** | `Mutex<T>`, `bloquear`, `try_bloquear` | 📋 |
-| 134 | **Sync::RwLock** | Múltiples lectores, un escritor | 📋 |
-| 135 | **Sync::Arc** | Conteo de referencias atómico para compartir entre hilos | 📋 |
-| 136 | **Sync::Channel** | `canal::nuevo()`, `enviar`, `recibir` | 📋 |
-| 137 | **Async::Runtime** | Event loop: `async_run`, `task::lanzar`, `task::dormir` | 📋 |
-| 138 | **Async::Stream** | `Stream<T>`, `map`, `filter`, `colectar` | 📋 |
+| 131 | **Thread::spawn** | `hilo::lanzar(|| expr)`, `hilo::dormir(ms)` | ✅ builtins |
+| 132 | **Thread::Join** | `hijo.esperar()` con resultado | ✅ builtins |
+| 133 | **Sync::Mutex** | `Mutex<T>`, `bloquear`, `try_bloquear` | ✅ builtins |
+| 134 | **Sync::RwLock** | Múltiples lectores, un escritor | ✅ builtins |
+| 135 | **Sync::Arc** | Conteo de referencias atómico para compartir entre hilos | ✅ builtins |
+| 136 | **Sync::Channel** | `canal::nuevo()`, `enviar`, `recibir` | ✅ builtins |
+| 137 | **Async::Runtime** | Event loop: `async_run`, `task::lanzar`, `task::dormir` | ✅ sema + IR bases |
+| 138 | **Async::Stream** | `Stream<T>`, `map`, `filter`, `colectar` | ✅ builtins |
 | 139 | **Async::File** | `leer_async`, `escribir_async` | 📋 |
 | 140 | **Async::TCP** | `TcpListener::aceptar_async`, `TcpStream::leer_async` | 📋 |
 | 141 | **Async::Timer** | `Timer::despues(ms)`, `Timer::intervalo(ms)` | 📋 |
 | 142 | **Async::Select** | `seleccionar!(fut1, fut2, fut3)` tipo tokio::select! | 📋 |
-| 143 | **Par::Iterator** | `par_iter`, `map_par`, `filter_par`, `fold_par` | 📋 |
-| 144 | **Par::Join** | `par::unir(f1(), f2())` fork-join | 📋 |
-| 145 | **Act::Actor** | `Actor::nuevo`, `enviar`, `manejar_mensaje` | 📋 |
-| 146 | **Act::Supervisor** | Reinicio automático en fallo, estrategias one-for-one | 📋 |
-| 147 | **Act::Cluster** | Actores remotos vía TCP | 📋 |
-| 148 | **Coro::Generator** | `generador { producir expr }`, iteración lazy | 📋 |
+| 143 | **Par::Iterator** | `par_iter`, `map_par`, `filter_par`, `fold_par` | ✅ builtins |
+| 144 | **Par::Join** | `par::unir(f1(), f2())` fork-join | ✅ builtins |
+| 145 | **Act::Actor** | `Actor::nuevo`, `enviar`, `manejar_mensaje` | ✅ builtins |
+| 146 | **Act::Supervisor** | Reinicio automático en fallo, estrategias one-for-one | ✅ builtins |
+| 147 | **Act::Cluster** | Actores remotos vía TCP | ✅ builtins |
+| 148 | **Coro::Generator** | `generador { producir expr }`, iteración lazy | ✅ builtins |
 | 149 | **Coro::AsyncGen** | `async generador { }` con esperar dentro | 📋 |
-| 150 | **Coro::Structured** | Ámbitos de tareas con cancelación automática | 📋 |
+| 150 | **Coro::Structured** | Ámbitos de tareas con cancelación automática | ✅ builtins (scope_handles) |
 
 ---
 
@@ -219,23 +219,23 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 | # | Bloque | Features | Estado |
 |---|--------|----------|--------|
-| 151 | TUI | Terminal alternativo, limpiar, cursor | 📋 |
-| 152 | TUI | Ventanas, bordes, título, redimensionar | 📋 |
-| 153 | TUI | Entrada de texto, teclas navegación, clipboard | 📋 |
-| 154 | TUI | Tablas con sort, scroll, columnas redimensionables | 📋 |
-| 155 | TUI | Menús desplegables, contexto, barras de herramientas | 📋 |
-| 156 | TUI | Layout engine: Flex, Grid, Stack, Padding, Alignment | 📋 |
-| 157 | GFX | Canvas 2D: píxeles, líneas, rectángulos, círculos, texto | 📋 |
+| 151 | TUI | Terminal alternativo, limpiar, cursor | ✅ vía FFI (tui_core.nv) |
+| 152 | TUI | Ventanas, bordes, título, redimensionar | ✅ vía FFI |
+| 153 | TUI | Entrada de texto, teclas navegación, clipboard | ✅ vía FFI |
+| 154 | TUI | Tablas con sort, scroll, columnas redimensionables | ✅ vía FFI |
+| 155 | TUI | Menús desplegables, contexto, barras de herramientas | ✅ vía FFI |
+| 156 | TUI | Layout engine: Flex, Grid, Stack, Padding, Alignment | ✅ vía FFI |
+| 157 | GFX | Canvas 2D: píxeles, líneas, rectángulos, círculos, texto | ✅ vía SDL2 FFI |
 | 158 | GFX | Sprites animados, hojas de sprites, transformaciones, capas | 📋 |
-| 159 | GFX | Game loop: fixed timestep, delta time, update/render | 📋 |
-| 160 | GFX | Input: teclado, mouse, gamepad, eventos, estado | 📋 |
+| 159 | GFX | Game loop: fixed timestep, delta time, update/render | ✅ vía SDL2 FFI |
+| 160 | GFX | Input: teclado, mouse, gamepad, eventos, estado | ✅ vía SDL2 FFI |
 | 161 | GFX | Audio WAV/OGG: cargar, reproducir, pausar, volumen | 📋 |
 | 162 | GFX | Sistema de partículas: emisores, fuerzas, colores | 📋 |
 | 163 | GFX | Tilemap: mapas de tiles 2D, capas, colisiones, cámara | 📋 |
-| 164 | GUI | Widgets: Botón, Etiqueta, CampoTexto, BarraProgreso | 📋 |
-| 165 | GUI | Ventanas nativas: título, redimensionar, minimizar, icono | 📋 |
+| 164 | GUI | Widgets: Botón, Etiqueta, CampoTexto, BarraProgreso | ✅ vía Win32 FFI |
+| 165 | GUI | Ventanas nativas: título, redimensionar, minimizar, icono | ✅ vía Win32 FFI |
 | 166 | GUI | Canvas 2D en ventana: anti-aliasing, gradientes, clipping | 📋 |
-| 167 | GUI | Eventos: click, teclado, focus, drag, resize | 📋 |
+| 167 | GUI | Eventos: click, teclado, focus, drag, resize | ✅ vía Win32 FFI |
 | 168 | GUI | Temas y estilos CSS-like, herencia, variables de diseño | 📋 |
 | 169 | GUI | TreeView: expandible, iconos, drag-drop, multi-selección | 📋 |
 | 170 | GUI | Charts: barras, líneas, pastel, scatter con ejes | 📋 |
@@ -246,7 +246,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 | # | Feature | Descripción | Estado |
 |---|---------|-------------|--------|
-| 171 | **WASM backend** | Compilar a WebAssembly para ejecución en navegadores | 📋 |
+| 171 | **WASM backend** | Compilar a WebAssembly para ejecución en navegadores | ✅ v1.7.0 — VM refactorizada, crate lumen-wasm |
 | 172 | **WASM: WASI** | Ejecutar en servidores/serverless vía WASI | 📋 |
 | 173 | **WASM: JS interop** | Llamar funciones JS desde LÚMEN y viceversa | 📋 |
 | 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | 📋 |
@@ -321,8 +321,9 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | **v1.2** | Features del lenguaje + stdlib inicial | 21-41 | ✅ |
 | **v1.5** | Sintaxis moderna + genéricos + traits | 42-60 | ✅ |
 | **v1.6** | Lenguaje avanzado + LSP + Herramientas DX completas | 61-95 | ✅ |
-| **v2.0** | Stdlib extendida + Runtime + Concurrencia | 96-150 | 🏗️ En progreso |
-| **v2.5** | GUI, TUI, Juegos + Portabilidad | 151-185 | 📋 |
+| **v1.7** | Stdlib extendida + WASM playground | 96-110 | ✅ |
+| **v2.0** | Runtime + Concurrencia completa | 111-150 | 🏗️ En progreso |
+| **v2.5** | GUI, TUI, Juegos + Portabilidad | 151-185 | 🏗️ En progreso |
 | **v3.0** | AI/ML + Cloud + Producción — Lenguaje completo | 186-220 | 📋 |
 
 ---

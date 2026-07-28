@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.6.0-orange)
-![Tests](https://img.shields.io/badge/tests-317%20passing-brightgreen)
-![Fases](https://img.shields.io/badge/fases-0--95%20completadas-blueviolet)
+![Version](https://img.shields.io/badge/version-1.7.0-orange)
+![Tests](https://img.shields.io/badge/tests-345%20passing-brightgreen)
+![Fases](https://img.shields.io/badge/fases-0--96%20completadas-blueviolet)
 
 > **El primer lenguaje de programación moderno con el español como ciudadano de primera clase.**
 > Pipeline completo escrito en Rust: Lexer → Parser → Sema → IR → Optimizador → Bytecode → VM.
@@ -149,21 +149,24 @@ imprimir(saludo);
 | `lumen debug <archivo>` | Depurador con breakpoints e inspección |
 | `lumen serve` | Servidor de desarrollo con hot reload |
 | `lumen lsp` | Servidor LSP para VS Code (diagnostics, completion, hover, go-to-def) |
+| `lumen install <paquete>` | Instala paquetes del registry |
+| `lumen doc <archivo>` | Genera documentación HTML desde `///` |
+| `lumen run --target wasm` | Ejecuta en playground WebAssembly experimental |
 
 ---
 
-## 📊 Estado del Proyecto (v1.6.0)
+## 📊 Estado del Proyecto (v1.7.0)
 
 ```
 Lenguaje Core      (Fases 0-60)   ████████████████████ 100%
 Lenguaje Avanzado  (Fases 61-70)  ████████████████████ 100%
 Herramientas       (Fases 71-95)  ████████████████████ 100%
-Distribución       (Fases 96-110) ██░░░░░░░░░░░░░░░░░░  20%
+Distribución       (Fases 96-110) ███░░░░░░░░░░░░░░░░░  25%
 ```
 
-- ✅ **317 tests** pasando, ~0 warnings
+- ✅ **345 tests** pasando, ~0 warnings
 - ✅ **45 ejemplos** `.nv` funcionales
-- ✅ **14 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg
+- ✅ **15 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg, wasm
 
 ---
 

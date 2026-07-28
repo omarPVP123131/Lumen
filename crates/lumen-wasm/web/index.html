@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LÚMEN Playground</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; display: flex; flex-direction: column; }
+  header { background: #181825; padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #313244; }
+  header h1 { font-size: 18px; color: #cba6f7; }
+  header span { font-size: 12px; color: #6c7086; }
+  .container { display: flex; flex: 1; gap: 0; }
+  .panel { flex: 1; display: flex; flex-direction: column; }
+  .panel-header { background: #181825; padding: 8px 16px; font-size: 12px; color: #a6adc8; border-bottom: 1px solid #313244; }
+  textarea { flex: 1; background: #1e1e2e; color: #cdd6f4; border: none; padding: 16px; font-family: 'JetBrains Mono', 'Cascadia Code', monospace; font-size: 14px; resize: none; outline: none; tab-size: 2; }
+  textarea::placeholder { color: #585b70; }
+  #output { flex: 1; background: #11111b; color: #a6e3a1; padding: 16px; font-family: 'JetBrains Mono', 'Cascadia Code', monospace; font-size: 14px; overflow-y: auto; white-space: pre-wrap; }
+  .toolbar { display: flex; gap: 8px; padding: 8px 16px; background: #181825; border-top: 1px solid #313244; }
+  button { background: #cba6f7; color: #1e1e2e; border: none; padding: 8px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+  button:hover { background: #b4befe; }
+  button.secondary { background: #313244; color: #cdd6f4; }
+  button.secondary:hover { background: #45475a; }
+  #status { font-size: 12px; color: #6c7086; padding: 8px 16px; }
+  .divider { width: 1px; background: #313244; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LÚMEN</h1>
+  <span>Playground Web v1.7.0</span>
+</header>
+
+<div class="container">
+  <div class="panel">
+    <div class="panel-header">📝 Código (.nv)</div>
+    <textarea id="code" spellcheck="false">imprimir("¡Hola, LÚMEN desde el navegador!");
+
+// Prueba con variables
+texto nombre = "Mundo";
+entero año = 2026;
+imprimir("Hola ", nombre, " en ", año);
+
+// Prueba matemáticas
+entero a = 42;
+entero b = 10;
+imprimir("42 + 10 = ", a + b);
+imprimir("42 & 10 = ", a & b);
+
+// Prueba función
+funcion texto saludo(texto n) {
+    retornar "¡Hola " + n + "!";
+}
+imprimir(saludo("LÚMEN"));
+</textarea>
+    <div class="toolbar">
+      <button id="runBtn">▶ Ejecutar</button>
+      <button id="clearBtn" class="secondary">🗑 Limpiar</button>
+      <button id="examplesBtn" class="secondary">📂 Ejemplos</button>
+      <span id="status">✓ Listo</span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="panel">
+    <div class="panel-header">🖥️ Salida</div>
+    <div id="output">Presiona "Ejecutar" para correr el código...</div>
+  </div>
+</div>
+
+<script src="pkg/lumen_wasm.js"></script>
+<script>
+let runtime = null;
+
+async function init() {
+  try {
+    const { LumenRuntime } = await wasm_bindgen('pkg/lumen_wasm_bg.wasm');
+    runtime = new LumenRuntime();
+    document.getElementById('status').textContent = '✓ VM cargada';
+  } catch(e) {
+    document.getElementById('status').textContent = '✗ Error: ' + e;
+    document.getElementById('output').textContent = 'Error al cargar la VM: ' + e;
+  }
+}
+
+document.getElementById('runBtn').addEventListener('click', () => {
+  if (!runtime) { document.getElementById('output').textContent = 'VM no cargada aún...'; return; }
+  const code = document.getElementById('code').value;
+  document.getElementById('output').textContent = 'Ejecutando...';
+  document.getElementById('status').textContent = '⚡ ejecutando';
+  
+  setTimeout(() => {
+    const result = runtime.run(code);
+    document.getElementById('output').textContent = result || '(sin salida)';
+    document.getElementById('status').textContent = '✓ completado';
+  }, 50);
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('output').textContent = '';
+});
+
+document.getElementById('examplesBtn').addEventListener('click', () => {
+  const examples = [
+    { name: 'Hola Mundo', code: 'imprimir("¡Hola, LÚMEN!");' },
+    { name: 'Matemáticas', code: 'entero x = 42;\nentero y = 10;\nimprimir("x + y = ", x + y);\nimprimir("x & y = ", x & y);\nimprimir("x << 2 = ", x << 2);' },
+    { name: 'Función', code: 'funcion texto fib(entero n) {\n    si n <= 1 { retornar "1"; }\n    retornar fib(n - 1) + fib(n - 2);\n}\nimprimir(fib(5));' },
+    { name: 'Bucle', code: 'entero i = 0;\nmientras i < 10 {\n    imprimir(i);\n    i = i + 1;\n}' },
+    { name: 'Bitwise', code: 'entero a = 0b1100;\n// LÚMEN usa decimal:\na = 12;\nb = 10;\nimprimir("a & b = ", a & b);\nimprimir("a | b = ", a | b);\nimprimir("a ^ b = ", a ^ b);\nimprimir("~a = ", ~a);\nimprimir("a << 2 = ", a << 2);\nimprimir("a >> 1 = ", a >> 1);' },
+  ];
+  
+  let menu = "EJEMPLOS:\n\n";
+  examples.forEach((ex, i) => { menu += (i+1) + ". " + ex.name + "\n"; });
+  menu += "\nSelecciona un número (0=cancelar):";
+  const sel = prompt(menu);
+  const idx = parseInt(sel) - 1;
+  if (idx >= 0 && idx < examples.length) {
+    document.getElementById('code').value = examples[idx].code;
+  }
+});
+
+init();
+</script>
+</body>
+</html>

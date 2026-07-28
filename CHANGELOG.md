@@ -4,6 +4,26 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
+## v1.7.0 — Julio 2026
+
+### Agregado
+- **Fase 96: WASM Playground** — Compilación a `wasm32-unknown-unknown`.
+  - VM refactorizada: `call_core_builtin()` + `call_full_builtin()` extraídas del dispatch masivo.
+  - Feature flags `full`/`minimal` en VM con `#[cfg(feature = "full")]` en fields TCP, cluster, scope, FFI.
+  - Stubs para crypto_ffi, gui_ffi, coro_ffi en modo minimal.
+  - crate `lumen-wasm` con playground web HTML.
+  - `Display` impl para `VmError`.
+- Nuevo crate: `lumen-wasm` (runtime WASM + playground web).
+- VM: 139 e2e tests (26 nuevos desde v1.6.0).
+- VM: 0 dependencias externas obligatorias (solo `libloading` con feature flag).
+
+### Cambiado
+- Version bump a 1.7.0 en workspace.
+- VM struct fields con `#[cfg(feature = "full")]` para compilación WASM.
+- `AGENTS.md` actualizado con fases completadas y test counts.
+
+---
+
 ## v1.6.0 — Julio 2026
 
 ### Agregado

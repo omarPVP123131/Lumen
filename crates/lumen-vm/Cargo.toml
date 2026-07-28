@@ -8,6 +8,9 @@ repository.workspace = true
 description = "Máquina virtual stack-based para el lenguaje LÚMEN — ejecuta bytecode .nvc"
 keywords = ["lumen", "language", "vm", "virtual-machine", "educational"]
 
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("full"))'] }
+
 [dependencies]
 lumen-codegen = { path = "../lumen-codegen" }
 serde_json.workspace = true
