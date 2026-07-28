@@ -2113,7 +2113,7 @@ impl SemanticAnalyzer {
                                     }
                                     TypeInfo::Void
                                 } else if callee == "__tarea_lanzar" || callee == "__task_spawn" {
-                                    if args.len() < 1 {
+                                    if args.is_empty() {
                                         self.errors.push(SemError {
                                             code: "E040".to_string(),
                                             message: format!("'{}' espera al menos 1 argumento (nombre de función), no {}", callee, args.len()),
