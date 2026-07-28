@@ -3,7 +3,10 @@ use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
 use std::collections::HashMap;
 #[cfg(feature = "full")]
 use std::sync::Arc;
+use std::sync::OnceLock;
 use unicode_normalization::UnicodeNormalization;
+
+pub static JS_EVAL: OnceLock<fn(&str) -> String> = OnceLock::new();
 
 #[cfg(feature = "full")]
 use crate::crypto_ffi::Bcrypt;
@@ -937,6 +940,31 @@ impl VM {
                     let val = args.first().cloned().unwrap_or(Value::Void);
                     let json = lumen_value_to_json(&val);
                     self.push(Value::Str(serde_json::to_string(&json).unwrap_or_default()));
+                return Some(Ok(()));
+                }
+
+                if name == "__js_call" || name == "__js_llamar" {
+                    let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let js_args: Vec<String> = args.iter().skip(1).map(|v| format!("{}", v)).collect();
+                    let js_code = format!("__lumen_call('{}', [{}])", fn_name.replace('\'', "\\'"),
+                        js_args.iter().map(|a| format!("'{}'", a.replace('\'', "\\'"))).collect::<Vec<_>>().join(","));
+                    if let Some(eval) = JS_EVAL.get() {
+                        let result = eval(&js_code);
+                        self.push(Value::Str(result));
+                    } else {
+                        self.push(Value::Str(js_code));
+                    }
+                return Some(Ok(()));
+                }
+
+                if name == "__js_eval" || name == "__js_evaluar" {
+                    let js_code = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if let Some(eval) = JS_EVAL.get() {
+                        let result = eval(&js_code);
+                        self.push(Value::Str(result));
+                    } else {
+                        self.push(Value::Str(js_code));
+                    }
                 return Some(Ok(()));
                 }
 

@@ -1695,3 +1695,19 @@ imprimir(res);";
     // Void prints as "void" on the output
     assert!(output[0].contains("void") || output[0].contains("error") || output[0].contains("Error"));
 }
+
+#[test]
+fn test_js_eval_stub() {
+    let src = "texto r = __js_eval(\"1 + 1\");
+imprimir(r);";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1 + 1"]);
+}
+
+#[test]
+fn test_js_call_stub() {
+    let src = "texto r = __js_llamar(\"alert\", \"hola\");
+imprimir(r);";
+    let output = run_source(src).unwrap();
+    assert!(output[0].contains("__lumen_call"));
+}

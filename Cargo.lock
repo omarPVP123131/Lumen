@@ -1279,6 +1279,7 @@ name = "lumen-wasm"
 version = "1.6.0"
 dependencies = [
  "console_error_panic_hook",
+ "js-sys",
  "lumen-codegen",
  "lumen-ir",
  "lumen-lexer",

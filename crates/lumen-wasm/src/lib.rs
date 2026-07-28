@@ -1,5 +1,12 @@
 use wasm_bindgen::prelude::*;
 
+fn js_eval(js: &str) -> String {
+    js_sys::eval(js)
+        .ok()
+        .and_then(|v| v.as_string())
+        .unwrap_or_default()
+}
+
 #[wasm_bindgen]
 pub struct LumenRuntime {
     output: String,
@@ -9,6 +16,7 @@ pub struct LumenRuntime {
 impl LumenRuntime {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
+        let _ = lumen_vm::vm::JS_EVAL.set(js_eval);
         LumenRuntime { output: String::new() }
     }
 

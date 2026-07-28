@@ -2142,6 +2142,9 @@ impl SemanticAnalyzer {
                                         }
                                     }
                                     TypeInfo::Entero
+                                } else if callee == "__js_eval" || callee == "__js_evaluar"
+                                    || callee == "__js_call" || callee == "__js_llamar" {
+                                    TypeInfo::Texto
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {
