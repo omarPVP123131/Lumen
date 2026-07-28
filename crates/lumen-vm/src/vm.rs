@@ -2938,11 +2938,13 @@ fn ffi_call_dynamic(
 }
 
 // ── JWT helpers ─────────────────────────────────────────────────────────
+#[cfg(feature = "full")]
 fn base64url_encode(data: &[u8]) -> String {
     use base64::Engine;
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
 }
 
+#[cfg(feature = "full")]
 fn base64url_decode(data: &str) -> Vec<u8> {
     use base64::Engine;
     base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -2950,6 +2952,7 @@ fn base64url_decode(data: &str) -> Vec<u8> {
         .unwrap_or_default()
 }
 
+#[cfg(feature = "full")]
 fn base64url_decode_to_string(data: &str) -> Result<String, String> {
     use base64::Engine;
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -2958,6 +2961,7 @@ fn base64url_decode_to_string(data: &str) -> Result<String, String> {
     String::from_utf8(bytes).map_err(|e| format!("UTF-8 error: {}", e))
 }
 
+#[cfg(feature = "full")]
 fn hmac_sha256(data: &[u8], key: &[u8]) -> Vec<u8> {
     use hmac::{Hmac, Mac};
     type HmacSha256 = Hmac<sha2::Sha256>;

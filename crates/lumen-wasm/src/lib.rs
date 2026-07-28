@@ -1,5 +1,4 @@
 use wasm_bindgen::prelude::*;
-use lumen_parser::ast::Program;
 
 #[wasm_bindgen]
 pub struct LumenRuntime {
@@ -25,7 +24,7 @@ impl LumenRuntime {
         }
 
         // Parser  
-        let mut parser = lumen_parser::Parser::new(tokens);
+        let parser = lumen_parser::Parser::new(tokens);
         let (mut program, parse_errors) = parser.parse();
         if !parse_errors.is_empty() {
             return format!("Error sintáctico [{}]: {}", parse_errors[0].span.start.line, parse_errors[0].message);

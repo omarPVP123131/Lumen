@@ -69,13 +69,14 @@ imprimir(saludo("LÚMEN"));
   </div>
 </div>
 
-<script src="pkg/lumen_wasm.js"></script>
-<script>
+<script type="module">
+import init, { LumenRuntime } from '../pkg/lumen_wasm.js';
+
 let runtime = null;
 
-async function init() {
+async function init_runtime() {
   try {
-    const { LumenRuntime } = await wasm_bindgen('pkg/lumen_wasm_bg.wasm');
+    await init();
     runtime = new LumenRuntime();
     document.getElementById('status').textContent = '✓ VM cargada';
   } catch(e) {
@@ -105,7 +106,7 @@ document.getElementById('examplesBtn').addEventListener('click', () => {
   const examples = [
     { name: 'Hola Mundo', code: 'imprimir("¡Hola, LÚMEN!");' },
     { name: 'Matemáticas', code: 'entero x = 42;\nentero y = 10;\nimprimir("x + y = ", x + y);\nimprimir("x & y = ", x & y);\nimprimir("x << 2 = ", x << 2);' },
-    { name: 'Función', code: 'funcion texto fib(entero n) {\n    si n <= 1 { retornar "1"; }\n    retornar fib(n - 1) + fib(n - 2);\n}\nimprimir(fib(5));' },
+    { name: 'Función', code: 'funcion entero fib(entero n) {\n    si n <= 1 { retornar n; }\n    retornar fib(n - 1) + fib(n - 2);\n}\nimprimir(fib(10));' },
     { name: 'Bucle', code: 'entero i = 0;\nmientras i < 10 {\n    imprimir(i);\n    i = i + 1;\n}' },
     { name: 'Bitwise', code: 'entero a = 0b1100;\n// LÚMEN usa decimal:\na = 12;\nb = 10;\nimprimir("a & b = ", a & b);\nimprimir("a | b = ", a | b);\nimprimir("a ^ b = ", a ^ b);\nimprimir("~a = ", ~a);\nimprimir("a << 2 = ", a << 2);\nimprimir("a >> 1 = ", a >> 1);' },
   ];
@@ -120,7 +121,7 @@ document.getElementById('examplesBtn').addEventListener('click', () => {
   }
 });
 
-init();
+init_runtime();
 </script>
 </body>
 </html>
