@@ -3,16 +3,16 @@
 // Uso: importar "gui.nv"
 // NOTA: Solo Windows. Requiere user32.dll
 
-cualquiera __user32 = ninguno;
+numero __user32 = 0;
 
 funcion booleano __cargar() {
-    si __tipo_de(__user32) == "texto" { retornar verdadero; }
-    __user32 = __ffi_cargar("user32.dll");
-    retornar __tipo_de(__user32) == "texto";
-}
-
-funcion texto __ws(texto s) {
-    retornar s; // Las funciones FFI manejan texto como UTF-16 automáticamente
+    si __user32 != 0 { retornar verdadero; }
+    texto lib = __ffi_cargar("user32.dll");
+    si __tipo_de(lib) == "texto" {
+        __user32 = 1;
+        retornar verdadero;
+    }
+    retornar falso;
 }
 
 // ============================================================
@@ -34,10 +34,10 @@ funcion booleano mostrar(texto id) {
 }
 funcion booleano show(texto id) { retornar mostrar(id); }
 
-funcion cualquiera evento(texto id) {
+funcion texto evento(texto id) {
     retornar __gui_esperar(id);
 }
-funcion cualquiera poll(texto id) { retornar evento(id); }
+funcion texto poll(texto id) { retornar evento(id); }
 
 funcion booleano cerrar(texto id) {
     retornar __gui_cerrar(id);
@@ -47,8 +47,8 @@ funcion booleano close(texto id) { retornar cerrar(id); }
 funcion texto bucle(texto id) {
     mostrar(id);
     mientras verdadero {
-        cualquiera evt = evento(id);
-        si __tipo_de(evt) == "nulo" { continuar; }
+        texto evt = evento(id);
+        si evt == "" { continuar; }
         si evt == "CLOSE" || evt == "DESTROY" { romper; }
     }
     cerrar(id);
@@ -80,17 +80,19 @@ funcion entero __crear_control(texto clase, texto texto_ctrl, entero estilo, ent
     si !__cargar() { retornar 0; }
     entero ctrl_id = __nuevo_id();
     // Write text to buffer for FFI call
-    entero text_buf = __ffi_asignar(texto_ctrl.largo() + 1);
+    entero tlen = __str_longitud(texto_ctrl);
+    entero text_buf = __ffi_asignar(tlen + 1);
     __ffi_escribir(text_buf, 0, texto_ctrl);
-    __ffi_poke(text_buf, texto_ctrl.largo(), 0);
-    entero class_buf = __ffi_asignar(clase.largo() + 1);
+    __ffi_poke(text_buf, tlen, 0);
+    entero clen = __str_longitud(clase);
+    entero class_buf = __ffi_asignar(clen + 1);
     __ffi_escribir(class_buf, 0, clase);
-    __ffi_poke(class_buf, clase.largo(), 0);
-    entero style_final = estilo | WS_CHILD | WS_VISIBLE;
+    __ffi_poke(class_buf, clen, 0);
+    entero style_final = estilo + WS_CHILD + WS_VISIBLE;
     entero hctrl = __ffi_llamar(__user32, "CreateWindowExA", "entero,entero,entero,entero,entero,entero,entero,entero,entero,entero,entero,entero",
         [0, class_buf, text_buf, style_final, x, y, w, h, padre_hwnd, ctrl_id, 0, 0], "entero");
-    __ffi_liberar(text_buf, texto_ctrl.largo() + 1);
-    __ffi_liberar(class_buf, clase.largo() + 1);
+    __ffi_liberar(text_buf, tlen + 1);
+    __ffi_liberar(class_buf, clen + 1);
     si hctrl == 0 { retornar 0; }
     retornar ctrl_id;
 }
@@ -112,20 +114,21 @@ funcion entero label(texto window_id, texto label_text, entero x, entero y, ente
 funcion entero entrada(texto ventana_id, entero x, entero y, entero w, entero h) {
     entero padre = __gui_id(ventana_id);
     si padre == 0 { retornar 0; }
-    retornar __crear_control("EDIT", "", ES_AUTOHSCROLL | WS_BORDER, padre, x, y, w, h);
+    retornar __crear_control("EDIT", "", ES_AUTOHSCROLL + WS_BORDER, padre, x, y, w, h);
 }
 funcion entero input(texto window_id, entero x, entero y, entero w, entero h) { retornar entrada(window_id, x, y, w, h); }
 
 funcion booleano texto_control(texto ventana_id, entero ctrl_id, texto nuevo_texto) {
     entero padre = __gui_id(ventana_id);
     si padre == 0 { retornar falso; }
-    entero text_buf = __ffi_asignar(nuevo_texto.largo() + 1);
+    entero nlen = __str_longitud(nuevo_texto);
+    entero text_buf = __ffi_asignar(nlen + 1);
     __ffi_escribir(text_buf, 0, nuevo_texto);
-    __ffi_poke(text_buf, nuevo_texto.largo(), 0);
+    __ffi_poke(text_buf, nlen, 0);
     entero hctrl = __ffi_llamar(__user32, "GetDlgItem", "entero,entero", [padre, ctrl_id], "entero");
-    si hctrl == 0 { __ffi_liberar(text_buf, nuevo_texto.largo() + 1); retornar falso; }
+    si hctrl == 0 { __ffi_liberar(text_buf, nlen + 1); retornar falso; }
     entero rc = __ffi_llamar(__user32, "SetWindowTextA", "entero,entero", [hctrl, text_buf], "entero");
-    __ffi_liberar(text_buf, nuevo_texto.largo() + 1);
+    __ffi_liberar(text_buf, nlen + 1);
     retornar rc != 0;
 }
 funcion booleano set_text(texto window_id, entero ctrl_id, texto new_text) { retornar texto_control(window_id, ctrl_id, new_text); }

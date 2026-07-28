@@ -2157,8 +2157,47 @@ impl SemanticAnalyzer {
                                     || callee == "__js_evaluar"
                                     || callee == "__js_call"
                                     || callee == "__js_llamar"
+                                    || callee == "__gui_ventana"
+                                    || callee == "__gui_window"
+                                    || callee == "__gui_esperar"
+                                    || callee == "__gui_poll"
                                 {
                                     TypeInfo::Texto
+                                } else if callee == "__gui_mostrar"
+                                    || callee == "__gui_show"
+                                    || callee == "__gui_cerrar"
+                                    || callee == "__gui_close"
+                                {
+                                    TypeInfo::Booleano
+                                } else if callee == "__gui_id"
+                                    || callee == "__gui_hwnd"
+                                {
+                                    TypeInfo::Entero
+                                } else if callee == "__ffi_cargar"
+                                    || callee == "__ffi_load"
+                                {
+                                    TypeInfo::Texto
+                                } else if callee == "__ffi_llamar"
+                                    || callee == "__ffi_call"
+                                {
+                                    TypeInfo::Entero
+                                } else if callee == "__ffi_asignar"
+                                    || callee == "__ffi_alloc"
+                                {
+                                    TypeInfo::Entero
+                                } else if callee == "__ffi_liberar"
+                                    || callee == "__ffi_free"
+                                    || callee == "__ffi_escribir"
+                                    || callee == "__ffi_write"
+                                {
+                                    TypeInfo::Entero
+                                } else if callee == "__ffi_leer"
+                                    || callee == "__ffi_read"
+                                {
+                                    TypeInfo::Texto
+                                } else if callee == "__ffi_peek"
+                                {
+                                    TypeInfo::Entero
                                 } else if callee == "__aes_encriptar"
                                     || callee == "__aes_encrypt"
                                     || callee == "__aes_desencriptar"
