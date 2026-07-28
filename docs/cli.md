@@ -6,6 +6,26 @@
 lumen <comando> [opciones] <archivo>
 ```
 
+## Filosofía: De 0 a Ingeniero
+
+LÚMEN está diseñado como una **ruta de aprendizaje progresiva**:
+
+| Nivel | Comandos | Descripción |
+|-------|----------|-------------|
+| 🟢 Principiante | `run`, `check` | Ejecutar y verificar programas |
+| 🟡 Básico | `new`, `fmt`, `debug` | Crear, formatear, depurar |
+| 🟠 Intermedio | `test`, `doc`, `lint` | Probar, documentar, analizar |
+| 🔴 Avanzado | `build`, `disasm` | Compilar y optimizar |
+| 🟣 Profesional | `build --native`, `serve`, `lsp` | Nativo, web, editor |
+| ⚫ Ingeniero | `install`, `tutor`, `learn` | Publicar, enseñar, contribuir |
+
+```bash
+# RÁPIDA: De 0 a tu primer programa
+lumen tutor basics         # Aprende fundamentos
+lumen new mi_app           # Crea proyecto
+lumen run mi_app/main.nv   # Ejecuta
+```
+
 ---
 
 ## Comandos

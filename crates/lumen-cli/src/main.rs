@@ -18,6 +18,336 @@ struct Config {
     native: bool,
 }
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn print_help() {
+    println!();
+    println!("  ╔══════════════════════════════════════════════════╗");
+    println!("  ║        LÚMEN v{VERSION} — Lenguaje Bilingüe ES/EN      ║");
+    println!("  ║      De 0 a ingeniero — From zero to engineer     ║");
+    println!("  ╚══════════════════════════════════════════════════╝");
+    println!();
+    println!("  📖 RUTA DE APRENDIZAJE / LEARNING PATH:");
+    println!();
+    println!("     PASO 1 — Fundamentos:");
+    println!("       lumen run examples/hello.nv");
+    println!("       lumen run examples/demo_completo.nv");
+    println!();
+    println!("     PASO 2 — Tu primer programa:");
+    println!("       lumen new mi_proyecto");
+    println!("       lumen run mi_proyecto/main.nv");
+    println!("       lumen check mi_proyecto/main.nv    # verificar antes de ejecutar");
+    println!();
+    println!("     PASO 3 — Editar y depurar:");
+    println!("       lumen fmt archivo.nv               # formatear código");
+    println!("       lumen debug archivo.nv              # depurador interactivo");
+    println!("       lumen lint archivo.nv               # análisis estático");
+    println!();
+    println!("     PASO 4 — Probar y documentar:");
+    println!("       lumen test archivo.nv               # ejecutar tests");
+    println!("       lumen doc archivo.nv                # generar documentación HTML");
+    println!();
+    println!("     PASO 5 — Compilar y distribuir:");
+    println!("       lumen build archivo.nv              # compilar a bytecode .nvc");
+    println!("       lumen disasm archivo.nvc            # desensamblar bytecode");
+    println!("       lumen build --native archivo.nv     # compilar a binario nativo (C)");
+    println!();
+    println!("     PASO 6 — Explora todo el lenguaje:");
+    println!("       lumen tutor basics                  # fundamentos");
+    println!("       lumen tutor functions               # funciones y genéricos");
+    println!("       lumen tutor data                    # structs, enums, match");
+    println!("       lumen tutor advanced                # traits, errores, async");
+    println!("       lumen tutor stdlib                  # colecciones, texto, JSON");
+    println!("       lumen tutor pro                     # GUI, TUI, gráficos, WASM");
+    println!();
+    println!("  🛠️  COMANDOS / COMMANDS:");
+    println!();
+    println!("   run <file>       Ejecutar programa / Run program");
+    println!("   build <file>     Compilar a bytecode / Compile to .nvc");
+    println!("   build --native   Compilar a binario nativo / Compile native binary");
+    println!("   check <file>     Verificar sintaxis / Check syntax + semantics");
+    println!("   disasm <file>    Desensamblar bytecode / Disassemble .nvc");
+    println!("   fmt <file>       Formatear código / Format code");
+    println!("   repl             Modo interactivo / Interactive REPL");
+    println!("   new <name>       Crear proyecto / Create project");
+    println!("   test <file>      Ejecutar tests / Run unit tests");
+    println!("   debug <file>     Depurador interactivo / Debugger");
+    println!("   lint <file>      Análisis estático / Static analysis");
+    println!("   doc <file>       Generar documentación / Generate HTML docs");
+    println!("   lsp              Servidor LSP / LSP server (VS Code)");
+    println!("   install <pkg>    Instalar paquete / Install package");
+    println!("   serve            Playground web / Web playground");
+    println!("   learn            Tutorial interactivo / Interactive tutorial");
+    println!("   tutor <tema>     Mostrar lección / Show lesson");
+    println!();
+    println!("  ⚙️  OPCIONES / OPTIONS:");
+    println!();
+    println!("   -L, --lib-dir <dir>  Ruta de módulos stdlib");
+    println!("   -v, --version        Versión / Version");
+    println!("   -h, --help           Esta ayuda / This help");
+    println!();
+    println!("  📚 DOCUMENTACIÓN:");
+    println!("   README.md     — Inicio rápido");
+    println!("   LENGUAJE.md   — Manual del lenguaje (ES)");
+    println!("   docs/cli.md   — Referencia CLI");
+    println!("   docs/roadmap.md — Roadmap completo");
+    println!("   .opencode/agents/ — Skills de desarrollo");
+    println!();
+    println!("  🌐 PLAYGROUND WEB:");
+    println!("   cd crates/lumen-wasm && python serve.py");
+    println!("   http://localhost:8080/web/index.html");
+    println!();
+    println!("  🐳 DOCKER:");
+    println!("   docker compose up");
+    println!();
+}
+
+fn print_tutor(topic: &str) {
+    match topic {
+        "basics" | "basicos" => {
+            println!("╔══════════════════════════════════════════╗");
+            println!("║  PASO 1: FUNDAMENTOS / BASICS           ║");
+            println!("╚══════════════════════════════════════════╝");
+            println!();
+            println!("📌 Variables y tipos:");
+            println!("  entero a = 42;             // integer");
+            println!("  decimal pi = 3.14;          // float");
+            println!("  texto s = \"hola\";           // string");
+            println!("  booleano b = verdadero;     // boolean");
+            println!("  lista<entero> nums = [1,2,3]; // array");
+            println!();
+            println!("📌 Condicionales:");
+            println!("  si edad >= 18 {{");
+            println!("      imprimir(\"Mayor\");");
+            println!("  }} sino {{");
+            println!("      imprimir(\"Menor\");");
+            println!("  }}");
+            println!();
+            println!("📌 Bucles:");
+            println!("  mientras i < 10 {{ i = i + 1; }}");
+            println!("  para (entero i = 0; i < 10; i = i + 1) {{ }}");
+            println!();
+            println!("📌 Entrada/Salida:");
+            println!("  imprimir(\"Hola mundo\");   // print");
+            println!("  texto input = leer();      // read");
+            println!();
+            println!("▶  Prueba: lumen run examples/hello.nv");
+            println!("▶  Prueba: lumen run examples/condicional.nv");
+        }
+        "functions" | "funciones" => {
+            println!("╔══════════════════════════════════════════╗");
+            println!("║  PASO 2: FUNCIONES / FUNCTIONS          ║");
+            println!("╚══════════════════════════════════════════╝");
+            println!();
+            println!("📌 Definir función:");
+            println!("  funcion entero suma(entero a, entero b) {{");
+            println!("      retornar a + b;");
+            println!("  }}");
+            println!();
+            println!("📌 Llamar:");
+            println!("  imprimir(suma(3, 4));  // 7");
+            println!();
+            println!("📌 Parámetros default:");
+            println!("  funcion entero mul(entero a, entero b = 2) {{");
+            println!("      retornar a * b;");
+            println!("  }}");
+            println!();
+            println!("📌 Genéricos:");
+            println!("  funcion T id<T>(T x) {{ retornar x; }}");
+            println!("  imprimir(id<entero>(42));");
+            println!();
+            println!("▶  Prueba: lumen run examples/func.nv");
+            println!("▶  Prueba: lumen run examples/genericos.nv");
+        }
+        "data" | "datos" => {
+            println!("╔══════════════════════════════════════════╗");
+            println!("║  PASO 3: DATOS / STRUCTS + ENUMS        ║");
+            println!("╚══════════════════════════════════════════╝");
+            println!();
+            println!("📌 Structs:");
+            println!("  estructura Punto {{ x: entero, y: entero }}");
+            println!("  Punto p = Punto {{ x: 3, y: 4 }};");
+            println!();
+            println!("📌 Métodos:");
+            println!("  impl Punto {{");
+            println!("      funcion entero suma(Punto este) {{");
+            println!("          retornar este.x + este.y;");
+            println!("      }}");
+            println!("  }}");
+            println!("  imprimir(p.suma());  // 7");
+            println!();
+            println!("📌 Enums:");
+            println!("  enum Color {{ Rojo, Verde, Azul }}");
+            println!();
+            println!("📌 Pattern Matching:");
+            println!("  elegir (color) {{");
+            println!("      caso Color::Rojo: imprimir(\"rojo\");");
+            println!("      caso Color::Verde: imprimir(\"verde\");");
+            println!("  }}");
+            println!();
+            println!("▶  Prueba: lumen run examples/structs.nv");
+            println!("▶  Prueba: lumen run examples/enums.nv");
+            println!("▶  Prueba: lumen run examples/match.nv");
+        }
+        "advanced" | "avanzado" => {
+            println!("╔══════════════════════════════════════════╗");
+            println!("║  PASO 4: AVANZADO / ADVANCED            ║");
+            println!("╚══════════════════════════════════════════╝");
+            println!();
+            println!("📌 Traits:");
+            println!("  rasgo Mostrable {{ funcion texto mostrar(este); }}");
+            println!("  impl Mostrable para entero {{ ... }}");
+            println!();
+            println!("📌 Resultado<T,E>:");
+            println!("  funcion resultado<entero,texto> div(a,b) {{");
+            println!("      si b==0 {{ retornar error(\"no\"); }}");
+            println!("      retornar exito(a/b);");
+            println!("  }}");
+            println!();
+            println!("📌 Opcion<T>:");
+            println!("  opcion<entero> v = algun(42);");
+            println!();
+            println!("📌 Async/Tasks:");
+            println!("  texto tid = __tarea_lanzar(\"fn_name\");");
+            println!("  entero r = __tarea_esperar(tid);");
+            println!();
+            println!("📌 Extension Methods:");
+            println!("  impl Duplicable para entero {{");
+            println!("      funcion entero duplicar(este) {{ retornar este*2; }}");
+            println!("  }}");
+            println!();
+            println!("▶  Prueba: lumen run examples/demo_completo.nv");
+        }
+        "stdlib" => {
+            println!("╔══════════════════════════════════════════╗");
+            println!("║  PASO 5: BIBLIOTECA ESTÁNDAR / STDLIB   ║");
+            println!("╚══════════════════════════════════════════╝");
+            println!();
+            println!("📌 Colecciones:");
+            println!("  numero m = __map_nuevo();");
+            println!("  m = __map_poner(m, \"clave\", 42);");
+            println!("  numero s = __conjunto_nuevo();");
+            println!();
+            println!("📌 Texto:");
+            println!("  importar \"texto.nv\";");
+            println!("  texto_longitud(\"hola\");  // 4");
+            println!("  texto_mayusculas(\"hola\"); // HOLA");
+            println!();
+            println!("📌 JSON:");
+            println!("  texto js = __json_texto(__json_parsear('{{\"a\":1}}'));");
+            println!();
+            println!("📌 Regex:");
+            println!("  __regex_coincide(\"\\\\d+\", \"abc123\");  // true");
+            println!();
+            println!("📌 Hash:");
+            println!("  __hash_sha256(\"hola\");  // 64 hex chars");
+            println!();
+            println!("▶  Prueba: lumen run -L stdlib/ examples/test_stdlib.nv");
+        }
+        "pro" => {
+            println!("╔══════════════════════════════════════════╗");
+            println!("║  PASO 6: PROFESIONAL / PRO              ║");
+            println!("╚══════════════════════════════════════════╝");
+            println!();
+            println!("📌 Canvas 2D (círculos, líneas, gradientes):");
+            println!("  importar \"graficos_canvas.nv\";");
+            println!();
+            println!("📌 Tilemap (mapas 2D con cámara):");
+            println!("  importar \"graficos_tilemap.nv\";");
+            println!();
+            println!("📌 Charts (barras, líneas, pastel):");
+            println!("  importar \"graficos_charts.nv\";");
+            println!();
+            println!("📌 TUI (interfaz de terminal):");
+            println!("  importar \"tui.nv\";");
+            println!();
+            println!("📌 GUI nativo (Win32):");
+            println!("  importar \"gui.nv\";");
+            println!();
+            println!("📌 WebAssembly:");
+            println!("  cd crates/lumen-wasm && python serve.py");
+            println!();
+            println!("📌 AOT nativo:");
+            println!("  lumen build --native programa.nv");
+            println!();
+            println!("▶  Prueba: python crates/lumen-wasm/serve.py");
+            println!("▶  Prueba: docker compose up");
+        }
+        _ => {
+            println!("Temas disponibles / Available topics:");
+            println!("  basics   — Fundamentos / Variables, loops, if");
+            println!("  functions — Funciones y genéricos");
+            println!("  data     — Structs, Enums, Match");
+            println!("  advanced — Traits, Result, Option, Async");
+            println!("  stdlib   — Colecciones, texto, JSON, regex");
+            println!("  pro      — Canvas, TUI, GUI, WASM, Docker");
+            println!();
+            println!("Uso: lumen tutor <tema>");
+        }
+    }
+}
+
+fn print_learn() {
+    println!("╔══════════════════════════════════════════════════════╗");
+    println!("║     🎓 LÚMEN — RUTA DE APRENDIZAJE COMPLETA       ║");
+    println!("║     From zero to software engineer                 ║");
+    println!("╚══════════════════════════════════════════════════════╝");
+    println!();
+    println!("  NIVEL 1 — PRINCIPIANTE / BEGINNER (sin experiencia):");
+    println!("   1. lumen tutor basics        → variables, if, while");
+    println!("   2. lumen run examples/hello.nv");
+    println!("   3. lumen run examples/condicional.nv");
+    println!("   4. Crea tu primer archivo: mi_programa.nv");
+    println!("   5. lumen run mi_programa.nv");
+    println!();
+    println!("  NIVEL 2 — BÁSICO / BASIC:");
+    println!("   6. lumen tutor functions");
+    println!("   7. lumen run examples/func.nv");
+    println!("   8. lumen tutor data");
+    println!("   9. lumen run examples/structs.nv");
+    println!("  10. lumen run examples/enums.nv");
+    println!("  11. lumen run examples/match.nv");
+    println!();
+    println!("  NIVEL 3 — INTERMEDIO / INTERMEDIATE:");
+    println!("  12. lumen tutor advanced");
+    println!("  13. lumen run examples/genericos.nv");
+    println!("  14. lumen run examples/resultado.nv");
+    println!("  15. lumen run examples/opcion.nv");
+    println!("  16. lumen run examples/foreach.nv");
+    println!("  17. lumen run examples/destructuring.nv");
+    println!();
+    println!("  NIVEL 4 — AVANZADO / ADVANCED:");
+    println!("  18. lumen tutor stdlib");
+    println!("  19. lumen run -L stdlib/ examples/demo_completo.nv");
+    println!("  20. lumen test examples/demo_completo.nv");
+    println!("  21. lumen doc examples/demo_completo.nv");
+    println!("  22. lumen fmt examples/mi_programa.nv");
+    println!("  23. lumen debug examples/mi_programa.nv");
+    println!();
+    println!("  NIVEL 5 — PROFESIONAL / PROFESSIONAL:");
+    println!("  24. lumen tutor pro");
+    println!("  25. lumen build --native programa.nv");
+    println!("  26. python crates/lumen-wasm/serve.py");
+    println!("  27. docker compose up");
+    println!();
+    println!("  NIVEL 6 — INGENIERO / ENGINEER:");
+    println!("  28. Crea tu propio proyecto: lumen new app");
+    println!("  29. Implementa un juego con tilemaps");
+    println!("  30. Crea charts con datos reales");
+    println!("  31. Publica un paquete: lumen install");
+    println!("  32. Contribuye: skills en .opencode/agents/");
+    println!();
+    println!("  📚 DOCUMENTACIÓN:");
+    println!("    LENGUAJE.md     — Manual completo del lenguaje");
+    println!("    HERRAMIENTAS.md — Guía de herramientas");
+    println!("    docs/roadmap.md — Roadmap v2.0.0 → v3.0.0");
+    println!("    docs/cli.md     — Referencia CLI");
+    println!();
+    println!("  💡 TIP: Usa 'lumen tutor <tema>' para cada lección.");
+    println!("  🎯 META: Escribir programas funcionales en LÚMEN.");
+    println!("  🌐 Web: cd crates/lumen-wasm && python serve.py");
+}
+
 fn parse_args(args: &[String]) -> Config {
     let mut i = 1;
     let mut command = String::new();
@@ -53,7 +383,6 @@ fn parse_args(args: &[String]) -> Config {
         i += 1;
     }
 
-    // Add stdlib/ as default search path if it exists
     let stdlib_path = PathBuf::from("stdlib");
     if stdlib_path.is_dir() && !lib_dirs.iter().any(|p| p == &stdlib_path) {
         lib_dirs.push(stdlib_path);
@@ -79,39 +408,7 @@ fn main() {
             Some("--help" | "-h" | "help")
         )
     {
-        eprintln!(
-            "LÚMEN v{} — Lenguaje de programación educativo bilingüe",
-            env!("CARGO_PKG_VERSION")
-        );
-        eprintln!();
-        eprintln!("USO:");
-        eprintln!("  lumen [opciones] <comando> <archivo>");
-        eprintln!();
-        eprintln!("COMANDOS:");
-        eprintln!("  run <archivo>       Ejecuta un programa .nv o bytecode .nvc");
-        eprintln!("  build <archivo>     Compila a bytecode (.nvc)");
-        eprintln!("  check <archivo>     Verifica sintaxis y semántica");
-        eprintln!("  disasm <archivo>    Desensambla bytecode .nvc");
-        eprintln!();
-        eprintln!("OPCIONES:");
-        eprintln!("  -L, --lib-dir <dir>  Directorio de búsqueda para módulos (stdlib)");
-        eprintln!("  -v, --version        Muestra la versión");
-        eprintln!("  -h, --help           Muestra esta ayuda");
-        eprintln!();
-        eprintln!("EJEMPLOS:");
-        eprintln!("  lumen run hello.nv          Ejecutar un programa");
-        eprintln!("  lumen build programa.nv     Compilar a .nvc");
-        eprintln!("  lumen run -L stdlib/ test.nv  Ejecutar con stdlib");
-        eprintln!();
-        eprintln!("SINTAXIS BÁSICA:");
-        eprintln!("  imprimir(\"Hola\");           // Mostrar en pantalla");
-        eprintln!("  entero x = 42;              // Declarar variable");
-        eprintln!("  si (x > 0) {{ ... }}          // Condicional");
-        eprintln!("  mientras (x < 10) {{ ... }}   // Bucle");
-        eprintln!("  funcion entero f(a) {{ ... }} // Función");
-        eprintln!("  lista<entero> v = [1,2,3];  // Lista/Array");
-        eprintln!("  largo(v)                    // Longitud de lista");
-        eprintln!("  agregar(v, 4)               // Agregar elemento");
+        print_help();
         process::exit(if args.len() == 1 { 1 } else { 0 });
     }
 
@@ -227,21 +524,38 @@ fn main() {
                 eprintln!("Error: falta el archivo");
                 process::exit(1);
             }
-            println!("✓ Análisis estático (lumen lint): 0 advertencias de código muerto o complejidad en '{}'", config.file);
+            println!(
+                "✓ Análisis estático (lumen lint): 0 advertencias en '{}'",
+                config.file
+            );
         }
         "serve" | "playground" => {
-            println!("🚀 Servidor local LÚMEN (Playground / Hot Reload) iniciado en http://localhost:8080");
+            println!("🚀 Playground web: cd crates/lumen-wasm && python serve.py");
+            println!("   http://localhost:8080/web/index.html");
+        }
+        "learn" => {
+            print_learn();
+        }
+        "tutor" => {
+            let topic = if config.file.is_empty() {
+                ""
+            } else {
+                &config.file
+            };
+            print_tutor(topic);
         }
         "--version" | "-v" => {
-            println!("LÚMEN v{}", env!("CARGO_PKG_VERSION"));
+            println!("LÚMEN v{VERSION}");
         }
         _ => {
             eprintln!("Comando desconocido: '{}'", config.command);
-            eprintln!("Usa 'lumen run', 'lumen build', 'lumen check', o 'lumen disasm'");
+            eprintln!("Usa 'lumen help' para ver los comandos disponibles.");
             process::exit(1);
         }
     }
 }
+
+// ── Funciones auxiliares (sin cambios) ────────────────────────────
 
 fn resolve_or_exit(mut loader: ModuleLoader, source: &str, base_dir: &Path) -> Vec<DeclOrStmt> {
     match loader.resolve_imports(source, base_dir) {
@@ -362,22 +676,18 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
             process::exit(1);
         }
     };
-
     let base_path = Path::new(path);
     let base_dir = base_path.parent().unwrap_or(Path::new("."));
     let loader = ModuleLoader::new(lib_dirs.to_vec());
     let mut program = resolve_or_exit(loader, &source, base_dir);
-
     let sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         show_sema_errors(&sem_errors, &source, path);
         process::exit(1);
     }
-
     let builder = IRBuilder::new();
     let ir_program = builder.build(&program);
-
     let codegen = Codegen::new();
     let (bytecode, _) = codegen.generate(&ir_program);
     bytecode
@@ -407,7 +717,6 @@ fn run_bytecode(path: &str) {
             process::exit(1);
         }
     };
-
     match Bytecode::decode(&data) {
         Ok((bc, warnings)) => {
             for (offset, msg) in &warnings {
@@ -459,7 +768,6 @@ fn disasm_file(path: &str) {
             process::exit(1);
         }
     };
-
     match Bytecode::decode(&data) {
         Ok((bc, warnings)) => {
             for (offset, msg) in &warnings {
@@ -598,7 +906,6 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
         process::exit(1);
     }
     let ir = IRBuilder::new().build(&prog);
-
     let c_code = lumen_aot::compile_to_c(&ir);
     let out_name = Path::new(path).with_extension("");
     let c_path = out_name.with_extension("c");
@@ -606,7 +913,6 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
         eprintln!("Error: {}", e);
         process::exit(1);
     });
-
     let exe_ext = if cfg!(windows) { "exe" } else { "" };
     let exe_name = if exe_ext.is_empty() {
         out_name.clone()
@@ -626,8 +932,7 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
     match s {
         Ok(st) if st.success() => {
             let _ = fs::remove_file(&c_path);
-            println!("✓ Binario nativo (C -O3)");
-            println!("  {}", exe_name.display());
+            println!("✓ Binario nativo (C -O3): {}", exe_name.display());
         }
         Ok(st) => {
             eprintln!("Error compilacion C (exit {})", st);
@@ -645,7 +950,7 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
     let mut vm = VM::new(bytecode);
     vm.debug = true;
     let _ = vm.step();
-    println!("LUMEN Debugger — s=step, c=continue, b<ip>=breakpoint, q=quit");
+    println!("LÚMEN Debugger — s=step, c=continue, b<ip>=breakpoint, q=quit");
     loop {
         print!("debug> ");
         let _ = std::io::Write::flush(&mut std::io::stdout());
@@ -653,8 +958,7 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
         if std::io::stdin().read_line(&mut input).is_err() {
             break;
         }
-        let cmd = input.trim();
-        match cmd {
+        match input.trim() {
             "s" | "step" => {
                 match vm.step() {
                     Ok(()) => {}
@@ -662,10 +966,6 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
                         eprintln!("Error: {}", e.with_stack(vm.call_stack()));
                         break;
                     }
-                }
-                if false {
-                    println!("Programa terminado");
-                    break;
                 }
                 println!(
                     "ip={} stack_len={}",
