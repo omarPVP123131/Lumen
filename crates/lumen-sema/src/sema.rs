@@ -2145,6 +2145,58 @@ impl SemanticAnalyzer {
                                 } else if callee == "__js_eval" || callee == "__js_evaluar"
                                     || callee == "__js_call" || callee == "__js_llamar" {
                                     TypeInfo::Texto
+                                } else if callee == "__aes_encriptar" || callee == "__aes_encrypt"
+                                    || callee == "__aes_desencriptar" || callee == "__aes_decrypt"
+                                {
+                                    if args.len() < 2 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera al menos 2 argumentos (key, data), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa la clave y los datos como argumentos".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Texto
+                                } else if callee == "__timezone_info" || callee == "__zona_info" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera 1 argumento (zona horaria), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa el nombre de la zona horaria".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Entero
+                                } else if callee == "__duration_new" || callee == "__duracion_nueva" {
+                                    TypeInfo::Entero
+                                } else if callee == "__duration_secs" || callee == "__duracion_segundos" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera 1 argumento, no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa la duración en nanosegundos".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Entero
+                                } else if callee == "__calendar_hijri" || callee == "__calendario_hijri"
+                                    || callee == "__calendar_persian" || callee == "__calendario_persa"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera 1 argumento (timestamp), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa un timestamp Unix".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Texto
+                                } else if callee == "__leer_archivo_async" || callee == "__file_read_async"
+                                    || callee == "__escribir_archivo_async" || callee == "__file_write_async"
+                                    || callee == "__timer_delay" || callee == "__temporizador_esperar"
+                                    || callee == "__tcp_connect_async" || callee == "__tcp_conectar_async"
+                                {
+                                    TypeInfo::Texto
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {

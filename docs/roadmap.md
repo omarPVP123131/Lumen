@@ -11,8 +11,8 @@ Lenguaje Core       [███████████████████�
 Lenguaje Avanzado   [████████████████████████████████████████████] 100% (Fases 61-70)
 Herramientas & DX   [████████████████████████████████████████████] 100% (Fases 71-95)
 Stdlib Extendida    [████████████████████████████████████████████] 100% (Fases 96-110)
-Runtime & Sistema   [████████████████████████████████████████░░░░░]  85% (Fases 111-130)
-Concurrencia & Async[████████████████████████████████████████░░░░░]  85% (Fases 131-150)
+Runtime & Sistema   [████████████████████████████████████████████] 100% (Fases 111-130)
+Concurrencia & Async[████████████████████████████████████████████] 100% (Fases 131-150)
 GUI, TUI & Juegos   [████████████████████████░░░░░░░░░░░░░░░░░░░░░]  55% (Fases 151-170)
 Portabilidad        [▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   7% (Fases 171-185)
 AI/ML & Data        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 186-200)
@@ -175,12 +175,12 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | 118 | `sistema` | **Env** | Variables de entorno | ✅ vía __env_listar + __ffi_* |
 | 119 | `sistema` | **Path** | Manipulación de rutas | ✅ vía __ffi_* |
 | 120 | `sistema` | **Temp** | Archivos temporales | ✅ vía __ffi_* |
-| 121 | `fecha` | **Timezone** | Zonas horarias IANA | 📋 |
-| 122 | `fecha` | **Duracion** | Duración precisa | 📋 |
+| 121 | `fecha` | **Timezone** | Zonas horarias IANA | ✅ vía __timezone_info |
+| 122 | `fecha` | **Duracion** | Duración precisa | ✅ vía __duration_new/secs |
 | 123 | `fecha` | **Format** | Formateo/parseo de fechas con patrones | ✅ vía __tiempo_formatear/parsear |
-| 124 | `fecha` | **Calendario** | Calendarios no gregorianos | 📋 |
+| 124 | `fecha` | **Calendario** | Calendarios no gregorianos | ✅ vía __calendar_hijri/persian |
 | 125 | `crypto` | **Hash** | SHA-256, SHA-512, HMAC | ✅ vía BCrypt CNG |
-| 126 | `crypto` | **AES** | Cifrado simétrico AES-128/256 | ⏳ stub — requiere implementación BCrypt |
+| 126 | `crypto` | **AES** | Cifrado simétrico AES-128/256 | ✅ vía BCrypt AES-GCM |
 | 127 | `crypto` | **JWT** | Creación y verificación de JWT | ✅ vía sha256 + base64url |
 | 128 | `testing` | **Assert** | Macros de aserción | ✅ vía testing.nv (pure LÚMEN) |
 | 129 | `testing` | **Mock** | Sistema de mocks | ✅ vía testing.nv (pure LÚMEN) |
@@ -200,9 +200,9 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | 136 | **Sync::Channel** | `canal::nuevo()`, `enviar`, `recibir` | ✅ builtins + stdlib |
 | 137 | **Async::Runtime** | Task spawn/await via thread pool | ✅ vía __tarea_lanzar/esperar |
 | 138 | **Async::Stream** | `Stream<T>`, `map`, `filter`, `colectar` | ✅ builtins + stdlib |
-| 139 | **Async::File** | `leer_async`, `escribir_async` | 📋 |
-| 140 | **Async::TCP** | `TcpListener::aceptar_async` | 📋 |
-| 141 | **Async::Timer** | `Timer::despues(ms)`, `Timer::intervalo(ms)` | 📋 |
+| 139 | **Async::File** | `leer_async`, `escribir_async` | ✅ vía __leer/escribir_archivo_async |
+| 140 | **Async::TCP** | `TcpListener::aceptar_async` | ✅ vía __tcp_connect_async |
+| 141 | **Async::Timer** | `Timer::despues(ms)`, `Timer::intervalo(ms)` | ✅ vía __timer_delay |
 | 142 | **Async::Select** | `seleccionar!(fut1, fut2, fut3)` | ✅ builtins + stdlib |
 | 143 | **Par::Iterator** | `par_iter`, `map_par`, `filter_par` | ✅ builtins + stdlib |
 | 144 | **Par::Join** | `par::unir(f1(), f2())` | ✅ builtins + stdlib |

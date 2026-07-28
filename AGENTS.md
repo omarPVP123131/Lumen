@@ -15,7 +15,7 @@
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 155 | e2e |
+| lumen-vm | 165 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
@@ -23,9 +23,9 @@
 | lumen-doc | 1 | unit |
 | lumen-pkg | 1 | unit |
 | lumen-plugin | 1 | unit |
-| **Total** | **~361** | |
+| **Total** | **~371** | |
 
-**0 warnings, ~361 tests passing. 45/45 ejemplos funcionando. 155 e2e, 45 unit.**
+**0 warnings, ~371 tests passing. 45/45 ejemplos funcionando. 165 e2e, 45 unit.**
 
 ---
 
@@ -207,7 +207,16 @@ Compilación a `wasm32-unknown-unknown` con feature flags. VM refactorizada:
 - **Conexión**: `crypto_ffi.rs`, `gui_ffi.rs`, `coro_ffi.rs` ahora incluidos vía `mod` en lib.rs
 - **Stdlib dual ES/EN**: `texto.nv`, `fecha.nv`, `io.nv`, `crypto.nv` actualizados con aliases inglés
 - **Async Runtime**: `async funcion` + `esperar` ahora funcional vía thread tasks. Builtins `__tarea_lanzar/spawn`, `__tarea_esperar/await`. `Expr::Esperar` desugara a `Call(__tarea_esperar)` en IR builder.
-- **155 e2e tests** (16 nuevos)
+- **JS Interop**: `__js_eval/evaluar` y `__js_call/llamar` vía `JS_EVAL` static callback. `js-sys` en WASM runtime.
+- **WASM Playground**: build con `wasm-pack`, playground web con ejemplos.
+- **AES**: encriptar/desencriptar vía BCrypt AES-GCM
+- **Timezone**: `__timezone_info` con soporte IANA
+- **Duracion**: `__duration_new/secs`
+- **Calendario**: Hijri (`__calendar_hijri`) y Persa (`__calendar_persian`)
+- **Async File I/O**: `__leer/escribir_archivo_async`
+- **Async Timer**: `__timer_delay`
+- **Async TCP**: `__tcp_connect_async`
+- **165 e2e tests** (26 nuevos)
 
 ---
 

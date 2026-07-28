@@ -1711,3 +1711,96 @@ imprimir(r);";
     let output = run_source(src).unwrap();
     assert!(output[0].contains("__lumen_call"));
 }
+
+// --- New builtins: AES, Timezone, Duration, Calendar, Async I/O ---
+
+#[test]
+fn test_aes_encrypt_decrypt() {
+    let src = r#"texto key = "clave16bytes!!!!";
+texto data = "mensaje secreto";
+texto ct = __aes_encriptar(key, data);
+texto pt = __aes_desencriptar(key, ct);
+imprimir(pt);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["mensaje secreto"]);
+}
+
+#[test]
+fn test_timezone_info() {
+    let src = r#"entero utc = __zona_info("utc");
+entero est = __zona_info("est");
+entero pst = __zona_info("pst");
+entero cet = __zona_info("cet");
+entero jst = __zona_info("jst");
+imprimir(utc);
+imprimir(est);
+imprimir(pst);
+imprimir(cet);
+imprimir(jst);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["0", "-5", "-8", "1", "9"]);
+}
+
+#[test]
+fn test_duration() {
+    let src = r#"entero d = __duracion_nueva(5, 500000000);
+entero s = __duracion_segundos(d);
+imprimir(s);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["5"]);
+}
+
+#[test]
+fn test_calendar_hijri() {
+    let src = r#"texto h = __calendario_hijri(0);
+imprimir(h);
+"#;
+    let output = run_source(src).unwrap();
+    // Epoch 1970-01-01 → ~1391 AH
+    assert!(output[0].contains("AH"), "Expected Hijri date, got: {}", output[0]);
+}
+
+#[test]
+fn test_calendar_persian() {
+    let src = r#"texto p = __calendario_persa(0);
+imprimir(p);
+"#;
+    let output = run_source(src).unwrap();
+    // Epoch 1970-01-01 → ~1348 AP
+    assert!(output[0].contains("AP"), "Expected Persian date, got: {}", output[0]);
+}
+
+#[test]
+fn test_file_read_async() {
+    let src = r#"texto tid = __file_read_async("Cargo.toml");
+numero content = __tarea_esperar(tid);
+imprimir(content);
+"#;
+    let output = run_source(src).unwrap();
+    assert!(!output[0].is_empty(), "Should read Cargo.toml content");
+    assert!(output[0].contains("lumen-vm"), "Should contain package name");
+}
+
+#[test]
+fn test_timer_delay() {
+    let src = r#"texto tid = __temporizador_esperar(10);
+numero r = __tarea_esperar(tid);
+imprimir(r);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["true"]);
+}
+
+#[test]
+fn test_tcp_connect_async() {
+    let src = r#"texto tid = __tcp_conectar_async("127.0.0.1:1");
+numero r = __tarea_esperar(tid);
+imprimir("hecho");
+"#;
+    // Expects error since no server is listening, but should not crash
+    let result = run_source(src);
+    assert!(result.is_ok());
+}

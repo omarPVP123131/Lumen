@@ -10,7 +10,7 @@ keywords = ["lumen", "language", "vm", "virtual-machine", "educational"]
 
 [features]
 default = ["full"]
-full = ["reqwest", "libloading", "base64", "hmac", "sha2"]
+full = ["reqwest", "libloading", "base64", "hmac", "sha2", "hex"]
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("full"))'] }
@@ -26,6 +26,7 @@ libloading = { version = "0.8", optional = true }
 base64 = { version = "0.22", optional = true }
 hmac = { version = "0.12", optional = true }
 sha2 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
 
 [dev-dependencies]
 lumen-lexer = { path = "../lumen-lexer" }

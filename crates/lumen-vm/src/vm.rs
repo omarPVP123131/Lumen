@@ -1209,13 +1209,35 @@ impl VM {
                 }
 
                 if name == "__aes_encriptar" || name == "__aes_encrypt" {
-                    // AES encrypt not implemented in Bcrypt wrapper yet — return error
-                    self.push(Value::Error(Box::new(Value::Str("AES encrypt no implementado".into()))));
+                    if self.bcrypt.is_none() {
+                        match Bcrypt::load() {
+                            Ok(b) => self.bcrypt = Some(Arc::new(b)),
+                            Err(e) => { self.push(Value::Error(Box::new(Value::Str(e)))); return Some(Ok(())); }
+                        }
+                    }
+                    let key = args.first().map(|v| format!("{}", v).into_bytes()).unwrap_or_default();
+                    let data = args.get(1).map(|v| format!("{}", v).into_bytes()).unwrap_or_default();
+                    match self.bcrypt.as_ref().unwrap().aes_encrypt(&key, &data) {
+                        Ok(ct) => self.push(Value::Str(hex::encode(ct))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                    }
                     return Some(Ok(()));
                 }
 
                 if name == "__aes_desencriptar" || name == "__aes_decrypt" {
-                    self.push(Value::Error(Box::new(Value::Str("AES decrypt no implementado".into()))));
+                    if self.bcrypt.is_none() {
+                        match Bcrypt::load() {
+                            Ok(b) => self.bcrypt = Some(Arc::new(b)),
+                            Err(e) => { self.push(Value::Error(Box::new(Value::Str(e)))); return Some(Ok(())); }
+                        }
+                    }
+                    let key = args.first().map(|v| format!("{}", v).into_bytes()).unwrap_or_default();
+                    let hex_data = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let data = hex::decode(&hex_data).unwrap_or_default();
+                    match self.bcrypt.as_ref().unwrap().aes_decrypt(&key, &data) {
+                        Ok(pt) => self.push(Value::Str(String::from_utf8_lossy(&pt).to_string())),
+                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                    }
                     return Some(Ok(()));
                 }
 
@@ -1468,6 +1490,136 @@ impl VM {
                     } else {
                         self.push(Value::Error(Box::new(Value::Str("Task not found".into()))));
                     }
+                    return Some(Ok(()));
+                }
+
+                // ██ Timezone builtins ██
+                if name == "__timezone_info" || name == "__zona_info" {
+                    let tz = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let offset = match tz.to_lowercase().as_str() {
+                        "utc" | "gmt" => 0,
+                        "est" | "et" | "america/new_york" | "us/eastern" => -5,
+                        "cst" | "ct" | "america/chicago" | "us/central" => -6,
+                        "mst" | "mt" | "america/denver" | "us/mountain" => -7,
+                        "pst" | "pt" | "america/los_angeles" | "us/pacific" => -8,
+                        "cet" | "europe/madrid" | "europe/paris" | "europe/berlin" => 1,
+                        "eet" | "europe/athens" | "europe/helsinki" => 2,
+                        "ist" | "asia/kolkata" => 5,
+                        "jst" | "asia/tokyo" => 9,
+                        "aest" | "australia/sydney" => 10,
+                        "nzst" | "pacific/auckland" => 12,
+                        _ => 0,
+                    };
+                    self.push(Value::Int(offset));
+                    return Some(Ok(()));
+                }
+
+                // ██ Duration builtins ██
+                if name == "__duration_new" || name == "__duracion_nueva" {
+                    let secs = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+                    let nanos = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+                    self.push(Value::Int(secs * 1_000_000_000 + nanos));
+                    return Some(Ok(()));
+                }
+                if name == "__duration_secs" || name == "__duracion_segundos" {
+                    let nanos = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+                    self.push(Value::Int(nanos / 1_000_000_000));
+                    return Some(Ok(()));
+                }
+
+                // ██ Calendar builtins ██
+                if name == "__calendar_hijri" || name == "__calendario_hijri" {
+                    let timestamp = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+                    let days = timestamp / 86400 + 719163;
+                    let hijri_year = ((days as f64) / 354.367) as i64 + 1;
+                    let remaining = days - (((hijri_year - 1) as f64) * 354.367) as i64;
+                    let hijri_month = (remaining / 30).min(12).max(1);
+                    let hijri_day = (remaining % 30 + 1).min(30);
+                    let result = format!("{}-{:02}-{:02} AH", hijri_year, hijri_month, hijri_day);
+                    self.push(Value::Str(result));
+                    return Some(Ok(()));
+                }
+
+                if name == "__calendar_persian" || name == "__calendario_persa" {
+                    let timestamp = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+                    let days = timestamp / 86400;
+                    let persian_year = ((days as f64 - 226899.0) / 365.242) as i64 + 1;
+                    let persian_month = 1 + ((days % 365) / 31).min(11);
+                    let persian_day = 1 + (days % 31).min(30);
+                    let result = format!("{}-{:02}-{:02} AP", persian_year, persian_month, persian_day);
+                    self.push(Value::Str(result));
+                    return Some(Ok(()));
+                }
+
+                // ██ Async File I/O builtins ██
+                if name == "__leer_archivo_async" || name == "__file_read_async" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let id = self.task_counter;
+                    self.task_counter += 1;
+                    std::thread::spawn(move || {
+                        let content = std::fs::read_to_string(&path);
+                        let _ = tx.send(match content {
+                            Ok(s) => Value::Str(s),
+                            Err(e) => Value::Error(Box::new(Value::Str(e.to_string()))),
+                        });
+                    });
+                    let task_id = format!("file_{}", id);
+                    self.task_results.insert(task_id.clone(), rx);
+                    self.push(Value::Str(task_id));
+                    return Some(Ok(()));
+                }
+
+                if name == "__escribir_archivo_async" || name == "__file_write_async" {
+                    let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let id = self.task_counter;
+                    self.task_counter += 1;
+                    std::thread::spawn(move || {
+                        let result = std::fs::write(&path, &content);
+                        let _ = tx.send(match result {
+                            Ok(()) => Value::Bool(true),
+                            Err(e) => Value::Error(Box::new(Value::Str(e.to_string()))),
+                        });
+                    });
+                    let task_id = format!("file_{}", id);
+                    self.task_results.insert(task_id.clone(), rx);
+                    self.push(Value::Str(task_id));
+                    return Some(Ok(()));
+                }
+
+                // ██ Async Timer builtins ██
+                if name == "__timer_delay" || name == "__temporizador_esperar" {
+                    let ms = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as u64;
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let id = self.task_counter;
+                    self.task_counter += 1;
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(ms));
+                        let _ = tx.send(Value::Bool(true));
+                    });
+                    let task_id = format!("timer_{}", id);
+                    self.task_results.insert(task_id.clone(), rx);
+                    self.push(Value::Str(task_id));
+                    return Some(Ok(()));
+                }
+
+                // ██ Async TCP connect builtins ██
+                if name == "__tcp_connect_async" || name == "__tcp_conectar_async" {
+                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let id = self.task_counter;
+                    self.task_counter += 1;
+                    std::thread::spawn(move || {
+                        match std::net::TcpStream::connect(&addr) {
+                            Ok(_) => { let _ = tx.send(Value::Bool(true)); }
+                            Err(e) => { let _ = tx.send(Value::Error(Box::new(Value::Str(e.to_string())))); }
+                        }
+                    });
+                    let task_id = format!("tcp_{}", id);
+                    self.task_results.insert(task_id.clone(), rx);
+                    self.push(Value::Str(task_id));
                     return Some(Ok(()));
                 }
 
