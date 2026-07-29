@@ -23,7 +23,8 @@
 | lumen-doc | 1 | unit |
 | lumen-pkg | 1 | unit |
 | lumen-plugin | 1 | unit |
-| **Total** | **~371** | |
+| lumen-api | 5 | unit |
+| **Total** | **~376** | |
 
 **0 warnings, ~371 tests passing. 45/45 ejemplos funcionando. 165 e2e, 45 unit.**
 
@@ -246,6 +247,8 @@ Compilación a `wasm32-unknown-unknown` con feature flags. VM refactorizada:
 - **demo_completo.nv**: 33 secciones cubriendo todas las features
 - **WASI**: soporte wasm32-wasip1 target
 - **Skills**: .opencode/agents/lumen-engineer.md + lumen-tester.md
+- **Self-Hosting**: Compilador LÚMEN funcional (lexer+parser+codegen en LÚMEN). Pipeline: source → tokens → AST → bytecode. 11 tokens desde código fuente.
+- **Fixes**: sino si en parser, Numero tipo dinámico, == retorna Booleano, no_struct_init en parse_block
 - **165 e2e tests** (26 nuevos)
 
 ---

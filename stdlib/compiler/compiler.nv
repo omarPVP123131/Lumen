@@ -1,13 +1,13 @@
 // compiler.nv — Compilador LUMEN auto-contenido (WORKING)
-// Building step by step from proven lexer
 
-funcion numero lex(texto s) {
+// Lexer: tokeniza source -> tokens como mapa {tipo, valor, cnt}
+funcion numero _lex(texto s) {
     lista<entero> codes = __str_ord(s);
     entero n = largo(codes);
     entero idx = 0;
     numero tk = __map_nuevo();
     entero cnt = 0;
-    
+
     mientras idx < n {
         entero cp = codes[idx];
         si cp == 32 || cp == 9 { idx = idx + 1; continuar; }
@@ -41,9 +41,7 @@ funcion numero lex(texto s) {
             texto id = "";
             mientras idx < n {
                 entero c2 = codes[idx];
-                si c2 >= 48 { 
-                    si c2 <= 57 { id = id + a_texto(c2); idx = idx + 1; continuar; }
-                }
+                si c2 >= 48 { si c2 <= 57 { id = id + a_texto(c2); idx = idx + 1; continuar; } }
                 si c2 >= 65 { id = id + a_texto(c2); idx = idx + 1; continuar; }
                 si c2 == 95 { id = id + a_texto(c2); idx = idx + 1; continuar; }
                 romper;
@@ -60,22 +58,173 @@ funcion numero lex(texto s) {
     retornar tk;
 }
 
-// Simple codegen: just prints token info
-imprimir("=== LUMEN Self-Compiler ===");
-texto src = "entero x = 42; imprimir(x);";
-numero tk = lex(src);
-numero cnt = __map_obtener(tk, "cnt");
-imprimir("Source: ", src);
-imprimir("Tokens: ", cnt);
-entero i = 0;
-mientras i < cnt {
-    numero t = __map_obtener(tk, a_texto(i));
-    entero tp = __map_obtener(t, "t");
-    texto tv = __map_obtener(t, "v");
-    si tp == 1 { imprimir("  Ident: ", tv); }
-    si tp == 2 { imprimir("  Num: ", tv); }
-    si tp == 3 { imprimir("  Str: ", tv); }
-    si tp == 4 { imprimir("  Op: ", tv); }
-    i = i + 1;
+// Mini-parser: extrae VarDecl + Call statements
+funcion numero _parse(numero tk) {
+    numero stmts = __map_nuevo();
+    entero sc = 0;
+    entero pos = 0;
+    entero total = __map_obtener(tk, "cnt");
+    
+    mientras pos < total {
+        numero t1 = __map_obtener(tk, a_texto(pos));
+        texto v1 = __map_obtener(t1, "v");
+        entero tp1 = __map_obtener(t1, "t");
+        
+        si tp1 == 1 { // Ident
+            // Check for VarDecl: tipo nombre = valor;
+            si v1 == "entero" || v1 == "texto" || v1 == "decimal" || v1 == "booleano" || v1 == "numero" {
+                si pos + 4 < total {
+                    numero t3 = __map_obtener(tk, a_texto(pos + 2));
+                    texto v3 = __map_obtener(t3, "v");
+                    si v3 == "=" {
+                        numero t2 = __map_obtener(tk, a_texto(pos + 1));
+                        texto v2 = __map_obtener(t2, "v");
+                        numero t5 = __map_obtener(tk, a_texto(pos + 4));
+                        texto v5 = __map_obtener(t5, "v");
+                        
+                        numero stmt = __map_nuevo();
+                        stmt = __map_poner(stmt, "tipo", "VarDecl");
+                        stmt = __map_poner(stmt, "nombre", v2);
+                        stmt = __map_poner(stmt, "valor", v5);
+                        stmts = __map_poner(stmts, a_texto(sc), stmt);
+                        sc = sc + 1; pos = pos + 6; continuar;
+                    }
+                }
+            }
+            
+            // Check for Call: imprimir(arg);
+            si v1 == "imprimir" || v1 == "print" {
+                si pos + 4 < total {
+                    numero t3 = __map_obtener(tk, a_texto(pos + 2));
+                    texto v3 = __map_obtener(t3, "v");
+                    
+                    numero stmt = __map_nuevo();
+                    stmt = __map_poner(stmt, "tipo", "Call");
+                    stmt = __map_poner(stmt, "callee", v1);
+                    stmt = __map_poner(stmt, "arg", v3);
+                    stmts = __map_poner(stmts, a_texto(sc), stmt);
+                    sc = sc + 1; pos = pos + 5; continuar;
+                }
+            }
+        }
+        pos = pos + 1;
+    }
+    stmts = __map_poner(stmts, "cnt", sc);
+    retornar stmts;
 }
+
+// Codegen: stmts -> bytecode (como texto)
+funcion numero _cg(numero stmts) {
+    numero bc = __map_nuevo();
+    bc = __map_poner(bc, "st", __map_nuevo());
+    bc = __map_poner(bc, "sc", 0);
+    bc = __map_poner(bc, "op", __map_nuevo());
+    bc = __map_poner(bc, "pc", 0);
+    
+    entero cnt = __map_obtener(stmts, "cnt");
+    entero i = 0;
+    mientras i < cnt {
+        numero stmt = __map_obtener(stmts, a_texto(i));
+        texto tp = __map_obtener(stmt, "tipo");
+        
+        si tp == "VarDecl" {
+            texto val = __map_obtener(stmt, "valor");
+            texto nom = __map_obtener(stmt, "nombre");
+            
+            // Store strings
+            numero st = __map_obtener(bc, "st");
+            entero sc = __map_obtener(bc, "sc");
+            st = __map_poner(st, a_texto(sc), val);
+            entero vi = sc;
+            sc = sc + 1;
+            st = __map_poner(st, a_texto(sc), nom);
+            entero ni = sc;
+            sc = sc + 1;
+            bc = __map_poner(bc, "st", st);
+            bc = __map_poner(bc, "sc", sc);
+            
+            // Emit: PUSH vi, STORE ni
+            numero op = __map_obtener(bc, "op");
+            entero pc = __map_obtener(bc, "pc");
+            op = __map_poner(op, a_texto(pc), vi);
+            pc = pc + 1;
+            op = __map_poner(op, a_texto(pc), ni + 100);
+            pc = pc + 1;
+            bc = __map_poner(bc, "op", op);
+            bc = __map_poner(bc, "pc", pc);
+        }
+        
+        si tp == "Call" {
+            texto arg_nom = __map_obtener(stmt, "arg");
+            
+            // Store arg name
+            numero st = __map_obtener(bc, "st");
+            entero sc = __map_obtener(bc, "sc");
+            st = __map_poner(st, a_texto(sc), arg_nom);
+            bc = __map_poner(bc, "st", st);
+            bc = __map_poner(bc, "sc", sc + 1);
+            
+            // Emit: LOAD sc, PRINT
+            numero op = __map_obtener(bc, "op");
+            entero pc = __map_obtener(bc, "pc");
+            op = __map_poner(op, a_texto(pc), sc);
+            pc = pc + 1;
+            op = __map_poner(op, a_texto(pc), 999);
+            pc = pc + 1;
+            bc = __map_poner(bc, "op", op);
+            bc = __map_poner(bc, "pc", pc);
+        }
+        i = i + 1;
+    }
+    
+    // HALT
+    numero op = __map_obtener(bc, "op");
+    entero pc = __map_obtener(bc, "pc");
+    op = __map_poner(op, a_texto(pc), 888);
+    bc = __map_poner(bc, "op", op);
+    bc = __map_poner(bc, "pc", pc + 1);
+    retornar bc;
+}
+
+funcion texto _opname(entero v) {
+    si v == 888 { retornar "HALT"; }
+    si v == 999 { retornar "PRINT"; }
+    si v >= 100 { retornar "STORE(" + a_texto(v - 100) + ")"; }
+    retornar "PUSH(" + a_texto(v) + ")";
+}
+
+// ═══ COMPILADOR ═══════════════════════════════════════════
+funcion numero compiler_compile(texto src) {
+    numero tk = _lex(src);
+    numero ast = _parse(tk);
+    numero bc = _cg(ast);
+    retornar bc;
+}
+
+// ═══ MAIN ═════════════════════════════════════════════════
+imprimir("=== LUMEN Self-Hosting Compiler ===");
+texto src = "entero x = 42; imprimir(x);";
+imprimir("Source: ", src);
+
+numero tk = _lex(src);
+imprimir("Lexer: ", __map_obtener(tk, "cnt"), " tokens");
+
+numero ast = _parse(tk);
+imprimir("Parser: ", __map_obtener(ast, "cnt"), " statements");
+
+funcion void _print_bc(numero bc) {
+    entero pc = __map_obtener(bc, "pc");
+    imprimir("Codegen: ", pc, " instructions");
+    imprimir("Strings: ", __map_obtener(bc, "sc"));
+    numero op = __map_obtener(bc, "op");
+    entero j = 0;
+    mientras j < pc {
+        entero v = __map_obtener(op, a_texto(j));
+        imprimir("  ", j, ": ", _opname(v));
+        j = j + 1;
+    }
+}
+
+numero bc = _cg(ast);
+_print_bc(bc);
 imprimir("=== DONE ===");
