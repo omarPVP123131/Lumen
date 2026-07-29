@@ -245,7 +245,7 @@ impl SemanticAnalyzer {
             },
             Expr::List { items, .. } => {
                 if items.is_empty() {
-                    TypeInfo::Lista(Box::new(TypeInfo::Void))
+                    TypeInfo::Lista(Box::new(TypeInfo::Numero))
                 } else {
                     TypeInfo::Lista(Box::new(Self::infer_static_type(&items[0])))
                 }
@@ -524,6 +524,12 @@ impl SemanticAnalyzer {
                 let lt = Self::infer_expr_type_from_map(left, var_types);
                 let rt = Self::infer_expr_type_from_map(right, var_types);
                 match op {
+                    BinOp::Equal
+                    | BinOp::NotEqual
+                    | BinOp::Less
+                    | BinOp::LessEqual
+                    | BinOp::Greater
+                    | BinOp::GreaterEqual => TypeInfo::Booleano,
                     BinOp::Add if lt == TypeInfo::Texto || rt == TypeInfo::Texto => TypeInfo::Texto,
                     _ if is_numeric(&lt) && is_numeric(&rt) => {
                         if lt == TypeInfo::Entero && rt == TypeInfo::Entero {
@@ -532,12 +538,6 @@ impl SemanticAnalyzer {
                             TypeInfo::Decimal
                         }
                     }
-                    BinOp::Equal
-                    | BinOp::NotEqual
-                    | BinOp::Less
-                    | BinOp::LessEqual
-                    | BinOp::Greater
-                    | BinOp::GreaterEqual => TypeInfo::Booleano,
                     _ => TypeInfo::Void,
                 }
             }
@@ -2035,7 +2035,7 @@ impl SemanticAnalyzer {
                                     arg_types
                                         .first()
                                         .cloned()
-                                        .unwrap_or(TypeInfo::Lista(Box::new(TypeInfo::Void)))
+                                        .unwrap_or(TypeInfo::Lista(Box::new(TypeInfo::Numero)))
                                 } else if callee == "__json_parse" || callee == "__json_parsear" {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
@@ -2322,6 +2322,10 @@ impl SemanticAnalyzer {
                                     TypeInfo::Texto
                                 } else if callee == "__str_ord" || callee == "__str_codigo" {
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
+                                } else if callee == "__map_obtener" || callee == "__map_get"
+                                    || callee == "__map_nuevo" || callee == "__map_new"
+                                    || callee == "__map_poner" || callee == "__map_set" {
+                                    TypeInfo::Numero
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {
@@ -2458,7 +2462,7 @@ impl SemanticAnalyzer {
             }
             Expr::List { items, span: _ } => {
                 if items.is_empty() {
-                    TypeInfo::Lista(Box::new(TypeInfo::Void))
+                    TypeInfo::Lista(Box::new(TypeInfo::Numero))
                 } else {
                     let item_type = self.analyze_expr(&items[0]);
                     for item in items[1..].iter() {
@@ -3228,6 +3232,10 @@ fn is_numeric(t: &TypeInfo) -> bool {
 
 fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
     if target == value {
+        return true;
+    }
+    // Numero (dynamic type) accepts any value AND can be assigned from any type
+    if *target == TypeInfo::Numero || *value == TypeInfo::Numero {
         return true;
     }
     // TypeVar matches any type

@@ -953,7 +953,13 @@ impl Parser {
         let then_body = self.parse_block()?;
         let else_body = if self.check(&[TokenKind::Sino, TokenKind::Else]) {
             self.advance();
-            Some(self.parse_block()?)
+            if self.check(&[TokenKind::Si, TokenKind::If]) {
+                // sino si — chained if
+                let nested_if = self.parse_if()?;
+                Some(vec![DeclOrStmt::Stmt(nested_if)])
+            } else {
+                Some(self.parse_block()?)
+            }
         } else {
             None
         };
@@ -986,7 +992,12 @@ impl Parser {
         let then_body = self.parse_block()?;
         let else_body = if self.check(&[TokenKind::Sino, TokenKind::Else]) {
             self.advance();
-            Some(self.parse_block()?)
+            if self.check(&[TokenKind::Si, TokenKind::If]) {
+                let nested_if = self.parse_if()?;
+                Some(vec![DeclOrStmt::Stmt(nested_if)])
+            } else {
+                Some(self.parse_block()?)
+            }
         } else {
             None
         };
