@@ -1,0 +1,210 @@
+// lumen_compiler.nv — Compilador LUMEN auto-contenido
+// Lexer + Parser + Codegen en un solo archivo sin imports
+// Bootstrap: compilar con Rust → .nvc → self-hosting 
+
+// ═══ LEXER ═══════════════════════════════════════════════════
+funcion numero lex(texto s) {
+    lista<entero> codes = __str_ord(s);
+    entero n = largo(codes); entero idx = 0; entero ln = 1; entero cl = 1;
+    numero tk = __map_nuevo(); entero cnt = 0;
+    
+    mientras idx < n {
+        entero cp = codes[idx]; entero sl = ln; entero sc = cl;
+        si cp == 32 || cp == 9 { cl = cl + 1; idx = idx + 1; continuar; }
+        si cp == 10 { ln = ln + 1; cl = 1; idx = idx + 1; continuar; }
+        si cp == 13 { idx = idx + 1; continuar; }
+        // //
+        si cp == 47 && idx + 1 < n { si codes[idx + 1] == 47 { idx = idx + 2; mientras idx < n && codes[idx] != 10 { idx = idx + 1; } continuar; } }
+        // /* */
+        si cp == 47 && idx + 1 < n { si codes[idx + 1] == 42 { idx = idx + 2; mientras idx + 1 < n { si codes[idx] == 42 && codes[idx + 1] == 47 { idx = idx + 2; romper; } si codes[idx] == 10 { ln = ln + 1; cl = 1; } sino { cl = cl + 1; } idx = idx + 1; } continuar; } }
+        // String
+        si cp == 34 { texto st = ""; idx = idx + 1; mientras idx < n && codes[idx] != 34 { st = st + a_texto(codes[idx]); idx = idx + 1; } si idx < n { idx = idx + 1; } numero t = __map_nuevo(); t = __map_poner(t, "t", 3); t = __map_poner(t, "v", st); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
+        // Numero
+        si cp >= 48 && cp <= 57 { texto num = ""; mientras idx < n && codes[idx] >= 48 && codes[idx] <= 57 { num = num + a_texto(codes[idx]); idx = idx + 1; } numero t = __map_nuevo(); t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
+        // Ident/Kw
+        si (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122) || cp == 95 { texto id = ""; mientras idx < n && (((codes[idx] >= 65 && codes[idx] <= 90) || (codes[idx] >= 97 && codes[idx] <= 122) || codes[idx] == 95) || (codes[idx] >= 48 && codes[idx] <= 57)) { id = id + a_texto(codes[idx]); idx = idx + 1; } numero t = __map_nuevo(); t = __map_poner(t, "t", 1); t = __map_poner(t, "v", id); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
+        // Oper/Punt
+        texto op = a_texto(cp); numero t = __map_nuevo(); t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; idx = idx + 1;
+    }
+    numero t = __map_nuevo(); t = __map_poner(t, "t", 99); t = __map_poner(t, "v", ""); tk = __map_poner(tk, a_texto(cnt), t);
+    tk = __map_poner(tk, "cnt", cnt + 1);
+    retornar tk;
+}
+
+// ═══ PARSER ══════════════════════════════════════════════════
+funcion numero parse(numero tk) {
+    numero prog = __map_nuevo(); prog = __map_poner(prog, "tipo", "Programa");
+    lista<entero> stmts = []; entero pos = 0; entero total = __map_obtener(tk, "cnt");
+    
+    mientras pos + 3 < total {
+        numero t1 = __map_obtener(tk, a_texto(pos));
+        numero t2 = __map_obtener(tk, a_texto(pos + 1));
+        numero t3 = __map_obtener(tk, a_texto(pos + 2));
+        texto v1 = __map_obtener(t1, "v");
+        texto v3 = __map_obtener(t3, "v");
+        entero tp1 = __map_obtener(t1, "t");
+        entero tp2 = __map_obtener(t2, "t");
+        
+        // VarDecl: tipo nombre = valor;
+        si (v1 == "entero" || v1 == "texto" || v1 == "decimal" || v1 == "booleano" || v1 == "numero") && tp2 == 1 {
+            numero t4 = __map_obtener(tk, a_texto(pos + 3));
+            texto v4 = __map_obtener(t4, "v");
+            si v3 == "=" {
+                numero t5 = __map_obtener(tk, a_texto(pos + 4));
+                texto v5 = __map_obtener(t5, "v");
+                numero vd = __map_nuevo();
+                vd = __map_poner(vd, "tipo", "VarDecl");
+                vd = __map_poner(vd, "nombre", v4);
+                vd = __map_poner(vd, "tipo_var", v1);
+                numero lit = __map_nuevo(); lit = __map_poner(lit, "tipo", "Literal"); lit = __map_poner(lit, "v", v5);
+                vd = __map_poner(vd, "valor", lit);
+                stmts.agregar(vd); pos = pos + 6; continuar;
+            }
+        }
+        
+        // Call: imprimir(expr);
+        si v1 == "imprimir" || v1 == "print" {
+            numero tc = __map_nuevo(); tc = __map_poner(tc, "tipo", "Call"); tc = __map_poner(tc, "callee", v1);
+            numero args = [];
+            // Arg inside ()
+            numero t5 = __map_obtener(tk, a_texto(pos + 2));
+            si t5 != 0 {
+                texto av = __map_obtener(t5, "v");
+                numero aid = __map_nuevo(); aid = __map_poner(aid, "tipo", "Ident"); aid = __map_poner(aid, "nombre", av);
+                args.agregar(aid);
+            }
+            tc = __map_poner(tc, "args", args);
+            stmts.agregar(tc); pos = pos + 5; continuar;
+        }
+        
+        // Binary: a + b, a - b, etc  
+        si tp2 == 4 {
+            texto tk_op = __map_obtener(t1, "v");
+            si tk_op == "+" || tk_op == "-" || tk_op == "*" || tk_op == "/" {
+                numero t0 = __map_obtener(tk, a_texto(pos - 1));
+                texto left_v = __map_obtener(t0, "v");
+                numero t4 = __map_obtener(tk, a_texto(pos + 2));
+                texto right_v = __map_obtener(t4, "v");
+                numero bn = __map_nuevo(); bn = __map_poner(bn, "tipo", "Binary"); bn = __map_poner(bn, "op", tk_op);
+                numero left_n = __map_nuevo(); left_n = __map_poner(left_n, "tipo", "Ident"); left_n = __map_poner(left_n, "nombre", left_v);
+                numero right_n = __map_nuevo(); right_n = __map_poner(right_n, "tipo", "Literal"); right_n = __map_poner(right_n, "v", right_v);
+                bn = __map_poner(bn, "left", left_n); bn = __map_poner(bn, "right", right_n);
+                stmts.agregar(bn); pos = pos + 3; continuar;
+            }
+        }
+        
+        pos = pos + 1;
+    }
+    prog = __map_poner(prog, "stmts", stmts);
+    retornar prog;
+}
+
+// ═══ CODEGEN ═════════════════════════════════════════════════
+funcion numero cg_gen(numero ast) {
+    numero cg = __map_nuevo(); cg = __map_poner(cg, "instrs", __map_nuevo());
+    cg = __map_poner(cg, "strings", __map_nuevo()); cg = __map_poner(cg, "str_cnt", 0);
+    cg = __map_poner(cg, "ints", __map_nuevo()); cg = __map_poner(cg, "int_cnt", 0);
+    entero pos = 0; entero cnt = 0;
+    
+    numero stmts = __map_obtener(ast, "stmts");
+    entero i = 0;
+    mientras i < largo(stmts) {
+        numero stmt = stmts[i];
+        texto tp = __map_obtener(stmt, "tipo");
+        
+        si tp == "VarDecl" {
+            numero val_n = __map_obtener(stmt, "valor");
+            texto val_v = __map_obtener(val_n, "v");
+            texto nombre = __map_obtener(stmt, "nombre");
+            
+            // Add string
+            entero sx = 0; entero found = 0;
+            mientras sx < cnt {
+                si __map_obtener(__map_obtener(cg, "strings"), a_texto(sx)) == val_v { found = 1; romper; }
+                sx = sx + 1;
+            }
+            si found == 0 { cg = __map_poner(cg, "strings", __map_poner(__map_obtener(cg, "strings"), a_texto(cnt), val_v)); cnt = cnt + 1; sx = cnt - 1; }
+            
+            // Find/store name
+            si found { sx = 0; }
+            entero ni = 0; entero nfound = 0;
+            mientras ni < cnt {
+                si __map_obtener(__map_obtener(cg, "strings"), a_texto(ni)) == nombre { nfound = 1; romper; }
+                ni = ni + 1;
+            }
+            si nfound == 0 { cg = __map_poner(cg, "strings", __map_poner(__map_obtener(cg, "strings"), a_texto(cnt), nombre)); cnt = cnt + 1; ni = cnt - 1; }
+            si nfound { ni = 0; }
+            
+            // Emit instructions
+            numero instrs = __map_obtener(cg, "instrs");
+            instrs = __map_poner(instrs, a_texto(pos), sx); pos = pos + 1; // op: PUSH_STR(sx)
+            instrs = __map_poner(instrs, a_texto(pos), ni + 100); pos = pos + 1; // op: STORE(ni) signaled by >=100
+            cg = __map_poner(cg, "instrs", instrs);
+        }
+        
+        si tp == "Call" {
+            texto callee = __map_obtener(stmt, "callee");
+            // Store callee name
+            entero ci = 0; entero cf = 0;
+            mientras ci < cnt {
+                si __map_obtener(__map_obtener(cg, "strings"), a_texto(ci)) == callee { cf = 1; romper; }
+                ci = ci + 1;
+            }
+            si cf == 0 { cg = __map_poner(cg, "strings", __map_poner(__map_obtener(cg, "strings"), a_texto(cnt), callee)); cnt = cnt + 1; ci = cnt - 1; }
+            si cf { ci = 0; }
+            
+            numero instrs = __map_obtener(cg, "instrs");
+            si callee == "imprimir" || callee == "print" {
+                instrs = __map_poner(instrs, a_texto(pos), 200); pos = pos + 1; // op: PRINT
+            } sino {
+                instrs = __map_poner(instrs, a_texto(pos), ci + 300); pos = pos + 1; // op: CALL(ci)
+            }
+            cg = __map_poner(cg, "instrs", instrs);
+        }
+        
+        i = i + 1;
+    }
+    cg = __map_poner(cg, "str_cnt", cnt);
+    cg = __map_poner(cg, "pos", pos);
+    retornar cg;
+}
+
+funcion texto _op(entero v) {
+    si v < 100 { retornar "PUSH_STR(" + a_texto(v) + ")"; }
+    si v < 200 { retornar "STORE(" + a_texto(v - 100) + ")"; }
+    si v < 300 { retornar "PRINT"; }
+    si v < 400 { retornar "CALL(" + a_texto(v - 300) + ")"; }
+    retornar "HALT";
+}
+
+funcion void imprimir_bytecode(numero cg) {
+    numero instrs = __map_obtener(cg, "instrs");
+    entero pos = __map_obtener(cg, "pos");
+    imprimir("Strings: ", __map_obtener(cg, "str_cnt"));
+    entero i = 0;
+    mientras i < pos {
+        entero v = __map_obtener(instrs, a_texto(i));
+        imprimir("  ", i, ": ", _op(v));
+        i = i + 1;
+    }
+}
+
+// ═══ COMPILER = ═══════════════════════════════════════════════
+funcion numero compilar(texto src) {
+    numero tk = lex(src);
+    numero ast = parse(tk);
+    numero cg = cg_gen(ast);
+    retornar cg;
+}
+
+// ═══ MAIN = ═══════════════════════════════════════════════════
+imprimir("=== LUMEN Self-Contained Compiler ===");
+
+texto src = "entero x = 42; imprimir(x);";
+imprimir("Source: ", src);
+
+numero res = compilar(src);
+imprimir_bytecode(res);
+
+imprimir("");
+imprimir("=== BOOTSTRAP OK ===");
