@@ -1,0 +1,81 @@
+// compiler.nv — Compilador LUMEN auto-contenido (WORKING)
+// Building step by step from proven lexer
+
+funcion numero lex(texto s) {
+    lista<entero> codes = __str_ord(s);
+    entero n = largo(codes);
+    entero idx = 0;
+    numero tk = __map_nuevo();
+    entero cnt = 0;
+    
+    mientras idx < n {
+        entero cp = codes[idx];
+        si cp == 32 || cp == 9 { idx = idx + 1; continuar; }
+        si cp == 10 { idx = idx + 1; continuar; }
+        si cp == 47 {
+            si idx + 1 < n && codes[idx + 1] == 47 {
+                mientras idx < n && codes[idx] != 10 { idx = idx + 1; }
+                continuar;
+            }
+        }
+        si cp == 34 {
+            texto st = ""; idx = idx + 1;
+            mientras idx < n && codes[idx] != 34 {
+                st = st + a_texto(codes[idx]); idx = idx + 1;
+            }
+            si idx < n { idx = idx + 1; }
+            numero t = __map_nuevo(); t = __map_poner(t, "t", 3); t = __map_poner(t, "v", st);
+            tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar;
+        }
+        si cp >= 48 {
+            si cp <= 57 {
+                texto num = "";
+                mientras idx < n && codes[idx] >= 48 && codes[idx] <= 57 {
+                    num = num + a_texto(codes[idx]); idx = idx + 1;
+                }
+                numero t = __map_nuevo(); t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num);
+                tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar;
+            }
+        }
+        si cp >= 65 {
+            texto id = "";
+            mientras idx < n {
+                entero c2 = codes[idx];
+                si c2 >= 48 { 
+                    si c2 <= 57 { id = id + a_texto(c2); idx = idx + 1; continuar; }
+                }
+                si c2 >= 65 { id = id + a_texto(c2); idx = idx + 1; continuar; }
+                si c2 == 95 { id = id + a_texto(c2); idx = idx + 1; continuar; }
+                romper;
+            }
+            numero t = __map_nuevo(); t = __map_poner(t, "t", 1); t = __map_poner(t, "v", id);
+            tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar;
+        }
+        texto op = a_texto(cp);
+        numero t = __map_nuevo(); t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op);
+        tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; idx = idx + 1;
+    }
+    numero t = __map_nuevo(); t = __map_poner(t, "t", 99); t = __map_poner(t, "v", "");
+    tk = __map_poner(tk, a_texto(cnt), t); tk = __map_poner(tk, "cnt", cnt + 1);
+    retornar tk;
+}
+
+// Simple codegen: just prints token info
+imprimir("=== LUMEN Self-Compiler ===");
+texto src = "entero x = 42; imprimir(x);";
+numero tk = lex(src);
+numero cnt = __map_obtener(tk, "cnt");
+imprimir("Source: ", src);
+imprimir("Tokens: ", cnt);
+entero i = 0;
+mientras i < cnt {
+    numero t = __map_obtener(tk, a_texto(i));
+    entero tp = __map_obtener(t, "t");
+    texto tv = __map_obtener(t, "v");
+    si tp == 1 { imprimir("  Ident: ", tv); }
+    si tp == 2 { imprimir("  Num: ", tv); }
+    si tp == 3 { imprimir("  Str: ", tv); }
+    si tp == 4 { imprimir("  Op: ", tv); }
+    i = i + 1;
+}
+imprimir("=== DONE ===");
