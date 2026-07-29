@@ -1,0 +1,38 @@
+// stdlib/compiler/lexer.nv — Lexer LUMEN
+funcion void _lx_emit(numero tk, numero tp, texto val, numero ln, numero cl) { numero t = __map_nuevo(); t = __map_poner(t, "tipo", tp); t = __map_poner(t, "valor", val); t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl); numero cnt = __map_longitud(tk); tk = __map_poner(tk, a_texto(cnt), t); }
+funcion booleano _lx_es_ident(texto c) { retornar (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c == "_"; }
+funcion booleano _lx_es_digit(texto c) { retornar c >= "0" && c <= "9"; }
+funcion booleano _lx_es_punct(texto c) { retornar c == ";" || c == "(" || c == ")" || c == "{" || c == "}" || c == "," || c == "." || c == "[" || c == "]" || c == ":"; }
+
+funcion numero lexer_tokenizar(texto s) {
+    numero kw = _lx_kw();
+    numero tk = __map_nuevo();
+    entero i = 0; entero n = largo(s); entero ln = 1; entero cl = 1;
+    mientras i < n {
+        texto c = _ch(s, i);
+        si c == " " || c == "\t" { i = i + 1; cl = cl + 1; continuar; }
+        si c == "\n" { i = i + 1; ln = ln + 1; cl = 1; continuar; }
+        si c == "\r" { i = i + 1; continuar; }
+        si _lx_es_ident(c) {
+            texto id = _lx_id(s, i, n); entero adv = largo(id); numero tp = 1;
+            numero kk = __map_obtener(kw, id); si __tipo_de(kk) == "entero" { tp = 6; }
+            _lx_emit(tk, tp, id, ln, cl); i = i + adv; cl = cl + adv; continuar;
+        }
+        si _lx_es_digit(c) {
+            texto num = _lx_num(s, i, n); entero adv = largo(num);
+            _lx_emit(tk, 2, num, ln, cl); i = i + adv; cl = cl + adv; continuar;
+        }
+        si _lx_es_punct(c) { _lx_emit(tk, 5, c, ln, cl); i = i + 1; cl = cl + 1; continuar; }
+        _lx_emit(tk, 4, c, ln, cl); i = i + 1; cl = cl + 1;
+    }
+    _lx_emit(tk, 99, "", ln, cl); retornar tk;
+}
+funcion numero lexer_tokenize(texto s) { retornar lexer_tokenizar(s); }
+funcion texto token_a_texto(numero t) { numero tk = __map_obtener(t, "tipo"); texto ts = "?"; si tk == 1 { ts = "Ident"; } si tk == 2 { ts = "Numero"; } si tk == 4 { ts = "Oper"; } si tk == 5 { ts = "Punt"; } si tk == 6 { ts = "Kw"; } si tk == 99 { ts = "EOF"; } texto val = __map_obtener(t, "valor"); retornar ts + "(" + val + ")"; }
+funcion texto token_to_text(numero t) { retornar token_a_texto(t); }
+
+// Funciones con mientras + acceso a string (forward ref, OK en LUMEN)
+funcion texto _ch(texto s, entero i) { retornar s[i]; }
+funcion texto _lx_id(texto s, entero i, entero n) { texto r = ""; mientras i < n && ((_ch(s,i) >= "a" && _ch(s,i) <= "z") || (_ch(s,i) >= "A" && _ch(s,i) <= "Z") || (_ch(s,i) >= "0" && _ch(s,i) <= "9") || _ch(s,i) == "_") { r = r + _ch(s,i); i = i + 1; } retornar r; }
+funcion texto _lx_num(texto s, entero i, entero n) { texto r = ""; mientras i < n && _ch(s,i) >= "0" && _ch(s,i) <= "9" { r = r + _ch(s,i); i = i + 1; } retornar r; }
+funcion numero _lx_kw() { numero kw = __map_nuevo(); kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1); kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1); kw = __map_poner(kw, "mientras", 1); kw = __map_poner(kw, "while", 1); kw = __map_poner(kw, "para", 1); kw = __map_poner(kw, "for", 1); kw = __map_poner(kw, "funcion", 1); kw = __map_poner(kw, "function", 1); kw = __map_poner(kw, "retornar", 1); kw = __map_poner(kw, "return", 1); kw = __map_poner(kw, "entero", 1); kw = __map_poner(kw, "texto", 1); kw = __map_poner(kw, "numero", 1); kw = __map_poner(kw, "booleano", 1); kw = __map_poner(kw, "decimal", 1); kw = __map_poner(kw, "lista", 1); kw = __map_poner(kw, "importar", 1); kw = __map_poner(kw, "romper", 1); kw = __map_poner(kw, "continuar", 1); kw = __map_poner(kw, "verdadero", 1); kw = __map_poner(kw, "falso", 1); kw = __map_poner(kw, "imprimir", 1); retornar kw; }

@@ -2318,6 +2318,10 @@ impl SemanticAnalyzer {
                                     || callee == "__arc_asignar" || callee == "__arc_set"
                                 {
                                     TypeInfo::Void
+                                } else if callee == "__tipo_de" || callee == "__typeof" {
+                                    TypeInfo::Texto
+                                } else if callee == "__str_ord" || callee == "__str_codigo" {
+                                    TypeInfo::Lista(Box::new(TypeInfo::Entero))
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {

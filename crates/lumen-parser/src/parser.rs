@@ -890,6 +890,8 @@ impl Parser {
             return None;
         }
         self.advance();
+        let saved = self.no_struct_init;
+        self.no_struct_init = true;
         while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
             if self.check(&[TokenKind::Eof]) {
                 break;
@@ -901,6 +903,7 @@ impl Parser {
                 }
             }
         }
+        self.no_struct_init = saved;
         if !self.check(&[TokenKind::RightBrace]) {
             self.error(
                 "E017",
