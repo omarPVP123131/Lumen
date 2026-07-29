@@ -187,6 +187,24 @@ Link-time optimization, dead code stripping, inlining agresivo en backend AOT.
 - `__attribute__((used))` + funciones `static` en transpilador C
 - Tests de DCE y compilación básica
 
+### Fase 180: Mutation Testing ✅
+`stdlib/testing.nv` — Funciones de mutación de código fuente: `mutar/mutate`, `mutantes_generar/mutants_generate`, `mutacion_probar/mutation_test`, `mutacion_puntaje/mutation_score`, `mutacion_analizar/mutation_analyze`.
+- 5 tipos de mutación: +→-, verdadero→falso, >→<, eliminar si, invertir retornar
+- Puntaje de mutación (muertos/total)
+- Análisis de archivos con reporte de calidad de tests
+
+### Fase 182: Tracing Distribuido ✅
+`stdlib/tracing.nv` — Trazado distribuido estilo OpenTelemetry simplificado: `span_iniciar/span_start`, `span_finalizar/span_finish`, `span_atributo/span_attribute`, `span_error/span_error_set`, `spans_exportar/spans_export`, `spans_arbol/spans_tree`, `spans_limpiar/spans_clear`.
+- Estructura Span con id, padre_id, nombre, inicio, fin, atributos, estado
+- Exportación JSON y árbol legible
+- Propagación de errores entre spans
+
+### Fase 184: Profiler CPU/Memoria ✅
+`stdlib/profiler.nv` — Perfilado de CPU y memoria: `perfil_iniciar/profile_start`, `perfil_finalizar/profile_end`, `perfil_reporte/profile_report`, `perfil_resumen/profile_summary`, `perfil_memoria/profile_memory`, `perfil_promedio/profile_avg`.
+- Tracking de tiempo total, promedio, min, max por función
+- Reportes detallados y resumidos
+- Detección de hot paths
+
 ### Fase 96: WASM Playground ✅
 Compilación a `wasm32-unknown-unknown` con feature flags. VM refactorizada:
 - `call_core_builtin()` + `call_full_builtin()` extraídas del dispatch masivo

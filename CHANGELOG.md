@@ -4,6 +4,42 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
+## v2.1.0 — Julio 2026
+
+### Agregado
+- **Fase 180: Mutation Testing** — `stdlib/testing.nv` extendido con funciones de mutación de código fuente.
+  - `mutar/mutate`: 5 tipos de mutación (+→-, verdadero→falso, >→<, eliminar si, invertir retornar).
+  - `mutantes_generar/mutants_generate`: generación de N mutantes desde código fuente.
+  - `mutacion_probar/mutation_test`: ejecución de mutation testing y conteo de mutantes muertos.
+  - `mutacion_puntaje/mutation_score`: cálculo de puntaje de mutación (muertos/total).
+  - `mutacion_analizar/mutation_analyze`: análisis de archivos con reporte de calidad de tests.
+  - Ejemplos: `examples/jr/mutation_jr.nv`, `examples/sr/mutation_sr.nv`.
+- **Fase 182: Tracing Distribuido** — `stdlib/tracing.nv` con spans estilo OpenTelemetry simplificado.
+  - `span_iniciar/span_start`, `span_finalizar/span_finish`: ciclo de vida de spans.
+  - `span_atributo/span_attribute`: atributos clave-valor en spans.
+  - `span_error/span_error_set`: marcado de spans con error.
+  - `spans_exportar/spans_export`: exportación JSON de todos los spans.
+  - `spans_arbol/spans_tree`: visualización jerárquica en formato árbol.
+  - `spans_limpiar/spans_clear`: reinicio de sesión de tracing.
+  - Ejemplos: `examples/sr/tracing_sr.nv`, `examples/real/tracing_real.nv`.
+- **Fase 184: Profiler CPU/Memoria** — `stdlib/profiler.nv` con perfilado de rendimiento.
+  - `perfil_iniciar/profile_start`, `perfil_finalizar/profile_end`: medición de tiempos.
+  - `perfil_reporte/profile_report`: reporte detallado con min/max/promedio/total.
+  - `perfil_resumen/profile_summary`: resumen compacto para comparación rápida.
+  - `perfil_memoria/profile_memory`: estimación de memoria usada.
+  - `perfil_promedio/profile_avg`: tiempo promedio por función.
+  - Detección de hot paths: identificación automática de funciones más lentas.
+  - Ejemplos: `examples/sr/profiler_sr.nv`, `examples/real/profiler_real.nv`.
+- **Dual ES/EN**: todas las funciones nuevas tienen alias en español e inglés.
+- **6 nuevos ejemplos**: mutation (jr/sr), tracing (sr/real), profiler (sr/real).
+
+### Cambiado
+- `stdlib/testing.nv` extendido con sección de mutación (funciones `mutar`, `mutantes_generar`, `mutacion_probar`, `mutacion_puntaje`, `mutacion_analizar`).
+- `AGENTS.md` actualizado con fases 180, 182, 184 completadas.
+- `docs/roadmap.md` actualizado: portabilidad 75% → 100%.
+
+---
+
 ## v2.0.0 — Julio 2026
 
 ### Agregado

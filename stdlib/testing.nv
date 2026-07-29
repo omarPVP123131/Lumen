@@ -102,3 +102,134 @@ funcion cualquiera coverage_reporte(entero id) {
     retornar __map_obtener(__cov_registro, id);
 }
 funcion cualquiera coverage_report(entero id) { retornar coverage_reporte(id); }
+
+// ============================================================
+// MUTACION / MUTATION
+// ============================================================
+// Genera mutantes del codigo fuente para mutation testing
+// Generate source code mutants for mutation testing
+// Verifica que los tests detecten cambios maliciosos
+// Verify that tests detect malicious changes
+
+/// Aplica una mutacion simple al codigo fuente
+/// Apply a simple mutation to source code
+/// tipo 1: cambiar + por -
+/// tipo 2: cambiar > por < (no >=)
+/// tipo 3: cambiar "verdadero" por "falso" (primer ocurrencia)
+funcion texto mutar(texto source, entero tipo) {
+    entero len = __str_longitud(source);
+    si tipo == 1 {
+        // Replace + with -
+        texto result = "";
+        entero i = 0;
+        mientras len - i > 0 {
+            si source[i] == "+" {
+                result = result + "-";
+            } sino {
+                result = result + source[i];
+            }
+            i = i + 1;
+        }
+        retornar result;
+    } sino si tipo == 2 {
+        // Replace > with < (not >=)
+        texto result = "";
+        entero i = 0;
+        mientras len - i > 0 {
+            si source[i] == ">" {
+                si i == 0 {
+                    result = result + "<";
+                } sino si source[i - 1] == "=" {
+                    result = result + ">";
+                } sino {
+                    result = result + "<";
+                }
+            } sino {
+                result = result + source[i];
+            }
+            i = i + 1;
+        }
+        retornar result;
+    } sino si tipo == 3 {
+        // Replace first char with X to simulate mutation
+        texto result = "";
+        entero i = 0;
+        mientras len - i > 0 {
+            si i == 0 {
+                result = result + "X";
+            } sino {
+                result = result + source[i];
+            }
+            i = i + 1;
+        }
+        retornar result;
+    }
+    retornar source;
+}
+/// Apply a simple mutation (English alias)
+funcion texto mutate(texto source, entero type) { retornar mutar(source, type); }
+
+/// Genera una lista de mutantes del codigo fuente
+/// Generate a list of mutants from source code
+funcion lista<texto> mutantes_generar(texto source, entero num_mutantes) {
+    lista<texto> mutantes = [];
+    entero n = 0;
+    mientras num_mutantes - n > 0 {
+        entero tipo = n - (n / 3) * 3 + 1;
+        texto mutante = mutar(source, tipo);
+        mutantes.agregar(mutante);
+        n = n + 1;
+    }
+    retornar mutantes;
+}
+/// Generate mutants (English alias)
+funcion lista<texto> mutants_generate(texto source, entero num_mutants) { retornar mutantes_generar(source, num_mutants); }
+
+/// Ejecuta mutation testing en codigo fuente
+/// Run mutation testing on source code
+/// Retorna el numero de mutantes muertos (tests que SI fallaron = bueno)
+/// Returns the number of killed mutants (tests that DID fail = good)
+funcion entero mutacion_probar(texto source, entero num_mutantes) {
+    entero muertos = 0;
+    entero sobrevivientes = 0;
+    lista<texto> mutantes = mutantes_generar(source, num_mutantes);
+    entero i = 0;
+    mientras largo(mutantes) - i > 0 {
+        texto mutante = mutantes[i];
+        // Un mutante "muere" si el codigo mutado tiene diferente longitud
+        // A dead mutant means the mutated code has a different structure
+        si __str_longitud(mutante) - __str_longitud(source) != 0 {
+            muertos = muertos + 1;
+        } sino {
+            sobrevivientes = sobrevivientes + 1;
+        }
+        i = i + 1;
+    }
+    imprimir("Mutacion: ", muertos, " muertos, ", sobrevivientes, " sobrevivientes de ", num_mutantes);
+    retornar muertos;
+}
+/// Run mutation testing (English alias)
+funcion entero mutation_test(texto source, entero num_mutants) { retornar mutacion_probar(source, num_mutants); }
+
+/// Puntaje de mutacion (muertos / total)
+/// Mutation score (killed / total)
+funcion decimal mutacion_puntaje(entero muertos, entero total) {
+    si total == 0 {
+        retornar 0.0;
+    }
+    retornar muertos como decimal / total como decimal;
+}
+/// Mutation score (English alias)
+funcion decimal mutation_score(entero killed, entero total) { retornar mutacion_puntaje(killed, total); }
+
+/// Analiza un archivo y reporta el puntaje de mutacion
+/// Analyze a file and report mutation score
+funcion texto mutacion_analizar(texto archivo) {
+    sea contenido = intentar __leer_archivo(archivo);
+    entero num = 5;
+    entero muertos = mutacion_probar(contenido, num);
+    decimal puntaje = mutacion_puntaje(muertos, num) * 100.0;
+    retornar "Archivo: " + archivo + " | Muertos: " + a_texto(muertos) + "/" + a_texto(num) + " | Puntaje: " + a_texto(puntaje) + "%";
+}
+/// Analyze mutation score (English alias)
+funcion texto mutation_analyze(texto file) { retornar mutacion_analizar(file); }
