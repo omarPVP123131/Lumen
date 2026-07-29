@@ -654,6 +654,10 @@ fn is_builtin(name: &str) -> bool {
         name,
         "imprimir"
             | "print"
+            | "largo"
+            | "len"
+            | "agregar"
+            | "push"
             | "leer"
             | "read"
             | "a_texto"

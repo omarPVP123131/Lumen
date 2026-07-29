@@ -1,0 +1,285 @@
+// stdlib/compiler/codegen.nv — Codegen LUMEN
+// AST → bytecode (instrucciones) — AST → bytecode (instructions)
+// Dual ES/EN API
+
+// ── Opcodes ───────────────────────────────────────────────────
+numero OP_PUSH_NUM = 1;
+numero OP_PUSH_STR = 2;
+numero OP_PUSH_INT = 3;
+numero OP_PUSH_BOOL = 4;
+numero OP_ADD = 5;
+numero OP_SUB = 6;
+numero OP_MUL = 7;
+numero OP_DIV = 8;
+numero OP_MOD = 9;
+numero OP_EQ = 10;
+numero OP_NEQ = 11;
+numero OP_LT = 12;
+numero OP_LE = 13;
+numero OP_GT = 14;
+numero OP_GE = 15;
+numero OP_AND = 16;
+numero OP_OR = 17;
+numero OP_NOT = 18;
+numero OP_NEG = 19;
+numero OP_STORE = 20;
+numero OP_LOAD = 21;
+numero OP_JMP = 22;
+numero OP_JMP_IF = 23;
+numero OP_CALL = 24;
+numero OP_RET = 25;
+numero OP_PRINT = 26;
+numero OP_HALT = 27;
+
+// ── Estructura de bytecode ──────────────────────────────────
+// Una instrucción es un mapa: {op: opcode, arg: valor}
+
+funcion numero _instr(numero op, numero arg) {
+    numero i = __map_nuevo();
+    i = __map_poner(i, "op", op);
+    i = __map_poner(i, "arg", arg);
+    retornar i;
+}
+
+funcion numero _codegen_nuevo() {
+    numero cg = __map_nuevo();
+    cg = __map_poner(cg, "instrs", __map_nuevo());
+    cg = __map_poner(cg, "pos", 0);
+    cg = __map_poner(cg, "strings", __map_nuevo());
+    cg = __map_poner(cg, "str_cnt", 0);
+    cg = __map_poner(cg, "ints", __map_nuevo());
+    cg = __map_poner(cg, "int_cnt", 0);
+    retornar cg;
+}
+
+funcion numero _cg_emit(numero cg, numero instr) {
+    numero p = __map_obtener(cg, "pos");
+    cg = __map_poner(cg, "instrs", __map_poner(__map_obtener(cg, "instrs"), a_texto(p), instr));
+    cg = __map_poner(cg, "pos", p + 1);
+    retornar cg;
+}
+
+funcion numero _cg_add_str(numero cg, numero s) {
+    numero strs = __map_obtener(cg, "strings");
+    numero sc = __map_obtener(cg, "str_cnt");
+    // Check if string already exists
+    numero i = 0;
+    mientras i < sc {
+        si __map_obtener(strs, a_texto(i)) == s { cg = __map_poner(cg, "str_tmp", i); retornar cg; }
+        i = i + 1;
+    }
+    cg = __map_poner(cg, "strings", __map_poner(strs, a_texto(sc), s));
+    cg = __map_poner(cg, "str_cnt", sc + 1);
+    cg = __map_poner(cg, "str_tmp", sc);
+    retornar cg;
+}
+
+funcion numero _cg_add_int(numero cg, numero n) {
+    numero ints = __map_obtener(cg, "ints");
+    numero ic = __map_obtener(cg, "int_cnt");
+    numero i = 0;
+    mientras i < ic {
+        si __map_obtener(ints, a_texto(i)) == n { cg = __map_poner(cg, "int_tmp", i); retornar cg; }
+        i = i + 1;
+    }
+    cg = __map_poner(cg, "ints", __map_poner(ints, a_texto(ic), n));
+    cg = __map_poner(cg, "int_cnt", ic + 1);
+    cg = __map_poner(cg, "int_tmp", ic);
+    retornar cg;
+}
+
+funcion numero _cg_emit_jmp(numero cg, numero target) {
+    cg = _cg_add_int(cg, target);
+    numero idx = __map_obtener(cg, "int_tmp");
+    cg = _cg_emit(cg, _instr(OP_JMP, idx));
+    retornar cg;
+}
+
+funcion numero _cg_emit_jmp_if(numero cg, numero target) {
+    cg = _cg_add_int(cg, target);
+    numero idx = __map_obtener(cg, "int_tmp");
+    cg = _cg_emit(cg, _instr(OP_JMP_IF, idx));
+    retornar cg;
+}
+
+funcion numero _cg_emit_call(numero cg, numero name, numero argc) {
+    cg = _cg_add_str(cg, name);
+    numero str_idx = __map_obtener(cg, "str_tmp");
+    cg = _cg_add_int(cg, argc);
+    numero ai = __map_obtener(cg, "int_tmp");
+    cg = _cg_emit(cg, _instr(OP_CALL, str_idx));
+    cg = _cg_emit(cg, _instr(OP_CALL, ai));
+    retornar cg;
+}
+
+// ── Gen: Expression ─────────────────────────────────────────
+funcion numero _gen_expr(numero cg, numero node) {
+    numero tp = __map_obtener(node, "tipo");
+    
+    si a_texto(tp) == "Literal" {
+        numero v = __map_obtener(node, "v");
+        cg = _cg_add_str(cg, v);
+        cg = _cg_emit(cg, _instr(OP_PUSH_STR, __map_obtener(cg, "str_tmp")));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Ident" {
+        numero nombre = __map_obtener(node, "nombre");
+        cg = _cg_add_str(cg, nombre);
+        cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Texto" {
+        numero v = __map_obtener(node, "v");
+        cg = _cg_add_str(cg, v);
+        cg = _cg_emit(cg, _instr(OP_PUSH_STR, __map_obtener(cg, "str_tmp")));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Bool" {
+        numero v = __map_obtener(node, "v");
+        numero bv = 1;
+        si a_texto(v) == "falso" || a_texto(v) == "false" { bv = 0; }
+        cg = _cg_add_int(cg, bv);
+        cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Call" {
+        numero callee = __map_obtener(node, "callee");
+        numero argc = 0;
+        // Builtins: print
+        si a_texto(callee) == "imprimir" || a_texto(callee) == "print" {
+            cg = _cg_emit(cg, _instr(OP_PRINT, 0));
+            retornar cg;
+        }
+        cg = _cg_emit_call(cg, callee, argc);
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Binary" {
+        numero op = __map_obtener(node, "op");
+        numero left = __map_obtener(node, "left");
+        numero right = __map_obtener(node, "right");
+        cg = _gen_expr(cg, left);
+        cg = _gen_expr(cg, right);
+        
+        si a_texto(op) == "+" { cg = _cg_emit(cg, _instr(OP_ADD, 0)); }
+        si a_texto(op) == "-" { cg = _cg_emit(cg, _instr(OP_SUB, 0)); }
+        si a_texto(op) == "*" { cg = _cg_emit(cg, _instr(OP_MUL, 0)); }
+        si a_texto(op) == "/" { cg = _cg_emit(cg, _instr(OP_DIV, 0)); }
+        si a_texto(op) == "<" { cg = _cg_emit(cg, _instr(OP_LT, 0)); }
+        si a_texto(op) == ">" { cg = _cg_emit(cg, _instr(OP_GT, 0)); }
+        si a_texto(op) == "==" { cg = _cg_emit(cg, _instr(OP_EQ, 0)); }
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Unary" {
+        numero op = __map_obtener(node, "op");
+        numero val_n = __map_obtener(node, "val");
+        cg = _gen_expr(cg, val_n);
+        si a_texto(op) == "-" { cg = _cg_emit(cg, _instr(OP_NEG, 0)); }
+        si a_texto(op) == "!" { cg = _cg_emit(cg, _instr(OP_NOT, 0)); }
+        retornar cg;
+    }
+    
+    retornar cg;
+}
+
+// ── Gen: Statement ────────────────────────────────────────────
+funcion numero _gen_stmt(numero cg, numero stmt) {
+    numero tp = __map_obtener(stmt, "tipo");
+    
+    si a_texto(tp) == "VarDecl" {
+        numero nombre = __map_obtener(stmt, "nombre");
+        numero valor = __map_obtener(stmt, "valor");
+        cg = _gen_expr(cg, valor);
+        cg = _cg_add_str(cg, nombre);
+        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Assign" {
+        numero nombre = __map_obtener(stmt, "nombre");
+        numero valor = __map_obtener(stmt, "valor");
+        cg = _gen_expr(cg, valor);
+        cg = _cg_add_str(cg, nombre);
+        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Return" {
+        numero valor = __map_obtener(stmt, "valor");
+        si valor != 0 {
+            cg = _gen_expr(cg, valor);
+        }
+        cg = _cg_emit(cg, _instr(OP_RET, 0));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "ExprStmt" {
+        numero expr = __map_obtener(stmt, "expr");
+        cg = _gen_expr(cg, expr);
+        retornar cg;
+    }
+    
+    retornar cg;
+}
+
+// ── Main Codegen ──────────────────────────────────────────────
+funcion numero codegen_generar(numero ast) {
+    numero cg = _codegen_nuevo();
+    
+    numero tp = __map_obtener(ast, "tipo");
+    si a_texto(tp) == "Programa" {
+        cg = _gen_stmt(cg, ast);
+    } sino {
+        cg = _gen_stmt(cg, ast);
+    }
+    
+    cg = _cg_emit(cg, _instr(OP_HALT, 0));
+    retornar cg;
+}
+
+funcion numero codegen_generate(numero ast) { retornar codegen_generar(ast); }
+
+// ── Bytecode to string ──────────────────────────────────────
+funcion numero _op_name(numero op) {
+    si op == 1 { retornar "PUSH_NUM"; }
+    si op == 2 { retornar "PUSH_STR"; }
+    si op == 3 { retornar "PUSH_INT"; }
+    si op == 5 { retornar "ADD"; }
+    si op == 6 { retornar "SUB"; }
+    si op == 7 { retornar "MUL"; }
+    si op == 8 { retornar "DIV"; }
+    si op == 10 { retornar "EQ"; }
+    si op == 11 { retornar "NEQ"; }
+    si op == 12 { retornar "LT"; }
+    si op == 14 { retornar "GT"; }
+    si op == 19 { retornar "NEG"; }
+    si op == 20 { retornar "STORE"; }
+    si op == 21 { retornar "LOAD"; }
+    si op == 22 { retornar "JMP"; }
+    si op == 23 { retornar "JMP_IF"; }
+    si op == 24 { retornar "CALL"; }
+    si op == 25 { retornar "RET"; }
+    si op == 26 { retornar "PRINT"; }
+    si op == 27 { retornar "HALT"; }
+    retornar a_texto(op);
+}
+
+funcion void codegen_imprimir(numero cg) {
+    numero instrs = __map_obtener(cg, "instrs");
+    numero pos = __map_obtener(cg, "pos");
+    numero i = 0;
+    mientras i < pos {
+        numero instr = __map_obtener(instrs, a_texto(i));
+        numero op = __map_obtener(instr, "op");
+        numero arg = __map_obtener(instr, "arg");
+        imprimir(i, ": ", _op_name(op), " ", arg);
+        i = i + 1;
+    }
+}
+
+funcion void codegen_print(numero cg) { codegen_imprimir(cg); }
