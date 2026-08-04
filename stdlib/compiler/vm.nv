@@ -58,16 +58,7 @@ funcion numero leer_float(lista<entero> b, entero pos) {
 }
 
 funcion entero a_entero(numero f) {
-    numero u = f;
-    si u < 0 { u = 0 - u; }
-    si u < 1 { retornar 0; }
-    entero r = 0;
-    while u >= 1 {
-        r = r + 1;
-        u = u - 1;
-    }
-    si f < 0 { retornar 0 - r; }
-    retornar r;
+    retornar __str_a_entero(a_texto(f));
 }
 
 funcion numero estado_pila(numero st, entero i) {
@@ -116,8 +107,11 @@ funcion numero es_verdad(numero v) {
     }
     si v >= 1000000000 {
         si v < 2000000000 {
-            si largo(str_at(stl, stl_din, a_entero(v - 1000000000))) > 0 { retornar 1.0; }
-            retornar 0.0;
+            si a_entero(v - 1000000000) < largo(stl) + largo(stl_din) {
+                si largo(str_at(stl, stl_din, a_entero(v - 1000000000))) > 0 { retornar 1.0; }
+                retornar 0.0;
+            }
+            retornar 1.0;
         }
         si v < 3000000000 {
             si __map_longitud(mapas[a_entero(v - 2000000000)]) > 0 { retornar 1.0; }
@@ -259,7 +253,9 @@ funcion numero ig_v(numero x, numero y) {
         retornar ig_listas(arrs[a_entero(0.0 - x - 1000000000.0) - 1], arrs[a_entero(0.0 - y - 1000000000.0) - 1]);
     }
     si x >= 1000000000 && y >= 1000000000 {
-        si x < 2000000000 && y < 2000000000 {
+        si x < 2000000000 && y < 2000000000
+            && a_entero(x - 1000000000) < largo(stl) + largo(stl_din)
+            && a_entero(y - 1000000000) < largo(stl) + largo(stl_din) {
             si str_at(stl, stl_din, a_entero(x - 1000000000)) == str_at(stl, stl_din, a_entero(y - 1000000000)) {
                 retornar 1.0;
             }
@@ -1019,8 +1015,8 @@ funcion entero main() {
             numero y = estado_pila(st, sp);
             sp = sp - 1;
             numero x = estado_pila(st, sp);
-            si x >= 1000000000 && x < 2000000000 {
-                si y >= 1000000000 && y < 2000000000 {
+            si x >= 1000000000 && x < 2000000000 && a_entero(x - 1000000000) < largo(stl) + largo(stl_din) {
+                si y >= 1000000000 && y < 2000000000 && a_entero(y - 1000000000) < largo(stl) + largo(stl_din) {
                     texto s2 = str_at(stl, stl_din, a_entero(x - 1000000000)) + str_at(stl, stl_din, a_entero(y - 1000000000));
                     stl_din.agregar(s2);
                     st = estado_pila_poner(st, sp, 1000000000.0 + largo(stl) + largo(stl_din) - 1);
@@ -1030,7 +1026,7 @@ funcion entero main() {
                     st = estado_pila_poner(st, sp, 1000000000.0 + largo(stl) + largo(stl_din) - 1);
                 }
             } sino {
-                si y >= 1000000000 && y < 2000000000 {
+                si y >= 1000000000 && y < 2000000000 && a_entero(y - 1000000000) < largo(stl) + largo(stl_din) {
                     texto s2 = a_texto_v(x) + str_at(stl, stl_din, a_entero(y - 1000000000));
                     stl_din.agregar(s2);
                     st = estado_pila_poner(st, sp, 1000000000.0 + largo(stl) + largo(stl_din) - 1);

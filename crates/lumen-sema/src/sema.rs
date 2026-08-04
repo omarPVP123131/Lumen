@@ -2517,6 +2517,8 @@ impl SemanticAnalyzer {
                                     TypeInfo::Lista(Box::new(TypeInfo::Texto))
                                 } else if callee == "__tarea_esperar" || callee == "__task_await" {
                                     TypeInfo::Decimal
+                                } else if callee == "__str_a_entero" || callee == "__texto_a_entero" {
+                                    TypeInfo::Entero
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {

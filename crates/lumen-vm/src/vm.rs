@@ -213,6 +213,18 @@ impl VM {
             return Some(Ok(()));
         }
 
+        if name == "__str_a_entero" || name == "__texto_a_entero" {
+            let mut s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            if let Some(dot) = s.find('.') {
+                s.truncate(dot);
+            }
+            match s.parse::<i64>() {
+                Ok(n) => self.push(Value::Int(n)),
+                Err(_) => self.push(Value::Int(0)),
+            }
+            return Some(Ok(()));
+        }
+
         if name == "largo" || name == "len" {
             match args.clone().into_iter().next() {
                 Some(Value::Array(v)) => self.push(Value::Int(v.len() as i64)),
@@ -3083,6 +3095,15 @@ impl VM {
                 } else if name == "a_texto" || name == "to_texto" || name == "__str_from" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     self.push(Value::Str(s));
+                } else if name == "__str_a_entero" || name == "__texto_a_entero" {
+                    let mut s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    if let Some(dot) = s.find('.') {
+                        s.truncate(dot);
+                    }
+                    match s.parse::<i64>() {
+                        Ok(n) => self.push(Value::Int(n)),
+                        Err(_) => self.push(Value::Int(0)),
+                    }
                 } else if name == "__str_len" || name == "__str_longitud" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     self.push(Value::Int(s.len() as i64));

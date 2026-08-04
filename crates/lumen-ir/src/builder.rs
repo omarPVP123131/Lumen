@@ -1008,6 +1008,8 @@ impl IRBuilder {
                                     | "__str_replace"
                                     | "__str_subcadena_chars"
                                     | "__str_slice_chars"
+                                    | "__str_a_entero"
+                                    | "__texto_a_entero"
                                     | "__num_a_f64_bytes"
                                     | "__numero_a_bytes_f64"
                                     | "__file_bytes"
