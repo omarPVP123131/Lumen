@@ -2161,7 +2161,7 @@ impl SemanticAnalyzer {
                                                 .to_string(),
                                         });
                                     }
-                                    TypeInfo::Void
+                                    TypeInfo::Numero
                                 } else if callee == "__json_stringify" || callee == "__json_texto" {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
@@ -2449,6 +2449,8 @@ impl SemanticAnalyzer {
                                     TypeInfo::Texto
                                 } else if callee == "__map_contiene" || callee == "__map_contains" {
                                     TypeInfo::Booleano
+                                } else if callee == "__map_claves" || callee == "__map_keys" {
+                                    TypeInfo::Lista(Box::new(TypeInfo::Numero))
                                 } else if callee == "__map_obtener" || callee == "__map_get"
                                     || callee == "__map_nuevo" || callee == "__map_new"
                                     || callee == "__map_poner" || callee == "__map_set" {
@@ -2502,6 +2504,19 @@ impl SemanticAnalyzer {
                                     TypeInfo::Texto
                                 } else if callee == "__coro_ceder" || callee == "__coro_yield" {
                                     TypeInfo::Void
+                                } else if callee == "__unicode_normalize" || callee == "__unicode_normalizar"
+                                    || callee == "__str_padding_inicio" || callee == "__str_pad_start"
+                                    || callee == "__str_padding_fin" || callee == "__str_pad_end"
+                                    || callee == "__tiempo_formatear" || callee == "__time_format"
+                                    || callee == "__coro_crear" || callee == "__coro_create"
+                                {
+                                    TypeInfo::Texto
+                                } else if callee == "__fs_listar" || callee == "__fs_listdir"
+                                    || callee == "__env_listar" || callee == "__env_list"
+                                {
+                                    TypeInfo::Lista(Box::new(TypeInfo::Texto))
+                                } else if callee == "__tarea_esperar" || callee == "__task_await" {
+                                    TypeInfo::Decimal
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {

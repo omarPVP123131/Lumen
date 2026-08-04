@@ -1452,7 +1452,7 @@ fn test_map_keys() {
     let src = r#"numero d = __map_nuevo();
 d = __map_poner(d, "x", 1);
 d = __map_poner(d, "y", 2);
-numero k = __map_claves(d);
+lista<numero> k = __map_claves(d);
 imprimir(k);
 "#;
     let output = run_source(src).unwrap();

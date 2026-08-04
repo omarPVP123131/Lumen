@@ -2996,9 +2996,19 @@ impl VM {
             Opcode::Store => {
                 let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
                 let val = self.pop()?;
-                self.locals.last_mut().unwrap().insert(name, val);
-            }
-            Opcode::Call => {
+                let n = self.locals.len();
+                if n > 0 {
+                    let cur = n - 1;
+                    let write_idx = if self.locals[cur].contains_key(&name) {
+                        cur
+                    } else if n >= 2 && self.locals[0].contains_key(&name) {
+                        0
+                    } else {
+                        cur
+                    };
+                    self.locals[write_idx].insert(name, val);
+                }
+            }            Opcode::Call => {
                 let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
                 let argc_idx = self.ip;
                 self.ip += 1;

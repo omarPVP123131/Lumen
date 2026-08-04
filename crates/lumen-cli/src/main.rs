@@ -730,6 +730,9 @@ fn run_bytecode(path: &str) {
                     }
                 }
                 Err(e) => {
+                    for line in vm.output() {
+                        println!("{}", line);
+                    }
                     eprintln!("{}", e.with_stack(vm.call_stack()));
                     process::exit(1);
                 }

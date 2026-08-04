@@ -156,6 +156,17 @@ impl IRBuilder {
         }
 
         self.finalize_func();
+
+        if has_toplevel_code && self.program.funcs.contains_key("main") {
+            if let Some(main_func) = self.program.funcs.get_mut("__main__") {
+                if matches!(main_func.instrs.last(), Some(Instr::Halt)) {
+                    main_func.instrs.pop();
+                }
+                main_func.instrs.push(Instr::Call("main".to_string(), 0));
+                main_func.instrs.push(Instr::Halt);
+            }
+        }
+
         self.program.clone()
     }
 
