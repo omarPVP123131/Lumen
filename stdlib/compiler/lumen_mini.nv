@@ -30,7 +30,7 @@ funcion numero lx(texto s) {
         }
         si cp == 34 {
             texto st = ""; idx = idx + 1;
-            mientras idx < n && codes[idx] != 34 { st = st + a_texto(codes[idx]); idx = idx + 1; }
+            mientras idx < n && codes[idx] != 34 { st = st + __str_chr(codes[idx]); idx = idx + 1; }
             si idx < n { idx = idx + 1; }
             numero t = __map_nuevo();
             t = __map_poner(t, "t", 3); t = __map_poner(t, "v", st);
@@ -39,7 +39,7 @@ funcion numero lx(texto s) {
         }
         si cp >= 48 && cp <= 57 {
             texto num = "";
-            mientras idx < n && codes[idx] >= 48 && codes[idx] <= 57 { num = num + a_texto(codes[idx]); idx = idx + 1; }
+            mientras idx < n && codes[idx] >= 48 && codes[idx] <= 57 { num = num + __str_chr(codes[idx]); idx = idx + 1; }
             numero t = __map_nuevo();
             t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num);
             tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
@@ -49,18 +49,25 @@ funcion numero lx(texto s) {
             texto id = "";
             mientras idx < n {
                 entero c2 = codes[idx];
-                si (c2 >= 65 && c2 <= 90) || (c2 >= 97 && c2 <= 122) || c2 == 95 || (c2 >= 48 && c2 <= 57) {
-                    id = id + a_texto(c2); idx = idx + 1;
-                } sino {
-                    romper;
-                }
+                si (c2 >= 65 && c2 <= 90) || (c2 >= 97 && c2 <= 122) || c2 == 95 { id = id + __str_chr(c2); idx = idx + 1; continuar; }
+                si c2 >= 48 && c2 <= 57 { id = id + __str_chr(c2); idx = idx + 1; continuar; }
+                romper;
             }
             numero t = __map_nuevo();
             t = __map_poner(t, "t", 1); t = __map_poner(t, "v", id);
             tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
             continuar;
         }
-        texto op = a_texto(cp);
+        // Multi-character operators
+        si idx + 1 < n {
+            texto op2 = __str_chr(cp) + __str_chr(codes[idx + 1]);
+            si op2 == "||" || op2 == "&&" || op2 == "==" || op2 == "!=" || op2 == "<=" || op2 == ">=" {
+                numero t = __map_nuevo();
+                t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op2);
+                tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; idx = idx + 2; continuar;
+            }
+        }
+        texto op = __str_chr(cp);
         numero t = __map_nuevo();
         t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op);
         tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; idx = idx + 1;
@@ -120,7 +127,7 @@ funcion numero cg(numero tk) {
                         pc = pc + 1;
                         bc = __map_poner(bc, "op", op);
                         bc = __map_poner(bc, "pc", pc);
-                        pos = pos + 6; continuar;
+                        pos = pos + 5; continuar;
                     }
                 }
             }

@@ -18,13 +18,21 @@ funcion numero lex(texto s) {
         // /* */
         si cp == 47 && idx + 1 < n { si codes[idx + 1] == 42 { idx = idx + 2; mientras idx + 1 < n { si codes[idx] == 42 && codes[idx + 1] == 47 { idx = idx + 2; romper; } si codes[idx] == 10 { ln = ln + 1; cl = 1; } sino { cl = cl + 1; } idx = idx + 1; } continuar; } }
         // String
-        si cp == 34 { texto st = ""; idx = idx + 1; mientras idx < n && codes[idx] != 34 { st = st + a_texto(codes[idx]); idx = idx + 1; } si idx < n { idx = idx + 1; } numero t = __map_nuevo(); t = __map_poner(t, "t", 3); t = __map_poner(t, "v", st); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
+        si cp == 34 { texto st = ""; idx = idx + 1; mientras idx < n && codes[idx] != 34 { st = st + __str_chr(codes[idx]); idx = idx + 1; } si idx < n { idx = idx + 1; } numero t = __map_nuevo(); t = __map_poner(t, "t", 3); t = __map_poner(t, "v", st); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
         // Numero
-        si cp >= 48 && cp <= 57 { texto num = ""; mientras idx < n && codes[idx] >= 48 && codes[idx] <= 57 { num = num + a_texto(codes[idx]); idx = idx + 1; } numero t = __map_nuevo(); t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
+        si cp >= 48 && cp <= 57 { texto num = ""; mientras idx < n && codes[idx] >= 48 && codes[idx] <= 57 { num = num + __str_chr(codes[idx]); idx = idx + 1; } numero t = __map_nuevo(); t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
         // Ident/Kw
-        si (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122) || cp == 95 { texto id = ""; mientras idx < n && (((codes[idx] >= 65 && codes[idx] <= 90) || (codes[idx] >= 97 && codes[idx] <= 122) || codes[idx] == 95) || (codes[idx] >= 48 && codes[idx] <= 57)) { id = id + a_texto(codes[idx]); idx = idx + 1; } numero t = __map_nuevo(); t = __map_poner(t, "t", 1); t = __map_poner(t, "v", id); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
+        si (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122) || cp == 95 { texto id = ""; mientras idx < n { entero c2 = codes[idx]; si (c2 >= 65 && c2 <= 90) || (c2 >= 97 && c2 <= 122) || c2 == 95 { id = id + __str_chr(c2); idx = idx + 1; continuar; } si c2 >= 48 && c2 <= 57 { id = id + __str_chr(c2); idx = idx + 1; continuar; } romper; } numero t = __map_nuevo(); t = __map_poner(t, "t", 1); t = __map_poner(t, "v", id); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; continuar; }
+        // Multi-character operators
+        si idx + 1 < n {
+            texto op2 = __str_chr(cp) + __str_chr(codes[idx + 1]);
+            si op2 == "||" || op2 == "&&" || op2 == "==" || op2 == "!=" || op2 == "<=" || op2 == ">=" {
+                numero t = __map_nuevo(); t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op2);
+                tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; idx = idx + 2; continuar;
+            }
+        }
         // Oper/Punt
-        texto op = a_texto(cp); numero t = __map_nuevo(); t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; idx = idx + 1;
+        texto op = __str_chr(cp); numero t = __map_nuevo(); t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op); tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1; idx = idx + 1;
     }
     numero t = __map_nuevo(); t = __map_poner(t, "t", 99); t = __map_poner(t, "v", ""); tk = __map_poner(tk, a_texto(cnt), t);
     tk = __map_poner(tk, "cnt", cnt + 1);
@@ -34,7 +42,7 @@ funcion numero lex(texto s) {
 // ═══ PARSER ══════════════════════════════════════════════════
 funcion numero parse(numero tk) {
     numero prog = __map_nuevo(); prog = __map_poner(prog, "tipo", "Programa");
-    lista<entero> stmts = []; entero pos = 0; entero total = __map_obtener(tk, "cnt");
+    lista<numero> stmts = []; entero pos = 0; entero total = __map_obtener(tk, "cnt");
     
     mientras pos + 3 < total {
         numero t1 = __map_obtener(tk, a_texto(pos));
@@ -46,11 +54,12 @@ funcion numero parse(numero tk) {
         entero tp2 = __map_obtener(t2, "t");
         
         // VarDecl: tipo nombre = valor;
-        si (v1 == "entero" || v1 == "texto" || v1 == "decimal" || v1 == "booleano" || v1 == "numero") && tp2 == 1 {
-            numero t4 = __map_obtener(tk, a_texto(pos + 3));
-            texto v4 = __map_obtener(t4, "v");
-            si v3 == "=" {
-                numero t5 = __map_obtener(tk, a_texto(pos + 4));
+        si v1 == "entero" || v1 == "texto" || v1 == "decimal" || v1 == "booleano" || v1 == "numero" {
+            si tp2 == 1 {
+                numero t4 = __map_obtener(tk, a_texto(pos + 1));
+                texto v4 = __map_obtener(t4, "v");
+                si v3 == "=" {
+                numero t5 = __map_obtener(tk, a_texto(pos + 3));
                 texto v5 = __map_obtener(t5, "v");
                 numero vd = __map_nuevo();
                 vd = __map_poner(vd, "tipo", "VarDecl");
@@ -58,14 +67,15 @@ funcion numero parse(numero tk) {
                 vd = __map_poner(vd, "tipo_var", v1);
                 numero lit = __map_nuevo(); lit = __map_poner(lit, "tipo", "Literal"); lit = __map_poner(lit, "v", v5);
                 vd = __map_poner(vd, "valor", lit);
-                stmts.agregar(vd); pos = pos + 6; continuar;
+                stmts.agregar(vd); pos = pos + 5; continuar;
+            }
             }
         }
         
         // Call: imprimir(expr);
         si v1 == "imprimir" || v1 == "print" {
             numero tc = __map_nuevo(); tc = __map_poner(tc, "tipo", "Call"); tc = __map_poner(tc, "callee", v1);
-            numero args = [];
+            lista<numero> args = [];
             // Arg inside ()
             numero t5 = __map_obtener(tk, a_texto(pos + 2));
             si t5 != 0 {
@@ -95,7 +105,12 @@ funcion numero parse(numero tk) {
         
         pos = pos + 1;
     }
-    prog = __map_poner(prog, "stmts", stmts);
+    prog = __map_poner(prog, "stmts_cnt", largo(stmts));
+    entero sx = 0;
+    mientras sx < largo(stmts) {
+        prog = __map_poner(prog, a_texto(sx), stmts[sx]);
+        sx = sx + 1;
+    }
     retornar prog;
 }
 
@@ -106,10 +121,10 @@ funcion numero cg_gen(numero ast) {
     cg = __map_poner(cg, "ints", __map_nuevo()); cg = __map_poner(cg, "int_cnt", 0);
     entero pos = 0; entero cnt = 0;
     
-    numero stmts = __map_obtener(ast, "stmts");
+    entero stmts_cnt = __map_obtener(ast, "stmts_cnt");
     entero i = 0;
-    mientras i < largo(stmts) {
-        numero stmt = stmts[i];
+    mientras i < stmts_cnt {
+        numero stmt = __map_obtener(ast, a_texto(i));
         texto tp = __map_obtener(stmt, "tipo");
         
         si tp == "VarDecl" {
@@ -126,14 +141,14 @@ funcion numero cg_gen(numero ast) {
             si found == 0 { cg = __map_poner(cg, "strings", __map_poner(__map_obtener(cg, "strings"), a_texto(cnt), val_v)); cnt = cnt + 1; sx = cnt - 1; }
             
             // Find/store name
-            si found { sx = 0; }
+            si found != 0 { sx = 0; }
             entero ni = 0; entero nfound = 0;
             mientras ni < cnt {
                 si __map_obtener(__map_obtener(cg, "strings"), a_texto(ni)) == nombre { nfound = 1; romper; }
                 ni = ni + 1;
             }
             si nfound == 0 { cg = __map_poner(cg, "strings", __map_poner(__map_obtener(cg, "strings"), a_texto(cnt), nombre)); cnt = cnt + 1; ni = cnt - 1; }
-            si nfound { ni = 0; }
+            si nfound != 0 { ni = 0; }
             
             // Emit instructions
             numero instrs = __map_obtener(cg, "instrs");
@@ -151,14 +166,12 @@ funcion numero cg_gen(numero ast) {
                 ci = ci + 1;
             }
             si cf == 0 { cg = __map_poner(cg, "strings", __map_poner(__map_obtener(cg, "strings"), a_texto(cnt), callee)); cnt = cnt + 1; ci = cnt - 1; }
-            si cf { ci = 0; }
+            si cf != 0 { ci = 0; }
             
             numero instrs = __map_obtener(cg, "instrs");
-            si callee == "imprimir" || callee == "print" {
-                instrs = __map_poner(instrs, a_texto(pos), 200); pos = pos + 1; // op: PRINT
-            } sino {
-                instrs = __map_poner(instrs, a_texto(pos), ci + 300); pos = pos + 1; // op: CALL(ci)
-            }
+            entero op_val = ci + 300;
+            si callee == "imprimir" || callee == "print" { op_val = 200; }
+            instrs = __map_poner(instrs, a_texto(pos), op_val); pos = pos + 1;
             cg = __map_poner(cg, "instrs", instrs);
         }
         

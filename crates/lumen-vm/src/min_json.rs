@@ -1,23 +1,13 @@
 use crate::value::Value;
+use im::HashMap;
 
-#[derive(Clone, Debug)]
-pub enum JValue {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Float(f64),
-    Str(String),
-    Array(Vec<JValue>),
-    Object(Vec<(String, JValue)>),
-}
-
-pub fn parse_json(s: &str) -> Result<JValue, String> {
+pub fn parse_json(s: &str) -> Result<Value, String> {
     let mut p = Parser { s, i: 0 };
     p.skip_ws();
     p.parse_value()
 }
 
-pub fn json_to_lumen(j: JValue) -> Value {
+fn json_to_lumen(j: JValue) -> Value {
     match j {
         JValue::Null => Value::Void,
         JValue::Bool(b) => Value::Bool(b),
@@ -26,16 +16,16 @@ pub fn json_to_lumen(j: JValue) -> Value {
         JValue::Str(s) => Value::Str(s),
         JValue::Array(arr) => Value::Array(arr.into_iter().map(json_to_lumen).collect()),
         JValue::Object(map) => {
-            let mut pairs = Vec::new();
+            let mut m = HashMap::new();
             for (k, v) in map {
-                pairs.push((Value::Str(k), json_to_lumen(v)));
+                m.insert(Value::Str(k), json_to_lumen(v));
             }
-            Value::Map(pairs)
+            Value::Map(m)
         }
     }
 }
 
-pub fn lumen_to_json(v: &Value) -> JValue {
+fn lumen_to_json(v: &Value) -> JValue {
     match v {
         Value::Void | Value::Opcion(None) => JValue::Null,
         Value::Bool(b) => JValue::Bool(*b),
@@ -43,19 +33,30 @@ pub fn lumen_to_json(v: &Value) -> JValue {
         Value::Float(f) => JValue::Float(*f),
         Value::Str(s) => JValue::Str(s.clone()),
         Value::Array(arr) => JValue::Array(arr.iter().map(lumen_to_json).collect()),
-        Value::Map(pairs) => {
-            let mut map = Vec::new();
-            for (k, v) in pairs {
+        Value::Map(map) => {
+            let mut entries = Vec::new();
+            for (k, v) in map {
                 let ks = match k {
                     Value::Str(s) => s.clone(),
                     other => format!("{other}"),
                 };
-                map.push((ks, lumen_to_json(v)));
+                entries.push((ks, lumen_to_json(v)));
             }
-            JValue::Object(map)
+            JValue::Object(entries)
         }
         _ => JValue::Null,
     }
+}
+
+#[derive(Clone, Debug)]
+enum JValue {
+    Null,
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Str(String),
+    Array(Vec<JValue>),
+    Object(Vec<(String, JValue)>),
 }
 
 pub fn json_stringify(j: &JValue) -> String {

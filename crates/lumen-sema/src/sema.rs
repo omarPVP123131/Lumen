@@ -1599,7 +1599,10 @@ impl SemanticAnalyzer {
                         }
                     }
                     BinOp::Less | BinOp::LessEqual | BinOp::Greater | BinOp::GreaterEqual => {
-                        if (is_numeric(&lt) && is_numeric(&rt)) || has_op_overload(&lt, op) {
+                        if (is_numeric(&lt) && is_numeric(&rt))
+                            || lt == rt
+                            || has_op_overload(&lt, op)
+                        {
                             TypeInfo::Booleano
                         } else {
                             self.errors.push(SemError {
@@ -1925,6 +1928,8 @@ impl SemanticAnalyzer {
                                         err: Box::new(TypeInfo::Texto),
                                     }
                                 } else if callee == "__file_write" || callee == "__escribir_archivo"
+                                    || callee == "__file_append"
+                                    || callee == "__agregar_archivo"
                                 {
                                     if args.len() != 2 {
                                         self.errors.push(SemError {
@@ -1953,6 +1958,112 @@ impl SemanticAnalyzer {
                                         ok: Box::new(TypeInfo::Booleano),
                                         err: Box::new(TypeInfo::Texto),
                                     }
+                                } else if callee == "__file_write_binary" || callee == "__escribir_archivo_bin"
+                                {
+                                    if args.len() != 2 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 2 argumentos, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 2 argumentos: ruta y Array<Int>"
+                                                .to_string(),
+                                        });
+                                    }
+                                    if args.len() >= 1 && !can_assign(&TypeInfo::Texto, &arg_types[0]) {
+                                        self.errors.push(SemError {
+                                            code: "E041".to_string(),
+                                            message: format!("El argumento 1 de '{}' debe ser 'texto', no '{:?}'", callee, arg_types[0]),
+                                            span: *span,
+                                            suggestion: "Pasa un valor de tipo texto".to_string(),
+                                        });
+                                    }
+                                    if args.len() >= 2 && !can_assign(&TypeInfo::Lista(Box::new(TypeInfo::Entero)), &arg_types[1]) {
+                                        self.errors.push(SemError {
+                                            code: "E041".to_string(),
+                                            message: format!("El argumento 2 de '{}' debe ser 'Array<Int>', no '{:?}'", callee, arg_types[1]),
+                                            span: *span,
+                                            suggestion: "Pasa un valor de tipo Array<Int>".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Resultado {
+                                        ok: Box::new(TypeInfo::Booleano),
+                                        err: Box::new(TypeInfo::Texto),
+                                    }
+                                } else if callee == "__num_a_f64_bytes" || callee == "__numero_a_bytes_f64"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento: número".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Lista(Box::new(TypeInfo::Entero))
+                                } else if callee == "__file_bytes" || callee == "__leer_bytes"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera 1 argumento (ruta), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento: ruta del archivo".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Lista(Box::new(TypeInfo::Entero))
+                                } else if callee == "__a_f64_bytes" || callee == "__bytes_a_f64"
+                                {
+                                    TypeInfo::Numero
+                                } else if callee == "__compile_nv" || callee == "__compilar_nv"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera 1 argumento (ruta), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento: ruta del archivo .nv".to_string(),
+                                        });
+                                    }
+                                    if args.len() >= 1 && !can_assign(&TypeInfo::Texto, &arg_types[0]) {
+                                        self.errors.push(SemError {
+                                            code: "E041".to_string(),
+                                            message: format!("El argumento 1 de '{}' debe ser 'texto', no '{:?}'", callee, arg_types[0]),
+                                            span: *span,
+                                            suggestion: "Pasa una ruta de tipo texto".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Lista(Box::new(TypeInfo::Entero))
+                                } else if callee == "__codegen_a_nvc"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 argumento: codegen map".to_string(),
+                                        });
+                                    }
+                                    if args.len() >= 1 && !can_assign(&TypeInfo::Numero, &arg_types[0]) {
+                                        self.errors.push(SemError {
+                                            code: "E041".to_string(),
+                                            message: format!("El argumento 1 de '{}' debe ser 'numero', no '{:?}'", callee, arg_types[0]),
+                                            span: *span,
+                                            suggestion: "Pasa un mapa de codegen".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Lista(Box::new(TypeInfo::Entero))
                                 } else if callee == "__file_exists" || callee == "__existe_archivo"
                                 {
                                     if args.len() != 1 {
@@ -2322,10 +2433,75 @@ impl SemanticAnalyzer {
                                     TypeInfo::Texto
                                 } else if callee == "__str_ord" || callee == "__str_codigo" {
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
+                                } else if callee == "__str_chr" || callee == "__str_caracter" {
+                                    TypeInfo::Texto
+                                } else if callee == "__str_slice" || callee == "__str_subcadena" {
+                                    TypeInfo::Texto
+                                } else if callee == "__str_concat_list" || callee == "__str_concatenar_lista" {
+                                    TypeInfo::Texto
+                                } else if callee == "__str_starts_with" || callee == "__str_empieza_con" {
+                                    TypeInfo::Booleano
+                                } else if callee == "__str_to_chars" || callee == "__str_a_caracteres" {
+                                    TypeInfo::Lista(Box::new(TypeInfo::Texto))
+                                } else if callee == "__str_reemplazar" || callee == "__str_replace" {
+                                    TypeInfo::Texto
+                                } else if callee == "__str_subcadena_chars" || callee == "__str_slice_chars" {
+                                    TypeInfo::Texto
+                                } else if callee == "__map_contiene" || callee == "__map_contains" {
+                                    TypeInfo::Booleano
                                 } else if callee == "__map_obtener" || callee == "__map_get"
                                     || callee == "__map_nuevo" || callee == "__map_new"
                                     || callee == "__map_poner" || callee == "__map_set" {
                                     TypeInfo::Numero
+                                } else if callee == "__encoding_utf8" || callee == "__codificacion_utf8" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera 1 argumento (texto), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa 1 texto para codificar a UTF-8".to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        if !can_assign(&TypeInfo::Texto, got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!("'{}' espera 'texto', no '{:?}'", callee, got),
+                                                span: *span,
+                                                suggestion: "Pasa un valor de tipo texto".to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Lista(Box::new(TypeInfo::Entero))
+                                } else if callee == "__encoding_from_utf8" || callee == "__desde_utf8" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!("'{}' espera 1 argumento (Array<Int>), no {}", callee, args.len()),
+                                            span: *span,
+                                            suggestion: "Pasa 1 Array<Int> con bytes UTF-8".to_string(),
+                                        });
+                                    }
+                                    if let Some(got) = arg_types.first() {
+                                        if !can_assign(&TypeInfo::Lista(Box::new(TypeInfo::Entero)), got) {
+                                            self.errors.push(SemError {
+                                                code: "E041".to_string(),
+                                                message: format!("'{}' espera 'Array<Int>', no '{:?}'", callee, got),
+                                                span: *span,
+                                                suggestion: "Pasa un valor de tipo lista<entero>".to_string(),
+                                            });
+                                        }
+                                    }
+                                    TypeInfo::Texto
+                                } else if callee == "__regex_is_match" || callee == "__regex_coincide" {
+                                    TypeInfo::Booleano
+                                } else if callee == "__http_get" || callee == "__http_obtener"
+                                    || callee == "__http_post" || callee == "__http_enviar" {
+                                    TypeInfo::Texto
+                                } else if callee == "__hash_sha256" || callee == "__hash_sha512" {
+                                    TypeInfo::Texto
+                                } else if callee == "__coro_ceder" || callee == "__coro_yield" {
+                                    TypeInfo::Void
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
                                 } else {
@@ -3411,9 +3587,9 @@ mod tests {
 
     #[test]
     fn test_comparison_less_non_number() {
+        // String comparison is now allowed (same type)
         let errors = analyze(r#"booleano b = "a" < "b";"#);
-        assert!(!errors.is_empty());
-        assert_eq!(errors[0].code, "E035");
+        assert!(errors.is_empty());
     }
 
     #[test]

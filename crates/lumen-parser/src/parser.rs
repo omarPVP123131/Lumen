@@ -933,23 +933,10 @@ impl Parser {
         if self.check(&[TokenKind::Sea, TokenKind::Let]) {
             return self.parse_if_let(start);
         }
-        let has_paren = self.check(&[TokenKind::LeftParen]);
-        if has_paren {
-            self.advance();
-        }
+        let saved_no_struct = self.no_struct_init;
+        self.no_struct_init = true;
         let condition = Box::new(self.parse_expression()?);
-        if has_paren {
-            if !self.check(&[TokenKind::RightParen]) {
-                self.error(
-                    "E019",
-                    "Se esperaba ')'",
-                    start,
-                    "Agrega ')' después de la condición",
-                );
-                return None;
-            }
-            self.advance();
-        }
+        self.no_struct_init = saved_no_struct;
         let then_body = self.parse_block()?;
         let else_body = if self.check(&[TokenKind::Sino, TokenKind::Else]) {
             self.advance();
@@ -1050,23 +1037,10 @@ impl Parser {
     fn parse_while(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
         self.advance();
-        let has_paren = self.check(&[TokenKind::LeftParen]);
-        if has_paren {
-            self.advance();
-        }
+        let saved_no_struct = self.no_struct_init;
+        self.no_struct_init = true;
         let condition = Box::new(self.parse_expression()?);
-        if has_paren {
-            if !self.check(&[TokenKind::RightParen]) {
-                self.error(
-                    "E019",
-                    "Se esperaba ')'",
-                    start,
-                    "Agrega ')' después de la condición",
-                );
-                return None;
-            }
-            self.advance();
-        }
+        self.no_struct_init = saved_no_struct;
         let body = self.parse_block()?;
         Some(Stmt::While {
             condition,
@@ -2414,7 +2388,7 @@ impl Parser {
                     self.advance();
                     Some(Type::Lista(Box::new(inner)))
                 } else {
-                    Some(Type::Lista(Box::new(Type::Decimal)))
+                    Some(Type::Lista(Box::new(Type::Entero)))
                 }
             }
             TokenKind::Ident(name) => {

@@ -21,6 +21,10 @@ serde_json.workspace = true
 thiserror.workspace = true
 regex = "1"
 chrono = "0.4"
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
 reqwest = { version = "0.12", features = ["blocking"], optional = true }
 unicode-normalization = "0.1"
 libloading = { version = "0.8", optional = true }
@@ -28,6 +32,7 @@ base64 = { version = "0.22", optional = true }
 hmac = { version = "0.12", optional = true }
 sha2 = { version = "0.10", optional = true }
 hex = { version = "0.4", optional = true }
+im = "15"
 
 [dev-dependencies]
 lumen-lexer = { path = "../lumen-lexer" }

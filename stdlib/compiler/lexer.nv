@@ -1,38 +1,200 @@
 // stdlib/compiler/lexer.nv — Lexer LUMEN
-funcion void _lx_emit(numero tk, numero tp, texto val, numero ln, numero cl) { numero t = __map_nuevo(); t = __map_poner(t, "tipo", tp); t = __map_poner(t, "valor", val); t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl); numero cnt = __map_longitud(tk); tk = __map_poner(tk, a_texto(cnt), t); }
+// Tokeniza texto fuente → tokens como mapa {t, v, linea, col}
+// Token types: 1=Ident, 2=Numero, 3=String, 4=Oper, 5=Punt, 6=Kw, 99=EOF
+
 funcion booleano _lx_es_ident(texto c) { retornar (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c == "_"; }
 funcion booleano _lx_es_digit(texto c) { retornar c >= "0" && c <= "9"; }
 funcion booleano _lx_es_punct(texto c) { retornar c == ";" || c == "(" || c == ")" || c == "{" || c == "}" || c == "," || c == "." || c == "[" || c == "]" || c == ":"; }
 
 funcion numero lexer_tokenizar(texto s) {
-    numero kw = _lx_kw();
+    numero kw = __map_nuevo();
+    kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1);
+    kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1);
+    kw = __map_poner(kw, "mientras", 1); kw = __map_poner(kw, "while", 1);
+    kw = __map_poner(kw, "para", 1); kw = __map_poner(kw, "for", 1);
+    kw = __map_poner(kw, "funcion", 1); kw = __map_poner(kw, "function", 1);
+    kw = __map_poner(kw, "retornar", 1); kw = __map_poner(kw, "return", 1);
+    kw = __map_poner(kw, "entero", 1); kw = __map_poner(kw, "texto", 1);
+    kw = __map_poner(kw, "numero", 1); kw = __map_poner(kw, "booleano", 1);
+    kw = __map_poner(kw, "decimal", 1); kw = __map_poner(kw, "lista", 1);
+    kw = __map_poner(kw, "diccionario", 1); kw = __map_poner(kw, "void", 1);
+    kw = __map_poner(kw, "importar", 1); kw = __map_poner(kw, "romper", 1);
+    kw = __map_poner(kw, "continuar", 1); kw = __map_poner(kw, "verdadero", 1);
+    kw = __map_poner(kw, "falso", 1); kw = __map_poner(kw, "imprimir", 1);
+    kw = __map_poner(kw, "intentar", 1); kw = __map_poner(kw, "try", 1);
+    kw = __map_poner(kw, "exito", 1); kw = __map_poner(kw, "error", 1);
+    kw = __map_poner(kw, "const", 1); kw = __map_poner(kw, "true", 1); kw = __map_poner(kw, "false", 1);
+    kw = __map_poner(kw, "estructura", 1); kw = __map_poner(kw, "struct", 1);
+    kw = __map_poner(kw, "enum", 1); kw = __map_poner(kw, "elegir", 1);
+    kw = __map_poner(kw, "opcion", 1); kw = __map_poner(kw, "resultado", 1);
+    kw = __map_poner(kw, "sea", 1); kw = __map_poner(kw, "let", 1);
+    kw = __map_poner(kw, "en", 1); kw = __map_poner(kw, "in", 1);
+    
+    // Normalize CRLF to LF and remove stray CR to avoid off-by-one tokenization
+    texto s2 = __str_reemplazar(s, "\r\n", "\n");
+    s2 = __str_reemplazar(s2, "\r", "");
+    lista<texto> chars = __str_a_caracteres(s2);
     numero tk = __map_nuevo();
-    entero i = 0; entero n = largo(s); entero ln = 1; entero cl = 1;
+    entero cnt = 0;
+    entero i = 0; entero n = largo(chars); entero ln = 1; entero cl = 1;
+    
     mientras i < n {
-        texto c = _ch(s, i);
+        texto c = chars[i];
         si c == " " || c == "\t" { i = i + 1; cl = cl + 1; continuar; }
         si c == "\n" { i = i + 1; ln = ln + 1; cl = 1; continuar; }
         si c == "\r" { i = i + 1; continuar; }
+        
         si _lx_es_ident(c) {
-            texto id = _lx_id(s, i, n); entero adv = largo(id); numero tp = 1;
-            numero kk = __map_obtener(kw, id); si __tipo_de(kk) == "entero" { tp = 6; }
-            _lx_emit(tk, tp, id, ln, cl); i = i + adv; cl = cl + adv; continuar;
+            entero st = i;
+            mientras i < n && _lx_es_ident_o_digito(chars[i]) { i = i + 1; }
+            texto id = sub_from_chars(chars, st, i);
+            entero adv = i - st;
+            numero tp = 1;
+            numero kk = __map_obtener(kw, id);
+            si __tipo_de(kk) == "entero" { tp = 6; }
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", tp); t = __map_poner(t, "v", id);
+            t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+            tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+            cl = cl + adv; continuar;
         }
+        
         si _lx_es_digit(c) {
-            texto num = _lx_num(s, i, n); entero adv = largo(num);
-            _lx_emit(tk, 2, num, ln, cl); i = i + adv; cl = cl + adv; continuar;
+            entero st = i;
+            mientras i < n && (_lx_es_digit(chars[i]) || chars[i] == ".") { i = i + 1; }
+            texto num = sub_from_chars(chars, st, i);
+            entero adv = i - st;
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num);
+            t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+            tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+            cl = cl + adv; continuar;
         }
-        si _lx_es_punct(c) { _lx_emit(tk, 5, c, ln, cl); i = i + 1; cl = cl + 1; continuar; }
-        _lx_emit(tk, 4, c, ln, cl); i = i + 1; cl = cl + 1;
+        
+        si _lx_es_punct(c) {
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", 5); t = __map_poner(t, "v", c);
+            t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+            tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+            i = i + 1; cl = cl + 1; continuar;
+        }
+        
+        // Line comment: skip until end of line
+        si c == "/" && i + 1 < n && chars[i + 1] == "/" {
+            mientras i < n && chars[i] != "\n" { i = i + 1; }
+            continuar;
+        }
+        // Block comment: skip */
+        si c == "/" && i + 1 < n && chars[i + 1] == "*" {
+            i = i + 2;
+            mientras i + 1 < n && !(chars[i] == "*" && chars[i + 1] == "/") { i = i + 1; }
+            si i + 1 < n { i = i + 2; }
+            continuar;
+        }
+        
+        si c == "\"" {
+            i = i + 1; cl = cl + 1;
+            texto sb = "";
+            mientras i < n && chars[i] != "\"" {
+                si chars[i] == "\\" && i + 1 < n {
+                    texto nxt = chars[i + 1];
+                    si nxt == "n" { sb = sb + "\n"; }
+                    sino si nxt == "t" { sb = sb + "\t"; }
+                    sino si nxt == "r" { sb = sb + "\r"; }
+                    sino si nxt == "\"" { sb = sb + "\""; }
+                    sino si nxt == "\\" { sb = sb + "\\"; }
+                    sino { sb = sb + nxt; }
+                    i = i + 2; cl = cl + 2;
+                } sino {
+                    sb = sb + chars[i];
+                    i = i + 1; cl = cl + 1;
+                }
+            }
+            si i < n { i = i + 1; cl = cl + 1; }
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", 3); t = __map_poner(t, "v", sb);
+            t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+            tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+            continuar;
+        }
+        
+        // Multi-character operators (|| && == != <= >=)
+        si i + 1 < n {
+            texto op2 = c + chars[i + 1];
+            si op2 == "||" || op2 == "&&" || op2 == "==" || op2 == "!=" || op2 == "<=" || op2 == ">=" {
+                numero t = __map_nuevo();
+                t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op2);
+                t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+                tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+                i = i + 2; cl = cl + 2; continuar;
+            }
+        }
+        
+        // Single-char operator/punctuation
+        numero t = __map_nuevo();
+        t = __map_poner(t, "t", 4); t = __map_poner(t, "v", c);
+        t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+        tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+        i = i + 1; cl = cl + 1;
     }
-    _lx_emit(tk, 99, "", ln, cl); retornar tk;
+    
+    // Post-process tokens: merge single-letter oper + ident into keywords (workaround for stray-char splits)
+    numero ntk = __map_nuevo();
+    entero ni = 0;
+    entero ii = 0;
+    mientras (ii < cnt) {
+        numero tkv = __map_obtener(tk, a_texto(ii));
+        numero ttp = __map_obtener(tkv, "t");
+        texto tvv = a_texto(__map_obtener(tkv, "v"));
+        si (ttp == 4 && largo(tvv) == 1 && ii + 1 < cnt) {
+            numero nxt = __map_obtener(tk, a_texto(ii + 1));
+            si (__map_obtener(nxt, "t") == 1) {
+                texto comb = tvv + a_texto(__map_obtener(nxt, "v"));
+                numero kk = __map_obtener(kw, comb);
+                si (__tipo_de(kk) == "entero") {
+                    // create keyword token
+                    numero nt = __map_nuevo();
+                    nt = __map_poner(nt, "t", 6); nt = __map_poner(nt, "v", comb);
+                    nt = __map_poner(nt, "linea", __map_obtener(tkv, "linea")); nt = __map_poner(nt, "col", __map_obtener(tkv, "col"));
+                    ntk = __map_poner(ntk, a_texto(ni), nt); ni = ni + 1;
+                    ii = ii + 2; continuar;
+                }
+            }
+        }
+        // default: copy token
+        ntk = __map_poner(ntk, a_texto(ni), tkv); ni = ni + 1; ii = ii + 1;
+    }
+    // EOF token (not counted in cnt so parser knows when to stop)
+    numero t = __map_nuevo();
+    t = __map_poner(t, "t", 99); t = __map_poner(t, "v", "");
+    t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+    ntk = __map_poner(ntk, a_texto(ni), t);
+    ntk = __map_poner(ntk, "cnt", ni);
+    retornar ntk;
 }
+
 funcion numero lexer_tokenize(texto s) { retornar lexer_tokenizar(s); }
-funcion texto token_a_texto(numero t) { numero tk = __map_obtener(t, "tipo"); texto ts = "?"; si tk == 1 { ts = "Ident"; } si tk == 2 { ts = "Numero"; } si tk == 4 { ts = "Oper"; } si tk == 5 { ts = "Punt"; } si tk == 6 { ts = "Kw"; } si tk == 99 { ts = "EOF"; } texto val = __map_obtener(t, "valor"); retornar ts + "(" + val + ")"; }
+
+funcion texto token_a_texto(numero t) {
+    numero tk = __map_obtener(t, "t");
+    texto ts = "?";
+    si tk == 1 { ts = "Ident"; }
+    si tk == 2 { ts = "Numero"; }
+    si tk == 3 { ts = "Texto"; }
+    si tk == 4 { ts = "Oper"; }
+    si tk == 5 { ts = "Punt"; }
+    si tk == 6 { ts = "Kw"; }
+    si tk == 99 { ts = "EOF"; }
+    texto val = __map_obtener(t, "v");
+    retornar ts + "(" + val + ")";
+}
 funcion texto token_to_text(numero t) { retornar token_a_texto(t); }
 
-// Funciones con mientras + acceso a string (forward ref, OK en LUMEN)
-funcion texto _ch(texto s, entero i) { retornar s[i]; }
-funcion texto _lx_id(texto s, entero i, entero n) { texto r = ""; mientras i < n && ((_ch(s,i) >= "a" && _ch(s,i) <= "z") || (_ch(s,i) >= "A" && _ch(s,i) <= "Z") || (_ch(s,i) >= "0" && _ch(s,i) <= "9") || _ch(s,i) == "_") { r = r + _ch(s,i); i = i + 1; } retornar r; }
-funcion texto _lx_num(texto s, entero i, entero n) { texto r = ""; mientras i < n && _ch(s,i) >= "0" && _ch(s,i) <= "9" { r = r + _ch(s,i); i = i + 1; } retornar r; }
-funcion numero _lx_kw() { numero kw = __map_nuevo(); kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1); kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1); kw = __map_poner(kw, "mientras", 1); kw = __map_poner(kw, "while", 1); kw = __map_poner(kw, "para", 1); kw = __map_poner(kw, "for", 1); kw = __map_poner(kw, "funcion", 1); kw = __map_poner(kw, "function", 1); kw = __map_poner(kw, "retornar", 1); kw = __map_poner(kw, "return", 1); kw = __map_poner(kw, "entero", 1); kw = __map_poner(kw, "texto", 1); kw = __map_poner(kw, "numero", 1); kw = __map_poner(kw, "booleano", 1); kw = __map_poner(kw, "decimal", 1); kw = __map_poner(kw, "lista", 1); kw = __map_poner(kw, "importar", 1); kw = __map_poner(kw, "romper", 1); kw = __map_poner(kw, "continuar", 1); kw = __map_poner(kw, "verdadero", 1); kw = __map_poner(kw, "falso", 1); kw = __map_poner(kw, "imprimir", 1); retornar kw; }
+funcion booleano _lx_es_ident_o_digito(texto c) {
+    retornar _lx_es_ident(c) || _lx_es_digit(c);
+}
+
+// Helper: build substring from a character list between indices [st, fin)
+funcion texto sub_from_chars(lista<texto> cs, entero st, entero fin) {
+    retornar __str_subcadena_chars(cs, st, fin);
+}

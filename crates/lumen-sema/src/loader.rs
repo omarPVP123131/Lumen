@@ -83,7 +83,9 @@ impl ModuleLoader {
     }
 
     fn resolve_path(&self, path: &str, current_dir: &Path) -> Result<PathBuf, ModuleError> {
+        let extensions = [".nv", ".lumen"];
         if path.contains('.') || path.contains('/') || path.contains('\\') {
+            // Try as-is (full path with extension)
             let p = current_dir.join(path);
             if p.exists() {
                 return Ok(fs::canonicalize(&p).unwrap_or(p));
@@ -94,12 +96,26 @@ impl ModuleLoader {
                     return Ok(fs::canonicalize(&p).unwrap_or(p));
                 }
             }
+            // Try with extensions
+            for ext in &extensions {
+                let p = current_dir.join(format!("{}{}", path, ext));
+                if p.exists() {
+                    return Ok(fs::canonicalize(&p).unwrap_or(p));
+                }
+            }
+            for sp in &self.search_paths {
+                for ext in &extensions {
+                    let p = sp.join(format!("{}{}", path, ext));
+                    if p.exists() {
+                        return Ok(fs::canonicalize(&p).unwrap_or(p));
+                    }
+                }
+            }
             Err(ModuleError::Io {
                 path: current_dir.join(path),
                 message: format!("Archivo no encontrado: '{}'", path),
             })
         } else {
-            let extensions = [".nv", ".lumen"];
             for ext in &extensions {
                 let p = current_dir.join(format!("{}{}", path, ext));
                 if p.exists() {
@@ -667,6 +683,16 @@ fn is_builtin(name: &str) -> bool {
             | "__str_longitud"
             | "__str_ord"
             | "__str_codigo"
+            | "__str_chr"
+            | "__str_caracter"
+            | "__str_slice"
+            | "__str_subcadena"
+            | "__str_concat_list"
+            | "__str_concatenar_lista"
+            | "__str_starts_with"
+            | "__str_empieza_con"
+            | "__str_to_chars"
+            | "__str_a_caracteres"
             | "__str_upper"
             | "__str_mayusculas"
             | "__str_lower"
@@ -679,8 +705,21 @@ fn is_builtin(name: &str) -> bool {
             | "__str_dividir"
             | "__file_read"
             | "__leer_archivo"
-            | "__file_write"
-            | "__escribir_archivo"
+             | "__file_write"
+             | "__escribir_archivo"
+             | "__file_append"
+             | "__agregar_archivo"
+            | "__file_write_binary"
+            | "__escribir_archivo_bin"
+            | "__num_a_f64_bytes"
+            | "__numero_a_bytes_f64"
+            | "__file_bytes"
+            | "__leer_bytes"
+            | "__a_f64_bytes"
+            | "__bytes_a_f64"
+            | "__codegen_a_nvc"
+            | "__compile_nv"
+            | "__compilar_nv"
             | "__file_exists"
             | "__existe_archivo"
             | "__time_now"

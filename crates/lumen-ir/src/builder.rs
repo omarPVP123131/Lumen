@@ -628,24 +628,57 @@ impl IRBuilder {
                     self.gen_expr(right);
                     self.emit(Instr::Call(fname.clone(), 2));
                 } else {
-                    self.gen_expr(left);
-                    self.gen_expr(right);
-                    self.emit(Instr::Binary(match op {
-                        BinOp::Add => Op::Add,
-                        BinOp::Sub => Op::Sub,
-                        BinOp::Mul => Op::Mul,
-                        BinOp::Div => Op::Div,
-                        BinOp::Mod => Op::Mod,
-                        BinOp::Equal => Op::Equal,
-                        BinOp::NotEqual => Op::NotEqual,
-                        BinOp::Less => Op::Less,
-                        BinOp::LessEqual => Op::LessEqual,
-                        BinOp::Greater => Op::Greater,
-                        BinOp::GreaterEqual => Op::GreaterEqual,
-                        BinOp::And => Op::And,
-                        BinOp::Or => Op::Or,
-                        BinOp::BitOr => Op::BitOr,
-                    }));
+                    match op {
+                        BinOp::And => {
+                            let temp = format!("__sc_{}", self.temp_counter);
+                            self.temp_counter += 1;
+                            let false_label = self.new_label();
+                            let end_label = self.new_label();
+                            self.gen_expr(left);
+                            self.emit(Instr::Store(temp.clone()));
+                            self.emit(Instr::Load(temp.clone()));
+                            self.emit(Instr::JmpIf(false_label));
+                            self.gen_expr(right);
+                            self.emit(Instr::Jmp(end_label));
+                            self.emit(Instr::Label(false_label));
+                            self.emit(Instr::Load(temp));
+                            self.emit(Instr::Label(end_label));
+                        }
+                        BinOp::Or => {
+                            let temp = format!("__sc_{}", self.temp_counter);
+                            self.temp_counter += 1;
+                            let eval_label = self.new_label();
+                            let end_label = self.new_label();
+                            self.gen_expr(left);
+                            self.emit(Instr::Store(temp.clone()));
+                            self.emit(Instr::Load(temp.clone()));
+                            self.emit(Instr::JmpIf(eval_label));
+                            self.emit(Instr::Load(temp));
+                            self.emit(Instr::Jmp(end_label));
+                            self.emit(Instr::Label(eval_label));
+                            self.gen_expr(right);
+                            self.emit(Instr::Label(end_label));
+                        }
+                        _ => {
+                            self.gen_expr(left);
+                            self.gen_expr(right);
+                            self.emit(Instr::Binary(match op {
+                                BinOp::Add => Op::Add,
+                                BinOp::Sub => Op::Sub,
+                                BinOp::Mul => Op::Mul,
+                                BinOp::Div => Op::Div,
+                                BinOp::Mod => Op::Mod,
+                                BinOp::Equal => Op::Equal,
+                                BinOp::NotEqual => Op::NotEqual,
+                                BinOp::Less => Op::Less,
+                                BinOp::LessEqual => Op::LessEqual,
+                                BinOp::Greater => Op::Greater,
+                                BinOp::GreaterEqual => Op::GreaterEqual,
+                                BinOp::BitOr => Op::BitOr,
+                                _ => unreachable!(),
+                            }));
+                        }
+                    }
                 }
             }
             Expr::Unary { op, operand, .. } => {
@@ -690,10 +723,14 @@ impl IRBuilder {
                                     | "__str_dividir"
                                     | "__str_ord"
                                     | "__str_codigo"
+                                    | "__str_chr"
+                                    | "__str_caracter"
                                     | "__file_read"
                                     | "__leer_archivo"
-                                    | "__file_write"
-                                    | "__escribir_archivo"
+                                     | "__file_write"
+                                     | "__escribir_archivo"
+                                     | "__file_append"
+                                     | "__agregar_archivo"
                                     | "__file_exists"
                                     | "__existe_archivo"
                                     | "__time_now"
@@ -946,6 +983,29 @@ impl IRBuilder {
                                     | "__file_write_async"
                                     | "__timer_delay"
                                     | "__temporizador_esperar"
+                                    | "__file_write_binary"
+                                    | "__escribir_archivo_bin"
+                                    | "__str_slice"
+                                    | "__str_subcadena"
+                                    | "__str_concat_list"
+                                    | "__str_concatenar_lista"
+                                    | "__str_starts_with"
+                                    | "__str_empieza_con"
+                                    | "__str_to_chars"
+                                    | "__str_a_caracteres"
+                                    | "__str_reemplazar"
+                                    | "__str_replace"
+                                    | "__str_subcadena_chars"
+                                    | "__str_slice_chars"
+                                    | "__num_a_f64_bytes"
+                                    | "__numero_a_bytes_f64"
+                                    | "__file_bytes"
+                                    | "__leer_bytes"
+                                    | "__a_f64_bytes"
+                                    | "__bytes_a_f64"
+                                    | "__codegen_a_nvc"
+                                    | "__compile_nv"
+                                    | "__compilar_nv"
                                     | "__tcp_connect_async"
                                     | "__tcp_conectar_async"
                             )

@@ -1,4 +1,5 @@
 use crate::value::Value;
+use im::HashMap as ImMap;
 use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
 use std::collections::HashMap;
 #[cfg(feature = "full")]
@@ -8,7 +9,6 @@ use unicode_normalization::UnicodeNormalization;
 use chrono::{TimeZone, Datelike, Timelike, Utc};
 
 pub static JS_EVAL: OnceLock<fn(&str) -> String> = OnceLock::new();
-
 #[cfg(feature = "full")]
 use crate::coro_ffi::Coroutine;
 #[cfg(feature = "full")]
@@ -300,6 +300,94 @@ impl VM {
             return Some(Ok(()));
         }
 
+        if name == "__str_slice" || name == "__str_subcadena" {
+            let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let start = args.get(1).and_then(|v| match v {
+                Value::Int(i) => Some(*i as usize),
+                _ => v.as_num().map(|f| f as usize),
+            }).unwrap_or(0);
+            let end = args.get(2).and_then(|v| match v {
+                Value::Int(i) => {
+                    if *i == -1 { Some(s.len()) } else { Some(*i as usize) }
+                }
+                _ => v.as_num().map(|f| f as usize),
+            }).unwrap_or(s.len());
+            let start = start.min(s.len());
+            let end = end.min(s.len()).max(start);
+            let sub: String = s.chars().skip(start).take(end - start).collect();
+            self.push(Value::Str(sub));
+            return Some(Ok(()));
+        }
+
+        if name == "__str_concat_list" || name == "__str_concatenar_lista" {
+            let list = args.first().cloned().unwrap_or(Value::Array(vec![]));
+            match list {
+                Value::Array(items) => {
+                    let result = items.iter().map(|v| format!("{}", v)).collect::<String>();
+                    self.push(Value::Str(result));
+                }
+                _ => {
+                    return builtin_err(VmError::TypeError(
+                        "__str_concat_list espera una lista".to_string(),
+                    ))
+                }
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__str_starts_with" || name == "__str_empieza_con" {
+            let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let prefix = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            self.push(Value::Bool(s.starts_with(&prefix)));
+            return Some(Ok(()));
+        }
+
+        if name == "__str_to_chars" || name == "__str_a_caracteres" {
+            let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let chars: Vec<Value> = s.chars().map(|c| Value::Str(c.to_string())).collect();
+            self.push(Value::Array(chars));
+            return Some(Ok(()));
+        }
+
+        if name == "__str_reemplazar" || name == "__str_replace" {
+            let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let from = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            let to = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
+            self.push(Value::Str(s.replace(&from, &to)));
+            return Some(Ok(()));
+        }
+
+        if name == "__str_subcadena_chars" || name == "__str_slice_chars" {
+            let cs = match args.first() {
+                Some(Value::Array(a)) => a.clone(),
+                _ => vec![],
+            };
+            let st = args.get(1).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(0);
+            let en = args.get(2).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(-1);
+            let n = cs.len() as i64;
+            let st = st.max(0).min(n);
+            let en = if en < 0 { n } else { en.max(0).min(n) };
+            let mut out = String::new();
+            for c in cs.iter().skip(st as usize).take((en - st).max(0) as usize) {
+                out.push_str(&format!("{}", c));
+            }
+            self.push(Value::Str(out));
+            return Some(Ok(()));
+        }
+
+        if name == "__str_chr" || name == "__str_caracter" {
+            let n = args
+                .first()
+                .and_then(|v| match v {
+                    Value::Int(i) => Some(*i),
+                    _ => v.as_num().map(|f| f as i64),
+                })
+                .unwrap_or(0);
+            let c = char::from_u32(n as u32).map(|c| c.to_string()).unwrap_or_default();
+            self.push(Value::Str(c));
+            return Some(Ok(()));
+        }
+
         if name == "__file_read" || name == "__leer_archivo" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::read_to_string(&path) {
@@ -347,6 +435,108 @@ impl VM {
                 }
                 Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
             }
+            return Some(Ok(()));
+        }
+
+        if name == "__file_write_binary" || name == "__escribir_archivo_bin" {
+            let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let bytes = match args.get(1) {
+                Some(Value::Array(arr)) => arr.iter().filter_map(|v| match v {
+                    Value::Int(n) if *n >= 0 && *n <= 255 => Some(*n as u8),
+                    _ => None,
+                }).collect::<Vec<u8>>(),
+                _ => Vec::new(),
+            };
+            match std::fs::write(&path, &bytes) {
+                Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
+                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__file_bytes" || name == "__leer_bytes" {
+            let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            match std::fs::read(&path) {
+                Ok(data) => self.push(Value::Array(
+                    data.iter().map(|&b| Value::Int(b as i64)).collect(),
+                )),
+                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__a_f64_bytes" || name == "__bytes_a_f64" {
+            let mut buf = [0u8; 8];
+            if let Some(Value::Array(arr)) = args.first() {
+                for (i, b) in arr.iter().take(8).enumerate() {
+                    if let Value::Int(n) = b {
+                        buf[i] = *n as u8;
+                    }
+                }
+            }
+            self.push(Value::Float(f64::from_le_bytes(buf)));
+            return Some(Ok(()));
+        }
+
+        if name == "__num_a_f64_bytes" || name == "__numero_a_bytes_f64" {
+            let n = args.first().map(|v| match v {
+                Value::Int(i) => *i as f64,
+                Value::Float(f) => *f,
+                _ => 0.0,
+            }).unwrap_or(0.0);
+            let bytes: Vec<Value> = n.to_le_bytes().iter().map(|&b| Value::Int(b as i64)).collect();
+            self.push(Value::Array(bytes));
+            return Some(Ok(()));
+        }
+
+        if name == "__codegen_a_nvc" || name == "__codegen_a_nvc" {
+            // Takes a codegen map, returns Array<Int> of .nvc bytes
+            let cg = args.first().cloned().unwrap_or(Value::Void);
+            let result = self.codegen_to_nvc(cg);
+            return match result {
+                Ok(bytes) => { self.push(bytes); Some(Ok(())) }
+                Err(_) => { self.push(Value::Error(Box::new(Value::Str("codegen_to_nvc failed".into())))); Some(Ok(())) }
+            };
+        }
+
+        if name == "__compile_nv" || name == "__compilar_nv" {
+            // Compile a .nv source file to .nvc bytes using the native Rust pipeline
+            let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let source = match std::fs::read_to_string(&path) {
+                Ok(s) => s,
+                Err(e) => {
+                    self.push(Value::Error(Box::new(Value::Str(format!("IO: {}", e)))));
+                    return Some(Ok(()));
+                }
+            };
+            let base_path = std::path::Path::new(&path);
+            let base_dir = base_path.parent().unwrap_or(std::path::Path::new("."));
+            let mut lib_dirs = vec![std::path::PathBuf::from("stdlib")];
+            if let Ok(cwd) = std::env::current_dir() {
+                lib_dirs.push(cwd.join("stdlib"));
+            }
+            let mut loader = lumen_sema::loader::ModuleLoader::new(lib_dirs);
+            let mut program = match loader.resolve_imports(&source, base_dir) {
+                Ok(p) => p,
+                Err(e) => {
+                    self.push(Value::Error(Box::new(Value::Str(format!("Loader error: {:?}", e)))));
+                    return Some(Ok(()));
+                }
+            };
+            let sema = lumen_sema::sema::SemanticAnalyzer::new();
+            let sem_errors = sema.analyze(&mut program);
+            if !sem_errors.is_empty() {
+                let msg = sem_errors.iter().map(|e| format!("{}", e.message)).collect::<Vec<_>>().join("; ");
+                self.push(Value::Error(Box::new(Value::Str(format!("Sem error: {}", msg)))));
+                return Some(Ok(()));
+            }
+            let builder = lumen_ir::builder::IRBuilder::new();
+            let ir = builder.build(&program);
+            let codegen = lumen_codegen::codegen::Codegen::new();
+            let (bytecode, _) = codegen.generate(&ir);
+            let bytes_vec = bytecode.encode();
+            let bytes: Vec<Value> = bytes_vec.into_iter().map(|b| Value::Int(b as i64)).collect();
+            self.push(Value::Array(bytes));
             return Some(Ok(()));
         }
 
@@ -404,23 +594,19 @@ impl VM {
         }
 
         if name == "__map_new" || name == "__map_nuevo" {
-            self.push(Value::Map(vec![]));
+            self.push(Value::Map(ImMap::new()));
             return Some(Ok(()));
         }
 
         if name == "__map_set" || name == "__map_poner" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(vec![]));
+            let m = it.next().unwrap_or(Value::Map(ImMap::new()));
             let k = it.next().unwrap_or(Value::Void);
             let v = it.next().unwrap_or(Value::Void);
             match m {
-                Value::Map(mut p) => {
-                    if let Some(pos) = p.iter().position(|(pk, _)| *pk == k) {
-                        p[pos] = (k, v);
-                    } else {
-                        p.push((k, v));
-                    }
-                    self.push(Value::Map(p));
+                Value::Map(mut m) => {
+                    m.insert(k, v);
+                    self.push(Value::Map(m));
                 }
                 _ => return builtin_err(VmError::TypeError("__map_set espera diccionario".into())),
             }
@@ -429,15 +615,11 @@ impl VM {
 
         if name == "__map_get" || name == "__map_obtener" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(vec![]));
+            let m = it.next().unwrap_or(Value::Map(ImMap::new()));
             let k = it.next().unwrap_or(Value::Void);
             match m {
-                Value::Map(p) => {
-                    if let Some((_, v)) = p.iter().find(|(pk, _)| *pk == k) {
-                        self.push(v.clone());
-                    } else {
-                        self.push(Value::Void);
-                    }
+                Value::Map(m) => {
+                    self.push(m.get(&k).cloned().unwrap_or(Value::Void));
                 }
                 _ => return builtin_err(VmError::TypeError("__map_get espera diccionario".into())),
             }
@@ -449,9 +631,9 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Map(vec![]));
+                .unwrap_or(Value::Map(ImMap::new()));
             match m {
-                Value::Map(p) => self.push(Value::Int(p.len() as i64)),
+                Value::Map(m) => self.push(Value::Int(m.len() as i64)),
                 _ => return builtin_err(VmError::TypeError("__map_len espera diccionario".into())),
             }
             return Some(Ok(()));
@@ -462,9 +644,12 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Map(vec![]));
+                .unwrap_or(Value::Map(ImMap::new()));
             match m {
-                Value::Map(p) => self.push(Value::Array(p.into_iter().map(|(k, _)| k).collect())),
+                Value::Map(m) => {
+                    let keys: Vec<Value> = m.into_iter().map(|(k, _)| k).collect();
+                    self.push(Value::Array(keys));
+                }
                 _ => {
                     return builtin_err(VmError::TypeError("__map_keys espera diccionario".into()))
                 }
@@ -474,10 +659,10 @@ impl VM {
 
         if name == "__map_contains" || name == "__map_contiene" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(vec![]));
+            let m = it.next().unwrap_or(Value::Map(ImMap::new()));
             let k = it.next().unwrap_or(Value::Void);
             match m {
-                Value::Map(p) => self.push(Value::Bool(p.iter().any(|(pk, _)| *pk == k))),
+                Value::Map(m) => self.push(Value::Bool(m.contains_key(&k))),
                 _ => {
                     return builtin_err(VmError::TypeError(
                         "__map_contains espera diccionario".into(),
@@ -488,20 +673,18 @@ impl VM {
         }
 
         if name == "__set_new" || name == "__conjunto_nuevo" {
-            self.push(Value::Map(vec![]));
+            self.push(Value::Map(ImMap::new()));
             return Some(Ok(()));
         }
 
         if name == "__set_add" || name == "__conjunto_agregar" {
             let mut it = args.clone().into_iter();
-            let s = it.next().unwrap_or(Value::Map(vec![]));
+            let s = it.next().unwrap_or(Value::Map(ImMap::new()));
             let item = it.next().unwrap_or(Value::Void);
             match s {
-                Value::Map(mut p) => {
-                    if !p.iter().any(|(k, _)| *k == item) {
-                        p.push((item, Value::Bool(true)));
-                    }
-                    self.push(Value::Map(p));
+                Value::Map(mut m) => {
+                    m.insert(item, Value::Bool(true));
+                    self.push(Value::Map(m));
                 }
                 _ => return builtin_err(VmError::TypeError("__set_add espera conjunto".into())),
             }
@@ -510,10 +693,10 @@ impl VM {
 
         if name == "__set_has" || name == "__conjunto_tiene" {
             let mut it = args.clone().into_iter();
-            let s = it.next().unwrap_or(Value::Map(vec![]));
+            let s = it.next().unwrap_or(Value::Map(ImMap::new()));
             let item = it.next().unwrap_or(Value::Void);
             match s {
-                Value::Map(p) => self.push(Value::Bool(p.iter().any(|(k, _)| *k == item))),
+                Value::Map(m) => self.push(Value::Bool(m.contains_key(&item))),
                 _ => return builtin_err(VmError::TypeError("__set_has espera conjunto".into())),
             }
             return Some(Ok(()));
@@ -521,17 +704,14 @@ impl VM {
 
         if name == "__set_union" || name == "__conjunto_unir" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(vec![]));
-            let b = it.next().unwrap_or(Value::Map(vec![]));
+            let a = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let b = it.next().unwrap_or(Value::Map(ImMap::new()));
             match (a, b) {
-                (Value::Map(p1), Value::Map(p2)) => {
-                    let mut m = p1;
-                    for (k, v) in p2 {
-                        if !m.iter().any(|(mk, _)| *mk == k) {
-                            m.push((k, v));
-                        }
+                (Value::Map(mut m1), Value::Map(m2)) => {
+                    for (k, v) in m2 {
+                        if !m1.contains_key(&k) { m1.insert(k, v); }
                     }
-                    self.push(Value::Map(m));
+                    self.push(Value::Map(m1));
                 }
                 _ => return builtin_err(VmError::TypeError("__set_union espera conjuntos".into())),
             }
@@ -540,13 +720,13 @@ impl VM {
 
         if name == "__set_inter" || name == "__conjunto_interseccion" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(vec![]));
-            let b = it.next().unwrap_or(Value::Map(vec![]));
+            let a = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let b = it.next().unwrap_or(Value::Map(ImMap::new()));
             match (a, b) {
-                (Value::Map(p1), Value::Map(p2)) => {
-                    let r: Vec<_> = p1
+                (Value::Map(m1), Value::Map(m2)) => {
+                    let r: ImMap<Value, Value> = m1
                         .into_iter()
-                        .filter(|(k, _)| p2.iter().any(|(k2, _)| *k2 == *k))
+                        .filter(|(k, _)| m2.contains_key(k))
                         .collect();
                     self.push(Value::Map(r));
                 }
@@ -557,13 +737,13 @@ impl VM {
 
         if name == "__set_diff" || name == "__conjunto_diferencia" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(vec![]));
-            let b = it.next().unwrap_or(Value::Map(vec![]));
+            let a = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let b = it.next().unwrap_or(Value::Map(ImMap::new()));
             match (a, b) {
-                (Value::Map(p1), Value::Map(p2)) => {
-                    let r: Vec<_> = p1
+                (Value::Map(m1), Value::Map(m2)) => {
+                    let r: ImMap<Value, Value> = m1
                         .into_iter()
-                        .filter(|(k, _)| !p2.iter().any(|(k2, _)| *k2 == *k))
+                        .filter(|(k, _)| !m2.contains_key(k))
                         .collect();
                     self.push(Value::Map(r));
                 }
@@ -2415,7 +2595,8 @@ impl VM {
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Bool((*a as f64) < *b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Bool(*a < *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Bool(a < b)),
-                    _ => return Err(VmError::TypeError("Lt requires numbers".to_string())),
+                    (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a < b)),
+                    _ => return Err(VmError::TypeError("Lt requires numbers or strings".to_string())),
                 }
             }
             Opcode::Le => {
@@ -2426,7 +2607,8 @@ impl VM {
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Bool((*a as f64) <= *b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Bool(*a <= *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Bool(a <= b)),
-                    _ => return Err(VmError::TypeError("Le requires numbers".to_string())),
+                    (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a <= b)),
+                    _ => return Err(VmError::TypeError("Le requires numbers or strings".to_string())),
                 }
             }
             Opcode::Gt => {
@@ -2437,7 +2619,8 @@ impl VM {
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Bool((*a as f64) > *b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Bool(*a > *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Bool(a > b)),
-                    _ => return Err(VmError::TypeError("Gt requires numbers".to_string())),
+                    (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a > b)),
+                    _ => return Err(VmError::TypeError("Gt requires numbers or strings".to_string())),
                 }
             }
             Opcode::Ge => {
@@ -2448,7 +2631,8 @@ impl VM {
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Bool((*a as f64) >= *b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Bool(*a >= *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Bool(a >= b)),
-                    _ => return Err(VmError::TypeError("Ge requires numbers".to_string())),
+                    (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a >= b)),
+                    _ => return Err(VmError::TypeError("Ge requires numbers or strings".to_string())),
                 }
             }
             Opcode::And => {
@@ -2486,6 +2670,8 @@ impl VM {
                 if let Some(frame) = self.call_stack.pop() {
                     self.locals.pop();
                     self.ip = frame.return_ip;
+                } else {
+                    self.ip = usize::MAX;
                 }
                 self.push(ret_val);
             }
@@ -2606,19 +2792,33 @@ impl VM {
                                 ))
                             }
                         };
-                        let chars: Vec<char> = s.chars().collect();
-                        if idx < 0 || idx as usize >= chars.len() {
+                        if idx < 0 {
                             return Err(VmError::Runtime(format!(
-                                "Índice {} fuera de rango (largo: {})",
-                                idx,
-                                chars.len()
+                                "Índice {} fuera de rango", idx
                             )));
                         }
-                        self.push(Value::Str(chars[idx as usize].to_string()));
+                        match s.chars().nth(idx as usize) {
+                            Some(c) => self.push(Value::Str(c.to_string())),
+                            None => return Err(VmError::Runtime(format!(
+                                "Índice {} fuera de rango (largo: {})", idx, s.chars().count()
+                            ))),
+                        }
+                    }
+                    Value::Map(map) => {
+                        let val = map.get(&index).cloned().unwrap_or(Value::Int(0));
+                        self.push(val);
+                    }
+                    Value::Struct { fields, .. } => {
+                        let field = match &index {
+                            Value::Str(s) => s.clone(),
+                            _ => "".to_string(),
+                        };
+                        let val = fields.iter().find(|(n, _)| n == &field).map(|(_, v)| v.clone()).unwrap_or(Value::Int(0));
+                        self.push(val);
                     }
                     _ => {
                         return Err(VmError::TypeError(
-                            "ArrayGet requires array or string".to_string(),
+                            "ArrayGet requires array, string, map or struct".to_string(),
                         ))
                     }
                 }
@@ -2639,9 +2839,25 @@ impl VM {
                         arr[idx as usize] = val;
                         self.push(Value::Array(arr));
                     }
+                    (Value::Map(mut map), key, val) => {
+                        map.insert(key, val);
+                        self.push(Value::Map(map));
+                    }
+                    (Value::Struct { name, mut fields }, key, val) => {
+                        let field_str = match &key {
+                            Value::Str(s) => s.clone(),
+                            _ => "".to_string(),
+                        };
+                        if let Some(pos) = fields.iter().position(|(n, _)| n == &field_str) {
+                            fields[pos].1 = val;
+                        } else {
+                            fields.push((field_str, val));
+                        }
+                        self.push(Value::Struct { name, fields });
+                    }
                     _ => {
                         return Err(VmError::TypeError(
-                            "ArraySet requires array, integer index, and value".to_string(),
+                            "ArraySet requires array, map or struct".to_string(),
                         ))
                     }
                 }
@@ -2886,49 +3102,104 @@ impl VM {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let codes: Vec<Value> = s.chars().map(|c| Value::Int(c as i64)).collect();
                     self.push(Value::Array(codes));
+                } else if name == "__str_chr" || name == "__str_caracter" {
+                    let n = args
+                        .first()
+                        .and_then(|v| match v {
+                            Value::Int(i) => Some(*i),
+                            _ => v.as_num().map(|f| f as i64),
+                        })
+                        .unwrap_or(0);
+                    let c = char::from_u32(n as u32).map(|c| c.to_string()).unwrap_or_default();
+                    self.push(Value::Str(c));
+                } else if name == "__str_slice" || name == "__str_subcadena" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let start = args.get(1).and_then(|v| match v {
+                        Value::Int(i) => Some(*i as usize),
+                        _ => v.as_num().map(|f| f as usize),
+                    }).unwrap_or(0);
+                    let end = args.get(2).and_then(|v| match v {
+                        Value::Int(i) => {
+                            if *i == -1 { Some(s.len()) } else { Some(*i as usize) }
+                        }
+                        _ => v.as_num().map(|f| f as usize),
+                    }).unwrap_or(s.len());
+                    let start = start.min(s.len());
+                    let end = end.min(s.len()).max(start);
+                    let sub: String = s.chars().skip(start).take(end - start).collect();
+                    self.push(Value::Str(sub));
+                } else if name == "__str_concat_list" || name == "__str_concatenar_lista" {
+                    let list = args.first().cloned().unwrap_or(Value::Array(vec![]));
+                    match list {
+                        Value::Array(items) => {
+                            let result = items.iter().map(|v| format!("{}", v)).collect::<String>();
+                            self.push(Value::Str(result));
+                        }
+                        _ => self.push(Value::Str(String::new())),
+                    }
+                } else if name == "__str_starts_with" || name == "__str_empieza_con" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let prefix = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Bool(s.starts_with(&prefix)));
+                } else if name == "__str_to_chars" || name == "__str_a_caracteres" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let chars: Vec<Value> = s.chars().map(|c| Value::Str(c.to_string())).collect();
+                    self.push(Value::Array(chars));
+                } else if name == "__str_reemplazar" || name == "__str_replace" {
+                    let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let from = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+                    let to = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
+                    self.push(Value::Str(s.replace(&from, &to)));
+                } else if name == "__str_subcadena_chars" || name == "__str_slice_chars" {
+                    let cs = match args.first() {
+                        Some(Value::Array(a)) => a.clone(),
+                        _ => vec![],
+                    };
+                    let st = args.get(1).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(0);
+                    let en = args.get(2).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(-1);
+                    let n = cs.len() as i64;
+                    let st = st.max(0).min(n);
+                    let en = if en < 0 { n } else { en.max(0).min(n) };
+                    let mut out = String::new();
+                    for c in cs.iter().skip(st as usize).take((en - st).max(0) as usize) {
+                        out.push_str(&format!("{}", c));
+                    }
+                    self.push(Value::Str(out));
                 } else if name == "__map_new" || name == "__map_nuevo" {
-                    self.push(Value::Map(vec![]));
+                    self.push(Value::Map(ImMap::new()));
                 } else if name == "__map_set" || name == "__map_poner" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(vec![]));
+                    let m = it.next().unwrap_or(Value::Map(ImMap::new()));
                     let k = it.next().unwrap_or(Value::Void);
                     let v = it.next().unwrap_or(Value::Void);
                     match m {
-                        Value::Map(mut p) => {
-                            if let Some(pos) = p.iter().position(|(pk, _)| *pk == k) {
-                                p[pos] = (k, v);
-                            } else {
-                                p.push((k, v));
-                            }
-                            self.push(Value::Map(p));
+                        Value::Map(mut m) => {
+                            m.insert(k, v);
+                            self.push(Value::Map(m));
                         }
                         _ => return Err(VmError::TypeError("__map_set espera diccionario".into())),
                     }
                 } else if name == "__map_get" || name == "__map_obtener" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(vec![]));
+                    let m = it.next().unwrap_or(Value::Map(ImMap::new()));
                     let k = it.next().unwrap_or(Value::Void);
                     match m {
-                        Value::Map(p) => {
-                            if let Some((_, v)) = p.iter().find(|(pk, _)| *pk == k) {
-                                self.push(v.clone());
-                            } else {
-                                self.push(Value::Void);
-                            }
+                        Value::Map(m) => {
+                            self.push(m.get(&k).cloned().unwrap_or(Value::Void));
                         }
                         _ => return Err(VmError::TypeError("__map_get espera diccionario".into())),
                     }
                 } else if name == "__map_len" || name == "__map_longitud" {
-                    let m = args.into_iter().next().unwrap_or(Value::Map(vec![]));
+                    let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::new()));
                     match m {
-                        Value::Map(p) => self.push(Value::Int(p.len() as i64)),
+                        Value::Map(m) => self.push(Value::Int(m.len() as i64)),
                         _ => return Err(VmError::TypeError("__map_len espera diccionario".into())),
                     }
                 } else if name == "__map_keys" || name == "__map_claves" {
-                    let m = args.into_iter().next().unwrap_or(Value::Map(vec![]));
+                    let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::new()));
                     match m {
-                        Value::Map(p) => {
-                            self.push(Value::Array(p.into_iter().map(|(k, _)| k).collect()))
+                        Value::Map(m) => {
+                            self.push(Value::Array(m.into_iter().map(|(k, _)| k).collect()));
                         }
                         _ => {
                             return Err(VmError::TypeError("__map_keys espera diccionario".into()))
@@ -2936,10 +3207,10 @@ impl VM {
                     }
                 } else if name == "__map_contains" || name == "__map_contiene" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(vec![]));
+                    let m = it.next().unwrap_or(Value::Map(ImMap::new()));
                     let k = it.next().unwrap_or(Value::Void);
                     match m {
-                        Value::Map(p) => self.push(Value::Bool(p.iter().any(|(pk, _)| *pk == k))),
+                        Value::Map(m) => self.push(Value::Bool(m.contains_key(&k))),
                         _ => {
                             return Err(VmError::TypeError(
                                 "__map_contains espera diccionario".into(),
@@ -2947,53 +3218,48 @@ impl VM {
                         }
                     }
                 } else if name == "__set_new" || name == "__conjunto_nuevo" {
-                    self.push(Value::Map(vec![]));
+                    self.push(Value::Map(ImMap::new()));
                 } else if name == "__set_add" || name == "__conjunto_agregar" {
                     let mut it = args.into_iter();
-                    let s = it.next().unwrap_or(Value::Map(vec![]));
+                    let s = it.next().unwrap_or(Value::Map(ImMap::new()));
                     let item = it.next().unwrap_or(Value::Void);
                     match s {
-                        Value::Map(mut p) => {
-                            if !p.iter().any(|(k, _)| *k == item) {
-                                p.push((item, Value::Bool(true)));
-                            }
-                            self.push(Value::Map(p));
+                        Value::Map(mut m) => {
+                            m.insert(item, Value::Bool(true));
+                            self.push(Value::Map(m));
                         }
                         _ => return Err(VmError::TypeError("__set_add espera conjunto".into())),
                     }
                 } else if name == "__set_has" || name == "__conjunto_tiene" {
                     let mut it = args.into_iter();
-                    let s = it.next().unwrap_or(Value::Map(vec![]));
+                    let s = it.next().unwrap_or(Value::Map(ImMap::new()));
                     let item = it.next().unwrap_or(Value::Void);
                     match s {
-                        Value::Map(p) => self.push(Value::Bool(p.iter().any(|(k, _)| *k == item))),
+                        Value::Map(m) => self.push(Value::Bool(m.contains_key(&item))),
                         _ => return Err(VmError::TypeError("__set_has espera conjunto".into())),
                     }
                 } else if name == "__set_union" || name == "__conjunto_unir" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(vec![]));
-                    let b = it.next().unwrap_or(Value::Map(vec![]));
+                    let a = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let b = it.next().unwrap_or(Value::Map(ImMap::new()));
                     match (a, b) {
-                        (Value::Map(p1), Value::Map(p2)) => {
-                            let mut m = p1;
-                            for (k, v) in p2 {
-                                if !m.iter().any(|(mk, _)| *mk == k) {
-                                    m.push((k, v));
-                                }
+                        (Value::Map(mut m1), Value::Map(m2)) => {
+                            for (k, v) in m2 {
+                                if !m1.contains_key(&k) { m1.insert(k, v); }
                             }
-                            self.push(Value::Map(m));
+                            self.push(Value::Map(m1));
                         }
                         _ => return Err(VmError::TypeError("__set_union espera conjuntos".into())),
                     }
                 } else if name == "__set_inter" || name == "__conjunto_interseccion" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(vec![]));
-                    let b = it.next().unwrap_or(Value::Map(vec![]));
+                    let a = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let b = it.next().unwrap_or(Value::Map(ImMap::new()));
                     match (a, b) {
-                        (Value::Map(p1), Value::Map(p2)) => {
-                            let r: Vec<_> = p1
+                        (Value::Map(m1), Value::Map(m2)) => {
+                            let r: ImMap<Value, Value> = m1
                                 .into_iter()
-                                .filter(|(k, _)| p2.iter().any(|(k2, _)| *k2 == *k))
+                                .filter(|(k, _)| m2.contains_key(k))
                                 .collect();
                             self.push(Value::Map(r));
                         }
@@ -3001,13 +3267,13 @@ impl VM {
                     }
                 } else if name == "__set_diff" || name == "__conjunto_diferencia" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(vec![]));
-                    let b = it.next().unwrap_or(Value::Map(vec![]));
+                    let a = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let b = it.next().unwrap_or(Value::Map(ImMap::new()));
                     match (a, b) {
-                        (Value::Map(p1), Value::Map(p2)) => {
-                            let r: Vec<_> = p1
+                        (Value::Map(m1), Value::Map(m2)) => {
+                            let r: ImMap<Value, Value> = m1
                                 .into_iter()
-                                .filter(|(k, _)| !p2.iter().any(|(k2, _)| *k2 == *k))
+                                .filter(|(k, _)| !m2.contains_key(k))
                                 .collect();
                             self.push(Value::Map(r));
                         }
@@ -3537,6 +3803,354 @@ impl VM {
         }
         Err(VmError::UndefinedVariable(name.to_string()))
     }
+
+    fn codegen_to_nvc(&self, cg: Value) -> Result<Value, VmError> {
+        let cg_map = match &cg {
+            Value::Map(m) => m.clone(),
+            _ => return Err(VmError::TypeError("codegen must be a map".into())),
+        };
+
+        let map_get = |map: &ImMap<Value, Value>, key: &str| -> Option<Value> {
+            map.get(&Value::Str(key.to_string())).cloned()
+        };
+
+        let map_get_i64 = |map: &ImMap<Value, Value>, key: &str| -> Option<i64> {
+            match map_get(map, key)? {
+                Value::Int(n) => Some(n),
+                _ => None,
+            }
+        };
+
+        let str_cnt = map_get_i64(&cg_map, "str_cnt").unwrap_or(0) as usize;
+        let int_cnt = map_get_i64(&cg_map, "int_cnt").unwrap_or(0) as usize;
+        let pc = map_get_i64(&cg_map, "pos").unwrap_or(0) as usize;
+
+        let strs_map = match map_get(&cg_map, "strings") {
+            Some(Value::Map(m)) => m,
+            _ => ImMap::new(),
+        };
+        let ints_map = match map_get(&cg_map, "ints") {
+            Some(Value::Map(m)) => m,
+            _ => ImMap::new(),
+        };
+        let instrs_map = match map_get(&cg_map, "instrs") {
+            Some(Value::Map(m)) => m,
+            _ => ImMap::new(),
+        };
+
+        let get_str = |idx: usize| -> String {
+            match strs_map.get(&Value::Str(idx.to_string())) {
+                Some(Value::Str(s)) => s.clone(),
+                _ => String::new(),
+            }
+        };
+
+        let get_int = |idx: usize| -> i64 {
+            match ints_map.get(&Value::Str(idx.to_string())) {
+                Some(Value::Int(n)) => *n,
+                Some(Value::Float(f)) => *f as i64,
+                Some(Value::Str(s)) => s.parse::<i64>().unwrap_or(0),
+                _ => 0,
+            }
+        };
+
+        let get_instr = |idx: usize| -> Option<(i64, i64)> {
+            match instrs_map.get(&Value::Str(idx.to_string())) {
+                Some(Value::Map(m)) => {
+                    let op = m.get(&Value::Str("op".into()))
+                        .and_then(|v| if let Value::Int(o) = v { Some(*o) } else { None })
+                        .unwrap_or(0);
+                    let arg = m.get(&Value::Str("arg".into()))
+                        .and_then(|v| if let Value::Int(a) = v { Some(*a) } else { None })
+                        .unwrap_or(0);
+                    Some((op, arg))
+                }
+                _ => None,
+            }
+        };
+
+        // Build names table from LOAD(21)/STORE(20)/CALL(24) instructions
+        let mut names: Vec<String> = Vec::new();
+        for ip in 0..pc {
+            if let Some((op, arg)) = get_instr(ip) {
+                if op == 20 || op == 21 || op == 24 {
+                    let name = get_str(arg as usize);
+                    if !name.is_empty() && !names.contains(&name) {
+                        names.push(name);
+                    }
+                }
+            }
+        }
+
+        // Collect nums (argc values from CALL pairs)
+        let mut nums_bytes: Vec<u8> = Vec::new();
+        let mut num_cnt = 0u32;
+        let mut instr_bytes: Vec<u8> = Vec::new();
+
+        // Opcode mapping: codegen.nv opcodes → Rust VM Opcode::to_u8()
+        // codegen: 1=PushStr, 2=PushStr, 4=PushBool, 5=Add... 27=Halt
+        // Rust VM: Nop=0, PushInt=1, PushNum=2, PushStr=3, PushBool=4,
+        //          Load=5, Store=6, Add=7, ... Halt=27, Mod=46
+        let cg_to_vm = |cg_op: i64| -> u8 {
+            match cg_op {
+                1 => 2,       // PushNum → VM PushNum (f64)
+                2 => 3,       // PushStr
+                3 => 1,       // PushInt
+                4 => 4,       // PushBool
+                5 => 7,       // Add
+                6 => 8,       // Sub
+                7 => 9,       // Mul
+                8 => 10,      // Div
+                9 => 46,      // Mod
+                10 => 11,     // Eq
+                11 => 12,     // Neq
+                12 => 13,     // Lt
+                13 => 14,     // Le
+                14 => 15,     // Gt
+                15 => 16,     // Ge
+                16 => 17,     // And
+                17 => 18,     // Or
+                18 => 20,     // Not
+                19 => 19,     // Neg
+                20 => 6,      // Store
+                21 => 5,      // Load
+                22 => 25,     // Jmp
+                23 => 26,     // JmpIf
+                24 => 21,     // Call
+                25 => 22,     // Ret
+                26 => 23,     // Print
+                27 => 27,     // Halt
+                28 => 28,     // ArrayNew
+                29 => 29,     // ArrayGet
+                30 => 30,     // ArraySet
+                31 => 31,     // ArrayLen
+                40 => 40,     // TryUnwrap
+                _ => 0,       // Nop
+            }
+        };
+
+        let mut i = 0usize;
+        while i < pc {
+            if let Some((op, arg)) = get_instr(i) {
+                if op == 24 && i + 1 < pc {
+                    if let Some((next_op, next_arg)) = get_instr(i + 1) {
+                        if next_op == 24 {
+                            // CALL pair
+                            let name = get_str(arg as usize);
+                            let name_idx = names.iter().position(|n| n == &name).unwrap_or(0);
+                            // Call instruction: tag 0x04, opcode 21, u32 name_idx
+                            instr_bytes.push(4);
+                            instr_bytes.push(21);
+                            instr_bytes.extend_from_slice(&(name_idx as u32).to_le_bytes());
+                            // Get argc from ints table
+                            let argc = get_int(next_arg as usize);
+                            nums_bytes.extend_from_slice(&(argc as f64).to_le_bytes());
+                            // Nop instruction: tag 0x04, opcode 0, u32 num_idx
+                            instr_bytes.push(4);
+                            instr_bytes.push(0);
+                            instr_bytes.extend_from_slice(&num_cnt.to_le_bytes());
+                            num_cnt += 1;
+                            i += 2;
+                            continue;
+                        }
+                    }
+                }
+
+                let vm_op = cg_to_vm(op);
+
+                // Simple ops (5-19 except 4) plus array ops (29-31; 28 needs WithIdx)
+                if (op >= 5 && op <= 19 && op != 4) || (op == 29 || op == 30 || op == 31) {
+                    instr_bytes.push(0);
+                    instr_bytes.push(vm_op);
+                } else if op == 28 {
+                    // ArrayNew: VM expects arg = nums idx (count); value lives in nums
+                    let val = get_int(arg as usize) as f64;
+                    nums_bytes.extend_from_slice(&val.to_le_bytes());
+                    instr_bytes.push(4);
+                    instr_bytes.push(28);
+                    instr_bytes.extend_from_slice(&num_cnt.to_le_bytes());
+                    num_cnt += 1;
+                } else if op == 4 {
+                    // PushBool: value is ints[arg]
+                    let val = get_int(arg as usize);
+                    instr_bytes.push(4);
+                    instr_bytes.push(4);
+                    instr_bytes.extend_from_slice(&(val as u32).to_le_bytes());
+                } else if op == 1 || op == 3 {
+                    // PushNum/PushInt: arg is ints index → VM PushInt (1) / PushNum (2)
+                    if op == 1 {
+                        let val = match ints_map.get(&Value::Str(arg.to_string())) {
+                            Some(Value::Float(f)) => *f,
+                            Some(Value::Int(n)) => *n as f64,
+                            Some(Value::Str(s)) => s.parse::<f64>().unwrap_or(0.0),
+                            _ => 0.0,
+                        };
+                        nums_bytes.extend_from_slice(&val.to_le_bytes());
+                        instr_bytes.push(4);
+                        instr_bytes.push(2);
+                        instr_bytes.extend_from_slice(&num_cnt.to_le_bytes());
+                        num_cnt += 1;
+                    } else {
+                        instr_bytes.push(4);
+                        instr_bytes.push(1);
+                        instr_bytes.extend_from_slice(&(arg as u32).to_le_bytes());
+                    }
+                } else if op == 2 {
+                    // PushStr: arg is strings index
+                    instr_bytes.push(4);
+                    instr_bytes.push(3);
+                    instr_bytes.extend_from_slice(&(arg as u32).to_le_bytes());
+                } else if op == 20 || op == 21 {
+                    // Store/Load: arg is strings index (variable name) → names table
+                    let name = get_str(arg as usize);
+                    let name_idx = names.iter().position(|n| n == &name).unwrap_or(0);
+                    instr_bytes.push(4);
+                    instr_bytes.push(vm_op);
+                    instr_bytes.extend_from_slice(&(name_idx as u32).to_le_bytes());
+                } else if op == 22 || op == 23 {
+                    // Jmp/JmpIf: VM expects arg = nums idx; target value lives in nums
+                    let target = get_int(arg as usize) as f64;
+                    nums_bytes.extend_from_slice(&target.to_le_bytes());
+                    instr_bytes.push(4);
+                    instr_bytes.push(vm_op);
+                    instr_bytes.extend_from_slice(&num_cnt.to_le_bytes());
+                    num_cnt += 1;
+                } else if op == 43 || op == 44 || op == 45 {
+                    // EnumCtor triplet: 43 = WithIdx(EnumCtor, name@strings),
+                    // 44 = WithIdx(Nop, variant@strings), 45 = WithIdx(Nop, argc@nums)
+                    if op == 43 {
+                        instr_bytes.push(4);
+                        instr_bytes.push(43);
+                        instr_bytes.extend_from_slice(&(arg as u32).to_le_bytes());
+                    } else if op == 44 {
+                        instr_bytes.push(4);
+                        instr_bytes.push(0);
+                        instr_bytes.extend_from_slice(&(arg as u32).to_le_bytes());
+                    } else {
+                        let argc = get_int(arg as usize) as f64;
+                        nums_bytes.extend_from_slice(&argc.to_le_bytes());
+                        instr_bytes.push(4);
+                        instr_bytes.push(0);
+                        instr_bytes.extend_from_slice(&num_cnt.to_le_bytes());
+                        num_cnt += 1;
+                    }
+                } else if op == 25 || op == 26 || op == 27 {
+                    // Ret, Print, Halt
+                    instr_bytes.push(0);
+                    instr_bytes.push(vm_op);
+                } else {
+                    instr_bytes.push(0);
+                    instr_bytes.push(vm_op);
+                }
+            }
+            i += 1;
+        }
+
+        // Count logical instructions for .nvc header
+        let mut logical_cnt = 0u32;
+        let mut bi = 0usize;
+        while bi < instr_bytes.len() {
+            let tag = instr_bytes[bi];
+            logical_cnt += 1;
+            match tag {
+                0 => bi += 2,
+                3 => bi += 3,
+                _ => bi += 6,
+            }
+        }
+
+        // Build final .nvc byte array
+        let mut buf = Vec::new();
+
+        // Magic: LUMN
+        buf.extend_from_slice(b"LUMN");
+
+        // Version
+        buf.extend_from_slice(&6u32.to_le_bytes());
+
+        // Strings table
+        buf.extend_from_slice(&(str_cnt as u32).to_le_bytes());
+        for si in 0..str_cnt {
+            let s = get_str(si);
+            let utf8 = s.as_bytes();
+            buf.extend_from_slice(&(utf8.len() as u32).to_le_bytes());
+            buf.extend_from_slice(utf8);
+        }
+
+        // Ints table
+        buf.extend_from_slice(&(int_cnt as u32).to_le_bytes());
+        for ii in 0..int_cnt {
+            let val = get_int(ii);
+            buf.extend_from_slice(&val.to_le_bytes());
+        }
+
+        // Nums table
+        buf.extend_from_slice(&num_cnt.to_le_bytes());
+        buf.extend_from_slice(&nums_bytes);
+
+        // Names table
+        buf.extend_from_slice(&(names.len() as u32).to_le_bytes());
+        for name in &names {
+            let utf8 = name.as_bytes();
+            buf.extend_from_slice(&(utf8.len() as u32).to_le_bytes());
+            buf.extend_from_slice(utf8);
+        }
+
+        // Funcs table
+        let func_cnt = map_get_i64(&cg_map, "func_cnt").unwrap_or(0) as usize;
+        let funcs_map = match map_get(&cg_map, "funcs") {
+            Some(Value::Map(m)) => m,
+            _ => ImMap::new(),
+        };
+        let mut func_bytes: Vec<u8> = Vec::new();
+        func_bytes.extend_from_slice(&(func_cnt as u32).to_le_bytes());
+        for fi in 0..func_cnt {
+            let f = match funcs_map.get(&Value::Str(fi.to_string())) {
+                Some(Value::Map(m)) => m.clone(),
+                _ => ImMap::new(),
+            };
+            let fname = match f.get(&Value::Str("nombre".into())) {
+                Some(Value::Str(s)) => s.clone(),
+                _ => String::new(),
+            };
+            func_bytes.extend_from_slice(&(fname.len() as u32).to_le_bytes());
+            func_bytes.extend_from_slice(fname.as_bytes());
+            let fparams = match f.get(&Value::Str("params".into())) {
+                Some(Value::Map(m)) => m.clone(),
+                _ => ImMap::new(),
+            };
+            let pcount = match fparams.get(&Value::Str("cnt".into())) {
+                Some(Value::Int(n)) => *n as usize,
+                _ => 0,
+            };
+            func_bytes.extend_from_slice(&(pcount as u32).to_le_bytes());
+            for pi in 0..pcount {
+                let pname = match fparams.get(&Value::Str(pi.to_string())) {
+                    Some(Value::Str(s)) => s.clone(),
+                    _ => String::new(),
+                };
+                func_bytes.extend_from_slice(&(pname.len() as u32).to_le_bytes());
+                func_bytes.extend_from_slice(pname.as_bytes());
+            }
+            let fstart = match f.get(&Value::Str("start".into())) {
+                Some(Value::Int(n)) => *n as u64,
+                Some(Value::Float(n)) => *n as u64,
+                _ => 0,
+            };
+            func_bytes.extend_from_slice(&fstart.to_le_bytes());
+        }
+        buf.extend_from_slice(&func_bytes);
+
+        // Instruction count
+        buf.extend_from_slice(&logical_cnt.to_le_bytes());
+
+        // Instructions
+        buf.extend_from_slice(&instr_bytes);
+
+        // Return as Array<Int>
+        let result: Vec<Value> = buf.iter().map(|&b| Value::Int(b as i64)).collect();
+        Ok(Value::Array(result))
+    }
 }
 
 fn json_value_to_lumen(v: serde_json::Value) -> Value {
@@ -3555,11 +4169,11 @@ fn json_value_to_lumen(v: serde_json::Value) -> Value {
             Value::Array(arr.into_iter().map(json_value_to_lumen).collect())
         }
         serde_json::Value::Object(map) => {
-            let pairs: Vec<(Value, Value)> = map
-                .into_iter()
-                .map(|(k, v)| (Value::Str(k), json_value_to_lumen(v)))
-                .collect();
-            Value::Map(pairs)
+            let mut m = ImMap::new();
+            for (k, v) in map {
+                m.insert(Value::Str(k), json_value_to_lumen(v));
+            }
+            Value::Map(m)
         }
     }
 }
@@ -3573,14 +4187,14 @@ fn lumen_value_to_json(v: &Value) -> serde_json::Value {
         Value::Array(arr) => {
             serde_json::Value::Array(arr.iter().map(lumen_value_to_json).collect())
         }
-        Value::Map(pairs) => {
-            let mut map = serde_json::Map::new();
-            for (k, v) in pairs {
+        Value::Map(map) => {
+            let mut obj = serde_json::Map::new();
+            for (k, v) in map {
                 if let Value::Str(key) = k {
-                    map.insert(key.clone(), lumen_value_to_json(v));
+                    obj.insert(key.clone(), lumen_value_to_json(v));
                 }
             }
-            serde_json::Value::Object(map)
+            serde_json::Value::Object(obj)
         }
         _ => serde_json::Value::Null,
     }

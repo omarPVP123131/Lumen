@@ -74,6 +74,7 @@ impl Lexer {
                             Some('\\') => match self.advance() {
                                 Some('n') => s.push('\n'),
                                 Some('t') => s.push('\t'),
+                                Some('r') => s.push('\r'),
                                 Some('"') => s.push('"'),
                                 Some('\\') => s.push('\\'),
                                 Some(ch) => s.push(ch),

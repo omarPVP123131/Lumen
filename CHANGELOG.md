@@ -4,6 +4,52 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
+## v2.3.0 — 31 Julio 2026
+
+### Agregado
+- **Self-hosting puro COMPLETADO: LÚMEN se compila a sí mismo sin `__compile_nv`**
+  - `compiler_v4.nv` autocontenido (55,308 bytes): `lexer.nv` + `parser.nv` + `codegen.nv` + main, sin imports
+  - Pipeline: leer .nv → lexer puro → parser puro → codegen puro → `__codegen_a_nvc` → .nvc
+  - **Fixpoint confirmado**: `compiler_v4_self.nvc` (54,712 bytes, 49 funciones) recompila su propio source con resultado IDÉNTICO (52,160 bytes → 11,437 tokens → 6,376 instrs → 54,712 bytes) en 3 runs consecutivos (193s, 203s, 197s)
+  - Tabla de funciones completa en el autocompilado: `_lx_es_ident`…`codegen_print` + `__main__`
+
+### Arreglado (pipeline puro)
+- `Jmp`/`JmpIf` serializados con target en tabla `nums` (la VM lee `nums[idx]`) — antes target directo → loop infinito
+- If emitía JMP al final del then-body para saltar el else (antes ejecutaba ambos)
+- Indexación `chars[i]`: postfix `[expr]` en `_parse_pr` + nodo `Index` en codegen + `OP_ARRAY_GET` (29)
+- `intentar` (TryUnwrap): mapeo `40 => 40` en `cg_to_vm` — antes Nop dejaba `Exito(Str)` en el stack
+- Print multi-arg: un `OP_PRINT` por argumento en orden (antes uno solo → output parcial/invertido)
+- Break/Continue: `loop_stack` en codegen con backpatches (breaks→fin de loop, conts→loop_start)
+- `numero r;` (VarDecl sin inicializador): PushInt 0 por defecto — antes stack underflow
+- Lexer puro: procesa escapes de string `\n \t \r \" \\` — antes `"\""` rompía la tokenización
+- Keywords `void` y `diccionario` añadidas al lexer puro — antes las funciones `codegen_imprimir` se corrompían
+- Forward declarations (`funcion X(...);`): ignoradas con nodo `Vacio` — antes se tragaban la función siguiente
+- Fix previo en `crates/lumen-lexer/src/lexer.rs`: escape `\r` → CR real (era 'r' literal)
+
+### Cambiado
+- `AGENTS.md`, `docs/self-hosting.md`, `docs/siguiente.md`, `docs/roadmap.md` sincronizados
+- `stdlib/compiler/generar_v4.ps1` regenera `compiler_v4.nv` (concatenación autocontenida)
+- Test artifacts de aislamiento eliminados (`mini_*`, `test_lexer*`)
+
+---
+
+## v2.2.0 — 30 Julio 2026
+
+### Agregado
+- **Self-hosting Total: `Value::Map` optimizado de `Vec<(Value,Value)>` a `HashMap<Value,Value>`**
+  - `Hash` + `Eq` manual para `Value` (f64 via `to_bits()`, Map via sorted key-value hashes)
+  - `__map_get`/`__map_set`/`__map_contains`: O(n) scan lineal → O(1) hash lookup
+  - Sets (union/inter/diff): O(n²) → O(n) con `contains_key`
+  - `codegen_to_nvc`: `map_get` O(1) con `HashMap::get`
+  - JSON helpers actualizados a HashMap
+  - ~378 tests pasan, autocompilación funcional (533ms)
+  - El parser LÚMEN-in-LÚMEN ahora tiene mapas O(1) — self-hosting total sin `__compile_nv` es viable
+
+### Cambiado
+- `AGENTS.md`, `docs/self-hosting.md`, `docs/siguiente.md`, `docs/roadmap.md` sincronizados
+
+---
+
 ## v2.1.0 — Julio 2026
 
 ### Agregado

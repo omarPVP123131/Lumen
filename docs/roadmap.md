@@ -249,7 +249,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | 171 | **WASM backend** | Compilar a WebAssembly para ejecución en navegadores | ✅ v1.7.0 — VM refactorizada, crate lumen-wasm |
 | 172 | **WASM: WASI** | Ejecutar en servidores/serverless vía WASI | ✅ build + CI + test |
 | 173 | **WASM: JS interop** | Llamar funciones JS desde LÚMEN y viceversa | ✅ 17 bridge functions |
-| 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | 📋 |
+| 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | ✅ Pipeline LÚMEN→.nvc→ejecuta; **Sprint 5 (31 Jul): fixpoint puro confirmado** — `compiler_v4_self.nvc` (54,712 bytes) se autocompila con output idéntico, ~200s |
 | 175 | **Docker Image** | `lumen:latest`, multi-stage, slim | ✅ Dockerfile |
 | 176 | **Docker Compose** | Servicios lumen + lumen-repl | ✅ docker-compose.yml |
 | 177 | **GitHub Action** | CI build/test/clippy/fmt/coverage | ✅ .github/workflows/ |
@@ -325,7 +325,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | **v1.8** | FFI system + Crypto builtins | 111-127 | ✅ |
 | **v1.9** | Concurrencia completa + Async runtime | 128-150 | ✅ |
 | **v2.0** | GUI, TUI, Juegos funcionales | 151-170 | ✅ |
-| **v2.5** | Portabilidad + WASI + Self-hosting | 171-185 | ✅ 100% |
+| **v2.5** | Portabilidad + WASI + Self-hosting | 171-185 | ✅ Pipeline .nvc completado |
 | **v3.0** | AI/ML + Cloud + Producción | 186-220 | 📋 |
 
 ---
@@ -354,14 +354,12 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 - ✅ **WASM**: compila a wasm32-unknown-unknown
 
 ### 📋 Lo que falta
-- **Async runtime**: event loop real para async/esperar
-- **WASM build completo**: wasm-pack + playground funcional
-- **Calendarios**: hijri, persa, etc.
-- **GFX avanzado**: sprites, audio, partículas, tilemaps
-- **GUI avanzado**: canvas 2D, temas CSS, TreeView, charts
-- **Self-hosting**: compilador en LÚMEN
-- **AI/ML**: tensores, redes neuronales, data science
-- **Cloud**: AWS, GCP, Azure, K8s
+- **Self-hosting completo (Fase 174)**: Pipeline LÚMEN→LÚMEN→.nvc→ejecuta ✅ (Sprint 2). Bootstrap completo ✅ (Sprint 3: `__compile_nv`, 533ms). HashMap O(1) ✅ (Sprint 4: `Value::Map` Vec→HashMap). **Self-hosting puro ✅ (Sprint 5, 31 Jul: fixpoint confirmado — `compiler_v4_self.nvc` 54,712 bytes, 3 runs idénticos 193s/203s/197s).** Pendiente: optimizar VM para hacer el self-compile práctico (~200s → objetivo <10s).
+- **SQLite ORM (Fase 116)**: mapeo objeto-relacional mínimo sobre SQLite.
+- **AsyncGen (Fase 149)**: `async generador { }` — generadores asíncronos.
+- **TreeView (Fase 169)**: widget TreeView con drag-drop y multi-selección.
+- **AI/ML (Fases 186-200)**: tensores, redes neuronales, data science.
+- **Producción & Cloud (Fases 201-220)**: AWS, GCP, Azure, K8s, docs, comunidad, extensiones VS Code/JetBrains.
 
 ---
 

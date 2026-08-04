@@ -85,11 +85,13 @@ crates/
   lumen-cli/       main.rs (binario único)
   lumen-fmt/       lib.rs
   lumen-repl/      lib.rs
-  lumen-lsp/       main.rs
+  lumen-lsp/       lib.rs
   lumen-doc/       lib.rs
   lumen-aot/       lib.rs
   lumen-pkg/       lib.rs
   lumen-project/   lib.rs
+  lumen-api/       lib.rs
+  lumen-plugin/    lib.rs
   lumen-bench/     benches/benchmarks.rs
 docs/
   spec/            grammar.ebnf, bytecode-format.md,

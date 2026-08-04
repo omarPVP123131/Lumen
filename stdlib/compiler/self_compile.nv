@@ -1,0 +1,4 @@
+// self_compile.nv — Self-compile compiler_v2.nv using native pipeline
+lista<entero> bytes = __compile_nv("stdlib/compiler/compiler_v2.nv");
+intentar __escribir_archivo_bin("stdlib/compiler/compiler_v2_self.nvc", bytes);
+imprimir("OK: compiler_v2.nv -> compiler_v2_self.nvc");

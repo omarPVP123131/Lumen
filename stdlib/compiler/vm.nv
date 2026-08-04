@@ -1,0 +1,371 @@
+// vm.nv - VM de Lumen en Lumen (Sprint 7)
+// Decodifica .nvc y ejecuta opcode a opcode.
+
+funcion entero leer_u32(lista<entero> b, entero pos) {
+    entero r = 0;
+    entero i = 0;
+    while i < 4 {
+        r = r * 256 + b[pos + 3 - i];
+        i = i + 1;
+    }
+    retornar r;
+}
+
+funcion entero leer_u64(lista<entero> b, entero pos) {
+    entero r = 0;
+    entero i = 0;
+    while i < 8 {
+        r = r * 256 + b[pos + 7 - i];
+        i = i + 1;
+    }
+    retornar r;
+}
+
+funcion texto deco_texto(lista<entero> b, entero pos, entero n) {
+    texto s = "";
+    entero i = 0;
+    while i < n {
+        s = s + __str_caracter(b[pos + i]);
+        i = i + 1;
+    }
+    retornar s;
+}
+
+funcion numero leer_float(lista<entero> b, entero pos) {
+    lista<entero> parte = [];
+    entero i = 0;
+    while i < 8 {
+        parte.agregar(b[pos + i]);
+        i = i + 1;
+    }
+    retornar __bytes_a_f64(parte);
+}
+
+funcion entero a_entero(numero f) {
+    entero r = 0;
+    while f > 0 {
+        r = r + 1;
+        f = f - 1;
+    }
+    retornar r;
+}
+
+funcion numero estado_pila(numero st, entero i) {
+    retornar __map_obtener(__map_obtener(st, "pila"), a_texto(i));
+}
+
+funcion numero estado_pila_poner(numero st, entero i, numero v) {
+    retornar __map_poner(st, "pila", __map_poner(__map_obtener(st, "pila"), a_texto(i), v));
+}
+
+funcion numero estado_mem(numero st, texto k) {
+    numero scopes = __map_obtener(st, "scopes");
+    entero ns = a_entero(__map_obtener(st, "ns"));
+    entero ci = ns;
+    while ci > 0 {
+        numero m = __map_obtener(scopes, a_texto(ci));
+        si __map_contiene(m, k) { retornar __map_obtener(m, k); }
+        ci = ci - 1;
+    }
+    retornar __map_obtener(__map_obtener(st, "mem"), k);
+}
+
+funcion numero estado_mem_poner(numero st, texto k, numero v) {
+    entero ns = a_entero(__map_obtener(st, "ns"));
+    si ns == 0 {
+        retornar __map_poner(st, "mem", __map_poner(__map_obtener(st, "mem"), k, v));
+    } sino {
+        numero scopes = __map_obtener(st, "scopes");
+        numero top = __map_obtener(scopes, a_texto(ns));
+        numero nuevo = __map_poner(top, k, v);
+        numero sc2 = __map_poner(scopes, a_texto(ns), nuevo);
+        retornar __map_poner(st, "scopes", sc2);
+    }
+}
+
+funcion texto str_at(lista<texto> stl, lista<texto> stl_din, entero idx) {
+    si idx < largo(stl) { retornar stl[idx]; }
+    retornar stl_din[idx - largo(stl)];
+}
+
+funcion entero main() {
+    texto RUTA = "C:/Users/Omar/Documents/Documentos WEb/LumenRust/examples/continue.nvc";
+    lista<entero> b = __leer_bytes(RUTA);
+    entero p = 8;
+    entero n = 0;
+    entero i = 0;
+    // --- strings
+    n = leer_u32(b, p);
+    p = p + 4;
+    lista<texto> stl = [];
+    i = 0;
+    while i < n {
+        entero ln = leer_u32(b, p);
+        p = p + 4;
+        stl.agregar(deco_texto(b, p, ln));
+        p = p + ln;
+        i = i + 1;
+    }
+    // --- ints
+    n = leer_u32(b, p);
+    p = p + 4;
+    lista<entero> ints = [];
+    i = 0;
+    while i < n {
+        ints.agregar(leer_u64(b, p));
+        p = p + 8;
+        i = i + 1;
+    }
+    // --- nums
+    n = leer_u32(b, p);
+    p = p + 4;
+    lista<numero> nums = [];
+    i = 0;
+    while i < n {
+        nums.agregar(leer_float(b, p));
+        p = p + 8;
+        i = i + 1;
+    }
+    // --- names
+    n = leer_u32(b, p);
+    p = p + 4;
+    lista<texto> nof = [];
+    i = 0;
+    while i < n {
+        entero ln = leer_u32(b, p);
+        p = p + 4;
+        nof.agregar(deco_texto(b, p, ln));
+        p = p + ln;
+        i = i + 1;
+    }
+    // --- funcs
+    n = leer_u32(b, p);
+    p = p + 4;
+    lista<texto> funn = [];
+    lista<texto> funp = [];
+    lista<entero> fun = [0];
+    i = 0;
+    while i < n {
+        entero ln = leer_u32(b, p);
+        p = p + 4;
+        funn.agregar(deco_texto(b, p, ln));
+        p = p + ln;
+        entero np = leer_u32(b, p);
+        p = p + 4;
+        entero ps = largo(funp);
+        entero jf = 0;
+        while jf < np {
+            entero l2 = leer_u32(b, p);
+            p = p + 4;
+            funp.agregar(deco_texto(b, p, l2));
+            p = p + l2;
+            jf = jf + 1;
+        }
+        fun.agregar(np);
+        fun.agregar(ps);
+        fun.agregar(leer_u64(b, p));
+        p = p + 8;
+        i = i + 1;
+    }
+    // --- instrs
+    n = leer_u32(b, p);
+    p = p + 4;
+    lista<entero> insn = [0];
+    i = 0;
+    while i < n {
+        entero tg = b[p];
+        p = p + 1;
+        entero op = b[p];
+        p = p + 1;
+        entero ar = 0;
+        si tg == 1 { ar = leer_u32(b, p); p = p + 4; }
+        si tg == 2 { ar = leer_u32(b, p); p = p + 4; }
+        si tg == 3 { ar = b[p]; p = p + 1; }
+        si tg == 4 { ar = leer_u32(b, p); p = p + 4; }
+        insn.agregar(tg);
+        insn.agregar(op);
+        insn.agregar(ar);
+        i = i + 1;
+    }
+    // --- ejecucion
+    lista<texto> stl_din = [];
+    numero st = __map_nuevo();
+    st = __map_poner(st, "pila", __map_nuevo());
+    st = __map_poner(st, "mem", __map_nuevo());
+    st = __map_poner(st, "sp", 0.0);
+    st = __map_poner(st, "scopes", __map_nuevo());
+    st = __map_poner(st, "ns", 0.0);
+    st = __map_poner(st, "rets", __map_nuevo());
+    st = __map_poner(st, "rn", 0.0);
+    lista<lista<numero>> arrs = [];
+    entero pc = 0;
+    entero sp = 0;
+    entero fin = 0;
+    entero saltar = 0;
+    while fin == 0 {
+        si pc >= largo(insn) / 3 { fin = 1; }
+        si fin == 0 {
+        entero op = insn[3*pc + 2];
+        entero a = insn[3*pc + 3];
+        saltar = 0;
+        si op == 1 { sp = sp + 1; st = estado_pila_poner(st, sp, ints[a] + 0.0); }
+        si op == 2 { sp = sp + 1; st = estado_pila_poner(st, sp, nums[a]); }
+        si op == 3 { sp = sp + 1; st = estado_pila_poner(st, sp, 1000000000.0 + a); }
+        si op == 4 { sp = sp + 1; st = estado_pila_poner(st, sp, a + 0.0); }
+        si op == 5 { sp = sp + 1; st = estado_pila_poner(st, sp, estado_mem(st, nof[a])); }
+        si op == 6 { st = estado_mem_poner(st, nof[a], estado_pila(st, sp)); sp = sp - 1; }
+        si op == 7 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); si x >= 1000000000 { si y >= 1000000000 { texto s2 = str_at(stl, stl_din, a_entero(x - 1000000000)) + str_at(stl, stl_din, a_entero(y - 1000000000)); stl_din.agregar(s2); st = estado_pila_poner(st, sp, 1000000000.0 + largo(stl) + largo(stl_din) - 1); } sino { texto s2 = str_at(stl, stl_din, a_entero(x - 1000000000)) + a_texto(y); stl_din.agregar(s2); st = estado_pila_poner(st, sp, 1000000000.0 + largo(stl) + largo(stl_din) - 1); } } sino { si y >= 1000000000 { texto s2 = a_texto(x) + str_at(stl, stl_din, a_entero(y - 1000000000)); stl_din.agregar(s2); st = estado_pila_poner(st, sp, 1000000000.0 + largo(stl) + largo(stl_din) - 1); } sino { st = estado_pila_poner(st, sp, x + y); } } }
+        si op == 8 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); st = estado_pila_poner(st, sp, x - y); }
+        si op == 9 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); st = estado_pila_poner(st, sp, x * y); }
+        si op == 10 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); st = estado_pila_poner(st, sp, x / y); }
+        si op == 11 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); si x == y { st = estado_pila_poner(st, sp, 1.0); } sino { st = estado_pila_poner(st, sp, 0.0); } }
+        si op == 12 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); si x != y { st = estado_pila_poner(st, sp, 1.0); } sino { st = estado_pila_poner(st, sp, 0.0); } }
+        si op == 13 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); si x < y { st = estado_pila_poner(st, sp, 1.0); } sino { st = estado_pila_poner(st, sp, 0.0); } }
+        si op == 14 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); si x <= y { st = estado_pila_poner(st, sp, 1.0); } sino { st = estado_pila_poner(st, sp, 0.0); } }
+        si op == 15 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); si x > y { st = estado_pila_poner(st, sp, 1.0); } sino { st = estado_pila_poner(st, sp, 0.0); } }
+        si op == 16 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); si x >= y { st = estado_pila_poner(st, sp, 1.0); } sino { st = estado_pila_poner(st, sp, 0.0); } }
+        si op == 18 { numero y = estado_pila(st, sp); sp = sp - 1; numero x = estado_pila(st, sp); si x == 0 { si y == 0 { st = estado_pila_poner(st, sp, 0.0); } sino { st = estado_pila_poner(st, sp, 1.0); } } sino { st = estado_pila_poner(st, sp, 1.0); } }
+        si op == 19 { numero x = estado_pila(st, sp); st = estado_pila_poner(st, sp, 0.0 - x); }
+        si op == 20 { numero x = estado_pila(st, sp); si x == 0 { st = estado_pila_poner(st, sp, 1.0); } sino { st = estado_pila_poner(st, sp, 0.0); } }
+        si op == 21 {
+            entero argc = a_entero(nums[insn[3*(pc+1) + 3]]);
+            texto nm = nof[a];
+            si nm == "imprimir" {
+                lista<numero> tmpa = [];
+                entero k2 = 1;
+                while k2 <= argc {
+                    tmpa.agregar(estado_pila(st, sp - argc + k2));
+                    k2 = k2 + 1;
+                }
+                entero j2 = 0;
+                while j2 < argc {
+                    numero vv = tmpa[j2];
+                    si vv >= 1000000000 {
+                        imprimir(str_at(stl, stl_din, a_entero(vv - 1000000000)));
+                    } sino {
+                        imprimir(a_texto(vv));
+                    }
+                    j2 = j2 + 1;
+                }
+                sp = sp - argc;
+            } sino {
+                si nm == "largo" {
+                    numero v = estado_pila(st, sp);
+                    sp = sp - 1;
+                    lista<numero> arr = arrs[a_entero(0.0 - v) - 1];
+                    st = estado_pila_poner(st, sp + 1, largo(arr) + 0.0);
+                    sp = sp + 1;
+                } sino {
+                    entero fi = 0;
+                    entero nf = largo(funn);
+                    entero ff = -1;
+                    while fi < nf {
+                        si funn[fi] == nm { ff = fi; }
+                        fi = fi + 1;
+                    }
+                    si ff >= 0 {
+                        entero npf = fun[1 + ff*3];
+                        entero ps = fun[2 + ff*3];
+                        numero nsc = __map_nuevo();
+                        entero jp = 0;
+                        while jp < npf {
+                            nsc = __map_poner(nsc, funp[ps + jp], estado_pila(st, sp - argc + 1 + jp));
+                            jp = jp + 1;
+                        }
+                        sp = sp - argc;
+                        numero scopes = __map_obtener(st, "scopes");
+                        entero ns = a_entero(__map_obtener(st, "ns")) + 1;
+                        scopes = __map_poner(scopes, a_texto(ns), nsc);
+                        numero rets = __map_obtener(st, "rets");
+                        entero rn = a_entero(__map_obtener(st, "rn"));
+                        rets = __map_poner(rets, a_texto(rn), pc + 2);
+                        st = __map_poner(st, "scopes", scopes);
+                        st = __map_poner(st, "ns", ns + 0.0);
+                        st = __map_poner(st, "rets", rets);
+                        st = __map_poner(st, "rn", rn + 1);
+                        pc = a_entero(fun[3 + ff*3]);
+                        saltar = 1;
+                    }
+                }
+            }
+            si saltar == 0 { pc = pc + 1; }
+        }
+        si op == 22 {
+            numero rv = estado_pila(st, sp);
+            sp = sp - 1;
+            entero rn = a_entero(__map_obtener(st, "rn")) - 1;
+            numero rets = __map_obtener(st, "rets");
+            pc = a_entero(__map_obtener(rets, a_texto(rn)));
+            rets = __map_poner(rets, a_texto(rn), 0.0);
+            entero ns2 = a_entero(__map_obtener(st, "ns")) - 1;
+            st = __map_poner(st, "rets", rets);
+            st = __map_poner(st, "rn", rn + 0.0);
+            st = __map_poner(st, "ns", ns2 + 0.0);
+            sp = sp + 1;
+            st = estado_pila_poner(st, sp, rv);
+            saltar = 1;
+        }
+        si op == 23 {
+            numero v = estado_pila(st, sp);
+            si v >= 1000000000 {
+                imprimir(str_at(stl, stl_din, a_entero(v - 1000000000)));
+            } sino {
+                imprimir(a_texto(v));
+            }
+        }
+        si op == 24 { sp = sp - 1; }
+        si op == 25 { pc = a_entero(nums[a]); saltar = 1; }
+        si op == 26 {
+            numero v = estado_pila(st, sp);
+            sp = sp - 1;
+            si v == 0 {
+                pc = a_entero(nums[a]);
+                saltar = 1;
+            }
+        }
+        si op == 27 { fin = 1; }
+        si op == 28 {
+            entero cnt = a_entero(nums[a]);
+            lista<numero> arr = [];
+            entero j3 = 0;
+            while j3 < cnt {
+                arr.agregar(estado_pila(st, sp - cnt + 1 + j3));
+                j3 = j3 + 1;
+            }
+            sp = sp - cnt;
+            arrs.agregar(arr);
+            sp = sp + 1;
+            st = estado_pila_poner(st, sp, 0.0 - largo(arrs));
+        }
+        si op == 29 {
+            numero ixv = estado_pila(st, sp);
+            sp = sp - 1;
+            numero v = estado_pila(st, sp);
+            sp = sp - 1;
+            lista<numero> arr = arrs[a_entero(0.0 - v) - 1];
+            st = estado_pila_poner(st, sp + 1, arr[a_entero(ixv)]);
+            sp = sp + 1;
+        }
+        si op == 31 {
+            numero v = estado_pila(st, sp);
+            sp = sp - 1;
+            lista<numero> arr = arrs[a_entero(0.0 - v) - 1];
+            st = estado_pila_poner(st, sp + 1, largo(arr) + 0.0);
+            sp = sp + 1;
+        }
+        si op == 32 {
+            numero v = estado_pila(st, sp);
+            sp = sp - 1;
+            numero av = estado_pila(st, sp);
+            sp = sp - 1;
+            lista<numero> arr = arrs[a_entero(0.0 - av) - 1];
+            arr.agregar(v);
+            arrs.agregar(arr);
+            st = estado_pila_poner(st, sp + 1, 0.0 - largo(arrs));
+            sp = sp + 1;
+        }
+        si saltar == 0 { pc = pc + 1; }
+        }
+    }
+    retornar 0;
+}

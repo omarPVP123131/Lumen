@@ -22,7 +22,7 @@ enum Value {
 }
 ```
 
-## Opcodes (41 total)
+## Opcodes (47 total: 0-46)
 
 ### Core (0-27)
 | Code | Name | Operands | Stack Effect | Description |
@@ -84,6 +84,28 @@ enum Value {
 | 38 | ResultOk | — | V → Exito(V) |
 | 39 | ResultErr | — | V → Error(V) |
 | 40 | TryUnwrap | — | Exito(V)→V, Error(V)→Ret(V) |
+
+### Option (41-42)
+| Code | Name | Operands | Description |
+|------|------|----------|-------------|
+| 41 | OptionSome | — | V → Algun(V) |
+| 42 | OptionNone | — | → Ninguno |
+
+### Enum (43)
+| Code | Name | Operands | Description |
+|------|------|----------|-------------|
+| 43 | EnumCtor | str_idx, str_idx | Push enum variant constructor |
+
+### Tuples (44-45)
+| Code | Name | Operands | Description |
+|------|------|----------|-------------|
+| 44 | TupleNew | u8 count | Create tuple from N stack values |
+| 45 | TupleGet | u8 index | Get element at index |
+
+### Mod (46)
+| Code | Name | Operands | Description |
+|------|------|----------|-------------|
+| 46 | Mod | — | A B → A%B |
 
 ## Execution Model
 1. Fetch next instruction from bytecode stream

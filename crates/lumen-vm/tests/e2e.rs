@@ -288,6 +288,22 @@ mientras (i < 5) {
 }
 
 #[test]
+fn test_nested_continue() {
+    let src = "entero i = 0;
+mientras (i < 3) {
+    entero j = 0;
+    mientras (j < 3) {
+        j = j + 1;
+        si (j == 2) { continuar; }
+        imprimir(i * 10 + j);
+    }
+    i = i + 1;
+}";
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "3", "11", "13", "21", "23"]);
+}
+
+#[test]
 fn test_match_simple() {
     let src = "entero x = 2;
 elegir (x) {
@@ -1368,7 +1384,7 @@ fn test_pad_end() {
 
 #[test]
 fn test_utf8_encoding() {
-    let src = r#"numero bytes = __codificacion_utf8("Hola");
+    let src = r#"lista<entero> bytes = __codificacion_utf8("Hola");
 imprimir(bytes);
 "#;
     let output = run_source(src).unwrap();
@@ -1495,7 +1511,7 @@ s = __conjunto_agregar(s, "x");
 s = __conjunto_agregar(s, "y");
 imprimir(__conjunto_tiene(s, "x"));
 imprimir(__regex_coincide("\\w+", "hola"));
-numero bytes = __codificacion_utf8("abc");
+lista<entero> bytes = __codificacion_utf8("abc");
 imprimir(bytes);
 imprimir(__str_padding_inicio("7", 3, "0"));
 "#;
@@ -1521,8 +1537,8 @@ imprimir(caps);
 
 #[test]
 fn test_encoding_from_utf8() {
-    let src = r#"numero bytes = __codificacion_utf8("Hola");
-numero dec = __desde_utf8(bytes);
+    let src = r#"lista<entero> bytes = __codificacion_utf8("Hola");
+texto dec = __desde_utf8(bytes);
 imprimir(dec);
 "#;
     let output = run_source(src).unwrap();

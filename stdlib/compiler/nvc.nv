@@ -1,0 +1,305 @@
+// stdlib/compiler/nvc.nv — Serializador .nvc binario para LÚMEN
+// Toma el mapa de codegen y produce Array<Int> de bytes en formato .nvc
+// NOTA: LÚMEN no tiene ++ para listas; usamos agregar() con append helper
+
+// ── Helpers ──────────────────────────────────────────────────
+funcion lista<entero> _u32_le(entero n) {
+    retornar [n % 256, (n / 256) % 256, (n / 65536) % 256, (n / 16777216) % 256];
+}
+
+funcion lista<entero> _i64_le(entero n) {
+    retornar [
+        n % 256,
+        (n / 256) % 256,
+        (n / 65536) % 256,
+        (n / 16777216) % 256,
+        (n / 4294967296) % 256,
+        (n / 1099511627776) % 256,
+        (n / 281474976710656) % 256,
+        n / 72057594037927936
+    ];
+}
+
+funcion lista<entero> _str_entry(texto s) {
+    lista<entero> utf8 = __codificacion_utf8(s);
+    lista<entero> res = _u32_le(largo(utf8));
+    entero i = 0;
+    mientras i < largo(utf8) {
+        res.agregar(utf8[i]);
+        i = i + 1;
+    }
+    retornar res;
+}
+
+funcion void _append(lista<entero> buf, lista<entero> src) {
+    entero i = 0;
+    mientras i < largo(src) {
+        buf.agregar(src[i]);
+        i = i + 1;
+    }
+}
+
+// ── Rust VM opcodes (from bytecode.rs Opcode enum) ─────────
+entero VM_NOP = 0;
+entero VM_PUSH_STR = 3;
+entero VM_PUSH_BOOL = 4;
+entero VM_LOAD = 5;
+entero VM_STORE = 6;
+entero VM_ADD = 7;
+entero VM_SUB = 8;
+entero VM_MUL = 9;
+entero VM_DIV = 10;
+entero VM_EQ = 11;
+entero VM_NEQ = 12;
+entero VM_LT = 13;
+entero VM_LE = 14;
+entero VM_GT = 15;
+entero VM_GE = 16;
+entero VM_AND = 17;
+entero VM_OR = 18;
+entero VM_NEG = 19;
+entero VM_NOT = 20;
+entero VM_CALL = 21;
+entero VM_RET = 22;
+entero VM_PRINT = 23;
+entero VM_JMP = 25;
+entero VM_JMP_IF = 26;
+entero VM_HALT = 27;
+entero VM_MOD = 46;
+
+funcion entero _cg_to_vm(entero cg_op) {
+    si cg_op == 1 { retornar VM_PUSH_STR; }
+    si cg_op == 2 { retornar VM_PUSH_STR; }
+    si cg_op == 4 { retornar VM_PUSH_BOOL; }
+    si cg_op == 5 { retornar VM_ADD; }
+    si cg_op == 6 { retornar VM_SUB; }
+    si cg_op == 7 { retornar VM_MUL; }
+    si cg_op == 8 { retornar VM_DIV; }
+    si cg_op == 9 { retornar VM_MOD; }
+    si cg_op == 10 { retornar VM_EQ; }
+    si cg_op == 11 { retornar VM_NEQ; }
+    si cg_op == 12 { retornar VM_LT; }
+    si cg_op == 13 { retornar VM_LE; }
+    si cg_op == 14 { retornar VM_GT; }
+    si cg_op == 15 { retornar VM_GE; }
+    si cg_op == 16 { retornar VM_AND; }
+    si cg_op == 17 { retornar VM_OR; }
+    si cg_op == 18 { retornar VM_NOT; }
+    si cg_op == 19 { retornar VM_NEG; }
+    si cg_op == 20 { retornar VM_STORE; }
+    si cg_op == 21 { retornar VM_LOAD; }
+    si cg_op == 22 { retornar VM_JMP; }
+    si cg_op == 23 { retornar VM_JMP_IF; }
+    si cg_op == 24 { retornar VM_CALL; }
+    si cg_op == 25 { retornar VM_RET; }
+    si cg_op == 26 { retornar VM_PRINT; }
+    si cg_op == 27 { retornar VM_HALT; }
+    retornar VM_NOP;
+}
+
+// ── Classify codegen opcodes ────────────────────────────────
+funcion booleano _is_name_op(entero cg_op) { retornar cg_op == 20 || cg_op == 21 || cg_op == 24; }
+funcion booleano _is_simple_op(entero cg_op) { retornar cg_op >= 5 && cg_op <= 19 && cg_op != 4; }
+
+// ── Build names table ──────────────────────────────────────
+funcion numero _build_namedb(numero instrs, entero cnt, numero strs, entero sc) {
+    numero names = __map_nuevo();
+    entero nc = 0;
+    entero i = 0;
+    mientras i < cnt {
+        numero instr = __map_obtener(instrs, a_texto(i));
+        si __tipo_de(instr) != "entero" {
+            entero op = __map_obtener(instr, "op");
+            entero arg = __map_obtener(instr, "arg");
+            si _is_name_op(op) && arg < sc {
+                texto name = __map_obtener(strs, a_texto(arg));
+                si __tipo_de(name) == "texto" {
+                    entero j = 0;
+                    booleano found = falso;
+                    mientras j < nc {
+                        si __map_obtener(names, a_texto(j)) == name { found = verdadero; }
+                        j = j + 1;
+                    }
+                    si !found {
+                        names = __map_poner(names, a_texto(nc), name);
+                        nc = nc + 1;
+                    }
+                }
+            }
+        }
+        i = i + 1;
+    }
+    names = __map_poner(names, "cnt", nc);
+    retornar names;
+}
+
+funcion entero _name_idx(numero names, texto name) {
+    entero nc = __map_obtener(names, "cnt");
+    entero i = 0;
+    mientras i < nc {
+        si __map_obtener(names, a_texto(i)) == name { retornar i; }
+        i = i + 1;
+    }
+    retornar 0;
+}
+
+// ── Main serializer ─────────────────────────────────────────
+funcion numero nvc_serializar(numero cg) {
+    numero strs = __map_obtener(cg, "strings");
+    entero sc = __map_obtener(cg, "str_cnt");
+    numero ints_map = __map_obtener(cg, "ints");
+    entero ic = __map_obtener(cg, "int_cnt");
+    numero instrs = __map_obtener(cg, "instrs");
+    entero pc = __map_obtener(cg, "pos");
+
+    numero names = _build_namedb(instrs, pc, strs, sc);
+    entero nc = __map_obtener(names, "cnt");
+
+    // Pass 1: collect instructions bytes and nums (argc f64 values)
+    lista<entero> instr_bytes = [];
+    lista<entero> nums_bytes = [];
+    entero num_cnt = 0;
+
+    entero i = 0;
+    mientras i < pc {
+        numero instr = __map_obtener(instrs, a_texto(i));
+        entero op = __map_obtener(instr, "op");
+        entero arg = __map_obtener(instr, "arg");
+        lista<entero> tmp = [];
+
+        si op == 24 && i + 1 < pc {
+            numero nxt = __map_obtener(instrs, a_texto(i + 1));
+            si __tipo_de(nxt) != "entero" {
+                entero nop = __map_obtener(nxt, "op");
+                si nop == 24 {
+                    texto name = __map_obtener(strs, a_texto(arg));
+                    entero name_idx = _name_idx(names, name);
+                    tmp = [4, VM_CALL];
+                    _append(tmp, _u32_le(name_idx));
+                    _append(instr_bytes, tmp);
+                    entero na = __map_obtener(nxt, "arg");
+                    entero argc = __map_obtener(ints_map, a_texto(na));
+                    _append(nums_bytes, __numero_a_bytes_f64(argc));
+                    tmp = [4, VM_NOP];
+                    _append(tmp, _u32_le(num_cnt));
+                    _append(instr_bytes, tmp);
+                    num_cnt = num_cnt + 1;
+                    i = i + 2;
+                    continuar;
+                }
+            }
+        }
+
+        si _is_simple_op(op) {
+            entero vm_op = _cg_to_vm(op);
+            instr_bytes.agregar(0);
+            instr_bytes.agregar(vm_op);
+        } sino si op == 4 {
+            entero val = __map_obtener(ints_map, a_texto(arg));
+            tmp = [4, VM_PUSH_BOOL];
+            _append(tmp, _u32_le(val));
+            _append(instr_bytes, tmp);
+        } sino si op == 1 || op == 2 {
+            tmp = [4, VM_PUSH_STR];
+            _append(tmp, _u32_le(arg));
+            _append(instr_bytes, tmp);
+        } sino si op == 20 || op == 21 {
+            texto name = __map_obtener(strs, a_texto(arg));
+            entero name_idx = _name_idx(names, name);
+            entero vm_op = _cg_to_vm(op);
+            tmp = [4, vm_op];
+            _append(tmp, _u32_le(name_idx));
+            _append(instr_bytes, tmp);
+        } sino si op == 22 || op == 23 {
+            entero target = __map_obtener(ints_map, a_texto(arg));
+            entero vm_op = _cg_to_vm(op);
+            tmp = [4, vm_op];
+            _append(tmp, _u32_le(target));
+            _append(instr_bytes, tmp);
+        } sino si op == 25 {
+            instr_bytes.agregar(0);
+            instr_bytes.agregar(VM_RET);
+        } sino si op == 26 {
+            instr_bytes.agregar(0);
+            instr_bytes.agregar(VM_PRINT);
+        } sino si op == 27 {
+            instr_bytes.agregar(0);
+            instr_bytes.agregar(VM_HALT);
+        } sino {
+            entero vm_op = _cg_to_vm(op);
+            instr_bytes.agregar(0);
+            instr_bytes.agregar(vm_op);
+        }
+
+        i = i + 1;
+    }
+
+    // Build final output
+    lista<entero> buf = [];
+
+    // Magic: LUMN
+    _append(buf, [76, 85, 77, 78]);
+
+    // Version (6)
+    _append(buf, _u32_le(6));
+
+    // Strings table
+    _append(buf, _u32_le(sc));
+    entero si2 = 0;
+    mientras si2 < sc {
+        texto s = __map_obtener(strs, a_texto(si2));
+        si __tipo_de(s) == "texto" {
+            _append(buf, _str_entry(s));
+        }
+        si2 = si2 + 1;
+    }
+
+    // Ints table
+    _append(buf, _u32_le(ic));
+    entero ii2 = 0;
+    mientras ii2 < ic {
+        entero val = __map_obtener(ints_map, a_texto(ii2));
+        _append(buf, _i64_le(val));
+        ii2 = ii2 + 1;
+    }
+
+    // Nums table
+    _append(buf, _u32_le(num_cnt));
+    _append(buf, nums_bytes);
+
+    // Names table
+    _append(buf, _u32_le(nc));
+    entero ni2 = 0;
+    mientras ni2 < nc {
+        texto name = __map_obtener(names, a_texto(ni2));
+        _append(buf, _str_entry(name));
+        ni2 = ni2 + 1;
+    }
+
+    // Funcs table (empty)
+    _append(buf, _u32_le(0));
+
+    // Count logical instructions by scanning instr_bytes
+    entero logical_cnt = 0;
+    entero bi = 0;
+    entero ib_len = largo(instr_bytes);
+    mientras bi < ib_len {
+        entero tag = instr_bytes[bi];
+        logical_cnt = logical_cnt + 1;
+        si tag == 0 {
+            bi = bi + 2;
+        } sino si tag == 3 {
+            bi = bi + 3;
+        } sino {
+            bi = bi + 6;
+        }
+    }
+    _append(buf, _u32_le(logical_cnt));
+
+    // Instructions
+    _append(buf, instr_bytes);
+
+    retornar buf;
+}
+
+funcion numero nvc_serialize(numero cg) { retornar nvc_serializar(cg); }

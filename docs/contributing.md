@@ -19,7 +19,7 @@ cargo test --all
 
 ### Estructura del proyecto
 
-El compilador está organizado en 14 crates dentro de `crates/`:
+El compilador está organizado en 16 crates dentro de `crates/`:
 
 | Crate | Responsabilidad |
 |-------|----------------|
@@ -37,6 +37,8 @@ El compilador está organizado en 14 crates dentro de `crates/`:
 | `lumen-doc` | Generador de documentación HTML |
 | `lumen-aot` | Compilación AOT (C transpiler + Cranelift) |
 | `lumen-pkg` | Gestor de paquetes (`lumen install`) |
+| `lumen-api` | API pública del compilador (usar LÚMEN como biblioteca) |
+| `lumen-plugin` | Sistema de plugins para fases del compilador |
 
 ### Flujo para añadir una feature
 

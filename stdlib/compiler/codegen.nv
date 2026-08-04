@@ -30,6 +30,12 @@ numero OP_CALL = 24;
 numero OP_RET = 25;
 numero OP_PRINT = 26;
 numero OP_HALT = 27;
+numero OP_ARRAY_NEW = 28;
+numero OP_ARRAY_GET = 29;
+numero OP_ARRAY_SET = 30;
+numero OP_ENUM_CTOR = 43;
+numero OP_ENUM_VAR = 44;
+numero OP_ENUM_ARGC = 45;
 
 // ── Estructura de bytecode ──────────────────────────────────
 // Una instrucción es un mapa: {op: opcode, arg: valor}
@@ -49,6 +55,10 @@ funcion numero _codegen_nuevo() {
     cg = __map_poner(cg, "str_cnt", 0);
     cg = __map_poner(cg, "ints", __map_nuevo());
     cg = __map_poner(cg, "int_cnt", 0);
+    cg = __map_poner(cg, "funcs", __map_nuevo());
+    cg = __map_poner(cg, "func_cnt", 0);
+    cg = __map_poner(cg, "loop_stack", __map_nuevo());
+    cg = __map_poner(cg, "loop_cnt", 0);
     retornar cg;
 }
 
@@ -95,10 +105,71 @@ funcion numero _cg_emit_jmp(numero cg, numero target) {
     retornar cg;
 }
 
+// Patch the arg of a previously emitted jump/jmp_if instruction
+funcion numero _cg_patch(numero cg, numero instr_p, numero target) {
+    numero instrs = __map_obtener(cg, "instrs");
+    numero instr = __map_obtener(instrs, a_texto(instr_p));
+    cg = _cg_add_int(cg, target);
+    instr = __map_poner(instr, "arg", __map_obtener(cg, "int_tmp"));
+    cg = __map_poner(cg, "instrs", __map_poner(instrs, a_texto(instr_p), instr));
+    retornar cg;
+}
+
 funcion numero _cg_emit_jmp_if(numero cg, numero target) {
     cg = _cg_add_int(cg, target);
     numero idx = __map_obtener(cg, "int_tmp");
     cg = _cg_emit(cg, _instr(OP_JMP_IF, idx));
+    retornar cg;
+}
+
+//   JmpIf salta cuando el valor es FALSY. Eval con short-circuit para && y ||:
+//   &&: izq falsy -> false; der falsy -> false; ambos -> true
+//   ||: izq truthy -> true; si no, der decide
+funcion numero _cg_and_or(numero cg, numero izq, numero der, numero es_and) {
+    si es_and == 1 {
+        cg = _gen_expr(cg, izq);
+        numero j1 = __map_obtener(cg, "pos");
+        cg = _cg_emit_jmp_if(cg, 0);
+        cg = _gen_expr(cg, der);
+        numero j2 = __map_obtener(cg, "pos");
+        cg = _cg_emit_jmp_if(cg, 0);
+        cg = _cg_add_int(cg, 1);
+        cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+        numero jm = __map_obtener(cg, "pos");
+        cg = _cg_emit_jmp(cg, 0);
+        numero lf = __map_obtener(cg, "pos");
+        cg = _cg_add_int(cg, 0);
+        cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+        numero le = __map_obtener(cg, "pos");
+        cg = _cg_patch(cg, j1, lf);
+        cg = _cg_patch(cg, j2, lf);
+        cg = _cg_patch(cg, jm, le);
+        retornar cg;
+    }
+    // OR
+    cg = _gen_expr(cg, izq);
+    numero k1 = __map_obtener(cg, "pos");
+    cg = _cg_emit_jmp_if(cg, 0);
+    cg = _cg_add_int(cg, 1);
+    cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+    numero km = __map_obtener(cg, "pos");
+    cg = _cg_emit_jmp(cg, 0);
+    numero lb = __map_obtener(cg, "pos");
+    cg = _gen_expr(cg, der);
+    numero k2 = __map_obtener(cg, "pos");
+    cg = _cg_emit_jmp_if(cg, 0);
+    cg = _cg_add_int(cg, 1);
+    cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+    numero jm2 = __map_obtener(cg, "pos");
+    cg = _cg_emit_jmp(cg, 0);
+    numero lf2 = __map_obtener(cg, "pos");
+    cg = _cg_add_int(cg, 0);
+    cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+    numero le2 = __map_obtener(cg, "pos");
+    cg = _cg_patch(cg, k1, lb);
+    cg = _cg_patch(cg, km, le2);
+    cg = _cg_patch(cg, k2, lf2);
+    cg = _cg_patch(cg, jm2, le2);
     retornar cg;
 }
 
@@ -118,8 +189,13 @@ funcion numero _gen_expr(numero cg, numero node) {
     
     si a_texto(tp) == "Literal" {
         numero v = __map_obtener(node, "v");
-        cg = _cg_add_str(cg, v);
-        cg = _cg_emit(cg, _instr(OP_PUSH_STR, __map_obtener(cg, "str_tmp")));
+        texto vs = a_texto(v);
+        cg = _cg_add_int(cg, v);
+        si (__str_reemplazar(vs, ".", "") != vs) {
+            cg = _cg_emit(cg, _instr(OP_PUSH_NUM, __map_obtener(cg, "int_tmp")));
+        } sino {
+            cg = _cg_emit(cg, _instr(OP_PUSH_INT, __map_obtener(cg, "int_tmp")));
+        }
         retornar cg;
     }
     
@@ -148,39 +224,192 @@ funcion numero _gen_expr(numero cg, numero node) {
     
     si a_texto(tp) == "Call" {
         numero callee = __map_obtener(node, "callee");
-        numero argc = 0;
-        // Builtins: print
+        numero args = __map_obtener(node, "args");
+        numero argc = __map_obtener(args, "cnt");
+        // Builtins: print — one Print per argument, in order
         si a_texto(callee) == "imprimir" || a_texto(callee) == "print" {
-            cg = _cg_emit(cg, _instr(OP_PRINT, 0));
+            numero pi = 0;
+            mientras pi < argc {
+                cg = _gen_expr(cg, __map_obtener(args, a_texto(pi)));
+                cg = _cg_emit(cg, _instr(OP_PRINT, 0));
+                pi = pi + 1;
+            }
             retornar cg;
         }
+        si a_texto(callee) == "exito" && argc == 1 {
+            cg = _gen_expr(cg, __map_obtener(args, "0"));
+            cg = _cg_emit(cg, _instr(38, 0)); // ResultOk
+            retornar cg;
+        }
+        si a_texto(callee) == "error" && argc == 1 {
+            cg = _gen_expr(cg, __map_obtener(args, "0"));
+            cg = _cg_emit(cg, _instr(39, 0)); // ResultErr
+            retornar cg;
+        }
+        // Generate code for arguments
+        numero ai = 0;
+        mientras ai < argc {
+            cg = _gen_expr(cg, __map_obtener(args, a_texto(ai)));
+            ai = ai + 1;
+        }
         cg = _cg_emit_call(cg, callee, argc);
+        retornar cg;
+    }
+
+    si a_texto(tp) == "Assign" {
+        numero nombre = __map_obtener(node, "nombre");
+        numero valor = __map_obtener(node, "valor");
+        si __map_contiene(node, "target") {
+            numero target = __map_obtener(node, "target");
+            numero obj = __map_obtener(target, "obj");
+            numero idx = __map_obtener(target, "idx");
+            cg = _gen_expr(cg, obj);
+            cg = _gen_expr(cg, idx);
+            cg = _gen_expr(cg, valor);
+            cg = _cg_emit(cg, _instr(OP_ARRAY_SET, 0));
+            cg = _cg_add_str(cg, nombre);
+            cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        } sino {
+            cg = _gen_expr(cg, valor);
+            cg = _cg_add_str(cg, nombre);
+            cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        }
+        retornar cg;
+    }
+
+    si a_texto(tp) == "StructInit" {
+        // Desugar to map creation: __map_nuevo() then __map_poner(...)
+        numero aux = __map_nuevo();
+        aux = __map_poner(aux, "f", "__map_nuevo");
+        numero b_nuevo = __map_obtener(aux, "f");
+        cg = _cg_emit_call(cg, b_nuevo, 0);
+        numero flds = __map_obtener(node, "campos");
+        numero fc = __map_obtener(flds, "cnt");
+        numero fi = 0;
+        mientras fi < fc {
+            numero fitem = __map_obtener(flds, a_texto(fi));
+            numero fnm = __map_obtener(fitem, "nombre");
+            numero fval = __map_obtener(fitem, "valor");
+            cg = _cg_add_str(cg, fnm);
+            cg = _cg_emit(cg, _instr(OP_PUSH_STR, __map_obtener(cg, "str_tmp")));
+            cg = _gen_expr(cg, fval);
+            numero aux2 = __map_nuevo();
+            aux2 = __map_poner(aux2, "f", "__map_poner");
+            cg = _cg_emit_call(cg, __map_obtener(aux2, "f"), 3);
+            fi = fi + 1;
+        }
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "EnumInit" {
+        // EnumCtor triplet: args (en orden), EnumCtor(43, nombre),
+        // EnumVar(44, variante), EnumArgc(45, argc) — consecutivas
+        numero eargs = __map_obtener(node, "args");
+        numero ec = __map_obtener(eargs, "cnt");
+        numero ei = 0;
+        mientras ei < ec {
+            cg = _gen_expr(cg, __map_obtener(eargs, a_texto(ei)));
+            ei = ei + 1;
+        }
+        cg = _cg_add_str(cg, __map_obtener(node, "nombre"));
+        cg = _cg_emit(cg, _instr(OP_ENUM_CTOR, __map_obtener(cg, "str_tmp")));
+        cg = _cg_add_str(cg, __map_obtener(node, "variante"));
+        cg = _cg_emit(cg, _instr(OP_ENUM_VAR, __map_obtener(cg, "str_tmp")));
+        cg = _cg_add_int(cg, ec);
+        cg = _cg_emit(cg, _instr(OP_ENUM_ARGC, __map_obtener(cg, "int_tmp")));
         retornar cg;
     }
     
     si a_texto(tp) == "Binary" {
         numero op = __map_obtener(node, "op");
-        numero left = __map_obtener(node, "left");
-        numero right = __map_obtener(node, "right");
-        cg = _gen_expr(cg, left);
-        cg = _gen_expr(cg, right);
+        numero izq = __map_obtener(node, "izq");
+        numero der = __map_obtener(node, "der");
+        si a_texto(op) == "&&" { retornar _cg_and_or(cg, izq, der, 1); }
+        si a_texto(op) == "||" { retornar _cg_and_or(cg, izq, der, 0); }
+        cg = _gen_expr(cg, izq);
+        cg = _gen_expr(cg, der);
         
         si a_texto(op) == "+" { cg = _cg_emit(cg, _instr(OP_ADD, 0)); }
         si a_texto(op) == "-" { cg = _cg_emit(cg, _instr(OP_SUB, 0)); }
         si a_texto(op) == "*" { cg = _cg_emit(cg, _instr(OP_MUL, 0)); }
         si a_texto(op) == "/" { cg = _cg_emit(cg, _instr(OP_DIV, 0)); }
+        si a_texto(op) == "%" { cg = _cg_emit(cg, _instr(OP_MOD, 0)); }
         si a_texto(op) == "<" { cg = _cg_emit(cg, _instr(OP_LT, 0)); }
         si a_texto(op) == ">" { cg = _cg_emit(cg, _instr(OP_GT, 0)); }
         si a_texto(op) == "==" { cg = _cg_emit(cg, _instr(OP_EQ, 0)); }
+        si a_texto(op) == "!=" { cg = _cg_emit(cg, _instr(OP_NEQ, 0)); }
+        si a_texto(op) == ">=" { cg = _cg_emit(cg, _instr(OP_GE, 0)); }
+        si a_texto(op) == "<=" { cg = _cg_emit(cg, _instr(OP_LE, 0)); }
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Intenta" {
+        numero expr_n = __map_obtener(node, "expr");
+        cg = _gen_expr(cg, expr_n);
+        cg = _cg_emit(cg, _instr(40, 0)); // TryUnwrap
+        retornar cg;
+    }
+
+    si a_texto(tp) == "Lista" {
+        numero elems = __map_obtener(node, "elementos");
+        numero ec = __map_obtener(elems, "cnt");
+        numero ei = 0;
+        mientras ei < ec {
+            cg = _gen_expr(cg, __map_obtener(elems, a_texto(ei)));
+            ei = ei + 1;
+        }
+        cg = _cg_add_int(cg, ec);
+        cg = _cg_emit(cg, _instr(OP_ARRAY_NEW, __map_obtener(cg, "int_tmp")));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Index" {
+        numero obj = __map_obtener(node, "obj");
+        numero idx = __map_obtener(node, "idx");
+        cg = _gen_expr(cg, obj);
+        cg = _gen_expr(cg, idx);
+        cg = _cg_emit(cg, _instr(OP_ARRAY_GET, 0));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Exito" {
+        numero expr_n = __map_obtener(node, "expr");
+        cg = _gen_expr(cg, expr_n);
+        cg = _cg_emit(cg, _instr(38, 0)); // ResultOk
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Error" {
+        numero expr_n = __map_obtener(node, "expr");
+        cg = _gen_expr(cg, expr_n);
+        cg = _cg_emit(cg, _instr(39, 0)); // ResultErr
         retornar cg;
     }
     
     si a_texto(tp) == "Unary" {
         numero op = __map_obtener(node, "op");
-        numero val_n = __map_obtener(node, "val");
-        cg = _gen_expr(cg, val_n);
+        numero expr_n = __map_obtener(node, "expr");
+        cg = _gen_expr(cg, expr_n);
         si a_texto(op) == "-" { cg = _cg_emit(cg, _instr(OP_NEG, 0)); }
         si a_texto(op) == "!" { cg = _cg_emit(cg, _instr(OP_NOT, 0)); }
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Ternario" {
+        numero cnd = __map_obtener(node, "cond");
+        numero sv = __map_obtener(node, "si");
+        numero nv = __map_obtener(node, "no");
+        cg = _gen_expr(cg, cnd);
+        numero jif_p = __map_obtener(cg, "pos");
+        cg = _cg_emit(cg, _instr(OP_JMP_IF, 0));
+        cg = _gen_expr(cg, sv);
+        numero jmp_p = __map_obtener(cg, "pos");
+        cg = _cg_emit(cg, _instr(OP_JMP, 0));
+        numero fin = __map_obtener(cg, "pos");
+        cg = _cg_patch(cg, jif_p, fin);
+        cg = _gen_expr(cg, nv);
+        numero fin2 = __map_obtener(cg, "pos");
+        cg = _cg_patch(cg, jmp_p, fin2);
         retornar cg;
     }
     
@@ -188,13 +417,29 @@ funcion numero _gen_expr(numero cg, numero node) {
 }
 
 // ── Gen: Statement ────────────────────────────────────────────
+funcion numero _gen_stmts(numero cg, numero stmts) {
+    numero i = 0;
+    mientras __map_contiene(stmts, a_texto(i)) {
+        cg = _gen_stmt(cg, __map_obtener(stmts, a_texto(i)));
+        i = i + 1;
+    }
+    retornar cg;
+}
+
 funcion numero _gen_stmt(numero cg, numero stmt) {
     numero tp = __map_obtener(stmt, "tipo");
     
     si a_texto(tp) == "VarDecl" {
         numero nombre = __map_obtener(stmt, "nombre");
         numero valor = __map_obtener(stmt, "valor");
-        cg = _gen_expr(cg, valor);
+        numero tv = __map_obtener(valor, "tipo");
+        si tv != 0 && a_texto(tv) == "Vacio" {
+            // Declaración sin inicializador: empujar 0 por defecto
+            cg = _cg_add_int(cg, 0);
+            cg = _cg_emit(cg, _instr(OP_PUSH_INT, __map_obtener(cg, "int_tmp")));
+        } sino {
+            cg = _gen_expr(cg, valor);
+        }
         cg = _cg_add_str(cg, nombre);
         cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
         retornar cg;
@@ -203,18 +448,154 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
     si a_texto(tp) == "Assign" {
         numero nombre = __map_obtener(stmt, "nombre");
         numero valor = __map_obtener(stmt, "valor");
-        cg = _gen_expr(cg, valor);
-        cg = _cg_add_str(cg, nombre);
-        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        si __map_contiene(stmt, "target") {
+            numero target = __map_obtener(stmt, "target");
+            numero obj = __map_obtener(target, "obj");
+            numero idx = __map_obtener(target, "idx");
+            cg = _gen_expr(cg, obj);
+            cg = _gen_expr(cg, idx);
+            cg = _gen_expr(cg, valor);
+            cg = _cg_emit(cg, _instr(OP_ARRAY_SET, 0));
+            cg = _cg_add_str(cg, nombre);
+            cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        } sino {
+            cg = _gen_expr(cg, valor);
+            cg = _cg_add_str(cg, nombre);
+            cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        }
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Break" {
+        numero lst = __map_obtener(cg, "loop_stack");
+        numero lc = __map_obtener(cg, "loop_cnt");
+        si lc > 0 {
+            numero ctx = __map_obtener(lst, a_texto(lc - 1));
+            numero brks = __map_obtener(ctx, "breaks");
+            numero bcnt = __map_obtener(ctx, "brk_cnt");
+            numero jmp_p = __map_obtener(cg, "pos");
+            cg = _cg_emit(cg, _instr(OP_JMP, 0));
+            brks = __map_poner(brks, a_texto(bcnt), jmp_p);
+            ctx = __map_poner(ctx, "breaks", brks);
+            ctx = __map_poner(ctx, "brk_cnt", bcnt + 1);
+            cg = __map_poner(cg, "loop_stack", __map_poner(lst, a_texto(lc - 1), ctx));
+        }
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Continue" {
+        numero lst = __map_obtener(cg, "loop_stack");
+        numero lc = __map_obtener(cg, "loop_cnt");
+        si lc > 0 {
+            numero ctx = __map_obtener(lst, a_texto(lc - 1));
+            numero cnts = __map_obtener(ctx, "conts");
+            numero ccnt = __map_obtener(ctx, "con_cnt");
+            numero jmp_p = __map_obtener(cg, "pos");
+            cg = _cg_emit(cg, _instr(OP_JMP, 0));
+            cnts = __map_poner(cnts, a_texto(ccnt), jmp_p);
+            ctx = __map_poner(ctx, "conts", cnts);
+            ctx = __map_poner(ctx, "con_cnt", ccnt + 1);
+            cg = __map_poner(cg, "loop_stack", __map_poner(lst, a_texto(lc - 1), ctx));
+        }
         retornar cg;
     }
     
     si a_texto(tp) == "Return" {
         numero valor = __map_obtener(stmt, "valor");
-        si valor != 0 {
+        numero tv = __map_obtener(valor, "tipo");
+        si tv != 0 && a_texto(tv) != "Vacio" {
             cg = _gen_expr(cg, valor);
         }
         cg = _cg_emit(cg, _instr(OP_RET, 0));
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "If" {
+        numero cond = __map_obtener(stmt, "cond");
+        numero cuerpo = __map_obtener(stmt, "cuerpo");
+        numero rama_else = __map_obtener(stmt, "sino");
+        // Emit condition, then placeholder for JMP_IF
+        cg = _gen_expr(cg, cond);
+        numero jmp_if_p = __map_obtener(cg, "pos");
+        cg = _cg_emit(cg, _instr(OP_JMP_IF, 0));
+        // Then body
+        cg = _gen_stmt(cg, cuerpo);
+        // Check else branch
+        numero e_tp = __map_obtener(rama_else, "tipo");
+        numero hay_else = 0;
+        si e_tp != 0 && a_texto(e_tp) != "Vacio" { hay_else = 1; }
+        si hay_else == 1 {
+            // Emit JMP past else, then patch JMP_IF to else start
+            numero jmp_end_p = __map_obtener(cg, "pos");
+            cg = _cg_emit(cg, _instr(OP_JMP, 0));
+            numero else_start = __map_obtener(cg, "pos");
+            cg = _cg_patch(cg, jmp_if_p, else_start);
+            // Emit else branch
+            cg = _gen_stmt(cg, rama_else);
+            // Patch JMP to past else
+            numero end_pos = __map_obtener(cg, "pos");
+            cg = _cg_patch(cg, jmp_end_p, end_pos);
+        } sino {
+            // No else: patch JMP_IF to jump past body
+            numero patch_pos = __map_obtener(cg, "pos");
+            cg = _cg_patch(cg, jmp_if_p, patch_pos);
+        }
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "While" {
+        // Loop header
+        numero loop_start = __map_obtener(cg, "pos");
+        numero cond = __map_obtener(stmt, "cond");
+        numero cuerpo = __map_obtener(stmt, "cuerpo");
+        // Push loop context
+        numero lst = __map_obtener(cg, "loop_stack");
+        numero lc = __map_obtener(cg, "loop_cnt");
+        numero ctx = __map_nuevo();
+        ctx = __map_poner(ctx, "start", loop_start);
+        ctx = __map_poner(ctx, "breaks", __map_nuevo());
+        ctx = __map_poner(ctx, "brk_cnt", 0);
+        ctx = __map_poner(ctx, "conts", __map_nuevo());
+        ctx = __map_poner(ctx, "con_cnt", 0);
+        lst = __map_poner(lst, a_texto(lc), ctx);
+        cg = __map_poner(cg, "loop_stack", lst);
+        cg = __map_poner(cg, "loop_cnt", lc + 1);
+        // Condition
+        cg = _gen_expr(cg, cond);
+        numero jmp_if_p = __map_obtener(cg, "pos");
+        cg = _cg_emit(cg, _instr(OP_JMP_IF, 0));
+        // Body
+        cg = _gen_stmt(cg, cuerpo);
+        // JMP back to loop start
+        cg = _cg_add_int(cg, loop_start);
+        cg = _cg_emit(cg, _instr(OP_JMP, __map_obtener(cg, "int_tmp")));
+        // Patch JMP_IF to jump past body
+        numero patch_pos = __map_obtener(cg, "pos");
+        cg = _cg_patch(cg, jmp_if_p, patch_pos);
+        // Pop loop context + patch breaks → patch_pos, conts → loop_start
+        numero lst2 = __map_obtener(cg, "loop_stack");
+        numero ctx2 = __map_obtener(lst2, a_texto(lc));
+        cg = __map_poner(cg, "loop_cnt", lc);
+        numero brks = __map_obtener(ctx2, "breaks");
+        numero bcnt = __map_obtener(ctx2, "brk_cnt");
+        entero bi = 0;
+        mientras bi < bcnt {
+            cg = _cg_patch(cg, __map_obtener(brks, a_texto(bi)), patch_pos);
+            bi = bi + 1;
+        }
+        numero cnts = __map_obtener(ctx2, "conts");
+        numero ccnt = __map_obtener(ctx2, "con_cnt");
+        entero ci = 0;
+        mientras ci < ccnt {
+            cg = _cg_patch(cg, __map_obtener(cnts, a_texto(ci)), loop_start);
+            ci = ci + 1;
+        }
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Block" {
+        numero cuerpo = __map_obtener(stmt, "cuerpo");
+        cg = _gen_stmts(cg, cuerpo);
         retornar cg;
     }
     
@@ -224,18 +605,93 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
         retornar cg;
     }
     
+    si a_texto(tp) == "Func" {
+        numero nombre = __map_obtener(stmt, "nombre");
+        numero params = __map_obtener(stmt, "params");
+        numero cuerpo = __map_obtener(stmt, "cuerpo");
+        numero start = __map_obtener(cg, "pos");
+        // Register function: {nombre, params: {0:"a",1:"b",cnt}, start}
+        numero pn = __map_obtener(params, "cnt");
+        numero pm = __map_nuevo();
+        entero pi = 0;
+        mientras pi < pn {
+            numero p = __map_obtener(params, a_texto(pi));
+            pm = __map_poner(pm, a_texto(pi), __map_obtener(p, "nombre"));
+            pi = pi + 1;
+        }
+        pm = __map_poner(pm, "cnt", pn);
+        numero funcs = __map_obtener(cg, "funcs");
+        numero fc = __map_obtener(cg, "func_cnt");
+        numero f = __map_nuevo();
+        f = __map_poner(f, "nombre", nombre);
+        f = __map_poner(f, "params", pm);
+        f = __map_poner(f, "start", start);
+        funcs = __map_poner(funcs, a_texto(fc), f);
+        cg = __map_poner(cg, "funcs", funcs);
+        cg = __map_poner(cg, "func_cnt", fc + 1);
+        // Emit body
+        cg = _gen_stmt(cg, cuerpo);
+        // Emit RET at end of function
+        cg = _cg_emit(cg, _instr(OP_RET, 0));
+        retornar cg;
+    }
+    
     retornar cg;
 }
 
 // ── Main Codegen ──────────────────────────────────────────────
+// Separa el AST en funciones (registradas en la tabla funcs) y
+// código top-level (registrado como __main__), para que la VM
+// encuentre el entry point y las funciones llamables.
 funcion numero codegen_generar(numero ast) {
     numero cg = _codegen_nuevo();
     
     numero tp = __map_obtener(ast, "tipo");
+    numero cuerpo = __map_nuevo();
+    numero cnt = 0;
     si a_texto(tp) == "Programa" {
-        cg = _gen_stmt(cg, ast);
+        cuerpo = __map_obtener(ast, "cuerpo");
+        cnt = __map_obtener(cuerpo, "cnt");
     } sino {
-        cg = _gen_stmt(cg, ast);
+        cuerpo = __map_poner(cuerpo, "0", ast);
+        cuerpo = __map_poner(cuerpo, "cnt", 1);
+        cnt = 1;
+    }
+    
+    // Pass 1: emit functions (register + body + RET)
+    entero i = 0;
+    mientras i < cnt {
+        numero stmt = __map_obtener(cuerpo, a_texto(i));
+        numero stp = __map_obtener(stmt, "tipo");
+        si a_texto(stp) == "Func" {
+            cg = _gen_stmt(cg, stmt);
+        }
+        i = i + 1;
+    }
+    
+    // Register __main__ (top-level code) starting at current pos
+    numero main_start = __map_obtener(cg, "pos");
+    numero funcs = __map_obtener(cg, "funcs");
+    numero fc = __map_obtener(cg, "func_cnt");
+    numero pm = __map_nuevo();
+    pm = __map_poner(pm, "cnt", 0);
+    numero f = __map_nuevo();
+    f = __map_poner(f, "nombre", "__main__");
+    f = __map_poner(f, "params", pm);
+    f = __map_poner(f, "start", main_start);
+    funcs = __map_poner(funcs, a_texto(fc), f);
+    cg = __map_poner(cg, "funcs", funcs);
+    cg = __map_poner(cg, "func_cnt", fc + 1);
+    
+    // Pass 2: emit top-level (non-Func) statements
+    i = 0;
+    mientras i < cnt {
+        numero stmt = __map_obtener(cuerpo, a_texto(i));
+        numero stp = __map_obtener(stmt, "tipo");
+        si a_texto(stp) != "Func" {
+            cg = _gen_stmt(cg, stmt);
+        }
+        i = i + 1;
     }
     
     cg = _cg_emit(cg, _instr(OP_HALT, 0));
@@ -249,14 +705,21 @@ funcion numero _op_name(numero op) {
     si op == 1 { retornar "PUSH_NUM"; }
     si op == 2 { retornar "PUSH_STR"; }
     si op == 3 { retornar "PUSH_INT"; }
+    si op == 4 { retornar "PUSH_BOOL"; }
     si op == 5 { retornar "ADD"; }
     si op == 6 { retornar "SUB"; }
     si op == 7 { retornar "MUL"; }
     si op == 8 { retornar "DIV"; }
+    si op == 9 { retornar "MOD"; }
     si op == 10 { retornar "EQ"; }
     si op == 11 { retornar "NEQ"; }
     si op == 12 { retornar "LT"; }
+    si op == 13 { retornar "LE"; }
     si op == 14 { retornar "GT"; }
+    si op == 15 { retornar "GE"; }
+    si op == 16 { retornar "AND"; }
+    si op == 17 { retornar "OR"; }
+    si op == 18 { retornar "NOT"; }
     si op == 19 { retornar "NEG"; }
     si op == 20 { retornar "STORE"; }
     si op == 21 { retornar "LOAD"; }
