@@ -6,6 +6,10 @@
 // Architecture: Map-based state (passed as parameter, updated via _res pattern).
 // Each parse function returns {st: updated_state, node: ast_node}.
 
+// Funciones anónimas (IIFE) hoisteadas durante el parseo — se fusionan al Programa
+lista<numero> lambdas_hoistadas = [];
+entero lambda_cnt = 0;
+
 // ── State Helpers ──────────────────────────────────────────────
 funcion numero _st_tk(numero st) {
     numero pos = __map_obtener(st, "pos");
@@ -125,6 +129,75 @@ funcion numero _parse_pr(numero st) {
         n = __map_poner(n, "tipo", "Intenta");
         n = __map_poner(n, "expr", _en);
         retornar _res(st, n);
+    }
+
+    // Función anónima (IIFE): funcion(params) { body } (args)
+    si (tt == 6 && (tvs == "funcion" || tvs == "function")) {
+        numero st_chk = _st_adv(st);
+        si (_st_ch(st_chk, 5, "(")) {
+            st = _st_adv(st_chk);
+            numero lams = __map_nuevo();
+            numero lc = 0;
+            mientras (!_st_eof(st)) {
+                si (_st_ch(st, 5, ")")) { romper; }
+                si (lc > 0) {
+                    si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                }
+                texto pt2 = a_texto(_st_tv(st));
+                si (_st_tp(st)) {
+                    st = _st_tp_skip(st);
+                } sino {
+                    st = _st_adv(st);
+                }
+                texto pn2 = a_texto(_st_tv(st));
+                st = _st_adv(st);
+                numero pm2 = __map_nuevo();
+                pm2 = __map_poner(pm2, "nombre", pn2);
+                pm2 = __map_poner(pm2, "tipo", pt2);
+                lams = __map_poner(lams, a_texto(lc), pm2);
+                lc = lc + 1;
+            }
+            st = _st_adv(st);
+            lams = __map_poner(lams, "cnt", lc);
+            numero rf = _parse_blk(st);
+            numero fbody = __map_obtener(rf, "node");
+            st = __map_obtener(rf, "st");
+            texto lname = "__lambda_" + a_texto(lambda_cnt);
+            numero lf = __map_nuevo();
+            lf = __map_poner(lf, "tipo", "Func");
+            lf = __map_poner(lf, "nombre", lname);
+            lf = __map_poner(lf, "params", lams);
+            lf = __map_poner(lf, "cuerpo", fbody);
+            lambdas_hoistadas.agregar(lf);
+            lambda_cnt = lambda_cnt + 1;
+            // IIFE: si sigue (args), construye Call(callee=lname)
+            si (_st_ch(st, 5, "(")) {
+                st = _st_adv(st);
+                numero largs = __map_nuevo();
+                numero lac = 0;
+                mientras (!_st_eof(st)) {
+                    si (_st_ch(st, 5, ")")) { romper; }
+                    si (lac > 0) {
+                        si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                    }
+                    numero rea = _parse_expr(st);
+                    largs = __map_poner(largs, a_texto(lac), __map_obtener(rea, "node"));
+                    st = __map_obtener(rea, "st");
+                    lac = lac + 1;
+                }
+                st = _st_adv(st);
+                largs = __map_poner(largs, "cnt", lac);
+                numero cn = __map_nuevo();
+                cn = __map_poner(cn, "tipo", "Call");
+                cn = __map_poner(cn, "callee", lname);
+                cn = __map_poner(cn, "args", largs);
+                retornar _res(st, cn);
+            }
+            numero lid = __map_nuevo();
+            lid = __map_poner(lid, "tipo", "Ident");
+            lid = __map_poner(lid, "nombre", lname);
+            retornar _res(st, lid);
+        }
     }
 
     si (tt == 6 && (tvs == "verdadero" || tvs == "true" ||
@@ -1086,6 +1159,7 @@ funcion numero _parse_prog(numero st) {
     prog = __map_poner(prog, "tipo", "Programa");
     numero stmts = __map_nuevo();
     numero sc = 0;
+    lambdas_hoistadas = [];
     mientras (!_st_eof(st)) {
         si (_st_ch(st, 5, ";") || _st_ch(st, 5, "}")) {
             st = _st_adv(st);
@@ -1104,6 +1178,14 @@ funcion numero _parse_prog(numero st) {
         st = __map_obtener(r, "st");
         stmts = __map_poner(stmts, a_texto(sc), __map_obtener(r, "node"));
         sc = sc + 1;
+    }
+    stmts = __map_poner(stmts, "cnt", sc);
+    // Fusionar funciones anónimas hoisteadas (IIFE) al Programa
+    entero li = 0;
+    mientras li < largo(lambdas_hoistadas) {
+        stmts = __map_poner(stmts, a_texto(sc), lambdas_hoistadas[li]);
+        sc = sc + 1;
+        li = li + 1;
     }
     stmts = __map_poner(stmts, "cnt", sc);
     prog = __map_poner(prog, "cuerpo", stmts);
