@@ -2683,6 +2683,7 @@ impl SemanticAnalyzer {
                 match expr_type {
                     TypeInfo::Lista(inner) => *inner,
                     TypeInfo::Texto => TypeInfo::Texto,
+                    TypeInfo::Numero => TypeInfo::Numero,
                     _ => {
                         self.errors.push(SemError {
                             code: "E044".to_string(),
@@ -2763,6 +2764,7 @@ impl SemanticAnalyzer {
                     "largo" | "len" | "length" => match expr_type {
                         TypeInfo::Lista(_) => TypeInfo::Entero,
                         TypeInfo::Texto => TypeInfo::Entero,
+                        TypeInfo::Numero => TypeInfo::Numero,
                         _ => {
                             self.errors.push(SemError {
                                 code: "E047".to_string(),
@@ -3282,7 +3284,7 @@ impl SemanticAnalyzer {
 
     fn type_to_info(&self, t: Type) -> TypeInfo {
         match t {
-            Type::Numero => TypeInfo::Decimal,
+            Type::Numero => TypeInfo::Numero,
             Type::Entero => TypeInfo::Entero,
             Type::Decimal => TypeInfo::Decimal,
             Type::Texto => TypeInfo::Texto,
@@ -3526,7 +3528,7 @@ mod tests {
 
     #[test]
     fn test_type_mismatch() {
-        let errors = analyze(r#"numero x = "hola";"#);
+        let errors = analyze(r#"entero x = "hola";"#);
         assert!(!errors.is_empty());
         assert_eq!(errors[0].code, "E031");
     }
@@ -3560,7 +3562,7 @@ mod tests {
 
     #[test]
     fn test_arithmetic_type_error() {
-        let errors = analyze(r#"numero x = 1 + "hola";"#);
+        let errors = analyze(r#"entero x = 1 + "hola";"#);
         assert!(!errors.is_empty());
     }
 
@@ -3632,7 +3634,7 @@ mod tests {
     #[test]
     fn test_function_call_arg_type() {
         let source =
-            r#"funcion numero suma(numero a, numero b) { retornar a + b; } suma(1, "hola");"#;
+            r#"funcion numero suma(entero a, entero b) { retornar a + b; } suma(1, "hola");"#;
         let errors = analyze(source);
         assert!(!errors.is_empty());
         assert_eq!(errors[0].code, "E041");

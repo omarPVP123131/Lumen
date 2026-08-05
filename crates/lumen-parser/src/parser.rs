@@ -2399,6 +2399,8 @@ impl Parser {
                 if self.check(&[TokenKind::Less]) && self.is_next_type_in_type_context() {
                     let args = self.parse_type_args()?;
                     Some(Type::GenericStruct { name, args })
+                } else if name == "cualquiera" || name == "any" {
+                    Some(Type::Numero)
                 } else {
                     Some(Type::Struct(name))
                 }

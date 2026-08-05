@@ -91,7 +91,7 @@ fn test_syntax_error() {
 
 #[test]
 fn test_semantic_error() {
-    let result = run_source("numero x = \"hola\";");
+    let result = run_source("entero x = \"hola\";");
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("SemError"));
 }
