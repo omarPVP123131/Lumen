@@ -18,7 +18,7 @@
 | **Optimización fixpoint** | ✅ **861s → 20.1s (43x)** | COW con `Arc` en Value (vm.rs) — clonado O(1) de strings/arrays grandes; fixpoint v4 byte-IDENTICAL |
 | **Bootstrapping doble** (vm.nv compilada por LÚMEN y auto-ejecutándose) | ⏳ | Próximo hito — 0 dependencias de Rust |
 | **Optimización fixpoint** | ✅ | Fixpoint v4 re-verificado en **5s** (112,368 B byte-IDENTICAL, 4 Ago) |
-| **Sprint 8: Dogfooding + release v2.4.0** | 🟢 en curso | **fuego: 116/116 compilan · 71/116 CORRECTOS (+10)** con la cadena 100% LÚMEN (40 de 116 no-corregidos son gaps conocidos: opcion/resultado, traits, closures, FFI/GUI, tuplas) |
+| **Sprint 8: Dogfooding + release v2.4.0** | 🟢 en curso | **fuego: 116/116 compilan · 75/116 CORRECTOS (+14)** con la cadena 100% LÚMEN (**opcion.nv + resultado.nv ahora OK+CORRECTO** vía Option/Result reales; 38 no-corregidos son gaps: traits, closures, FFI/GUI, tuplas, timing) — fixpoint v4 **113,857 B byte-IDENTICAL** |
 
 ### Arquitectura (actualizada)
 

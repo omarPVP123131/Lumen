@@ -199,6 +199,18 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **43 incompatibles = gaps conocidos**: `ninguno`/`algun`/`exito`/`error` (Option/Result ~10 ejemplos: opcion, resultado, audio_demo, charts_demo, graficos_*, tilemap, tui_pro/tui_puro/tui_temas), `rasgo` (traits: 43_tipos_asociados, 44_extension_methods), closures `|x|` (lambda), tuplas/destructuring/params_default/genericos (feature partial), FFI/red/sistema/sqlite/json/csv (natives `__ffi_*` que la VM LÚMEN no implementa — corren headers pero divergen), `debug_parser3`+`gui_ventana` (timeouts GUI/loop).
 - **Pendientes**: u opcion/resultado (`ninguno`/`algun`/`exito`/`error` reales en el self-hosted — desbloquea ~10 ejemplos) → docs + AGENTS v2.4.0 + release → bootstrapping doble.
 
+**Progreso (4 Ago — sesión AI · Option/Result REALES en el self-hosted — fuego 75/116):**
+- **lexer.nv (self-hosted)**: keywords `algun`/`some` + `ninguno`/`none` añadidas al mapa kw (faltaban — antes se parseaban como Ident → "Variable 'ninguno' no definida"). `exito`/`error` ya estaban.
+- **parser.nv**: `_st_tp` ahora reconoce `opcion` y `resultado` como tipos (antes `funcion opcion<entero> f()` tomaba `opcion` como NOMBRE de función → func mangled). `_st_tp_skip` reescrito para genéricos múltiples/anidados (`resultado<entero, texto>`, `lista<lista<x>>`).
+- **codegen.nv**: `algun(x)` → op 41 (OptionSome) en `_cg_emit_call`; nodo `Ninguno` → op 42 (OptionNone) en `_gen_expr` (espejo de Exito/Error).
+- **vm.rs `codegen_to_nvc` (cg_to_vm)**: añadidos `38=>38 ResultOk`, `39=>39 ResultErr`, `41=>41 OptionSome`, `42=>42 OptionNone` — **antes caían en `_=>0 Nop`** (por eso `algun(42)` imprimía `42` crudo y `ninguno` rompía).
+- **BUG RAÍZ `elegir` con bodies con llaves** ("Variable 'caso' no definida"): `_parse_stmt` NO despachaba `{` como bloque → el body-loop del caso consumía `{ imprimir(10); }` token a token y **se comía el `caso ninguno:` de case2** (emitía `Load caso; OptionNone` como statements de case1). Fix: dispatch `si (_st_ch(st,5,"{")) { _parse_blk(st) }` como fallthrough de `_parse_stmt` (como si/while/mientras). Diagnosticado con DBG temporales (ELEGIR/CASO/body) — `imprimir(a,b,c)` emite cada arg en su propia línea, el `rg DBG` no agrupaba.
+- **Resultados**: `opcion.nv` y `resultado.nv` **OK+CORRECTO** (byte-idénticos a Rust en la cadena 100% LÚMEN) · probe_elegir self==rust exacto · **fixpoint v4 CONFIRMADO 113,857 B byte-IDENTICAL** (self→self2, 5s) · cargo test 0 FAILED.
+- **fuego.ps1: 116/116 compilan · 75 CORRECTOS (+4) · 38 INCOMPATIBLES · 3 timeouts · 0 fallos**. Los ejemplos GUI/gráficos/TUI (audio, charts, graficos_*, tilemap, tui_*) ya no fallan con `ninguno` — ahora corren (divergen por rendering/red/timing).
+- **Commit**: `56472c4`.
+- **Pendientes**: `rasgo` (traits: 43_tipos_asociados, 44_extension_methods) y closures `|x|` (lambda) en el self-hosted → benchmarks vs Rust → docs + AGENTS v2.4.0 + release → bootstrapping doble.
+
+
 ---
 
 ## Bugs Conocidos y Fixes Recientes
