@@ -142,6 +142,14 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Commits**: `bdeb933` (handlers + banda + Store + demo 0 diffs), `f015ec1` (a_entero O(1) + fix colisión banda)
 - **Pendientes**: corutinas reales (`__coro_reanudar`/`__coro_ceder` con intercambio de contexto st/sp/pc — modelo cooperativo como vm.rs:1679-1734) → batería ampliada completa → Sprint 8 dogfooding stdlib + release v2.4.0
 
+**Progreso (4 Ago — sesión AI · Sprint 7: OPTIMIZACIÓN fixpoint 861s → 20.1s, 43x — COW con Arc):**
+- **Profiler per-opcode en `VM::run()`** (vm.rs ~2320, gated por `LUMEN_PROFILE=1`): contadores/tiempos por opcode; `Call` desagregado como `Call:<nombre>` vía `bytecode.names`. Fix: check `!var.is_empty()` (antes `is_ok()` → env vacío lo activaba)
+- **Diagnóstico O(n²)** (demo 4KB, 962,917 instrs, 1.7s): Load 48% (2.5µs/call — clona lista `chars` por token), ArrayGet 18% (45µs/call — clona la lista en cada acceso), `__str_subcadena_chars`+`sub_from_chars` 18.6% (~417µs/call — `a.clone()` de TODO el array en cada slice). Escalamiento 23.7x bytes → ~506x tiempo = O(n²) (23.7²=562)
+- **FIX: COW con `Arc`** en `Value::Str(Arc<str>)` y `Value::Array(Arc<Vec<Value>>)` (value.rs) + constructores `Value::str(s)`/`Value::arr(v)`; clonar Values grandes = O(1) — `Rc` no servía (no es Send/Sync; `__par_mapa`/`__par_unir` lanzan threads con Values)
+- **Transformación mecánica** de ~130 sitios en vm.rs/min_json.rs: construcciones `Value::Str(x)`/`Value::Array(x)` (un-ident) → `Value::str`/`Value::arr`; patrones multi-palabra (`mut v`, `mut arr`) → `Value::Array(mut v)` + `Arc::make_mut(&mut v)` en mutaciones (agregar, deque, heap, linked, conjuntos, ArraySet, ArrayPush, list_reverse/sort); iteradores `items.iter()`/`items.as_ref()` en streams/par_mapa; armas incompatibles → `s.to_string()`; `Value::str("lit".into())` → `Value::str("lit")` (E0283 con impl Into<String>); reverts de serde_json (`Value::arr` clobbered por el replace global → `serde_json::Value::Array`)
+- **Resultados**: **fixpoint v4 CONFIRMADO en 20.1s** (baseline 861s = **43x**): compiler_v4.nvc → self_out.nvc (112,368 B) → self_out2.nvc **byte-IDENTICAL (0 diffs)** · demo 0.9s · cargo test ~379 verdes · batería **8/8** (2 DIFF pre-existentes: `44_extension_methods` `este` no definida + `math` — fallan en ambas VMs)
+- **Commits**: `ccc6ecd` (COW Arc — fixpoint 43x) · previo: `9531366` (corutinas), `fa79d36` (docs plan)
+
 ---
 
 ## Bugs Conocidos y Fixes Recientes

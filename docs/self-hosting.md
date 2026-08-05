@@ -15,6 +15,7 @@
 | **Sprint 5: Pipeline puro LÚMEN** | ✅ | `lexer.nv`→`parser.nv`→`codegen.nv`→`__codegen_a_nvc` sin `__compile_nv` |
 | **Sprint 6: Imports + Gramática** | ✅ | 6.1 imports ✅ · 6.2 gramática ✅ · 6.3 lexer CRLF ✅ · 6.4 enum/elegir/sea reales ✅ · 6.5 cortocircuito `&&`/`\|\|` ✅ · fixpoint v4 ✅ |
 | **Sprint 7: VM en LÚMEN (`vm.nv`)** | 🟢 funcional | Ejecuta `demo_completo.nvc` **89/89 líneas 0 diffs en ~0.9s** (era ~120s); corutinas reales byte-IDENTICAL; batería test_vm.ps1 **27/28** (solo `44_extension_methods`+`math`, pre-existentes, fallan en ambas VMs) |
+| **Optimización fixpoint** | ✅ **861s → 20.1s (43x)** | COW con `Arc` en Value (vm.rs) — clonado O(1) de strings/arrays grandes; fixpoint v4 byte-IDENTICAL |
 | **Bootstrapping doble** (vm.nv compilada por LÚMEN y auto-ejecutándose) | ⏳ | Próximo hito — 0 dependencias de Rust |
 | **Optimización fixpoint** | 🔄 | Fixpoint v4 hoy ~10-18 min → objetivo <10s |
 | **Sprint 8: Dogfooding + release v2.4.0** | ⏳ | Pendiente |
@@ -249,7 +250,8 @@ si (_st_ch(st, 4, "<")) {
 | Tarea | Estado | Notas |
 |-------|--------|-------|
 | `vm.nv` — ejecutador de .nvc en LÚMEN puro | ✅ | Dispatch 0-46, builtins vía natives boxeados (JSON, tarea, coro, crypto, fs, env, tiempo, tipo_de), bandas boxed, **demo_completo 0 diffs ~0.9s**, **corutinas reales** (reanudar/ceder/ret con intercambio st/sp/pc), batería **27/28** (2 DIFFs pre-existentes en ambas VMs: `44_extension_methods`+`math`) |
-| Optimización VM LÚMEN (~200s → <10s) | 🔄 | `a_entero` O(n)→O(1) ya hecho (demo 120s→0.9s); falta tabla de salto + internamiento de strings en vm.nv; fixpoint v4 ~10-18 min → <10s |
+| Optimización VM LÚMEN (~200s → <10s) | 🔄 | `a_entero` O(n)→O(1) (demo 120s→0.9s); falta tabla de salto + internamiento de strings en vm.nv — la VM Rust ya está optimizada (COW Arc) |
+| **Optimización VM Rust (causa del O(n²) del fixpoint)** | ✅ | **COW con `Arc`** en `Value::Str(Arc<str>)`/`Value::Array(Arc<Vec<Value>>)`: clonar Values grandes = O(1) (antes Load/ArrayGet/`__str_subcadena_chars` clonaban listas enteras → O(n²)). **Fixpoint v4: 861s → 20.1s (43x)**, self_out2 byte-IDENTICAL (112,368 B) |
 | Bootstrapping doble (compiler_v4 compila vm.nv; vm.nvc corre en VM LÚMEN) | ⏳ | 0 dependencias de Rust — hito final |
 | Fixpoint doble (compilador + VM) | ⏳ | |
 
