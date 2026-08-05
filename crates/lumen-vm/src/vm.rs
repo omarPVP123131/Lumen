@@ -203,13 +203,13 @@ impl VM {
         }
 
         if name == "leer" || name == "read" {
-            self.push(Value::Str(String::new()));
+            self.push(Value::str(String::new()));
             return Some(Ok(()));
         }
 
         if name == "a_texto" || name == "to_texto" || name == "__str_from" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Str(s));
+            self.push(Value::str(s));
             return Some(Ok(()));
         }
 
@@ -246,11 +246,11 @@ impl VM {
 
         if name == "agregar" || name == "push" {
             let mut iter = args.clone().into_iter();
-            let list = iter.next().unwrap_or(Value::Array(vec![]));
+            let list = iter.next().unwrap_or(Value::arr(vec![]));
             let item = iter.next().unwrap_or(Value::Void);
             match list {
                 Value::Array(mut v) => {
-                    v.push(item);
+                    Arc::make_mut(&mut v).push(item);
                     self.push(Value::Array(v));
                 }
                 _ => {
@@ -270,19 +270,19 @@ impl VM {
 
         if name == "__str_upper" || name == "__str_mayusculas" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Str(s.to_uppercase()));
+            self.push(Value::str(s.to_uppercase()));
             return Some(Ok(()));
         }
 
         if name == "__str_lower" || name == "__str_minusculas" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Str(s.to_lowercase()));
+            self.push(Value::str(s.to_lowercase()));
             return Some(Ok(()));
         }
 
         if name == "__str_trim" || name == "__str_recortar" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Str(s.trim().to_string()));
+            self.push(Value::str(s.trim().to_string()));
             return Some(Ok(()));
         }
 
@@ -297,18 +297,18 @@ impl VM {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let delim = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let parts: Vec<Value> = if delim.is_empty() {
-                s.chars().map(|c| Value::Str(c.to_string())).collect()
+                s.chars().map(|c| Value::str(c.to_string())).collect()
             } else {
-                s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
+                s.split(&delim).map(|p| Value::str(p.to_string())).collect()
             };
-            self.push(Value::Array(parts));
+            self.push(Value::arr(parts));
             return Some(Ok(()));
         }
 
         if name == "__str_ord" || name == "__str_codigo" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let codes: Vec<Value> = s.chars().map(|c| Value::Int(c as i64)).collect();
-            self.push(Value::Array(codes));
+            self.push(Value::arr(codes));
             return Some(Ok(()));
         }
 
@@ -327,16 +327,16 @@ impl VM {
             let start = start.min(s.len());
             let end = end.min(s.len()).max(start);
             let sub: String = s.chars().skip(start).take(end - start).collect();
-            self.push(Value::Str(sub));
+            self.push(Value::str(sub));
             return Some(Ok(()));
         }
 
         if name == "__str_concat_list" || name == "__str_concatenar_lista" {
-            let list = args.first().cloned().unwrap_or(Value::Array(vec![]));
+            let list = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match list {
                 Value::Array(items) => {
                     let result = items.iter().map(|v| format!("{}", v)).collect::<String>();
-                    self.push(Value::Str(result));
+                    self.push(Value::str(result));
                 }
                 _ => {
                     return builtin_err(VmError::TypeError(
@@ -356,8 +356,8 @@ impl VM {
 
         if name == "__str_to_chars" || name == "__str_a_caracteres" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            let chars: Vec<Value> = s.chars().map(|c| Value::Str(c.to_string())).collect();
-            self.push(Value::Array(chars));
+            let chars: Vec<Value> = s.chars().map(|c| Value::str(c.to_string())).collect();
+            self.push(Value::arr(chars));
             return Some(Ok(()));
         }
 
@@ -365,14 +365,14 @@ impl VM {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let from = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let to = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Str(s.replace(&from, &to)));
+            self.push(Value::str(s.replace(&from, &to)));
             return Some(Ok(()));
         }
 
         if name == "__str_subcadena_chars" || name == "__str_slice_chars" {
             let cs = match args.first() {
                 Some(Value::Array(a)) => a.clone(),
-                _ => vec![],
+                _ => Arc::new(vec![]),
             };
             let st = args.get(1).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(0);
             let en = args.get(2).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(-1);
@@ -383,7 +383,7 @@ impl VM {
             for c in cs.iter().skip(st as usize).take((en - st).max(0) as usize) {
                 out.push_str(&format!("{}", c));
             }
-            self.push(Value::Str(out));
+            self.push(Value::str(out));
             return Some(Ok(()));
         }
 
@@ -396,15 +396,15 @@ impl VM {
                 })
                 .unwrap_or(0);
             let c = char::from_u32(n as u32).map(|c| c.to_string()).unwrap_or_default();
-            self.push(Value::Str(c));
+            self.push(Value::str(c));
             return Some(Ok(()));
         }
 
         if name == "__file_read" || name == "__leer_archivo" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::read_to_string(&path) {
-                Ok(content) => self.push(Value::Exito(Box::new(Value::Str(content)))),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Ok(content) => self.push(Value::Exito(Box::new(Value::str(content)))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -414,7 +414,7 @@ impl VM {
             let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::write(&path, &content) {
                 Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -429,7 +429,7 @@ impl VM {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::metadata(&path) {
                 Ok(meta) => self.push(Value::Int(meta.len() as i64)),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -442,10 +442,10 @@ impl VM {
                 Ok(mut file) => {
                     match file.write_all(content.as_bytes()) {
                         Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -461,7 +461,7 @@ impl VM {
             };
             match std::fs::write(&path, &bytes) {
                 Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -469,10 +469,10 @@ impl VM {
         if name == "__file_bytes" || name == "__leer_bytes" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::read(&path) {
-                Ok(data) => self.push(Value::Array(
+                Ok(data) => self.push(Value::arr(
                     data.iter().map(|&b| Value::Int(b as i64)).collect(),
                 )),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -497,7 +497,7 @@ impl VM {
                 _ => 0.0,
             }).unwrap_or(0.0);
             let bytes: Vec<Value> = n.to_le_bytes().iter().map(|&b| Value::Int(b as i64)).collect();
-            self.push(Value::Array(bytes));
+            self.push(Value::arr(bytes));
             return Some(Ok(()));
         }
 
@@ -507,7 +507,7 @@ impl VM {
             let result = self.codegen_to_nvc(cg);
             return match result {
                 Ok(bytes) => { self.push(bytes); Some(Ok(())) }
-                Err(_) => { self.push(Value::Error(Box::new(Value::Str("codegen_to_nvc failed".into())))); Some(Ok(())) }
+                Err(_) => { self.push(Value::Error(Box::new(Value::str("codegen_to_nvc failed")))); Some(Ok(())) }
             };
         }
 
@@ -517,7 +517,7 @@ impl VM {
             let source = match std::fs::read_to_string(&path) {
                 Ok(s) => s,
                 Err(e) => {
-                    self.push(Value::Error(Box::new(Value::Str(format!("IO: {}", e)))));
+                    self.push(Value::Error(Box::new(Value::str(format!("IO: {}", e)))));
                     return Some(Ok(()));
                 }
             };
@@ -531,7 +531,7 @@ impl VM {
             let mut program = match loader.resolve_imports(&source, base_dir) {
                 Ok(p) => p,
                 Err(e) => {
-                    self.push(Value::Error(Box::new(Value::Str(format!("Loader error: {:?}", e)))));
+                    self.push(Value::Error(Box::new(Value::str(format!("Loader error: {:?}", e)))));
                     return Some(Ok(()));
                 }
             };
@@ -539,7 +539,7 @@ impl VM {
             let sem_errors = sema.analyze(&mut program);
             if !sem_errors.is_empty() {
                 let msg = sem_errors.iter().map(|e| format!("{}", e.message)).collect::<Vec<_>>().join("; ");
-                self.push(Value::Error(Box::new(Value::Str(format!("Sem error: {}", msg)))));
+                self.push(Value::Error(Box::new(Value::str(format!("Sem error: {}", msg)))));
                 return Some(Ok(()));
             }
             let builder = lumen_ir::builder::IRBuilder::new();
@@ -548,7 +548,7 @@ impl VM {
             let (bytecode, _) = codegen.generate(&ir);
             let bytes_vec = bytecode.encode();
             let bytes: Vec<Value> = bytes_vec.into_iter().map(|b| Value::Int(b as i64)).collect();
-            self.push(Value::Array(bytes));
+            self.push(Value::arr(bytes));
             return Some(Ok(()));
         }
 
@@ -576,7 +576,7 @@ impl VM {
                     ))
                 }
             };
-            arr.reverse();
+            Arc::make_mut(&mut arr).reverse();
             self.push(Value::Array(arr));
             return Some(Ok(()));
         }
@@ -596,7 +596,7 @@ impl VM {
                     ))
                 }
             };
-            arr.sort_by(|a, b| {
+            Arc::make_mut(&mut arr).sort_by(|a, b| {
                 let an = a.as_num().unwrap_or(f64::MAX);
                 let bn = b.as_num().unwrap_or(f64::MAX);
                 an.partial_cmp(&bn).unwrap_or(std::cmp::Ordering::Equal)
@@ -660,7 +660,7 @@ impl VM {
             match m {
                 Value::Map(m) => {
                     let keys: Vec<Value> = m.into_iter().map(|(k, _)| k).collect();
-                    self.push(Value::Array(keys));
+                    self.push(Value::arr(keys));
                 }
                 _ => {
                     return builtin_err(VmError::TypeError("__map_keys espera diccionario".into()))
@@ -765,17 +765,17 @@ impl VM {
         }
 
         if name == "__deque_new" || name == "__deque_nuevo" {
-            self.push(Value::Array(vec![]));
+            self.push(Value::arr(vec![]));
             return Some(Ok(()));
         }
 
         if name == "__deque_push_front" || name == "__deque_agregar_frente" {
             let mut it = args.clone().into_iter();
-            let d = it.next().unwrap_or(Value::Array(vec![]));
+            let d = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match d {
                 Value::Array(mut v) => {
-                    v.insert(0, item);
+                    Arc::make_mut(&mut v).insert(0, item);
                     self.push(Value::Array(v));
                 }
                 _ => {
@@ -789,11 +789,11 @@ impl VM {
 
         if name == "__deque_push_back" || name == "__deque_agregar_final" {
             let mut it = args.clone().into_iter();
-            let d = it.next().unwrap_or(Value::Array(vec![]));
+            let d = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match d {
                 Value::Array(mut v) => {
-                    v.push(item);
+                    Arc::make_mut(&mut v).push(item);
                     self.push(Value::Array(v));
                 }
                 _ => {
@@ -808,12 +808,12 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match d {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
                 } else {
-                    v.remove(0)
+                    Arc::make_mut(&mut v).remove(0)
                 }),
                 _ => {
                     return builtin_err(VmError::TypeError("__deque_pop_front espera deque".into()))
@@ -827,12 +827,12 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match d {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
                 } else {
-                    v.pop().unwrap_or(Value::Void)
+                    Arc::make_mut(&mut v).pop().unwrap_or(Value::Void)
                 }),
                 _ => {
                     return builtin_err(VmError::TypeError("__deque_pop_back espera deque".into()))
@@ -846,7 +846,7 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match d {
                 Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                 _ => return builtin_err(VmError::TypeError("__deque_len espera deque".into())),
@@ -855,18 +855,18 @@ impl VM {
         }
 
         if name == "__heap_new" || name == "__monticulo_nuevo" {
-            self.push(Value::Array(vec![]));
+            self.push(Value::arr(vec![]));
             return Some(Ok(()));
         }
 
         if name == "__heap_push" || name == "__monticulo_agregar" {
             let mut it = args.clone().into_iter();
-            let h = it.next().unwrap_or(Value::Array(vec![]));
+            let h = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match h {
                 Value::Array(mut v) => {
-                    v.push(item);
-                    v.sort_by(|a, b| {
+                    Arc::make_mut(&mut v).push(item);
+                    Arc::make_mut(&mut v).sort_by(|a, b| {
                         let an = a.as_num().unwrap_or(f64::MIN);
                         let bn = b.as_num().unwrap_or(f64::MIN);
                         bn.partial_cmp(&an).unwrap_or(std::cmp::Ordering::Equal)
@@ -883,12 +883,12 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match h {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
                 } else {
-                    v.remove(0)
+                    Arc::make_mut(&mut v).remove(0)
                 }),
                 _ => return builtin_err(VmError::TypeError("__heap_pop espera heap".into())),
             }
@@ -900,7 +900,7 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match h {
                 Value::Array(v) => self.push(if v.is_empty() {
                     Value::Void
@@ -917,7 +917,7 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match h {
                 Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                 _ => return builtin_err(VmError::TypeError("__heap_len espera heap".into())),
@@ -926,17 +926,17 @@ impl VM {
         }
 
         if name == "__linked_new" || name == "__enlazada_nuevo" {
-            self.push(Value::Array(vec![]));
+            self.push(Value::arr(vec![]));
             return Some(Ok(()));
         }
 
         if name == "__linked_push_front" || name == "__enlazada_agregar_frente" {
             let mut it = args.clone().into_iter();
-            let l = it.next().unwrap_or(Value::Array(vec![]));
+            let l = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match l {
                 Value::Array(mut v) => {
-                    v.insert(0, item);
+                    Arc::make_mut(&mut v).insert(0, item);
                     self.push(Value::Array(v));
                 }
                 _ => {
@@ -950,11 +950,11 @@ impl VM {
 
         if name == "__linked_push_back" || name == "__enlazada_agregar_final" {
             let mut it = args.clone().into_iter();
-            let l = it.next().unwrap_or(Value::Array(vec![]));
+            let l = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match l {
                 Value::Array(mut v) => {
-                    v.push(item);
+                    Arc::make_mut(&mut v).push(item);
                     self.push(Value::Array(v));
                 }
                 _ => {
@@ -971,12 +971,12 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match l {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
                 } else {
-                    v.remove(0)
+                    Arc::make_mut(&mut v).remove(0)
                 }),
                 _ => {
                     return builtin_err(VmError::TypeError(
@@ -992,12 +992,12 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match l {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
                 } else {
-                    v.pop().unwrap_or(Value::Void)
+                    Arc::make_mut(&mut v).pop().unwrap_or(Value::Void)
                 }),
                 _ => {
                     return builtin_err(VmError::TypeError(
@@ -1013,7 +1013,7 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match l {
                 Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                 _ => return builtin_err(VmError::TypeError("__linked_len espera linked".into())),
@@ -1025,7 +1025,7 @@ impl VM {
             let pat = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match regex::Regex::new(&pat) {
                 Ok(_) => self.push(Value::Bool(true)),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1035,7 +1035,7 @@ impl VM {
             let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             match regex::Regex::new(&re_s) {
                 Ok(r) => self.push(Value::Bool(r.is_match(&text))),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1049,15 +1049,15 @@ impl VM {
                         let vs: Vec<Value> = caps
                             .iter()
                             .map(|m| {
-                                Value::Str(m.map(|x| x.as_str().to_string()).unwrap_or_default())
+                                Value::str(m.map(|x| x.as_str().to_string()).unwrap_or_default())
                             })
                             .collect();
-                        self.push(Value::Array(vs));
+                        self.push(Value::arr(vs));
                     } else {
-                        self.push(Value::Array(vec![]));
+                        self.push(Value::arr(vec![]));
                     }
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1067,8 +1067,8 @@ impl VM {
             let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let rep = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
             match regex::Regex::new(&re_s) {
-                Ok(r) => self.push(Value::Str(r.replace_all(&text, rep.as_str()).to_string())),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Ok(r) => self.push(Value::str(r.replace_all(&text, rep.as_str()).to_string())),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1083,7 +1083,7 @@ impl VM {
                 "NFKD" => s.nfkd().collect(),
                 _ => s.nfc().collect(),
             };
-            self.push(Value::Str(nf));
+            self.push(Value::str(nf));
             return Some(Ok(()));
         }
 
@@ -1097,7 +1097,7 @@ impl VM {
                 .chars()
                 .next()
                 .unwrap_or(' ');
-            self.push(Value::Str(format!(
+            self.push(Value::str(format!(
                 "{}{}",
                 ch.to_string().repeat(len.saturating_sub(s.len())),
                 s
@@ -1115,7 +1115,7 @@ impl VM {
                 .chars()
                 .next()
                 .unwrap_or(' ');
-            self.push(Value::Str(format!(
+            self.push(Value::str(format!(
                 "{}{}",
                 s,
                 ch.to_string().repeat(len.saturating_sub(s.len()))
@@ -1125,7 +1125,7 @@ impl VM {
 
         if name == "__encoding_utf8" || name == "__codificacion_utf8" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Array(
+            self.push(Value::arr(
                 s.bytes().map(|b| Value::Int(b as i64)).collect(),
             ));
             return Some(Ok(()));
@@ -1136,7 +1136,7 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Array(vec![]));
+                .unwrap_or(Value::arr(vec![]));
             match arr {
                 Value::Array(v) => {
                     let bytes: Vec<u8> = v
@@ -1149,9 +1149,9 @@ impl VM {
                             }
                         })
                         .collect();
-                    self.push(Value::Str(String::from_utf8_lossy(&bytes).to_string()));
+                    self.push(Value::str(String::from_utf8_lossy(&bytes).to_string()));
                 }
-                _ => self.push(Value::Str(String::new())),
+                _ => self.push(Value::str(String::new())),
             }
             return Some(Ok(()));
         }
@@ -1160,10 +1160,10 @@ impl VM {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::read_to_string(&path) {
                 Ok(c) => {
-                    let lines: Vec<Value> = c.lines().map(|l| Value::Str(l.to_string())).collect();
-                    self.push(Value::Array(lines));
+                    let lines: Vec<Value> = c.lines().map(|l| Value::str(l.to_string())).collect();
+                    self.push(Value::arr(lines));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1173,7 +1173,7 @@ impl VM {
             let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::write(&path, &content) {
                 Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1185,18 +1185,18 @@ impl VM {
                 Ok(data) => {
                     let chunks: Vec<Value> = data
                         .chunks(size)
-                        .map(|c| Value::Array(c.iter().map(|&b| Value::Int(b as i64)).collect()))
+                        .map(|c| Value::arr(c.iter().map(|&b| Value::Int(b as i64)).collect()))
                         .collect();
-                    self.push(Value::Array(chunks));
+                    self.push(Value::arr(chunks));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
 
         if name == "__http_server" || name == "__http_servidor" {
             let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Str(format!("HTTP server on {}", addr)));
+            self.push(Value::str(format!("HTTP server on {}", addr)));
             return Some(Ok(()));
         }
 
@@ -1209,7 +1209,7 @@ impl VM {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match serde_json::from_str::<serde_json::Value>(&s) {
                 Ok(v) => self.push(json_value_to_lumen(v)),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1217,7 +1217,7 @@ impl VM {
         if name == "__json_stringify" || name == "__json_texto" {
             let val = args.first().cloned().unwrap_or(Value::Void);
             let json = lumen_value_to_json(&val);
-            self.push(Value::Str(serde_json::to_string(&json).unwrap_or_default()));
+            self.push(Value::str(serde_json::to_string(&json).unwrap_or_default()));
             return Some(Ok(()));
         }
 
@@ -1235,9 +1235,9 @@ impl VM {
             );
             if let Some(eval) = JS_EVAL.get() {
                 let result = eval(&js_code);
-                self.push(Value::Str(result));
+                self.push(Value::str(result));
             } else {
-                self.push(Value::Str(js_code));
+                self.push(Value::str(js_code));
             }
             return Some(Ok(()));
         }
@@ -1246,9 +1246,9 @@ impl VM {
             let js_code = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(eval) = JS_EVAL.get() {
                 let result = eval(&js_code);
-                self.push(Value::Str(result));
+                self.push(Value::str(result));
             } else {
-                self.push(Value::Str(js_code));
+                self.push(Value::str(js_code));
             }
             return Some(Ok(()));
         }
@@ -1263,7 +1263,7 @@ impl VM {
             let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::net::TcpStream::connect(&addr) {
                 Ok(_) => self.push(Value::Bool(true)),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1275,7 +1275,7 @@ impl VM {
                     self.tcp_listener = Some(l);
                     self.push(Value::Bool(true));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1288,11 +1288,11 @@ impl VM {
                             .peer_addr()
                             .map(|a| a.to_string())
                             .unwrap_or_default();
-                        self.push(Value::Str(addr));
+                        self.push(Value::str(addr));
                     }
-                    Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                    Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                 },
-                None => self.push(Value::Error(Box::new(Value::Str("Sin listener".into())))),
+                None => self.push(Value::Error(Box::new(Value::str("Sin listener")))),
             }
             return Some(Ok(()));
         }
@@ -1303,9 +1303,9 @@ impl VM {
             match reqwest::blocking::get(&url) {
                 Ok(resp) => {
                     let body = resp.text().unwrap_or_default();
-                    self.push(Value::Str(body));
+                    self.push(Value::str(body));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1321,9 +1321,9 @@ impl VM {
             {
                 Ok(resp) => {
                     let text = resp.text().unwrap_or_default();
-                    self.push(Value::Str(text));
+                    self.push(Value::str(text));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1336,9 +1336,9 @@ impl VM {
                     let ptr = Box::into_raw(Box::new(lib)) as usize;
                     let id = format!("lib_{}", self.ffi_libraries.len());
                     self.ffi_libraries.insert(id.clone(), ptr);
-                    self.push(Value::Str(id));
+                    self.push(Value::str(id));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
@@ -1350,7 +1350,7 @@ impl VM {
             let lib_ptr = match self.ffi_libraries.get(&lib_id) {
                 Some(&p) => p,
                 None => {
-                    self.push(Value::Error(Box::new(Value::Str(format!(
+                    self.push(Value::Error(Box::new(Value::str(format!(
                         "Biblioteca '{}' no encontrada",
                         lib_id
                     )))));
@@ -1364,7 +1364,7 @@ impl VM {
                 > = match lib.get(fn_name.as_bytes()) {
                     Ok(s) => s,
                     Err(e) => {
-                        self.push(Value::Error(Box::new(Value::Str(format!(
+                        self.push(Value::Error(Box::new(Value::str(format!(
                             "Símbolo '{}' no encontrado: {}",
                             fn_name, e
                         )))));
@@ -1387,7 +1387,7 @@ impl VM {
             let layout = match std::alloc::Layout::from_size_align(size, align) {
                 Ok(l) => l,
                 Err(e) => {
-                    self.push(Value::Error(Box::new(Value::Str(format!(
+                    self.push(Value::Error(Box::new(Value::str(format!(
                         "Layout inválido: {}",
                         e
                     )))));
@@ -1407,8 +1407,7 @@ impl VM {
                 let layout = match std::alloc::Layout::from_size_align(size, align) {
                     Ok(l) => l,
                     Err(_) => {
-                        self.push(Value::Error(Box::new(Value::Str(
-                            "Layout inválido para liberar".into(),
+                        self.push(Value::Error(Box::new(Value::str("Layout inválido para liberar",
                         ))));
                         return Some(Ok(()));
                     }
@@ -1442,9 +1441,9 @@ impl VM {
                 unsafe {
                     std::ptr::copy_nonoverlapping(ptr_val as *const u8, buf.as_mut_ptr(), len);
                 }
-                self.push(Value::Str(String::from_utf8_lossy(&buf).to_string()));
+                self.push(Value::str(String::from_utf8_lossy(&buf).to_string()));
             } else {
-                self.push(Value::Str(String::new()));
+                self.push(Value::str(String::new()));
             }
             return Some(Ok(()));
         }
@@ -1481,12 +1480,11 @@ impl VM {
                 Some(bc) => match bc.sha256(data.as_bytes()) {
                     Ok(hash) => {
                         let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
-                        self.push(Value::Str(hex));
+                        self.push(Value::str(hex));
                     }
-                    Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                    Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
                 },
-                None => self.push(Value::Error(Box::new(Value::Str(
-                    "Bcrypt no disponible".into(),
+                None => self.push(Value::Error(Box::new(Value::str("Bcrypt no disponible",
                 )))),
             }
             return Some(Ok(()));
@@ -1498,12 +1496,11 @@ impl VM {
                 Some(bc) => match bc.sha512(data.as_bytes()) {
                     Ok(hash) => {
                         let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
-                        self.push(Value::Str(hex));
+                        self.push(Value::str(hex));
                     }
-                    Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                    Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
                 },
-                None => self.push(Value::Error(Box::new(Value::Str(
-                    "Bcrypt no disponible".into(),
+                None => self.push(Value::Error(Box::new(Value::str("Bcrypt no disponible",
                 )))),
             }
             return Some(Ok(()));
@@ -1514,7 +1511,7 @@ impl VM {
                 match Bcrypt::load() {
                     Ok(b) => self.bcrypt = Some(Arc::new(b)),
                     Err(e) => {
-                        self.push(Value::Error(Box::new(Value::Str(e))));
+                        self.push(Value::Error(Box::new(Value::str(e))));
                         return Some(Ok(()));
                     }
                 }
@@ -1528,8 +1525,8 @@ impl VM {
                 .map(|v| format!("{}", v).into_bytes())
                 .unwrap_or_default();
             match self.bcrypt.as_ref().unwrap().aes_encrypt(&key, &data) {
-                Ok(ct) => self.push(Value::Str(hex::encode(ct))),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                Ok(ct) => self.push(Value::str(hex::encode(ct))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
             }
             return Some(Ok(()));
         }
@@ -1539,7 +1536,7 @@ impl VM {
                 match Bcrypt::load() {
                     Ok(b) => self.bcrypt = Some(Arc::new(b)),
                     Err(e) => {
-                        self.push(Value::Error(Box::new(Value::Str(e))));
+                        self.push(Value::Error(Box::new(Value::str(e))));
                         return Some(Ok(()));
                     }
                 }
@@ -1551,8 +1548,8 @@ impl VM {
             let hex_data = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let data = hex::decode(&hex_data).unwrap_or_default();
             match self.bcrypt.as_ref().unwrap().aes_decrypt(&key, &data) {
-                Ok(pt) => self.push(Value::Str(String::from_utf8_lossy(&pt).to_string())),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                Ok(pt) => self.push(Value::str(String::from_utf8_lossy(&pt).to_string())),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
             }
             return Some(Ok(()));
         }
@@ -1570,7 +1567,7 @@ impl VM {
             let signature_input = format!("{}.{}", b64_header, b64_payload);
             let sig = hmac_sha256(signature_input.as_bytes(), secret.as_bytes());
             let b64_sig = base64url_encode(&sig);
-            self.push(Value::Str(format!(
+            self.push(Value::str(format!(
                 "{}.{}.{}",
                 b64_header, b64_payload, b64_sig
             )));
@@ -1582,8 +1579,7 @@ impl VM {
             let secret = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let parts: Vec<&str> = token.split('.').collect();
             if parts.len() != 3 {
-                self.push(Value::Error(Box::new(Value::Str(
-                    "JWT inválido: se esperan 3 partes".into(),
+                self.push(Value::Error(Box::new(Value::str("JWT inválido: se esperan 3 partes",
                 ))));
                 return Some(Ok(()));
             }
@@ -1591,14 +1587,13 @@ impl VM {
             let expected_sig = hmac_sha256(sig_input.as_bytes(), secret.as_bytes());
             let actual_sig = base64url_decode(parts[2]);
             if actual_sig != expected_sig {
-                self.push(Value::Error(Box::new(Value::Str(
-                    "Firma JWT inválida".into(),
+                self.push(Value::Error(Box::new(Value::str("Firma JWT inválida",
                 ))));
                 return Some(Ok(()));
             }
             match base64url_decode_to_string(parts[1]) {
-                Ok(payload) => self.push(Value::Str(payload)),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                Ok(payload) => self.push(Value::str(payload)),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
             }
             return Some(Ok(()));
         }
@@ -1622,7 +1617,7 @@ impl VM {
                 Value::Error(_) => "error",
                 Value::Opcion(_) => "opcion",
             };
-            self.push(Value::Str(type_name.to_string()));
+            self.push(Value::str(type_name.to_string()));
             return Some(Ok(()));
         }
 
@@ -1632,20 +1627,20 @@ impl VM {
                 Ok(entries) => {
                     let mut items = Vec::new();
                     for entry in entries.flatten() {
-                        items.push(Value::Str(entry.file_name().to_string_lossy().to_string()));
+                        items.push(Value::str(entry.file_name().to_string_lossy().to_string()));
                     }
-                    self.push(Value::Array(items));
+                    self.push(Value::arr(items));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
         }
 
         if name == "__env_listar" || name == "__env_list" {
             let vars: Vec<Value> = std::env::vars()
-                .map(|(k, v)| Value::Str(format!("{}={}", k, v)))
+                .map(|(k, v)| Value::str(format!("{}={}", k, v)))
                 .collect();
-            self.push(Value::Array(vars));
+            self.push(Value::arr(vars));
             return Some(Ok(()));
         }
 
@@ -1654,7 +1649,7 @@ impl VM {
             let timestamp = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
             let fmt = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let formatted = format_timestamp(timestamp, &fmt);
-            self.push(Value::Str(formatted));
+            self.push(Value::str(formatted));
             return Some(Ok(()));
         }
 
@@ -1662,7 +1657,7 @@ impl VM {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match parse_iso8601_to_unix(&s) {
                 Ok(ts) => self.push(Value::Int(ts)),
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
             }
             return Some(Ok(()));
         }
@@ -1682,9 +1677,9 @@ impl VM {
                 let coro = Coroutine::new(&fn_name, func.start);
                 let coro_id = format!("coro_{}", self.coroutines.len());
                 self.coroutines.insert(coro_id.clone(), coro);
-                self.push(Value::Str(coro_id));
+                self.push(Value::str(coro_id));
             } else {
-                self.push(Value::Error(Box::new(Value::Str(format!(
+                self.push(Value::Error(Box::new(Value::str(format!(
                     "Función '{}' no encontrada",
                     fn_name
                 )))));
@@ -1715,8 +1710,7 @@ impl VM {
             let coro_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(coro) = self.coroutines.get(&coro_id) {
                 if coro.is_done {
-                    self.push(Value::Error(Box::new(Value::Str(
-                        "Coroutine terminada".into(),
+                    self.push(Value::Error(Box::new(Value::str("Coroutine terminada",
                     ))));
                     return Some(Ok(()));
                 }
@@ -1742,9 +1736,9 @@ impl VM {
                 Ok(w) => {
                     let wid = format!("win_{}", self.gui_windows.len());
                     self.gui_windows.insert(wid.clone(), w);
-                    self.push(Value::Str(wid));
+                    self.push(Value::str(wid));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::Str(e)))),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
             }
             return Some(Ok(()));
         }
@@ -1755,7 +1749,7 @@ impl VM {
                 w.show();
                 self.push(Value::Bool(true));
             } else {
-                self.push(Value::Error(Box::new(Value::Str(format!(
+                self.push(Value::Error(Box::new(Value::str(format!(
                     "Ventana '{}' no encontrada",
                     id
                 )))));
@@ -1778,7 +1772,7 @@ impl VM {
             if let Some(w) = self.gui_windows.get(&id) {
                 self.push(Value::Int(w.hwnd() as i64));
             } else {
-                self.push(Value::Error(Box::new(Value::Str(format!(
+                self.push(Value::Error(Box::new(Value::str(format!(
                     "Ventana '{}' no encontrada",
                     id
                 )))));
@@ -1814,7 +1808,7 @@ impl VM {
             });
             let task_id = format!("task_{}", id);
             self.task_results.insert(task_id.clone(), rx);
-            self.push(Value::Str(task_id));
+            self.push(Value::str(task_id));
             return Some(Ok(()));
         }
 
@@ -1823,10 +1817,10 @@ impl VM {
             if let Some(rx) = self.task_results.remove(&task_id) {
                 match rx.recv() {
                     Ok(val) => self.push(val),
-                    Err(_) => self.push(Value::Error(Box::new(Value::Str("Task failed".into())))),
+                    Err(_) => self.push(Value::Error(Box::new(Value::str("Task failed")))),
                 }
             } else {
-                self.push(Value::Error(Box::new(Value::Str("Task not found".into()))));
+                self.push(Value::Error(Box::new(Value::str("Task not found"))));
             }
             return Some(Ok(()));
         }
@@ -1874,7 +1868,7 @@ impl VM {
             let hijri_month = (remaining / 30).clamp(1, 12);
             let hijri_day = (remaining % 30 + 1).min(30);
             let result = format!("{}-{:02}-{:02} AH", hijri_year, hijri_month, hijri_day);
-            self.push(Value::Str(result));
+            self.push(Value::str(result));
             return Some(Ok(()));
         }
 
@@ -1888,7 +1882,7 @@ impl VM {
                 "{}-{:02}-{:02} AP",
                 persian_year, persian_month, persian_day
             );
-            self.push(Value::Str(result));
+            self.push(Value::str(result));
             return Some(Ok(()));
         }
 
@@ -1901,13 +1895,13 @@ impl VM {
             std::thread::spawn(move || {
                 let content = std::fs::read_to_string(&path);
                 let _ = tx.send(match content {
-                    Ok(s) => Value::Str(s),
-                    Err(e) => Value::Error(Box::new(Value::Str(e.to_string()))),
+                    Ok(s) => Value::str(s),
+                    Err(e) => Value::Error(Box::new(Value::str(e.to_string()))),
                 });
             });
             let task_id = format!("file_{}", id);
             self.task_results.insert(task_id.clone(), rx);
-            self.push(Value::Str(task_id));
+            self.push(Value::str(task_id));
             return Some(Ok(()));
         }
 
@@ -1921,12 +1915,12 @@ impl VM {
                 let result = std::fs::write(&path, &content);
                 let _ = tx.send(match result {
                     Ok(()) => Value::Bool(true),
-                    Err(e) => Value::Error(Box::new(Value::Str(e.to_string()))),
+                    Err(e) => Value::Error(Box::new(Value::str(e.to_string()))),
                 });
             });
             let task_id = format!("file_{}", id);
             self.task_results.insert(task_id.clone(), rx);
-            self.push(Value::Str(task_id));
+            self.push(Value::str(task_id));
             return Some(Ok(()));
         }
 
@@ -1942,7 +1936,7 @@ impl VM {
             });
             let task_id = format!("timer_{}", id);
             self.task_results.insert(task_id.clone(), rx);
-            self.push(Value::Str(task_id));
+            self.push(Value::str(task_id));
             return Some(Ok(()));
         }
 
@@ -1957,12 +1951,12 @@ impl VM {
                     let _ = tx.send(Value::Bool(true));
                 }
                 Err(e) => {
-                    let _ = tx.send(Value::Error(Box::new(Value::Str(e.to_string()))));
+                    let _ = tx.send(Value::Error(Box::new(Value::str(e.to_string()))));
                 }
             });
             let task_id = format!("tcp_{}", id);
             self.task_results.insert(task_id.clone(), rx);
-            self.push(Value::Str(task_id));
+            self.push(Value::str(task_id));
             return Some(Ok(()));
         }
 
@@ -1985,7 +1979,7 @@ impl VM {
             });
             let hid = format!("thread_{}", self.thread_handles.len());
             self.thread_handles.insert(hid.clone(), handle);
-            self.push(Value::Str(hid));
+            self.push(Value::str(hid));
             return Some(Ok(()));
         }
 
@@ -1994,10 +1988,10 @@ impl VM {
             if let Some((_, handle)) = self.thread_handles.remove_entry(&hid) {
                 match handle.join() {
                     Ok(val) => self.push(val),
-                    Err(_) => self.push(Value::Error(Box::new(Value::Str("Thread panicked".into())))),
+                    Err(_) => self.push(Value::Error(Box::new(Value::str("Thread panicked")))),
                 }
             } else {
-                self.push(Value::Error(Box::new(Value::Str("Thread not found".into()))));
+                self.push(Value::Error(Box::new(Value::str("Thread not found"))));
             }
             return Some(Ok(()));
         }
@@ -2006,7 +2000,7 @@ impl VM {
             let (tx, rx) = std::sync::mpsc::channel::<Value>();
             let cid = format!("chan_{}", self.channels.len());
             self.channels.insert(cid.clone(), (Some(tx), Some(rx)));
-            self.push(Value::Str(cid));
+            self.push(Value::str(cid));
             return Some(Ok(()));
         }
 
@@ -2019,7 +2013,7 @@ impl VM {
                     Err(_) => self.push(Value::Bool(false)),
                 }
             } else {
-                self.push(Value::Error(Box::new(Value::Str("Channel not found".into()))));
+                self.push(Value::Error(Box::new(Value::str("Channel not found"))));
             }
             return Some(Ok(()));
         }
@@ -2042,7 +2036,7 @@ impl VM {
                     self.push(val);
                 }
                 None => {
-                    self.push(Value::Error(Box::new(Value::Str("Channel not found".into()))));
+                    self.push(Value::Error(Box::new(Value::str("Channel not found"))));
                 }
             }
             return Some(Ok(()));
@@ -2051,7 +2045,7 @@ impl VM {
         if name == "__mutex_nuevo" || name == "__mutex_new" {
             let mid = format!("mutex_{}", self.mutexes.len());
             self.mutexes.insert(mid.clone(), std::sync::Mutex::new(Value::Void));
-            self.push(Value::Str(mid));
+            self.push(Value::str(mid));
             return Some(Ok(()));
         }
 
@@ -2067,7 +2061,7 @@ impl VM {
                 let mut vm = VM::new(bc);
                 vm.run_function(&fn_name, vec![fn_arg]).unwrap_or(Value::Void)
             } else {
-                Value::Error(Box::new(Value::Str("Mutex not found".into())))
+                Value::Error(Box::new(Value::str("Mutex not found")))
             };
             self.push(result);
             return Some(Ok(()));
@@ -2086,17 +2080,16 @@ impl VM {
                 Value::Array(items) => {
                     let bc = self.bytecode.clone();
                     let mapped: Vec<Value> = items
-                        .into_iter()
+                        .iter()
                         .map(|item| {
                             let mut vm = VM::new(bc.clone());
-                            vm.run_function(&fn_name, vec![item])
+                            vm.run_function(&fn_name, vec![item.clone()])
                                 .unwrap_or(Value::Void)
                         })
                         .collect();
-                    self.push(Value::Array(mapped));
+                    self.push(Value::arr(mapped));
                 }
-                _ => self.push(Value::Error(Box::new(Value::Str(
-                    "stream_map espera una lista".into(),
+                _ => self.push(Value::Error(Box::new(Value::str("stream_map espera una lista",
                 )))),
             }
             return Some(Ok(()));
@@ -2109,19 +2102,19 @@ impl VM {
                 Value::Array(items) => {
                     let bc = self.bytecode.clone();
                     let filtered: Vec<Value> = items
-                        .into_iter()
+                        .iter()
                         .filter(|item| {
                             let mut vm = VM::new(bc.clone());
-                            match vm.run_function(&fn_name, vec![item.clone()]) {
+                            match vm.run_function(&fn_name, vec![(*item).clone()]) {
                                 Ok(Value::Bool(true)) => true,
                                 _ => false,
                             }
                         })
+                        .cloned()
                         .collect();
-                    self.push(Value::Array(filtered));
+                    self.push(Value::arr(filtered));
                 }
-                _ => self.push(Value::Error(Box::new(Value::Str(
-                    "stream_filter espera una lista".into(),
+                _ => self.push(Value::Error(Box::new(Value::str("stream_filter espera una lista",
                 )))),
             }
             return Some(Ok(()));
@@ -2134,18 +2127,18 @@ impl VM {
         }
 
         if name == "__par_mapear" || name == "__par_map" {
-            let source = args.first().cloned().unwrap_or(Value::Array(vec![]));
+            let source = args.first().cloned().unwrap_or(Value::arr(vec![]));
             let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             match source {
                 Value::Array(items) => {
                     let bc = self.bytecode.clone();
                     let mut handles = Vec::new();
-                    for item in items {
+                    for item in items.iter().cloned() {
                         let bc_clone = bc.clone();
                         let fn_clone = fn_name.clone();
                         handles.push(std::thread::spawn(move || {
                             let mut vm = VM::new(bc_clone);
-                            vm.run_function(&fn_clone, vec![item])
+                            vm.run_function(&fn_clone, vec![item.clone()])
                                 .unwrap_or(Value::Void)
                         }));
                     }
@@ -2153,10 +2146,9 @@ impl VM {
                         .into_iter()
                         .map(|h| h.join().unwrap_or(Value::Void))
                         .collect();
-                    self.push(Value::Array(results));
+                    self.push(Value::arr(results));
                 }
-                _ => self.push(Value::Error(Box::new(Value::Str(
-                    "par_map espera una lista".into(),
+                _ => self.push(Value::Error(Box::new(Value::str("par_map espera una lista",
                 )))),
             }
             return Some(Ok(()));
@@ -2187,7 +2179,7 @@ impl VM {
             });
             let r1 = h1.join().unwrap_or(Value::Void);
             let r2 = h2.join().unwrap_or(Value::Void);
-            self.push(Value::Array(vec![r1, r2]));
+            self.push(Value::arr(vec![r1, r2]));
             return Some(Ok(()));
         }
 
@@ -2196,7 +2188,7 @@ impl VM {
             // Actor is just a mailbox: a channel
             let (tx, rx) = std::sync::mpsc::channel::<Value>();
             self.actors.insert(aid.clone(), (Some(tx), Some(rx)));
-            self.push(Value::Str(aid));
+            self.push(Value::str(aid));
             return Some(Ok(()));
         }
 
@@ -2209,7 +2201,7 @@ impl VM {
                     Err(_) => self.push(Value::Bool(false)),
                 }
             } else {
-                self.push(Value::Error(Box::new(Value::Str("Actor not found".into()))));
+                self.push(Value::Error(Box::new(Value::str("Actor not found"))));
             }
             return Some(Ok(()));
         }
@@ -2230,7 +2222,7 @@ impl VM {
                     self.push(val);
                 }
                 None => {
-                    self.push(Value::Error(Box::new(Value::Str("Actor not found".into()))));
+                    self.push(Value::Error(Box::new(Value::str("Actor not found"))));
                 }
             }
             return Some(Ok(()));
@@ -2240,7 +2232,7 @@ impl VM {
             let gid = format!("gen_{}", self.generators.len());
             let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             self.generators.insert(gid.clone(), fn_name);
-            self.push(Value::Str(gid));
+            self.push(Value::str(gid));
             return Some(Ok(()));
         }
 
@@ -2250,7 +2242,7 @@ impl VM {
             let fn_name = if let Some(fn_name) = self.generators.get(&gid) {
                 fn_name.clone()
             } else {
-                self.push(Value::Error(Box::new(Value::Str("Generator not found".into()))));
+                self.push(Value::Error(Box::new(Value::str("Generator not found"))));
                 return Some(Ok(()));
             };
             let mut vm = VM::new(self.bytecode.clone());
@@ -2262,15 +2254,15 @@ impl VM {
         // Stubs for remaining concurrency builtins
         if name == "__seleccionar" || name == "__select" {
             // Return first available; stub returns "select_stub"
-            self.push(Value::Str("select_stub".into()));
+            self.push(Value::str("select_stub"));
             return Some(Ok(()));
         }
         if name == "__scope_nuevo" || name == "__scope_new" {
-            self.push(Value::Str("scope_0".into()));
+            self.push(Value::str("scope_0"));
             return Some(Ok(()));
         }
         if name == "__scope_lanzar" || name == "__scope_spawn" {
-            self.push(Value::Str("scope_task_0".into()));
+            self.push(Value::str("scope_task_0"));
             return Some(Ok(()));
         }
         if name == "__scope_cancelar" || name == "__scope_cancel" {
@@ -2278,7 +2270,7 @@ impl VM {
             return Some(Ok(()));
         }
         if name == "__supervisor_nuevo" || name == "__supervisor_new" {
-            self.push(Value::Str("sup_0".into()));
+            self.push(Value::str("sup_0"));
             return Some(Ok(()));
         }
         if name == "__supervisor_agregar" || name == "__supervisor_add" {
@@ -2290,7 +2282,7 @@ impl VM {
             return Some(Ok(()));
         }
         if name == "__cluster_conectar" || name == "__cluster_connect" {
-            self.push(Value::Str("cluster_0".into()));
+            self.push(Value::str("cluster_0"));
             return Some(Ok(()));
         }
         if name == "__cluster_enviar" || name == "__cluster_send" {
@@ -2298,7 +2290,7 @@ impl VM {
             return Some(Ok(()));
         }
         if name == "__rwlock_nuevo" || name == "__rwlock_new" {
-            self.push(Value::Str("rwlock_0".into()));
+            self.push(Value::str("rwlock_0"));
             return Some(Ok(()));
         }
         if name == "__rwlock_leer" || name == "__rwlock_read" {
@@ -2310,7 +2302,7 @@ impl VM {
             return Some(Ok(()));
         }
         if name == "__arc_nuevo" || name == "__arc_new" {
-            self.push(Value::Str("arc_0".into()));
+            self.push(Value::str("arc_0"));
             return Some(Ok(()));
         }
         if name == "__arc_obtener" || name == "__arc_get" {
@@ -2325,6 +2317,9 @@ impl VM {
         None
     }
     pub fn run(&mut self) -> Result<(), VmError> {
+        let profile = !std::env::var("LUMEN_PROFILE").unwrap_or_default().is_empty();
+        let mut prof: std::collections::HashMap<String, (u64, f64)> = std::collections::HashMap::new();
+        let prof_start = std::time::Instant::now();
         loop {
             if self.ip >= self.bytecode.instructions.len() {
                 break;
@@ -2351,7 +2346,39 @@ impl VM {
                     }
                 }
             }
-            self.execute(&instr)?;
+            if profile {
+                let t0 = std::time::Instant::now();
+                let opname = match &instr {
+                    Instruction::WithIdx(op @ Opcode::Call, nidx) => {
+                        format!("Call:{}", self.bytecode.names.get(*nidx).cloned().unwrap_or_default())
+                    }
+                    Instruction::Simple(op) => format!("{:?}", op),
+                    Instruction::WithNum(op, _) => format!("{:?}", op),
+                    Instruction::WithStr(op, _) => format!("{:?}", op),
+                    Instruction::WithBool(op, _) => format!("{:?}", op),
+                    Instruction::WithIdx(op, _) => format!("{:?}", op),
+                };
+                let res = self.execute(&instr);
+                let e = t0.elapsed().as_secs_f64();
+                let ent = prof.entry(opname).or_insert((0, 0.0));
+                ent.0 += 1;
+                ent.1 += e;
+                res?;
+            } else {
+                self.execute(&instr)?;
+            }
+        }
+        if profile {
+            let total = prof_start.elapsed().as_secs_f64();
+            let mut v: Vec<(String, u64, f64)> = prof
+                .into_iter()
+                .map(|(k, (c, t))| (k, c, t))
+                .collect();
+            v.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            eprintln!("=== PROFILE total={:.1}s instrs={} ===", total, self.instr_count);
+            for (k, c, t) in v {
+                eprintln!("{:20} {:>12} calls {:>10.3}s ({:>5.1}%)", k, c, t, t / total * 100.0);
+            }
         }
         Ok(())
     }
@@ -2431,17 +2458,17 @@ impl VM {
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Float(*a as f64 + b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Float(a + *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Float(a + b)),
-                    (Value::Str(a), Value::Str(b)) => self.push(Value::Str(format!("{}{}", a, b))),
-                    (Value::Str(a), Value::Int(b)) => self.push(Value::Str(format!("{}{}", a, b))),
+                    (Value::Str(a), Value::Str(b)) => self.push(Value::str(format!("{}{}", a, b))),
+                    (Value::Str(a), Value::Int(b)) => self.push(Value::str(format!("{}{}", a, b))),
                     (Value::Str(a), Value::Float(b)) => {
-                        self.push(Value::Str(format!("{}{}", a, b)))
+                        self.push(Value::str(format!("{}{}", a, b)))
                     }
-                    (Value::Int(a), Value::Str(b)) => self.push(Value::Str(format!("{}{}", a, b))),
+                    (Value::Int(a), Value::Str(b)) => self.push(Value::str(format!("{}{}", a, b))),
                     (Value::Float(a), Value::Str(b)) => {
-                        self.push(Value::Str(format!("{}{}", a, b)))
+                        self.push(Value::str(format!("{}{}", a, b)))
                     }
-                    (Value::Str(a), Value::Bool(b)) => self.push(Value::Str(format!("{}{}", a, b))),
-                    (Value::Bool(a), Value::Str(b)) => self.push(Value::Str(format!("{}{}", a, b))),
+                    (Value::Str(a), Value::Bool(b)) => self.push(Value::str(format!("{}{}", a, b))),
+                    (Value::Bool(a), Value::Str(b)) => self.push(Value::str(format!("{}{}", a, b))),
                     _ => {
                         return Err(VmError::TypeError(
                             "Add requires numbers or strings".to_string(),
@@ -2716,7 +2743,7 @@ impl VM {
                 let field_name = self.pop()?;
                 let struct_val = self.pop()?;
                 let field = match &field_name {
-                    Value::Str(s) => s.clone(),
+                    Value::Str(s) => s.to_string(),
                     _ => {
                         return Err(VmError::TypeError(
                             "StructGet requires string field name".to_string(),
@@ -2725,7 +2752,7 @@ impl VM {
                 };
                 match struct_val {
                     Value::Struct { fields, .. } => {
-                        let val = fields.iter().find(|(name, _)| name == &field);
+                        let val = fields.iter().find(|(name, _)| name.as_str() == field.as_str());
                         match val {
                             Some((_, v)) => self.push(v.clone()),
                             None => {
@@ -2748,19 +2775,19 @@ impl VM {
                 let field_name = self.pop()?;
                 let struct_val = self.pop()?;
                 let field = match &field_name {
-                    Value::Str(s) => s.clone(),
+                    Value::Str(s) => s.to_string(),
                     _ => {
                         return Err(VmError::TypeError(
-                            "StructSet requires string field name".to_string(),
+                            "StructGet requires string field name".to_string(),
                         ))
                     }
                 };
                 match struct_val {
                     Value::Struct { name, mut fields } => {
-                        let pos = fields.iter().position(|(n, _)| n == &field);
+                        let pos = fields.iter().position(|(n, _)| n.as_str() == field.as_str());
                         match pos {
                             Some(i) => {
-                                fields[i] = (field, new_val);
+                                fields[i] = (field.to_string(), new_val);
                                 self.push(Value::Struct { name, fields });
                             }
                             None => {
@@ -2824,7 +2851,7 @@ impl VM {
                             )));
                         }
                         match s.chars().nth(idx as usize) {
-                            Some(c) => self.push(Value::Str(c.to_string())),
+                            Some(c) => self.push(Value::str(c.to_string())),
                             None => return Err(VmError::Runtime(format!(
                                 "Índice {} fuera de rango (largo: {})", idx, s.chars().count()
                             ))),
@@ -2836,7 +2863,7 @@ impl VM {
                     }
                     Value::Struct { fields, .. } => {
                         let field = match &index {
-                            Value::Str(s) => s.clone(),
+                            Value::Str(s) => s.to_string(),
                             _ => "".to_string(),
                         };
                         let val = fields.iter().find(|(n, _)| n == &field).map(|(_, v)| v.clone()).unwrap_or(Value::Int(0));
@@ -2862,7 +2889,7 @@ impl VM {
                                 arr.len()
                             )));
                         }
-                        arr[idx as usize] = val;
+                        Arc::make_mut(&mut arr)[idx as usize] = val;
                         self.push(Value::Array(arr));
                     }
                     (Value::Map(mut map), key, val) => {
@@ -2871,7 +2898,7 @@ impl VM {
                     }
                     (Value::Struct { name, mut fields }, key, val) => {
                         let field_str = match &key {
-                            Value::Str(s) => s.clone(),
+                            Value::Str(s) => s.to_string(),
                             _ => "".to_string(),
                         };
                         if let Some(pos) = fields.iter().position(|(n, _)| n == &field_str) {
@@ -2905,7 +2932,7 @@ impl VM {
                 let array = self.pop()?;
                 match array {
                     Value::Array(mut arr) => {
-                        arr.push(value);
+                        Arc::make_mut(&mut arr).push(value);
                         self.push(Value::Array(arr));
                     }
                     other => {
@@ -2980,7 +3007,7 @@ impl VM {
     fn execute_with_str(&mut self, op: Opcode, s: &str) -> Result<(), VmError> {
         match op {
             Opcode::PushStr => {
-                self.push(Value::Str(s.to_string()));
+                self.push(Value::str(s.to_string()));
                 Ok(())
             }
             _ => Ok(()),
@@ -3009,7 +3036,7 @@ impl VM {
             }
             Opcode::PushStr => {
                 let s = self.bytecode.strings.get(idx).cloned().unwrap_or_default();
-                self.push(Value::Str(s));
+                self.push(Value::str(s));
             }
             Opcode::PushBool => {
                 self.push(Value::Bool(idx != 0));
@@ -3105,10 +3132,10 @@ impl VM {
                     }
                     self.push(Value::Void);
                 } else if name == "leer" || name == "read" {
-                    self.push(Value::Str(String::new()));
+                    self.push(Value::str(String::new()));
                 } else if name == "a_texto" || name == "to_texto" || name == "__str_from" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s));
+                    self.push(Value::str(s));
                 } else if name == "__str_a_entero" || name == "__texto_a_entero" {
                     let mut s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     if let Some(dot) = s.find('.') {
@@ -3123,13 +3150,13 @@ impl VM {
                     self.push(Value::Int(s.len() as i64));
                 } else if name == "__str_upper" || name == "__str_mayusculas" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s.to_uppercase()));
+                    self.push(Value::str(s.to_uppercase()));
                 } else if name == "__str_lower" || name == "__str_minusculas" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s.to_lowercase()));
+                    self.push(Value::str(s.to_lowercase()));
                 } else if name == "__str_trim" || name == "__str_recortar" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s.trim().to_string()));
+                    self.push(Value::str(s.trim().to_string()));
                 } else if name == "__str_contains" || name == "__str_contiene" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let sub = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
@@ -3138,15 +3165,15 @@ impl VM {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let delim = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
                     let parts: Vec<Value> = if delim.is_empty() {
-                        s.chars().map(|c| Value::Str(c.to_string())).collect()
+                        s.chars().map(|c| Value::str(c.to_string())).collect()
                     } else {
-                        s.split(&delim).map(|p| Value::Str(p.to_string())).collect()
+                        s.split(&delim).map(|p| Value::str(p.to_string())).collect()
                     };
-                    self.push(Value::Array(parts));
+                    self.push(Value::arr(parts));
                 } else if name == "__str_ord" || name == "__str_codigo" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let codes: Vec<Value> = s.chars().map(|c| Value::Int(c as i64)).collect();
-                    self.push(Value::Array(codes));
+                    self.push(Value::arr(codes));
                 } else if name == "__str_chr" || name == "__str_caracter" {
                     let n = args
                         .first()
@@ -3156,7 +3183,7 @@ impl VM {
                         })
                         .unwrap_or(0);
                     let c = char::from_u32(n as u32).map(|c| c.to_string()).unwrap_or_default();
-                    self.push(Value::Str(c));
+                    self.push(Value::str(c));
                 } else if name == "__str_slice" || name == "__str_subcadena" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let start = args.get(1).and_then(|v| match v {
@@ -3172,15 +3199,15 @@ impl VM {
                     let start = start.min(s.len());
                     let end = end.min(s.len()).max(start);
                     let sub: String = s.chars().skip(start).take(end - start).collect();
-                    self.push(Value::Str(sub));
+                    self.push(Value::str(sub));
                 } else if name == "__str_concat_list" || name == "__str_concatenar_lista" {
-                    let list = args.first().cloned().unwrap_or(Value::Array(vec![]));
+                    let list = args.first().cloned().unwrap_or(Value::arr(vec![]));
                     match list {
                         Value::Array(items) => {
                             let result = items.iter().map(|v| format!("{}", v)).collect::<String>();
-                            self.push(Value::Str(result));
+                            self.push(Value::str(result));
                         }
-                        _ => self.push(Value::Str(String::new())),
+                        _ => self.push(Value::str(String::new())),
                     }
                 } else if name == "__str_starts_with" || name == "__str_empieza_con" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
@@ -3188,17 +3215,17 @@ impl VM {
                     self.push(Value::Bool(s.starts_with(&prefix)));
                 } else if name == "__str_to_chars" || name == "__str_a_caracteres" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let chars: Vec<Value> = s.chars().map(|c| Value::Str(c.to_string())).collect();
-                    self.push(Value::Array(chars));
+                    let chars: Vec<Value> = s.chars().map(|c| Value::str(c.to_string())).collect();
+                    self.push(Value::arr(chars));
                 } else if name == "__str_reemplazar" || name == "__str_replace" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let from = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
                     let to = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(s.replace(&from, &to)));
+                    self.push(Value::str(s.replace(&from, &to)));
                 } else if name == "__str_subcadena_chars" || name == "__str_slice_chars" {
                     let cs = match args.first() {
                         Some(Value::Array(a)) => a.clone(),
-                        _ => vec![],
+                _ => Arc::new(vec![]),
                     };
                     let st = args.get(1).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(0);
                     let en = args.get(2).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(-1);
@@ -3209,7 +3236,7 @@ impl VM {
                     for c in cs.iter().skip(st as usize).take((en - st).max(0) as usize) {
                         out.push_str(&format!("{}", c));
                     }
-                    self.push(Value::Str(out));
+                    self.push(Value::str(out));
                 } else if name == "__map_new" || name == "__map_nuevo" {
                     self.push(Value::Map(ImMap::new()));
                 } else if name == "__map_set" || name == "__map_poner" {
@@ -3244,7 +3271,7 @@ impl VM {
                     let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::new()));
                     match m {
                         Value::Map(m) => {
-                            self.push(Value::Array(m.into_iter().map(|(k, _)| k).collect()));
+                            self.push(Value::arr(m.into_iter().map(|(k, _)| k).collect()));
                         }
                         _ => {
                             return Err(VmError::TypeError("__map_keys espera diccionario".into()))
@@ -3325,14 +3352,14 @@ impl VM {
                         _ => return Err(VmError::TypeError("__set_diff espera conjuntos".into())),
                     }
                 } else if name == "__deque_new" || name == "__deque_nuevo" {
-                    self.push(Value::Array(vec![]));
+                    self.push(Value::arr(vec![]));
                 } else if name == "__deque_push_front" || name == "__deque_agregar_frente" {
                     let mut it = args.into_iter();
-                    let d = it.next().unwrap_or(Value::Array(vec![]));
+                    let d = it.next().unwrap_or(Value::arr(vec![]));
                     let item = it.next().unwrap_or(Value::Void);
                     match d {
                         Value::Array(mut v) => {
-                            v.insert(0, item);
+                            Arc::make_mut(&mut v).insert(0, item);
                             self.push(Value::Array(v));
                         }
                         _ => {
@@ -3343,11 +3370,11 @@ impl VM {
                     }
                 } else if name == "__deque_push_back" || name == "__deque_agregar_final" {
                     let mut it = args.into_iter();
-                    let d = it.next().unwrap_or(Value::Array(vec![]));
+                    let d = it.next().unwrap_or(Value::arr(vec![]));
                     let item = it.next().unwrap_or(Value::Void);
                     match d {
                         Value::Array(mut v) => {
-                            v.push(item);
+                            Arc::make_mut(&mut v).push(item);
                             self.push(Value::Array(v));
                         }
                         _ => {
@@ -3355,45 +3382,45 @@ impl VM {
                         }
                     }
                 } else if name == "__deque_pop_front" || name == "__deque_quitar_frente" {
-                    let d = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let d = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match d {
                         Value::Array(mut v) => self.push(if v.is_empty() {
                             Value::Void
                         } else {
-                            v.remove(0)
+                            Arc::make_mut(&mut v).remove(0)
                         }),
                         _ => {
                             return Err(VmError::TypeError("__deque_pop_front espera deque".into()))
                         }
                     }
                 } else if name == "__deque_pop_back" || name == "__deque_quitar_final" {
-                    let d = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let d = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match d {
                         Value::Array(mut v) => self.push(if v.is_empty() {
                             Value::Void
                         } else {
-                            v.pop().unwrap_or(Value::Void)
+                            Arc::make_mut(&mut v).pop().unwrap_or(Value::Void)
                         }),
                         _ => {
                             return Err(VmError::TypeError("__deque_pop_back espera deque".into()))
                         }
                     }
                 } else if name == "__deque_len" || name == "__deque_longitud" {
-                    let d = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let d = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match d {
                         Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                         _ => return Err(VmError::TypeError("__deque_len espera deque".into())),
                     }
                 } else if name == "__heap_new" || name == "__monticulo_nuevo" {
-                    self.push(Value::Array(vec![]));
+                    self.push(Value::arr(vec![]));
                 } else if name == "__heap_push" || name == "__monticulo_agregar" {
                     let mut it = args.into_iter();
-                    let h = it.next().unwrap_or(Value::Array(vec![]));
+                    let h = it.next().unwrap_or(Value::arr(vec![]));
                     let item = it.next().unwrap_or(Value::Void);
                     match h {
                         Value::Array(mut v) => {
-                            v.push(item);
-                            v.sort_by(|a, b| {
+                            Arc::make_mut(&mut v).push(item);
+                            Arc::make_mut(&mut v).sort_by(|a, b| {
                                 let an = a.as_num().unwrap_or(f64::MIN);
                                 let bn = b.as_num().unwrap_or(f64::MIN);
                                 bn.partial_cmp(&an).unwrap_or(std::cmp::Ordering::Equal)
@@ -3403,17 +3430,17 @@ impl VM {
                         _ => return Err(VmError::TypeError("__heap_push espera heap".into())),
                     }
                 } else if name == "__heap_pop" || name == "__monticulo_quitar" {
-                    let h = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let h = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match h {
                         Value::Array(mut v) => self.push(if v.is_empty() {
                             Value::Void
                         } else {
-                            v.remove(0)
+                            Arc::make_mut(&mut v).remove(0)
                         }),
                         _ => return Err(VmError::TypeError("__heap_pop espera heap".into())),
                     }
                 } else if name == "__heap_peek" || name == "__monticulo_ver" {
-                    let h = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let h = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match h {
                         Value::Array(v) => self.push(if v.is_empty() {
                             Value::Void
@@ -3423,20 +3450,20 @@ impl VM {
                         _ => return Err(VmError::TypeError("__heap_peek espera heap".into())),
                     }
                 } else if name == "__heap_len" || name == "__monticulo_longitud" {
-                    let h = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let h = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match h {
                         Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                         _ => return Err(VmError::TypeError("__heap_len espera heap".into())),
                     }
                 } else if name == "__linked_new" || name == "__enlazada_nuevo" {
-                    self.push(Value::Array(vec![]));
+                    self.push(Value::arr(vec![]));
                 } else if name == "__linked_push_front" || name == "__enlazada_agregar_frente" {
                     let mut it = args.into_iter();
-                    let l = it.next().unwrap_or(Value::Array(vec![]));
+                    let l = it.next().unwrap_or(Value::arr(vec![]));
                     let item = it.next().unwrap_or(Value::Void);
                     match l {
                         Value::Array(mut v) => {
-                            v.insert(0, item);
+                            Arc::make_mut(&mut v).insert(0, item);
                             self.push(Value::Array(v));
                         }
                         _ => {
@@ -3447,11 +3474,11 @@ impl VM {
                     }
                 } else if name == "__linked_push_back" || name == "__enlazada_agregar_final" {
                     let mut it = args.into_iter();
-                    let l = it.next().unwrap_or(Value::Array(vec![]));
+                    let l = it.next().unwrap_or(Value::arr(vec![]));
                     let item = it.next().unwrap_or(Value::Void);
                     match l {
                         Value::Array(mut v) => {
-                            v.push(item);
+                            Arc::make_mut(&mut v).push(item);
                             self.push(Value::Array(v));
                         }
                         _ => {
@@ -3461,12 +3488,12 @@ impl VM {
                         }
                     }
                 } else if name == "__linked_pop_front" || name == "__enlazada_quitar_frente" {
-                    let l = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let l = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match l {
                         Value::Array(mut v) => self.push(if v.is_empty() {
                             Value::Void
                         } else {
-                            v.remove(0)
+                            Arc::make_mut(&mut v).remove(0)
                         }),
                         _ => {
                             return Err(VmError::TypeError(
@@ -3475,12 +3502,12 @@ impl VM {
                         }
                     }
                 } else if name == "__linked_pop_back" || name == "__enlazada_quitar_final" {
-                    let l = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let l = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match l {
                         Value::Array(mut v) => self.push(if v.is_empty() {
                             Value::Void
                         } else {
-                            v.pop().unwrap_or(Value::Void)
+                            Arc::make_mut(&mut v).pop().unwrap_or(Value::Void)
                         }),
                         _ => {
                             return Err(VmError::TypeError(
@@ -3489,7 +3516,7 @@ impl VM {
                         }
                     }
                 } else if name == "__linked_len" || name == "__enlazada_longitud" {
-                    let l = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let l = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match l {
                         Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                         _ => return Err(VmError::TypeError("__linked_len espera linked".into())),
@@ -3498,14 +3525,14 @@ impl VM {
                     let pat = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     match regex::Regex::new(&pat) {
                         Ok(_) => self.push(Value::Bool(true)),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__regex_is_match" || name == "__regex_coincide" {
                     let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
                     match regex::Regex::new(&re_s) {
                         Ok(r) => self.push(Value::Bool(r.is_match(&text))),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__regex_captures" || name == "__regex_capturar" {
                     let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
@@ -3516,17 +3543,17 @@ impl VM {
                                 let vs: Vec<Value> = caps
                                     .iter()
                                     .map(|m| {
-                                        Value::Str(
+                                        Value::str(
                                             m.map(|x| x.as_str().to_string()).unwrap_or_default(),
                                         )
                                     })
                                     .collect();
-                                self.push(Value::Array(vs));
+                                self.push(Value::arr(vs));
                             } else {
-                                self.push(Value::Array(vec![]));
+                                self.push(Value::arr(vec![]));
                             }
                         }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__regex_replace" || name == "__regex_reemplazar" {
                     let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
@@ -3534,9 +3561,9 @@ impl VM {
                     let rep = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
                     match regex::Regex::new(&re_s) {
                         Ok(r) => {
-                            self.push(Value::Str(r.replace_all(&text, rep.as_str()).to_string()))
+                            self.push(Value::str(r.replace_all(&text, rep.as_str()).to_string()))
                         }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__unicode_normalize" || name == "__unicode_normalizar" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
@@ -3548,7 +3575,7 @@ impl VM {
                         "NFKD" => s.nfkd().collect(),
                         _ => s.nfc().collect(),
                     };
-                    self.push(Value::Str(nf));
+                    self.push(Value::str(nf));
                 } else if name == "__str_pad_start" || name == "__str_padding_inicio" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let len = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -3559,7 +3586,7 @@ impl VM {
                         .chars()
                         .next()
                         .unwrap_or(' ');
-                    self.push(Value::Str(format!(
+                    self.push(Value::str(format!(
                         "{}{}",
                         ch.to_string().repeat(len.saturating_sub(s.len())),
                         s
@@ -3574,18 +3601,18 @@ impl VM {
                         .chars()
                         .next()
                         .unwrap_or(' ');
-                    self.push(Value::Str(format!(
+                    self.push(Value::str(format!(
                         "{}{}",
                         s,
                         ch.to_string().repeat(len.saturating_sub(s.len()))
                     )));
                 } else if name == "__encoding_utf8" || name == "__codificacion_utf8" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Array(
+                    self.push(Value::arr(
                         s.bytes().map(|b| Value::Int(b as i64)).collect(),
                     ));
                 } else if name == "__encoding_from_utf8" || name == "__desde_utf8" {
-                    let arr = args.into_iter().next().unwrap_or(Value::Array(vec![]));
+                    let arr = args.into_iter().next().unwrap_or(Value::arr(vec![]));
                     match arr {
                         Value::Array(v) => {
                             let bytes: Vec<u8> = v
@@ -3598,26 +3625,26 @@ impl VM {
                                     }
                                 })
                                 .collect();
-                            self.push(Value::Str(String::from_utf8_lossy(&bytes).to_string()));
+                            self.push(Value::str(String::from_utf8_lossy(&bytes).to_string()));
                         }
-                        _ => self.push(Value::Str(String::new())),
+                        _ => self.push(Value::str(String::new())),
                     }
                 } else if name == "__buf_reader" || name == "__lector_buffer" {
                     let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     match std::fs::read_to_string(&path) {
                         Ok(c) => {
                             let lines: Vec<Value> =
-                                c.lines().map(|l| Value::Str(l.to_string())).collect();
-                            self.push(Value::Array(lines));
+                                c.lines().map(|l| Value::str(l.to_string())).collect();
+                            self.push(Value::arr(lines));
                         }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__buf_writer" || name == "__escritor_buffer" {
                     let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
                     match std::fs::write(&path, &content) {
                         Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__stream_chunks" || name == "__stream_trozos" {
                     let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
@@ -3627,18 +3654,18 @@ impl VM {
                             let chunks: Vec<Value> = data
                                 .chunks(size)
                                 .map(|c| {
-                                    Value::Array(c.iter().map(|&b| Value::Int(b as i64)).collect())
+                                    Value::arr(c.iter().map(|&b| Value::Int(b as i64)).collect())
                                 })
                                 .collect();
-                            self.push(Value::Array(chunks));
+                            self.push(Value::arr(chunks));
                         }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__tcp_connect" || name == "__tcp_conectar" {
                     let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     match std::net::TcpStream::connect(&addr) {
                         Ok(_) => self.push(Value::Bool(true)),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__tcp_listen" || name == "__tcp_escuchar" {
                     let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
@@ -3647,7 +3674,7 @@ impl VM {
                             self.tcp_listener = Some(l);
                             self.push(Value::Bool(true));
                         }
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__tcp_accept" || name == "__tcp_aceptar" {
                     match &self.tcp_listener {
@@ -3657,29 +3684,29 @@ impl VM {
                                     .peer_addr()
                                     .map(|a| a.to_string())
                                     .unwrap_or_default();
-                                self.push(Value::Str(addr));
+                                self.push(Value::str(addr));
                             }
-                            Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                            Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                         },
                         None => {
-                            self.push(Value::Error(Box::new(Value::Str("Sin listener".into()))))
+                            self.push(Value::Error(Box::new(Value::str("Sin listener"))))
                         }
                     }
                 } else if name == "__http_server" || name == "__http_servidor" {
                     let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Str(format!("HTTP server on {}", addr)));
+                    self.push(Value::str(format!("HTTP server on {}", addr)));
                 } else if name == "__serial_open" || name == "__serial_abrir" {
                     self.push(Value::Bool(true));
                 } else if name == "__json_parse" || name == "__json_parsear" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     match serde_json::from_str::<serde_json::Value>(&s) {
                         Ok(v) => self.push(json_value_to_lumen(v)),
-                        Err(e) => self.push(Value::Error(Box::new(Value::Str(e.to_string())))),
+                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__json_stringify" || name == "__json_texto" {
                     let val = args.first().cloned().unwrap_or(Value::Void);
                     let json = lumen_value_to_json(&val);
-                    self.push(Value::Str(serde_json::to_string(&json).unwrap_or_default()));
+                    self.push(Value::str(serde_json::to_string(&json).unwrap_or_default()));
                 } else if let Some(func) = self.find_func(&name) {
                     let func_start = func.start;
                     let func_params = func.params.clone();
@@ -3706,7 +3733,7 @@ impl VM {
                     items.push(self.pop()?);
                 }
                 items.reverse();
-                self.push(Value::Array(items));
+                self.push(Value::arr(items));
             }
             Opcode::StructNew => {
                 let struct_name = self.bytecode.strings.get(idx).cloned().unwrap_or_default();
@@ -3736,7 +3763,7 @@ impl VM {
                     .zip(field_values)
                     .map(|(name, val)| {
                         let n = match name {
-                            Value::Str(s) => s,
+                            Value::Str(s) => s.to_string(),
                             _ => "?".to_string(),
                         };
                         (n, val)
@@ -3856,7 +3883,7 @@ impl VM {
         };
 
         let map_get = |map: &ImMap<Value, Value>, key: &str| -> Option<Value> {
-            map.get(&Value::Str(key.to_string())).cloned()
+            map.get(&Value::str(key.to_string())).cloned()
         };
 
         let map_get_i64 = |map: &ImMap<Value, Value>, key: &str| -> Option<i64> {
@@ -3884,14 +3911,14 @@ impl VM {
         };
 
         let get_str = |idx: usize| -> String {
-            match strs_map.get(&Value::Str(idx.to_string())) {
-                Some(Value::Str(s)) => s.clone(),
+            match strs_map.get(&Value::str(idx.to_string())) {
+                Some(Value::Str(s)) => s.to_string(),
                 _ => String::new(),
             }
         };
 
         let get_int = |idx: usize| -> i64 {
-            match ints_map.get(&Value::Str(idx.to_string())) {
+            match ints_map.get(&Value::str(idx.to_string())) {
                 Some(Value::Int(n)) => *n,
                 Some(Value::Float(f)) => *f as i64,
                 Some(Value::Str(s)) => s.parse::<i64>().unwrap_or(0),
@@ -3900,12 +3927,12 @@ impl VM {
         };
 
         let get_instr = |idx: usize| -> Option<(i64, i64)> {
-            match instrs_map.get(&Value::Str(idx.to_string())) {
+            match instrs_map.get(&Value::str(idx.to_string())) {
                 Some(Value::Map(m)) => {
-                    let op = m.get(&Value::Str("op".into()))
+                    let op = m.get(&Value::str("op"))
                         .and_then(|v| if let Value::Int(o) = v { Some(*o) } else { None })
                         .unwrap_or(0);
-                    let arg = m.get(&Value::Str("arg".into()))
+                    let arg = m.get(&Value::str("arg"))
                         .and_then(|v| if let Value::Int(a) = v { Some(*a) } else { None })
                         .unwrap_or(0);
                     Some((op, arg))
@@ -4024,7 +4051,7 @@ impl VM {
                 } else if op == 1 || op == 3 {
                     // PushNum/PushInt: arg is ints index → VM PushInt (1) / PushNum (2)
                     if op == 1 {
-                        let val = match ints_map.get(&Value::Str(arg.to_string())) {
+                        let val = match ints_map.get(&Value::str(arg.to_string())) {
                             Some(Value::Float(f)) => *f,
                             Some(Value::Int(n)) => *n as f64,
                             Some(Value::Str(s)) => s.parse::<f64>().unwrap_or(0.0),
@@ -4150,34 +4177,34 @@ impl VM {
         let mut func_bytes: Vec<u8> = Vec::new();
         func_bytes.extend_from_slice(&(func_cnt as u32).to_le_bytes());
         for fi in 0..func_cnt {
-            let f = match funcs_map.get(&Value::Str(fi.to_string())) {
+            let f = match funcs_map.get(&Value::str(fi.to_string())) {
                 Some(Value::Map(m)) => m.clone(),
                 _ => ImMap::new(),
             };
-            let fname = match f.get(&Value::Str("nombre".into())) {
-                Some(Value::Str(s)) => s.clone(),
+            let fname = match f.get(&Value::str("nombre")) {
+                Some(Value::Str(s)) => s.to_string(),
                 _ => String::new(),
             };
             func_bytes.extend_from_slice(&(fname.len() as u32).to_le_bytes());
             func_bytes.extend_from_slice(fname.as_bytes());
-            let fparams = match f.get(&Value::Str("params".into())) {
+            let fparams = match f.get(&Value::str("params")) {
                 Some(Value::Map(m)) => m.clone(),
                 _ => ImMap::new(),
             };
-            let pcount = match fparams.get(&Value::Str("cnt".into())) {
+            let pcount = match fparams.get(&Value::str("cnt")) {
                 Some(Value::Int(n)) => *n as usize,
                 _ => 0,
             };
             func_bytes.extend_from_slice(&(pcount as u32).to_le_bytes());
             for pi in 0..pcount {
-                let pname = match fparams.get(&Value::Str(pi.to_string())) {
-                    Some(Value::Str(s)) => s.clone(),
-                    _ => String::new(),
+                let pname = match fparams.get(&Value::str(pi.to_string())) {
+                    Some(Value::Str(s)) => s.to_string(),
+                _ => String::new(),
                 };
                 func_bytes.extend_from_slice(&(pname.len() as u32).to_le_bytes());
                 func_bytes.extend_from_slice(pname.as_bytes());
             }
-            let fstart = match f.get(&Value::Str("start".into())) {
+            let fstart = match f.get(&Value::str("start")) {
                 Some(Value::Int(n)) => *n as u64,
                 Some(Value::Float(n)) => *n as u64,
                 _ => 0,
@@ -4194,7 +4221,7 @@ impl VM {
 
         // Return as Array<Int>
         let result: Vec<Value> = buf.iter().map(|&b| Value::Int(b as i64)).collect();
-        Ok(Value::Array(result))
+        Ok(Value::arr(result))
     }
 }
 
@@ -4209,14 +4236,14 @@ fn json_value_to_lumen(v: serde_json::Value) -> Value {
                 Value::Float(n.as_f64().unwrap_or(0.0))
             }
         }
-        serde_json::Value::String(s) => Value::Str(s),
+        serde_json::Value::String(s) => Value::str(s),
         serde_json::Value::Array(arr) => {
-            Value::Array(arr.into_iter().map(json_value_to_lumen).collect())
+            Value::arr(arr.into_iter().map(json_value_to_lumen).collect())
         }
         serde_json::Value::Object(map) => {
             let mut m = ImMap::new();
             for (k, v) in map {
-                m.insert(Value::Str(k), json_value_to_lumen(v));
+                m.insert(Value::str(k), json_value_to_lumen(v));
             }
             Value::Map(m)
         }
@@ -4227,7 +4254,7 @@ fn lumen_value_to_json(v: &Value) -> serde_json::Value {
     match v {
         Value::Int(n) => serde_json::json!(*n),
         Value::Float(n) => serde_json::json!(*n),
-        Value::Str(s) => serde_json::json!(s),
+        Value::Str(s) => serde_json::json!(s.as_ref()),
         Value::Bool(b) => serde_json::json!(*b),
         Value::Array(arr) => {
             serde_json::Value::Array(arr.iter().map(lumen_value_to_json).collect())
@@ -4236,7 +4263,7 @@ fn lumen_value_to_json(v: &Value) -> serde_json::Value {
             let mut obj = serde_json::Map::new();
             for (k, v) in map {
                 if let Value::Str(key) = k {
-                    obj.insert(key.clone(), lumen_value_to_json(v));
+                    obj.insert(key.to_string(), lumen_value_to_json(v));
                 }
             }
             serde_json::Value::Object(obj)

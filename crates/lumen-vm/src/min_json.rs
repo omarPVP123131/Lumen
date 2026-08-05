@@ -14,7 +14,7 @@ fn json_to_lumen(j: JValue) -> Value {
         JValue::Int(n) => Value::Int(n),
         JValue::Float(f) => Value::Float(f),
         JValue::Str(s) => Value::Str(s),
-        JValue::Array(arr) => Value::Array(arr.into_iter().map(json_to_lumen).collect()),
+        JValue::Array(arr) => Value::arr(arr.into_iter().map(json_to_lumen).collect()),
         JValue::Object(map) => {
             let mut m = HashMap::new();
             for (k, v) in map {
@@ -31,8 +31,8 @@ fn lumen_to_json(v: &Value) -> JValue {
         Value::Bool(b) => JValue::Bool(*b),
         Value::Int(n) => JValue::Int(*n),
         Value::Float(f) => JValue::Float(*f),
-        Value::Str(s) => JValue::Str(s.clone()),
-        Value::Array(arr) => JValue::Array(arr.iter().map(lumen_to_json).collect()),
+        Value::Str(s) => JValue::str(s.clone()),
+        Value::Array(arr) => JValue::arr(arr.iter().map(lumen_to_json).collect()),
         Value::Map(map) => {
             let mut entries = Vec::new();
             for (k, v) in map {
@@ -191,7 +191,7 @@ impl Parser<'_> {
     fn parse_array(&mut self) -> Result<JValue, String> {
         self.expect('[')?;
         self.skip_ws();
-        if self.peek() == Some(']') { self.advance(); return Ok(JValue::Array(vec![])); }
+        if self.peek() == Some(']') { self.advance(); return Ok(JValue::arr(vec![])); }
         let mut arr = Vec::new();
         loop {
             arr.push(self.parse_value()?);

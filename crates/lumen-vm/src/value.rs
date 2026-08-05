@@ -1,14 +1,15 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 use im::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
     Float(f64),
-    Str(String),
+    Str(Arc<str>),
     Bool(bool),
-    Array(Vec<Value>),
+    Array(Arc<Vec<Value>>),
     Func(String),
     Struct {
         name: String,
@@ -32,9 +33,9 @@ impl PartialEq for Value {
         match (self, other) {
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a.to_bits() == b.to_bits(),
-            (Value::Str(a), Value::Str(b)) => a == b,
+            (Value::Str(a), Value::Str(b)) => a.as_ref() == b.as_ref(),
             (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => a.as_ref() == b.as_ref(),
             (Value::Func(a), Value::Func(b)) => a == b,
             (Value::Struct { name: na, fields: fa }, Value::Struct { name: nb, fields: fb }) => {
                 na == nb && fa == fb
@@ -88,7 +89,7 @@ impl Hash for Value {
             }
             Value::Array(arr) => {
                 5u8.hash(state);
-                for item in arr {
+                for item in arr.iter() {
                     item.hash(state);
                 }
             }
@@ -155,6 +156,14 @@ impl Hash for Value {
 }
 
 impl Value {
+    pub fn str(s: impl Into<String>) -> Value {
+        Value::Str(Arc::from(s.into()))
+    }
+
+    pub fn arr(v: Vec<Value>) -> Value {
+        Value::Array(Arc::new(v))
+    }
+
     pub fn is_ok(&self) -> bool {
         matches!(self, Value::Exito(_))
     }
@@ -285,7 +294,7 @@ mod tests {
 
     #[test]
     fn test_display_str() {
-        assert_eq!(format!("{}", Value::Str("hola".to_string())), "hola");
+        assert_eq!(format!("{}", Value::str("hola")), "hola");
     }
 
     #[test]
@@ -321,8 +330,8 @@ mod tests {
 
     #[test]
     fn test_truthy_str() {
-        assert!(Value::Str("hello".to_string()).is_truthy());
-        assert!(!Value::Str("".to_string()).is_truthy());
+        assert!(Value::str("hello").is_truthy());
+        assert!(!Value::str("").is_truthy());
     }
 
     #[test]
@@ -334,7 +343,7 @@ mod tests {
     fn test_as_num() {
         assert_eq!(Value::Int(5).as_num(), Some(5.0));
         assert_eq!(Value::Float(3.5).as_num(), Some(3.5));
-        assert_eq!(Value::Str("x".to_string()).as_num(), None);
+        assert_eq!(Value::str("x").as_num(), None);
     }
 
     #[test]
