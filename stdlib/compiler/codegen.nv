@@ -246,6 +246,11 @@ funcion numero _gen_expr(numero cg, numero node) {
             cg = _cg_emit(cg, _instr(39, 0)); // ResultErr
             retornar cg;
         }
+        si a_texto(callee) == "algun" && argc == 1 {
+            cg = _gen_expr(cg, __map_obtener(args, "0"));
+            cg = _cg_emit(cg, _instr(41, 0)); // OptionSome
+            retornar cg;
+        }
         // Generate code for arguments
         numero ai = 0;
         mientras ai < argc {
@@ -383,6 +388,11 @@ funcion numero _gen_expr(numero cg, numero node) {
         numero expr_n = __map_obtener(node, "expr");
         cg = _gen_expr(cg, expr_n);
         cg = _cg_emit(cg, _instr(39, 0)); // ResultErr
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Ninguno" {
+        cg = _cg_emit(cg, _instr(42, 0)); // OptionNone
         retornar cg;
     }
     

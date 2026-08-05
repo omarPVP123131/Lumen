@@ -3996,12 +3996,16 @@ impl VM {
                 25 => 22,     // Ret
                 26 => 23,     // Print
                 27 => 27,     // Halt
-                28 => 28,     // ArrayNew
-                29 => 29,     // ArrayGet
-                30 => 30,     // ArraySet
-                31 => 31,     // ArrayLen
-                40 => 40,     // TryUnwrap
-                _ => 0,       // Nop
+                 28 => 28,     // ArrayNew
+                 29 => 29,     // ArrayGet
+                 30 => 30,     // ArraySet
+                 31 => 31,     // ArrayLen
+                 38 => 38,     // ResultOk
+                 39 => 39,     // ResultErr
+                 40 => 40,     // TryUnwrap
+                 41 => 41,     // OptionSome
+                 42 => 42,     // OptionNone
+                 _ => 0,       // Nop
             }
         };
 

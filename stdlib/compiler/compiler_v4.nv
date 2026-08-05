@@ -32,6 +32,8 @@ funcion numero lexer_tokenizar(texto s) {
     kw = __map_poner(kw, "opcion", 1); kw = __map_poner(kw, "resultado", 1);
     kw = __map_poner(kw, "sea", 1); kw = __map_poner(kw, "let", 1);
     kw = __map_poner(kw, "en", 1); kw = __map_poner(kw, "in", 1);
+    kw = __map_poner(kw, "algun", 1); kw = __map_poner(kw, "some", 1);
+    kw = __map_poner(kw, "ninguno", 1); kw = __map_poner(kw, "none", 1);
     
     // Normalize CRLF to LF and remove stray CR to avoid off-by-one tokenization
     texto s2 = __str_reemplazar(s, "\r\n", "\n");
@@ -259,16 +261,20 @@ funcion booleano _st_tp(numero st) {
     texto v = a_texto(_st_tv(st));
     retornar _st_tt(st) == 6 && (v == "entero" || v == "texto" ||
            v == "decimal" || v == "booleano" || v == "numero" || v == "void" ||
-           v == "lista" || v == "diccionario");
+           v == "lista" || v == "diccionario" ||
+           v == "opcion" || v == "resultado");
 }
 
-// Avanza tras el tipo en una declaración, saltando genéricos "lista<entero>"
+// Avanza tras el tipo en una declaración, saltando genéricos "lista<entero>",
+// "opcion<entero>", "resultado<entero, texto>"
 funcion numero _st_tp_skip(numero st) {
     st = _st_adv(st);
     si _st_ch(st, 4, "<") {
         st = _st_adv(st);
-        si _st_tp(st) { st = _st_adv(st); }
-        si _st_ch(st, 4, ">") { st = _st_adv(st); }
+        mientras (!_st_eof(st)) {
+            si _st_ch(st, 4, ">") { st = _st_adv(st); romper; }
+            st = _st_adv(st);
+        }
     }
     retornar st;
 }
@@ -333,6 +339,13 @@ funcion numero _parse_pr(numero st) {
         numero n = __map_nuevo();
         n = __map_poner(n, "tipo", "Bool");
         n = __map_poner(n, "v", tvs);
+        retornar _res(st, n);
+    }
+
+    si (tt == 6 && (tvs == "ninguno" || tvs == "none")) {
+        st = _st_adv(st);
+        numero n = __map_nuevo();
+        n = __map_poner(n, "tipo", "Ninguno");
         retornar _res(st, n);
     }
 
@@ -1116,6 +1129,12 @@ funcion numero _parse_stmt(numero st) {
         n = __map_poner(n, "tipo", "ExprStmt");
         n = __map_poner(n, "expr", ex);
         retornar _res(st, n);
+    }
+
+    si (_st_ch(st, 5, "{")) {
+        numero rb3 = _parse_blk(st);
+        numero b3 = __map_obtener(rb3, "node");
+        retornar _res(__map_obtener(rb3, "st"), b3);
     }
 
     si (!_st_eof(st)) {
@@ -1948,6 +1967,11 @@ funcion numero _gen_expr(numero cg, numero node) {
             cg = _cg_emit(cg, _instr(39, 0)); // ResultErr
             retornar cg;
         }
+        si a_texto(callee) == "algun" && argc == 1 {
+            cg = _gen_expr(cg, __map_obtener(args, "0"));
+            cg = _cg_emit(cg, _instr(41, 0)); // OptionSome
+            retornar cg;
+        }
         // Generate code for arguments
         numero ai = 0;
         mientras ai < argc {
@@ -2085,6 +2109,11 @@ funcion numero _gen_expr(numero cg, numero node) {
         numero expr_n = __map_obtener(node, "expr");
         cg = _gen_expr(cg, expr_n);
         cg = _cg_emit(cg, _instr(39, 0)); // ResultErr
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Ninguno" {
+        cg = _cg_emit(cg, _instr(42, 0)); // OptionNone
         retornar cg;
     }
     

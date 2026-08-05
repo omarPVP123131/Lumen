@@ -29,6 +29,8 @@ funcion numero lexer_tokenizar(texto s) {
     kw = __map_poner(kw, "opcion", 1); kw = __map_poner(kw, "resultado", 1);
     kw = __map_poner(kw, "sea", 1); kw = __map_poner(kw, "let", 1);
     kw = __map_poner(kw, "en", 1); kw = __map_poner(kw, "in", 1);
+    kw = __map_poner(kw, "algun", 1); kw = __map_poner(kw, "some", 1);
+    kw = __map_poner(kw, "ninguno", 1); kw = __map_poner(kw, "none", 1);
     
     // Normalize CRLF to LF and remove stray CR to avoid off-by-one tokenization
     texto s2 = __str_reemplazar(s, "\r\n", "\n");

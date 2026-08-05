@@ -55,16 +55,20 @@ funcion booleano _st_tp(numero st) {
     texto v = a_texto(_st_tv(st));
     retornar _st_tt(st) == 6 && (v == "entero" || v == "texto" ||
            v == "decimal" || v == "booleano" || v == "numero" || v == "void" ||
-           v == "lista" || v == "diccionario");
+           v == "lista" || v == "diccionario" ||
+           v == "opcion" || v == "resultado");
 }
 
-// Avanza tras el tipo en una declaración, saltando genéricos "lista<entero>"
+// Avanza tras el tipo en una declaración, saltando genéricos "lista<entero>",
+// "opcion<entero>", "resultado<entero, texto>"
 funcion numero _st_tp_skip(numero st) {
     st = _st_adv(st);
     si _st_ch(st, 4, "<") {
         st = _st_adv(st);
-        si _st_tp(st) { st = _st_adv(st); }
-        si _st_ch(st, 4, ">") { st = _st_adv(st); }
+        mientras (!_st_eof(st)) {
+            si _st_ch(st, 4, ">") { st = _st_adv(st); romper; }
+            st = _st_adv(st);
+        }
     }
     retornar st;
 }
@@ -129,6 +133,13 @@ funcion numero _parse_pr(numero st) {
         numero n = __map_nuevo();
         n = __map_poner(n, "tipo", "Bool");
         n = __map_poner(n, "v", tvs);
+        retornar _res(st, n);
+    }
+
+    si (tt == 6 && (tvs == "ninguno" || tvs == "none")) {
+        st = _st_adv(st);
+        numero n = __map_nuevo();
+        n = __map_poner(n, "tipo", "Ninguno");
         retornar _res(st, n);
     }
 
@@ -912,6 +923,12 @@ funcion numero _parse_stmt(numero st) {
         n = __map_poner(n, "tipo", "ExprStmt");
         n = __map_poner(n, "expr", ex);
         retornar _res(st, n);
+    }
+
+    si (_st_ch(st, 5, "{")) {
+        numero rb3 = _parse_blk(st);
+        numero b3 = __map_obtener(rb3, "node");
+        retornar _res(__map_obtener(rb3, "st"), b3);
     }
 
     si (!_st_eof(st)) {
