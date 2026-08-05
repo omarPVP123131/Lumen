@@ -16,6 +16,9 @@ lista<texto> fncs = [];
 entero coro_n = 0;
 entero tarea_n = 0;
 numero tareas_mapa = __map_nuevo();
+numero hilos_m = __map_nuevo();
+numero hilos_args_m = __map_nuevo();
+entero hilo_n = 0;
 entero coro_actual = -1;
 numero coro_st_guard = 0.0;
 entero coro_sp_guard = 0;
@@ -861,6 +864,40 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         }
         retornar 0.0 + __tiempo_diferencia(a_entero(a), a_entero(b));
     }
+    si nm == "__calendario_hijri" || nm == "__calendar_hijri" {
+        numero t = estado_pila(st, sp);
+        retornar box_str(__calendario_hijri(a_entero(t)));
+    }
+    si nm == "__calendario_persa" || nm == "__calendar_persian" {
+        numero t = estado_pila(st, sp);
+        retornar box_str(__calendario_persa(a_entero(t)));
+    }
+    si nm == "__hilo_lanzar" || nm == "__thread_spawn" {
+        texto fn = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        numero arg = estado_pila(st, sp);
+        numero hidb = box_str("hilo_" + a_texto(hilo_n));
+        hilos_m = __map_poner(hilos_m, hidb, box_str(fn));
+        hilos_args_m = __map_poner(hilos_args_m, hidb, arg);
+        hilo_n = hilo_n + 1;
+        retornar hidb;
+    }
+    si nm == "__canal_nuevo" || nm == "__channel_new" {
+        retornar box_str(__canal_nuevo());
+    }
+    si nm == "__canal_enviar" || nm == "__channel_send" {
+        texto cid = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        numero val = estado_pila(st, sp);
+        si __canal_enviar(cid, val) { retornar 9000000001.0; }
+        retornar 9000000000.0;
+    }
+    si nm == "__canal_recibir" || nm == "__channel_recv" {
+        texto cid = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        texto r = __canal_recibir(cid);
+        retornar box_str(r);
+    }
+    si nm == "__mutex_nuevo" || nm == "__mutex_new" {
+        retornar box_str("mutex_" + a_texto(tarea_n));
+    }
     si nm == "__fs_listar" || nm == "__fs_listdir" {
         numero v = estado_pila(st, sp);
         lista<texto> items = __fs_listar(str_at(stl, stl_din, a_entero(v - 1000000000)));
@@ -1159,7 +1196,81 @@ funcion entero main() {
                         saltar = 1;
                     }
                 }
-                si nm == "__coro_reanudar" || nm == "__coro_resume" {
+                si nm == "__hilo_esperar" || nm == "__thread_join" {
+        numero hidv = estado_pila(st, sp);
+        texto fn = str_at(stl, stl_din, a_entero(__map_obtener(hilos_m, hidv) - 1000000000));
+        numero arg = __map_obtener(hilos_args_m, hidv);
+        entero fid2 = -1;
+        entero fi2b = 0;
+        while fi2b < largo(funn) {
+            si funn[fi2b] == fn { fid2 = fi2b; }
+            fi2b = fi2b + 1;
+        }
+        sp = sp - argc;
+        si fid2 >= 0 {
+            entero npb = fun[1 + fid2*3];
+            entero psb = fun[2 + fid2*3];
+            numero nscb = __map_nuevo();
+            entero jpb = 0;
+            while jpb < npb {
+                si jpb == 0 { nscb = __map_poner(nscb, funp[psb + jpb], arg); }
+                sino { nscb = __map_poner(nscb, funp[psb + jpb], 0.0); }
+                jpb = jpb + 1;
+            }
+            numero scopesb = __map_obtener(st, "scopes");
+            entero nsb = a_entero(__map_obtener(st, "ns")) + 1;
+            scopesb = __map_poner(scopesb, a_texto(nsb), nscb);
+            numero retsb = __map_obtener(st, "rets");
+            entero rnb = a_entero(__map_obtener(st, "rn"));
+            retsb = __map_poner(retsb, a_texto(rnb), pc + 2);
+            st = __map_poner(st, "scopes", scopesb);
+            st = __map_poner(st, "ns", nsb + 0.0);
+            st = __map_poner(st, "rets", retsb);
+            st = __map_poner(st, "rn", rnb + 1);
+            pc = a_entero(fun[3 + fid2*3]);
+            saltar = 1;
+        }
+    }
+    si nm == "__mutex_bloquear" || nm == "__mutex_lock" {
+        texto mid = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 2) - 1000000000));
+        texto fn = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        numero arg = estado_pila(st, sp);
+        numero hidb = box_str("mutex_" + a_texto(tarea_n));
+        hilos_m = __map_poner(hilos_m, hidb, box_str(fn));
+        hilos_args_m = __map_poner(hilos_args_m, hidb, arg);
+        tarea_n = tarea_n + 1;
+        entero fid2 = -1;
+        entero fi2b = 0;
+        while fi2b < largo(funn) {
+            si funn[fi2b] == fn { fid2 = fi2b; }
+            fi2b = fi2b + 1;
+        }
+        sp = sp - argc;
+        si fid2 >= 0 {
+            entero npb = fun[1 + fid2*3];
+            entero psb = fun[2 + fid2*3];
+            numero nscb = __map_nuevo();
+            entero jpb = 0;
+            while jpb < npb {
+                si jpb == 0 { nscb = __map_poner(nscb, funp[psb + jpb], arg); }
+                sino { nscb = __map_poner(nscb, funp[psb + jpb], 0.0); }
+                jpb = jpb + 1;
+            }
+            numero scopesb = __map_obtener(st, "scopes");
+            entero nsb = a_entero(__map_obtener(st, "ns")) + 1;
+            scopesb = __map_poner(scopesb, a_texto(nsb), nscb);
+            numero retsb = __map_obtener(st, "rets");
+            entero rnb = a_entero(__map_obtener(st, "rn"));
+            retsb = __map_poner(retsb, a_texto(rnb), pc + 2);
+            st = __map_poner(st, "scopes", scopesb);
+            st = __map_poner(st, "ns", nsb + 0.0);
+            st = __map_poner(st, "rets", retsb);
+            st = __map_poner(st, "rn", rnb + 1);
+            pc = a_entero(fun[3 + fid2*3]);
+            saltar = 1;
+        }
+    }
+    si nm == "__coro_reanudar" || nm == "__coro_resume" {
                     numero cidv = estado_pila(st, sp);
                     entero cidx = a_entero(__map_obtener(coros_idx_mapa, cidv));
                     sp = sp - argc;

@@ -2270,7 +2270,11 @@ impl Parser {
             return true;
         }
         if self.is_next_type_param() {
-            return true;
+            // Also require a matching > followed by ( or { to avoid `x < T {` in conditions
+            if let Some(tok) = self.find_token_after_type_args(self.pos) {
+                return matches!(tok.kind, TokenKind::LeftParen | TokenKind::LeftBrace);
+            }
+            return false;
         }
         // Allow any Ident as a potential type arg (user-defined struct type)
         // but only if it's followed by > and then ( or {
@@ -2561,6 +2565,8 @@ impl Parser {
     }
 
     /// Starting from an Ident at `start_pos` followed by `<`, find the token after the matching `>`.
+    /// Aborts (returns None) if it hits a delimiter (`(` `)` `{` `}` `;`) before the matching `>`,
+    /// so expressions like `i < veces {` or `i < largo(arr)` are not mistaken for generics.
     fn find_token_after_type_args(&self, start_pos: usize) -> Option<&Token> {
         let mut depth = 0u32;
         let mut i = start_pos + 1; // start at <
@@ -2573,6 +2579,11 @@ impl Parser {
                         return self.tokens.get(i + 1);
                     }
                 }
+                TokenKind::LeftParen
+                | TokenKind::RightParen
+                | TokenKind::LeftBrace
+                | TokenKind::RightBrace
+                | TokenKind::Semicolon => return None,
                 _ => {}
             }
             i += 1;

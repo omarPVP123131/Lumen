@@ -609,7 +609,7 @@ fn prefix_type_with_params(t: &mut Type, prefix: &str, type_params: &HashSet<Str
             }
             prefix_type_with_params(return_type, prefix, type_params);
         }
-        Type::Struct(name) => {
+        Type::Struct(name) if name != "Infer" => {
             *name = format!("{}_{}", prefix, name);
         }
         Type::Resultado { ok, err } => {
@@ -647,7 +647,9 @@ fn prefix_type(t: &mut Type, prefix: &str) {
             prefix_type(return_type, prefix);
         }
         Type::Struct(name) => {
-            *name = format!("{}_{}", prefix, name);
+            if name != "Infer" {
+                *name = format!("{}_{}", prefix, name);
+            }
         }
         Type::Resultado { ok, err } => {
             prefix_type(ok, prefix);
@@ -808,6 +810,8 @@ fn is_builtin(name: &str) -> bool {
             | "__str_padding_inicio"
             | "__str_pad_end"
             | "__str_padding_fin"
+            | "__str_replace"
+            | "__str_reemplazar"
             | "__encoding_utf8"
             | "__codificacion_utf8"
             | "__encoding_from_utf8"

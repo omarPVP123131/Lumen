@@ -2,7 +2,7 @@
 // Testing module - pure LUMEN assertions, dual ES/EN API
 // Uso: importar "testing.nv"
 
-funcion booleano afirmar_verdadero(cualquiera val) {
+funcion booleano afirmar_verdadero<T>(T val) {
     si val == verdadero {
         retornar verdadero;
     } sino {
@@ -10,9 +10,9 @@ funcion booleano afirmar_verdadero(cualquiera val) {
         retornar falso;
     }
 }
-funcion booleano assert_true(cualquiera val) { retornar afirmar_verdadero(val); }
+funcion booleano assert_true<T>(T val) { retornar afirmar_verdadero(val); }
 
-funcion booleano afirmar_falso(cualquiera val) {
+funcion booleano afirmar_falso<T>(T val) {
     si val == falso {
         retornar verdadero;
     } sino {
@@ -20,9 +20,9 @@ funcion booleano afirmar_falso(cualquiera val) {
         retornar falso;
     }
 }
-funcion booleano assert_false(cualquiera val) { retornar afirmar_falso(val); }
+funcion booleano assert_false<T>(T val) { retornar afirmar_falso(val); }
 
-funcion booleano afirmar_igual(cualquiera a, cualquiera b) {
+funcion booleano afirmar_igual<T>(T a, T b) {
     si a == b {
         retornar verdadero;
     } sino {
@@ -30,9 +30,9 @@ funcion booleano afirmar_igual(cualquiera a, cualquiera b) {
         retornar falso;
     }
 }
-funcion booleano assert_eq(cualquiera a, cualquiera b) { retornar afirmar_igual(a, b); }
+funcion booleano assert_eq<T>(T a, T b) { retornar afirmar_igual(a, b); }
 
-funcion booleano afirmar_distinto(cualquiera a, cualquiera b) {
+funcion booleano afirmar_distinto<T>(T a, T b) {
     si a != b {
         retornar verdadero;
     } sino {
@@ -40,7 +40,7 @@ funcion booleano afirmar_distinto(cualquiera a, cualquiera b) {
         retornar falso;
     }
 }
-funcion booleano assert_neq(cualquiera a, cualquiera b) { retornar afirmar_distinto(a, b); }
+funcion booleano assert_neq<T>(T a, T b) { retornar afirmar_distinto(a, b); }
 
 // Mock - contador de llamadas en LUMEN puro
 // Mock - call counter in pure LUMEN
@@ -116,53 +116,53 @@ funcion cualquiera coverage_report(entero id) { retornar coverage_reporte(id); }
 /// tipo 1: cambiar + por -
 /// tipo 2: cambiar > por < (no >=)
 /// tipo 3: cambiar "verdadero" por "falso" (primer ocurrencia)
-funcion texto mutar(texto source, entero tipo) {
+funcion texto mutar(texto source, entero tipom) {
     entero len = __str_longitud(source);
-    si tipo == 1 {
+    si tipom == 1 {
         // Replace + with -
-        texto result = "";
+        texto res = "";
         entero i = 0;
         mientras len - i > 0 {
             si source[i] == "+" {
-                result = result + "-";
+                res = res + "-";
             } sino {
-                result = result + source[i];
+                res = res + source[i];
             }
             i = i + 1;
         }
-        retornar result;
-    } sino si tipo == 2 {
+        retornar res;
+    } sino si tipom == 2 {
         // Replace > with < (not >=)
-        texto result = "";
+        texto res = "";
         entero i = 0;
         mientras len - i > 0 {
             si source[i] == ">" {
                 si i == 0 {
-                    result = result + "<";
+                    res = res + "<";
                 } sino si source[i - 1] == "=" {
-                    result = result + ">";
+                    res = res + ">";
                 } sino {
-                    result = result + "<";
+                    res = res + "<";
                 }
             } sino {
-                result = result + source[i];
+                res = res + source[i];
             }
             i = i + 1;
         }
-        retornar result;
-    } sino si tipo == 3 {
+        retornar res;
+    } sino si tipom == 3 {
         // Replace first char with X to simulate mutation
-        texto result = "";
+        texto res = "";
         entero i = 0;
         mientras len - i > 0 {
             si i == 0 {
-                result = result + "X";
+                res = res + "X";
             } sino {
-                result = result + source[i];
+                res = res + source[i];
             }
             i = i + 1;
         }
-        retornar result;
+        retornar res;
     }
     retornar source;
 }
@@ -175,8 +175,8 @@ funcion lista<texto> mutantes_generar(texto source, entero num_mutantes) {
     lista<texto> mutantes = [];
     entero n = 0;
     mientras num_mutantes - n > 0 {
-        entero tipo = n - (n / 3) * 3 + 1;
-        texto mutante = mutar(source, tipo);
+        entero tipom = n - (n / 3) * 3 + 1;
+        texto mutante = mutar(source, tipom);
         mutantes.agregar(mutante);
         n = n + 1;
     }
@@ -217,7 +217,7 @@ funcion decimal mutacion_puntaje(entero muertos, entero total) {
     si total == 0 {
         retornar 0.0;
     }
-    retornar muertos como decimal / total como decimal;
+    retornar muertos * 1.0 / total;
 }
 /// Mutation score (English alias)
 funcion decimal mutation_score(entero killed, entero total) { retornar mutacion_puntaje(killed, total); }

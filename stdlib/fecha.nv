@@ -50,3 +50,23 @@ funcion entero diferencia(numero t1, numero t2) {
 }
 /// Calculate the difference between two timestamps (English alias)
 funcion entero diff(numero t1, numero t2) { retornar diferencia(t1, t2); }
+
+// ============================================================
+// CALENDARIOS / CALENDARS (Hijri, Persa)
+// ============================================================
+
+/// Convierte un timestamp a fecha del calendario Hijri (AH)
+/// Convert a timestamp to Hijri calendar date (AH)
+funcion texto calendario_hijri(numero timestamp) {
+    retornar __calendario_hijri(timestamp);
+}
+/// Hijri calendar date (English alias)
+funcion texto hijri(numero timestamp) { retornar calendario_hijri(timestamp); }
+
+/// Convierte un timestamp a fecha del calendario Persa (Jalali)
+/// Convert a timestamp to Persian (Jalali) calendar date
+funcion texto calendario_persa(numero timestamp) {
+    retornar __calendario_persa(timestamp);
+}
+/// Persian calendar date (English alias)
+funcion texto persa(numero timestamp) { retornar calendario_persa(timestamp); }
