@@ -121,14 +121,18 @@ fn builtin_err(err: VmError) -> Option<Result<(), VmError>> {
 
 impl VM {
     pub fn new(bytecode: Bytecode) -> Self {
-        let ip = bytecode
-            .funcs
-            .iter()
-            .find(|f| f.name == "__main__")
-            .or_else(|| bytecode.funcs.iter().find(|f| f.name == "main"))
-            .or_else(|| bytecode.funcs.first())
-            .map(|f| f.start)
-            .unwrap_or(0);
+        let ip = if bytecode.funcs.is_empty() {
+            0
+        } else {
+            bytecode
+                .funcs
+                .iter()
+                .find(|f| f.name == "__main__")
+                .or_else(|| bytecode.funcs.iter().find(|f| f.name == "main"))
+                .or_else(|| bytecode.funcs.iter().find(|f| f.name == "principal"))
+                .map(|f| f.start)
+                .unwrap_or(usize::MAX)
+        };
         let mut func_index_cache = HashMap::new();
         for (i, func) in bytecode.funcs.iter().enumerate() {
             func_index_cache.insert(func.name.clone(), i);

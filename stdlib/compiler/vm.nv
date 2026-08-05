@@ -1063,11 +1063,11 @@ funcion entero main() {
     entero fmain = -1;
     entero fi2 = 0;
     while fi2 < largo(funn) {
-        si funn[fi2] == "__main__" || funn[fi2] == "main" { fmain = fi2; }
+        si funn[fi2] == "__main__" || funn[fi2] == "main" || funn[fi2] == "principal" { fmain = fi2; }
         fi2 = fi2 + 1;
     }
-    si fmain < 0 && largo(funn) > 0 { fmain = 0; }
     si fmain >= 0 { pc = a_entero(fun[3 + fmain*3]); }
+    sino { pc = 999999999; }
     numero st = __map_nuevo();
     st = __map_poner(st, "pila", __map_nuevo());
     st = __map_poner(st, "mem", __map_nuevo());
@@ -1365,28 +1365,32 @@ funcion entero main() {
             si saltar == 0 { pc = pc + 1; }
         }
         si op == 22 {
-            numero rv = estado_pila(st, sp);
-            sp = sp - 1;
-            si coro_actual >= 0 {
-                coro_done_m = __map_poner(coro_done_m, 0.0 + coro_actual, 1.0);
-                st = coro_st_guard;
-                sp = coro_sp_guard;
-                pc = coro_pc_guard;
-                coro_actual = -1;
-            } sino {
-            entero rn = a_entero(__map_obtener(st, "rn")) - 1;
-            numero rets = __map_obtener(st, "rets");
-            pc = a_entero(__map_obtener(rets, a_texto(rn)));
-            rets = __map_poner(rets, a_texto(rn), 0.0);
-            entero ns2 = a_entero(__map_obtener(st, "ns")) - 1;
-            st = __map_poner(st, "rets", rets);
-            st = __map_poner(st, "rn", rn + 0.0);
-            st = __map_poner(st, "ns", ns2 + 0.0);
-            sp = sp + 1;
-            st = estado_pila_poner(st, sp, rv);
-            }
-            saltar = 1;
-        }
+             numero rv = estado_pila(st, sp);
+             sp = sp - 1;
+             si coro_actual >= 0 {
+                 coro_done_m = __map_poner(coro_done_m, 0.0 + coro_actual, 1.0);
+                 st = coro_st_guard;
+                 sp = coro_sp_guard;
+                 pc = coro_pc_guard;
+                 coro_actual = -1;
+             } sino {
+             entero rn = a_entero(__map_obtener(st, "rn")) - 1;
+             si rn < 0 {
+                 fin = 1;
+             } sino {
+             numero rets = __map_obtener(st, "rets");
+             pc = a_entero(__map_obtener(rets, a_texto(rn)));
+             rets = __map_poner(rets, a_texto(rn), 0.0);
+             entero ns2 = a_entero(__map_obtener(st, "ns")) - 1;
+             st = __map_poner(st, "rets", rets);
+             st = __map_poner(st, "rn", rn + 0.0);
+             st = __map_poner(st, "ns", ns2 + 0.0);
+             sp = sp + 1;
+             st = estado_pila_poner(st, sp, rv);
+             }
+             }
+             saltar = 1;
+         }
         si op == 23 {
             numero v = estado_pila(st, sp);
             imprimir(a_texto_v(v));
