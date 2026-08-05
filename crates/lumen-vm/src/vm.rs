@@ -2679,13 +2679,27 @@ impl VM {
             }
             Opcode::Ret => {
                 let ret_val = self.pop().unwrap_or(Value::Void);
-                if let Some(frame) = self.call_stack.pop() {
+                if let Some(coro_id) = self.current_coro.clone() {
+                    if let Some(coro) = self.coroutines.get_mut(&coro_id) {
+                        coro.is_done = true;
+                    }
+                    self.current_coro = None;
+                    if let Some((saved_stack, saved_locals, saved_ip)) = self.main_saved.take() {
+                        self.stack = saved_stack;
+                        self.locals = saved_locals;
+                        self.ip = saved_ip;
+                    } else {
+                        self.ip = usize::MAX;
+                    }
+                    self.push(ret_val);
+                } else if let Some(frame) = self.call_stack.pop() {
                     self.locals.pop();
                     self.ip = frame.return_ip;
+                    self.push(ret_val);
                 } else {
                     self.ip = usize::MAX;
+                    self.push(ret_val);
                 }
-                self.push(ret_val);
             }
             Opcode::Print => {
                 let val = self.pop()?;
