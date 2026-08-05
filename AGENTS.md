@@ -159,6 +159,19 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Commit**: `290f3ed` (vm.nv handlers tiempo + fmain + argc-guards; vm.rs parse espacio).
 - **Pendientes**: COMPILA-FALLA `test_texto_min`/`test_texto_std`/`jr_concurrencia` → `44_extension_methods`/`math` → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
 
+**Progreso (4 Ago — sesión AI · COMPILA-FALLA x3 RESUELTOS — batería 37/38):**
+- **Parser Rust: scan de genéricos sin límites** (`find_token_after_type_args`): en `mientras i < veces {` el `<` disparaba el scan de type-args y encontraba el `{` del body → E021 cascada. Fix: el scan **aborta** si encuentra `(` `)` `{` `}` `;` antes del `>` (espejo del fix que ya tenía parser.nv); misma guarda aplicada al branch de type-params (`x < T {`). 42 unit parser verdes.
+- **loader.rs `is_builtin`**: faltaba `__str_reemplazar`/`__str_replace` → el prefijado de imports lo renombraba a `texto___str_reemplazar` → E042. Añadido al allowlist.
+- **loader.rs prefijado de tipos**: `Type::Struct("Infer")` (el tipo de `sea x = ...` sin anotación) se prefijaba a `testing_Infer` → el sema ya no lo reconocía como inferencia → E031. Fix: eximir `"Infer"` del prefijo en `prefix_type` y `prefix_type_with_params`.
+- **stdlib/texto.nv — 12 funciones nuevas**: `buscar/find`, `empieza_con/starts_with`, `termina_con/ends_with`, `invertir/reverse`, `reemplazar/replace`, `repetir/repeat`, `recortar_inicio/trim_start`, `recortar_fin/trim_end`, `es_vacio/is_empty`, `es_digito/is_digit`, `es_letra/is_letter`, `upper`/`lower`; fix `decodificar_utf8(numero bytes)` → `lista<entero>` (E041); alias `largo`. → **test_texto_std CORRECTO** (18/18 checks).
+- **stdlib/fecha.nv**: wrappers `calendario_hijri/hijri` + `calendario_persa/persa` (los natives `__calendario_hijri/persa` existían en el VM Rust pero el stdlib nunca los expuso) → **jr_concurrencia compila**.
+- **stdlib/testing.nv**: `tipo`/`result`/`como` son keywords reservadas sin implementar como identificador/cast → renombrados (`tipom`, `res`, división flotante `muertos * 1.0 / total`); aserciones `cualquiera val` → genéricas `<T>` (`cualquiera` no es tipo válido en el lenguaje). testing.nv compila.
+- **vm.nv: handlers hilo/mutex/calendario**: `__hilo_lanzar`/`__canal_nuevo`/`__mutex_nuevo`/`__calendario_hijri/persa` registran ids/fn (los natives Rust usan `self.bytecode` = vm.nvc, NO el programa interno → no se podían delegar); `__hilo_esperar`/`__mutex_bloquear` hacen **dispatch inline en op21** (scope+rets+pc jump como `__tarea_esperar`, pasando el arg en param 0) → jr_concurrencia **IDÉNTICO** (Hijri/Persian/Thread/Channel/Mutex ✓).
+- **Batería ampliada: OK=37/38** — únicos DIFF restantes: `stress_fecha` (timing real 0ms vs 16ms, flaky inherente). `test_migracion` queda con gap pre-existente (`cualquiera` como tipo en csv.nv — no es tipo válido; requiere tipo Any en el lenguaje).
+- cargo test OK (42 parser, 49 sema, 45 unit, 166 e2e, 0 fallos).
+- **Commit**: `8c27abd`.
+- **Pendientes**: `44_extension_methods`/`math` (compiler issue `este`/extension methods, fallan en AMBAS VMs) → tipo `Any`/`cualquiera` real (desbloquea csv.nv/test_migracion) → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
+
 ---
 
 ## Bugs Conocidos y Fixes Recientes
