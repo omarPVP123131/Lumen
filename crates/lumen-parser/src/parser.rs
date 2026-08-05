@@ -144,7 +144,12 @@ impl Parser {
 
         let init = if self.check(&[TokenKind::Equal]) {
             self.advance();
-            Some(Box::new(self.parse_expression()?))
+            // Permitir struct-init en el inicializador (p.ej. `sea c = Caja { valor: 1 };`)
+            let saved_nsi = self.no_struct_init;
+            self.no_struct_init = false;
+            let e = self.parse_expression().map(Box::new);
+            self.no_struct_init = saved_nsi;
+            e
         } else {
             None
         };

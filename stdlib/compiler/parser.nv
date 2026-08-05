@@ -594,6 +594,10 @@ funcion numero _parse_stmt(numero st) {
             st = __map_obtener(re, "st");
         }
         si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+        // Inferir tipo desde StructInit: sea c = Caja { ... } → c:Caja
+        si a_texto(__map_obtener(vl, "tipo")) == "StructInit" {
+            svar = a_texto(__map_obtener(vl, "nombre"));
+        }
         numero n = __map_nuevo();
         n = __map_poner(n, "tipo", "VarDecl");
         n = __map_poner(n, "nombre", nm);
