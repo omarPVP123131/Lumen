@@ -1219,6 +1219,13 @@ funcion numero _parse_decl(numero st) {
             numero pm = __map_nuevo();
             pm = __map_poner(pm, "nombre", pn);
             pm = __map_poner(pm, "tipo", pt);
+            pm = __map_poner(pm, "defecto", 0);
+            si (_st_ch(st, 4, "=")) {
+                st = _st_adv(st);
+                numero rdf = _parse_expr(st);
+                pm = __map_poner(pm, "defecto", __map_obtener(rdf, "node"));
+                st = __map_obtener(rdf, "st");
+            }
             prms = __map_poner(prms, a_texto(pc), pm);
             pc = pc + 1;
         }
@@ -1895,6 +1902,29 @@ funcion numero _cg_and_or(numero cg, numero izq, numero der, numero es_and) {
 }
 
 funcion numero _cg_emit_call(numero cg, numero name, numero argc) {
+    // Default params: inline missing defaults antes del Call (como el IR de Rust)
+    numero funcs = __map_obtener(cg, "funcs");
+    numero fcnt = __map_obtener(cg, "func_cnt");
+    numero fi = 0;
+    mientras fi < fcnt {
+        numero f = __map_obtener(funcs, a_texto(fi));
+        si a_texto(__map_obtener(f, "nombre")) == a_texto(name) {
+            numero params = __map_obtener(f, "params");
+            numero pcnt = __map_obtener(params, "cnt");
+            numero pd = __map_obtener(f, "defectos");
+            numero ai2 = argc;
+            mientras ai2 < pcnt {
+                numero d = __map_obtener(pd, a_texto(ai2));
+                si d != 0 {
+                    cg = _gen_expr(cg, d);
+                    argc = argc + 1;
+                }
+                ai2 = ai2 + 1;
+            }
+            romper;
+        }
+        fi = fi + 1;
+    }
     cg = _cg_add_str(cg, name);
     numero str_idx = __map_obtener(cg, "str_tmp");
     cg = _cg_add_int(cg, argc);
@@ -2351,11 +2381,20 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
             pi = pi + 1;
         }
         pm = __map_poner(pm, "cnt", pn);
+        numero pd = __map_nuevo();
+        entero pj = 0;
+        mientras pj < pn {
+            numero p = __map_obtener(params, a_texto(pj));
+            pd = __map_poner(pd, a_texto(pj), __map_obtener(p, "defecto"));
+            pj = pj + 1;
+        }
+        pd = __map_poner(pd, "cnt", pn);
         numero funcs = __map_obtener(cg, "funcs");
         numero fc = __map_obtener(cg, "func_cnt");
         numero f = __map_nuevo();
         f = __map_poner(f, "nombre", nombre);
         f = __map_poner(f, "params", pm);
+        f = __map_poner(f, "defectos", pd);
         f = __map_poner(f, "start", start);
         funcs = __map_poner(funcs, a_texto(fc), f);
         cg = __map_poner(cg, "funcs", funcs);

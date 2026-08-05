@@ -1723,6 +1723,17 @@ impl Parser {
                     type_args: Vec::new(),
                     span,
                 };
+            } else if self.check(&[TokenKind::Como, TokenKind::As]) {
+                // Cast `X como T` — no-op de tipado: consume la keyword y el tipo,
+                // el valor pasa tal cual (sin instrucción extra en bytecode).
+                self.advance();
+                let _cast_type = self.parse_type()?;
+                let cast_span = expr.span();
+                let cast_merge = Span::merge(&cast_span, &self.previous().span);
+                expr = Expr::Grouping {
+                    expr: Box::new(expr),
+                    span: cast_merge,
+                };
             } else {
                 break;
             }

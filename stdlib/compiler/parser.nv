@@ -1013,6 +1013,13 @@ funcion numero _parse_decl(numero st) {
             numero pm = __map_nuevo();
             pm = __map_poner(pm, "nombre", pn);
             pm = __map_poner(pm, "tipo", pt);
+            pm = __map_poner(pm, "defecto", 0);
+            si (_st_ch(st, 4, "=")) {
+                st = _st_adv(st);
+                numero rdf = _parse_expr(st);
+                pm = __map_poner(pm, "defecto", __map_obtener(rdf, "node"));
+                st = __map_obtener(rdf, "st");
+            }
             prms = __map_poner(prms, a_texto(pc), pm);
             pc = pc + 1;
         }
