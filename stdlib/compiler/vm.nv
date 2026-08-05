@@ -178,6 +178,7 @@ funcion texto a_texto_v(numero v) {
             retornar s3 + " }";
         }
         si v < 4000000000 {
+            si a_entero(v - 3000000000) >= largo(stcs) { retornar a_texto(a_entero(v)); }
             numero s4 = stcs[a_entero(v - 3000000000)];
             lista<numero> claves4 = __map_claves(s4);
             texto s5 = "{ ";
@@ -190,6 +191,7 @@ funcion texto a_texto_v(numero v) {
             retornar s5 + " }";
         }
         si v < 5000000000 {
+            si a_entero(v - 4000000000) >= largo(resl) { retornar a_texto(a_entero(v)); }
             numero r5 = resl[a_entero(v - 4000000000)];
             si __map_obtener(r5, "ok") == 1 {
                 retornar "exito(" + a_texto_v(__map_obtener(r5, "v")) + ")";
@@ -197,6 +199,7 @@ funcion texto a_texto_v(numero v) {
             retornar "error(" + a_texto_v(__map_obtener(r5, "v")) + ")";
         }
         si v < 6000000000 {
+            si a_entero(v - 5000000000) >= largo(opts) { retornar a_texto(a_entero(v)); }
             numero r6 = opts[a_entero(v - 5000000000)];
             si __map_obtener(r6, "some") == 1 {
                 retornar "algun(" + a_texto_v(__map_obtener(r6, "v")) + ")";
@@ -204,6 +207,7 @@ funcion texto a_texto_v(numero v) {
             retornar "ninguno";
         }
         si v < 7000000000 {
+            si a_entero(v - 6000000000) >= largo(arrs) { retornar a_texto(a_entero(v)); }
             lista<numero> tp = arrs[a_entero(v - 6000000000)];
             texto s7 = "(";
             entero k4 = 0;
@@ -215,6 +219,7 @@ funcion texto a_texto_v(numero v) {
             retornar s7 + ")";
         }
         si v < 8000000000 {
+            si a_entero(v - 7000000000) >= largo(enms) { retornar a_texto(a_entero(v)); }
             numero enm = enms[a_entero(v - 7000000000)];
             texto s8 = a_texto_v(__map_obtener(enm, "nm")) + "::" + a_texto_v(__map_obtener(enm, "vr"));
             lista<numero> args8 = arrs[a_entero(0.0 - __map_obtener(enm, "args") - 1000000000.0) - 1];
@@ -230,6 +235,7 @@ funcion texto a_texto_v(numero v) {
             }
             retornar s8;
         }
+        si a_entero(v - 8000000000) >= largo(fncs) { retornar a_texto(a_entero(v)); }
         retornar "<funcion " + fncs[a_entero(v - 8000000000)] + ">";
     }
     retornar a_texto(v);

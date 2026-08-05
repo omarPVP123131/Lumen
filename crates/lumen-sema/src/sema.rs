@@ -2729,9 +2729,9 @@ impl SemanticAnalyzer {
                                     ),
                                 });
                             } else if arg_types.len() == 1
-                                && *inner != arg_types[0]
-                                && !(arg_types[0] == TypeInfo::Entero
-                                    && *inner == TypeInfo::Decimal)
+                                && !can_assign(&*inner, &arg_types[0])
+                                && !(*inner == TypeInfo::Numero
+                                    || arg_types[0] == TypeInfo::Numero)
                             {
                                 self.errors.push(SemError {
                                     code: "E046".to_string(),
