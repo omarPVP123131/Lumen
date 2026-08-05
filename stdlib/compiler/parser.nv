@@ -730,64 +730,64 @@ funcion numero _parse_stmt(numero st) {
                 st = __map_obtener(rc_v, "st");
                 si (_st_ch(st, 5, ":")) { st = _st_adv(st); }
                 // body del caso: statements hasta `}` o `caso` (sin consumir el `}` — es el cierre del elegir)
-                numero stmts_c = __map_nuevo();
-                numero sc2 = 0;
-                mientras (!_st_eof(st) && !_st_ch(st, 5, "}")) {
-                    numero cbt = _st_tt(st);
-                    texto cbv = a_texto(_st_tv(st));
-                    si ((cbt == 1 || cbt == 6) &&
-                        (cbv == "caso" || cbv == "case" || cbv == "defecto" ||
-                         cbv == "default")) { romper; }
-                    numero rs2 = _parse_stmt(st);
-                    numero sn2 = __map_obtener(rs2, "node");
-                    st = __map_obtener(rs2, "st");
-                    stmts_c = __map_poner(stmts_c, a_texto(sc2), sn2);
-                    sc2 = sc2 + 1;
-                }
-                stmts_c = __map_poner(stmts_c, "cnt", sc2);
-                // caso defecto/default: rama else del último If
-                si ((_st_tt(st) == 1 || _st_tt(st) == 6) &&
-                    (a_texto(_st_tv(st)) == "defecto" ||
-                     a_texto(_st_tv(st)) == "default")) {
-                    st = _st_adv(st);
-                    si (_st_ch(st, 5, ":")) { st = _st_adv(st); }
-                    numero stmts_d = __map_nuevo();
-                    numero sd = 0;
-                    mientras (!_st_eof(st) && !_st_ch(st, 5, "}")) {
-                        numero rsd = _parse_stmt(st);
-                        numero snd = __map_obtener(rsd, "node");
-                        st = __map_obtener(rsd, "st");
-                        stmts_d = __map_poner(stmts_d, a_texto(sd), snd);
-                        sd = sd + 1;
-                    }
-                    stmts_d = __map_poner(stmts_d, "cnt", sd);
-                    numero b_d = __map_nuevo();
-                    b_d = __map_poner(b_d, "tipo", "Block");
-                    b_d = __map_poner(b_d, "cuerpo", stmts_d);
-                    dblock = b_d;
-                    romper;
-                }
-                numero b_c = __map_nuevo();
-                b_c = __map_poner(b_c, "tipo", "Block");
-                b_c = __map_poner(b_c, "cuerpo", stmts_c);
-                numero cmp = __map_nuevo();
-                cmp = __map_poner(cmp, "tipo", "Binary");
-                cmp = __map_poner(cmp, "op", "==");
-                cmp = __map_poner(cmp, "izq", sel);
-                cmp = __map_poner(cmp, "der", cval);
-                numero ifn = __map_nuevo();
-                ifn = __map_poner(ifn, "tipo", "If");
-                ifn = __map_poner(ifn, "cond", cmp);
-                ifn = __map_poner(ifn, "cuerpo", b_c);
-                numero _sv = __map_nuevo();
-                _sv = __map_poner(_sv, "tipo", "Vacio");
-                ifn = __map_poner(ifn, "sino", _sv);
-                ifns = __map_poner(ifns, a_texto(ic), ifn);
-                ic = ic + 1;
-            } sino {
-                st = _st_adv(st);
-            }
-        }
+                 numero stmts_c = __map_nuevo();
+                 numero sc2 = 0;
+                 mientras (!_st_eof(st) && !_st_ch(st, 5, "}")) {
+                     numero cbt = _st_tt(st);
+                     texto cbv = a_texto(_st_tv(st));
+                     si ((cbt == 1 || cbt == 6) &&
+                         (cbv == "caso" || cbv == "case" || cbv == "defecto" ||
+                          cbv == "default")) { romper; }
+                     numero rs2 = _parse_stmt(st);
+                     numero sn2 = __map_obtener(rs2, "node");
+                     st = __map_obtener(rs2, "st");
+                     stmts_c = __map_poner(stmts_c, a_texto(sc2), sn2);
+                     sc2 = sc2 + 1;
+                 }
+                 stmts_c = __map_poner(stmts_c, "cnt", sc2);
+                 numero b_c = __map_nuevo();
+                 b_c = __map_poner(b_c, "tipo", "Block");
+                 b_c = __map_poner(b_c, "cuerpo", stmts_c);
+                 numero cmp = __map_nuevo();
+                 cmp = __map_poner(cmp, "tipo", "Binary");
+                 cmp = __map_poner(cmp, "op", "==");
+                 cmp = __map_poner(cmp, "izq", sel);
+                 cmp = __map_poner(cmp, "der", cval);
+                 numero ifn = __map_nuevo();
+                 ifn = __map_poner(ifn, "tipo", "If");
+                 ifn = __map_poner(ifn, "cond", cmp);
+                 ifn = __map_poner(ifn, "cuerpo", b_c);
+                 numero _sv = __map_nuevo();
+                 _sv = __map_poner(_sv, "tipo", "Vacio");
+                 ifn = __map_poner(ifn, "sino", _sv);
+                 ifns = __map_poner(ifns, a_texto(ic), ifn);
+                 ic = ic + 1;
+                 // caso defecto/default: rama else del último If (tras construir el ifn actual)
+                 si ((_st_tt(st) == 1 || _st_tt(st) == 6) &&
+                     (a_texto(_st_tv(st)) == "defecto" ||
+                      a_texto(_st_tv(st)) == "default")) {
+                     st = _st_adv(st);
+                     si (_st_ch(st, 5, ":")) { st = _st_adv(st); }
+                     numero stmts_d = __map_nuevo();
+                     numero sd = 0;
+                     mientras (!_st_eof(st) && !_st_ch(st, 5, "}")) {
+                         numero rsd = _parse_stmt(st);
+                         numero snd = __map_obtener(rsd, "node");
+                         st = __map_obtener(rsd, "st");
+                         stmts_d = __map_poner(stmts_d, a_texto(sd), snd);
+                         sd = sd + 1;
+                     }
+                     stmts_d = __map_poner(stmts_d, "cnt", sd);
+                     numero b_d = __map_nuevo();
+                     b_d = __map_poner(b_d, "tipo", "Block");
+                     b_d = __map_poner(b_d, "cuerpo", stmts_d);
+                     dblock = b_d;
+                     romper;
+                 }
+             } sino {
+                 st = _st_adv(st);
+             }
+         }
         si (_st_ch(st, 5, "}")) { st = _st_adv(st); }
         // Construir la cadena desde el final: __map_poner NO muta el mapa original
         si (ic > 0) {
