@@ -711,29 +711,41 @@ funcion numero codegen_generar(numero ast) {
         i = i + 1;
     }
     
-    // Register __main__ (top-level code) starting at current pos
-    numero main_start = __map_obtener(cg, "pos");
-    numero funcs = __map_obtener(cg, "funcs");
-    numero fc = __map_obtener(cg, "func_cnt");
-    numero pm = __map_nuevo();
-    pm = __map_poner(pm, "cnt", 0);
-    numero f = __map_nuevo();
-    f = __map_poner(f, "nombre", "__main__");
-    f = __map_poner(f, "params", pm);
-    f = __map_poner(f, "start", main_start);
-    funcs = __map_poner(funcs, a_texto(fc), f);
-    cg = __map_poner(cg, "funcs", funcs);
-    cg = __map_poner(cg, "func_cnt", fc + 1);
-    
-    // Pass 2: emit top-level (non-Func) statements
-    i = 0;
-    mientras i < cnt {
-        numero stmt = __map_obtener(cuerpo, a_texto(i));
-        numero stp = __map_obtener(stmt, "tipo");
-        si a_texto(stp) != "Func" {
-            cg = _gen_stmt(cg, stmt);
+    // Contar código top-level (no-Func): si no hay, no se crea __main__
+    // (la VM arranca en `principal`/`main` por fallback, como el pipeline Rust)
+    entero top_cnt = 0;
+    entero ti = 0;
+    mientras ti < cnt {
+        numero stt = __map_obtener(cuerpo, a_texto(ti));
+        texto sttp = a_texto(__map_obtener(stt, "tipo"));
+        si sttp != "Func" && sttp != "Vacio" { top_cnt = top_cnt + 1; }
+        ti = ti + 1;
+    }
+    si top_cnt > 0 {
+        // Register __main__ (top-level code) starting at current pos
+        numero main_start = __map_obtener(cg, "pos");
+        numero funcs = __map_obtener(cg, "funcs");
+        numero fc = __map_obtener(cg, "func_cnt");
+        numero pm = __map_nuevo();
+        pm = __map_poner(pm, "cnt", 0);
+        numero f = __map_nuevo();
+        f = __map_poner(f, "nombre", "__main__");
+        f = __map_poner(f, "params", pm);
+        f = __map_poner(f, "start", main_start);
+        funcs = __map_poner(funcs, a_texto(fc), f);
+        cg = __map_poner(cg, "funcs", funcs);
+        cg = __map_poner(cg, "func_cnt", fc + 1);
+        
+        // Pass 2: emit top-level (non-Func) statements
+        i = 0;
+        mientras i < cnt {
+            numero stmt = __map_obtener(cuerpo, a_texto(i));
+            numero stp = __map_obtener(stmt, "tipo");
+            si a_texto(stp) != "Func" {
+                cg = _gen_stmt(cg, stmt);
+            }
+            i = i + 1;
         }
-        i = i + 1;
     }
     
     cg = _cg_emit(cg, _instr(OP_HALT, 0));

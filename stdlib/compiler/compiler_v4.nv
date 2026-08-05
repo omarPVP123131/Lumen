@@ -34,6 +34,8 @@ funcion numero lexer_tokenizar(texto s) {
     kw = __map_poner(kw, "en", 1); kw = __map_poner(kw, "in", 1);
     kw = __map_poner(kw, "algun", 1); kw = __map_poner(kw, "some", 1);
     kw = __map_poner(kw, "ninguno", 1); kw = __map_poner(kw, "none", 1);
+    kw = __map_poner(kw, "rasgo", 1); kw = __map_poner(kw, "trait", 1);
+    kw = __map_poner(kw, "impl", 1);
     
     // Normalize CRLF to LF and remove stray CR to avoid off-by-one tokenization
     texto s2 = __str_reemplazar(s, "\r\n", "\n");
@@ -215,6 +217,9 @@ funcion texto sub_from_chars(lista<texto> cs, entero st, entero fin) {
 // Funciones anónimas (IIFE) hoisteadas durante el parseo — se fusionan al Programa
 lista<numero> lambdas_hoistadas = [];
 entero lambda_cnt = 0;
+// Traits/impl: tipo -> {metodo -> mangled}; variables -> tipo (para resolver n.metodo())
+numero mapa_impls = __map_nuevo();
+numero mapa_tipos_var = __map_nuevo();
 
 // ── State Helpers ──────────────────────────────────────────────
 funcion numero _st_tk(numero st) {
@@ -582,9 +587,25 @@ funcion numero _parse_pr(numero st) {
                 }
                 st = _st_adv(st);
                 margs = __map_poner(margs, "cnt", mc);
+                // Resolver método de trait: n.metodo() → Tipo_Trait_metodo(n, ...)
+                texto callee_final = mn;
+                si a_texto(__map_obtener(base, "tipo")) == "Ident" {
+                    texto bn = a_texto(__map_obtener(base, "nombre"));
+                    numero bt_v = __map_obtener(mapa_tipos_var, bn);
+                    si a_texto(__tipo_de(bt_v)) == "texto" {
+                        texto bt = a_texto(bt_v);
+                        numero impl_t = __map_obtener(mapa_impls, bt);
+                        si a_texto(__tipo_de(impl_t)) == "diccionario" || a_texto(__tipo_de(impl_t)) == "mapa" {
+                            numero m_v = __map_obtener(impl_t, mn);
+                            si a_texto(__tipo_de(m_v)) == "texto" && a_texto(m_v) != "" {
+                                callee_final = a_texto(m_v);
+                            }
+                        }
+                    }
+                }
                 numero nm2 = __map_nuevo();
                 nm2 = __map_poner(nm2, "tipo", "Call");
-                nm2 = __map_poner(nm2, "callee", mn);
+                nm2 = __map_poner(nm2, "callee", callee_final);
                 nm2 = __map_poner(nm2, "args", margs);
                 si ((mn == "agregar" || mn == "push") &&
                     a_texto(__map_obtener(base, "tipo")) == "Ident") {
@@ -786,6 +807,7 @@ funcion numero _parse_stmt(numero st) {
         n = __map_poner(n, "nombre", nm);
         n = __map_poner(n, "tipo_var", svar);
         n = __map_poner(n, "valor", vl);
+        mapa_tipos_var = __map_poner(mapa_tipos_var, nm, svar);
         retornar _res(st, n);
     }
 
@@ -808,6 +830,7 @@ funcion numero _parse_stmt(numero st) {
         n = __map_poner(n, "nombre", nm);
         n = __map_poner(n, "tipo_var", tvar);
         n = __map_poner(n, "valor", vl);
+        mapa_tipos_var = __map_poner(mapa_tipos_var, nm, tvar);
         retornar _res(st, n);
     }
 
@@ -830,6 +853,90 @@ funcion numero _parse_stmt(numero st) {
         n = __map_poner(n, "tipo_var", "const");
         n = __map_poner(n, "valor", vl);
         retornar _res(st, n);
+    }
+
+    si (tt == 6 && (tvs == "rasgo" || tvs == "trait")) {
+        st = _st_adv(st);
+        st = _st_adv(st); // nombre del rasgo
+        si (_st_ch(st, 5, "{")) { st = _st_adv(st); }
+        mientras (!_st_eof(st)) {
+            si (_st_ch(st, 5, "}")) { romper; }
+            st = _st_adv(st);
+        }
+        si (_st_ch(st, 5, "}")) { st = _st_adv(st); }
+        numero nrv = __map_nuevo();
+        nrv = __map_poner(nrv, "tipo", "Vacio");
+        retornar _res(st, nrv);
+    }
+
+    si (tt == 6 && tvs == "impl") {
+        st = _st_adv(st);
+        texto trait_nm = a_texto(_st_tv(st));
+        st = _st_adv(st);
+        si (_st_kw(st, "para") || _st_kw(st, "for")) { st = _st_adv(st); }
+        texto type_nm = a_texto(_st_tv(st));
+        si (_st_tp(st)) { st = _st_tp_skip(st); } sino { st = _st_adv(st); }
+        si (_st_ch(st, 5, "{")) { st = _st_adv(st); }
+        mientras (!_st_eof(st)) {
+            si (_st_ch(st, 5, "}")) { romper; }
+            numero mtt = _st_tt(st);
+            texto mvv = a_texto(_st_tv(st));
+            si ((mtt == 6 || mtt == 1) && (mvv == "funcion" || mvv == "function")) {
+                numero pfx = _st_adv(st);
+                numero st_rt = pfx;
+                si (_st_tp(st_rt)) { st_rt = _st_tp_skip(st_rt); }
+                texto mnm = a_texto(_st_tv(st_rt));
+                st = _st_adv(st_rt);
+                si (_st_ch(st, 5, "(")) { st = _st_adv(st); }
+                numero mpar = __map_nuevo();
+                numero mpc = 0;
+                mientras (!_st_eof(st)) {
+                    si (_st_ch(st, 5, ")")) { romper; }
+                    si (mpc > 0) {
+                        si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                    }
+                    texto ptt = a_texto(_st_tv(st));
+                    texto ppn = "";
+                    si (_st_tp(st)) {
+                        st = _st_tp_skip(st);
+                        ppn = a_texto(_st_tv(st));
+                        st = _st_adv(st);
+                    } sino {
+                        ppn = ptt;
+                        st = _st_adv(st);
+                    }
+                    numero pmm = __map_nuevo();
+                    pmm = __map_poner(pmm, "nombre", ppn);
+                    pmm = __map_poner(pmm, "tipo", ptt);
+                    mpar = __map_poner(mpar, a_texto(mpc), pmm);
+                    mpc = mpc + 1;
+                }
+                st = _st_adv(st);
+                mpar = __map_poner(mpar, "cnt", mpc);
+                numero rmb = _parse_blk(st);
+                numero mbod = __map_obtener(rmb, "node");
+                st = __map_obtener(rmb, "st");
+                texto mangled = type_nm + "_" + trait_nm + "_" + mnm;
+                numero mf = __map_nuevo();
+                mf = __map_poner(mf, "tipo", "Func");
+                mf = __map_poner(mf, "nombre", mangled);
+                mf = __map_poner(mf, "params", mpar);
+                mf = __map_poner(mf, "cuerpo", mbod);
+                lambdas_hoistadas.agregar(mf);
+                numero mtabla = __map_obtener(mapa_impls, type_nm);
+                si a_texto(__tipo_de(mtabla)) != "diccionario" && a_texto(__tipo_de(mtabla)) != "mapa" {
+                    mtabla = __map_nuevo();
+                }
+                mtabla = __map_poner(mtabla, mnm, mangled);
+                mapa_impls = __map_poner(mapa_impls, type_nm, mtabla);
+            } sino {
+                st = _st_adv(st);
+            }
+        }
+        si (_st_ch(st, 5, "}")) { st = _st_adv(st); }
+        numero nv = __map_nuevo();
+        nv = __map_poner(nv, "tipo", "Vacio");
+        retornar _res(st, nv);
     }
 
     si (tt == 6 && (tvs == "para" || tvs == "for")) {
@@ -2521,29 +2628,41 @@ funcion numero codegen_generar(numero ast) {
         i = i + 1;
     }
     
-    // Register __main__ (top-level code) starting at current pos
-    numero main_start = __map_obtener(cg, "pos");
-    numero funcs = __map_obtener(cg, "funcs");
-    numero fc = __map_obtener(cg, "func_cnt");
-    numero pm = __map_nuevo();
-    pm = __map_poner(pm, "cnt", 0);
-    numero f = __map_nuevo();
-    f = __map_poner(f, "nombre", "__main__");
-    f = __map_poner(f, "params", pm);
-    f = __map_poner(f, "start", main_start);
-    funcs = __map_poner(funcs, a_texto(fc), f);
-    cg = __map_poner(cg, "funcs", funcs);
-    cg = __map_poner(cg, "func_cnt", fc + 1);
-    
-    // Pass 2: emit top-level (non-Func) statements
-    i = 0;
-    mientras i < cnt {
-        numero stmt = __map_obtener(cuerpo, a_texto(i));
-        numero stp = __map_obtener(stmt, "tipo");
-        si a_texto(stp) != "Func" {
-            cg = _gen_stmt(cg, stmt);
+    // Contar código top-level (no-Func): si no hay, no se crea __main__
+    // (la VM arranca en `principal`/`main` por fallback, como el pipeline Rust)
+    entero top_cnt = 0;
+    entero ti = 0;
+    mientras ti < cnt {
+        numero stt = __map_obtener(cuerpo, a_texto(ti));
+        texto sttp = a_texto(__map_obtener(stt, "tipo"));
+        si sttp != "Func" && sttp != "Vacio" { top_cnt = top_cnt + 1; }
+        ti = ti + 1;
+    }
+    si top_cnt > 0 {
+        // Register __main__ (top-level code) starting at current pos
+        numero main_start = __map_obtener(cg, "pos");
+        numero funcs = __map_obtener(cg, "funcs");
+        numero fc = __map_obtener(cg, "func_cnt");
+        numero pm = __map_nuevo();
+        pm = __map_poner(pm, "cnt", 0);
+        numero f = __map_nuevo();
+        f = __map_poner(f, "nombre", "__main__");
+        f = __map_poner(f, "params", pm);
+        f = __map_poner(f, "start", main_start);
+        funcs = __map_poner(funcs, a_texto(fc), f);
+        cg = __map_poner(cg, "funcs", funcs);
+        cg = __map_poner(cg, "func_cnt", fc + 1);
+        
+        // Pass 2: emit top-level (non-Func) statements
+        i = 0;
+        mientras i < cnt {
+            numero stmt = __map_obtener(cuerpo, a_texto(i));
+            numero stp = __map_obtener(stmt, "tipo");
+            si a_texto(stp) != "Func" {
+                cg = _gen_stmt(cg, stmt);
+            }
+            i = i + 1;
         }
-        i = i + 1;
     }
     
     cg = _cg_emit(cg, _instr(OP_HALT, 0));
