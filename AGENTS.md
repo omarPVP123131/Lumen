@@ -150,6 +150,15 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Resultados**: **fixpoint v4 CONFIRMADO en 20.1s** (baseline 861s = **43x**): compiler_v4.nvc → self_out.nvc (112,368 B) → self_out2.nvc **byte-IDENTICAL (0 diffs)** · demo 0.9s · cargo test ~379 verdes · batería **8/8** (2 DIFF pre-existentes: `44_extension_methods` `este` no definida + `math` — fallan en ambas VMs)
 - **Commits**: `ccc6ecd` (COW Arc — fixpoint 43x) · previo: `9531366` (corutinas), `fa79d36` (docs plan)
 
+**Progreso (4 Ago — sesión AI · Sprint 7: batería ampliada 34/35 + jr_fecha/utils CORRECTOS):**
+- **Fix vm.nv `utils`**: `fmain` buscaba solo `__main__` pero el encoder graba `main` → FMAIN=-1 → pc=0 (ejecutaba `cuadrado` con operandos void → "Mul requires numbers"). Fix: acepta `__main__` **o** `main` + fallback `fmain=0` → **utils.nv 25/27 correcto** en la VM LÚMEN.
+- **Fix vm.nv `jr_fecha` (causa raíz doble)**: (1) `__tiempo_formatear` leía solo `sp` (el fmt boxeado → 2001-09-09) → handler 2-args (`sp-1` timestamp, `sp` fmt); (2) **el native Rust `parse_iso8601_to_unix` NO acepta separador espacio** ("2000-01-15 00:00:00" → Error) — la VM Rust "funcionaba" por accidente (`as_num().unwrap_or(0)` convertía el Error a 0 → diff=ts → 56.59 FALSO). Fix en vm.rs: `replacen(' ', "T", 1)` cuando no hay `T` → **edad 26.55 REAL en ambas VMs** (byte a byte idéntico).
+- **argc-guards en handlers tiempo** (vm.nv): `__tiempo_formatear(0)` (1 arg, demo sección 28) crasheaba "Índice -1000000000" porque el `str_at` inicial leía `sp-1` sin verificar argc → ahora `sp` para 1 arg con fmt default ISO `%Y-%m-%dT%H:%M:%SZ` (espeja format_timestamp de vm.rs); `__tiempo_parsear` 1-arg lee `sp`; `__tiempo_diferencia` argc<2 → 0.0.
+- **Batería ampliada: OK=34/35** — todos OK incl. utils, jr_fecha, demo_completo (33 secciones completas por la VM LÚMEN), match, enums, corutinas_demo, genericos, lambda, etc. Único DIFF: `stress_fecha` (timing real 0ms vs 16ms entre runs — inherentemente flaky, no es regresión). COMPILA-FALLA pre-existentes: `test_texto_min`, `test_texto_std`, `jr_concurrencia`.
+- cargo test OK (e2e 166 + unit); pre-existentes `44_extension_methods`/`math` siguen fallando en AMBAS VMs.
+- **Commit**: `290f3ed` (vm.nv handlers tiempo + fmain + argc-guards; vm.rs parse espacio).
+- **Pendientes**: COMPILA-FALLA `test_texto_min`/`test_texto_std`/`jr_concurrencia` → `44_extension_methods`/`math` → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
+
 ---
 
 ## Bugs Conocidos y Fixes Recientes
