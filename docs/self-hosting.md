@@ -14,11 +14,11 @@
 | **Sprint 4: Self-hosting Total (mapas O(1))** | ✅ | `Value::Map` → `im::HashMap` con `Hash`/`Eq` manual |
 | **Sprint 5: Pipeline puro LÚMEN** | ✅ | `lexer.nv`→`parser.nv`→`codegen.nv`→`__codegen_a_nvc` sin `__compile_nv` |
 | **Sprint 6: Imports + Gramática** | ✅ | 6.1 imports ✅ · 6.2 gramática ✅ · 6.3 lexer CRLF ✅ · 6.4 enum/elegir/sea reales ✅ · 6.5 cortocircuito `&&`/`\|\|` ✅ · fixpoint v4 ✅ |
-| **Sprint 7: VM en LÚMEN (`vm.nv`)** | 🟢 funcional | Ejecuta `demo_completo.nvc` **89/89 líneas 0 diffs en ~0.9s** (era ~120s); corutinas reales byte-IDENTICAL; batería test_vm.ps1 **27/28** (solo `44_extension_methods`+`math`, pre-existentes, fallan en ambas VMs) |
+| **Sprint 7: VM en LÚMEN (`vm.nv`)** | 🟢 funcional | Ejecuta `demo_completo.nvc` **89/89 líneas 0 diffs en ~0.9s** (era ~120s); corutinas reales byte-IDENTICAL; batería test_vm.ps1 **39/40** (solo `stress_fecha` flaky timing) |
 | **Optimización fixpoint** | ✅ **861s → 20.1s (43x)** | COW con `Arc` en Value (vm.rs) — clonado O(1) de strings/arrays grandes; fixpoint v4 byte-IDENTICAL |
 | **Bootstrapping doble** (vm.nv compilada por LÚMEN y auto-ejecutándose) | ⏳ | Próximo hito — 0 dependencias de Rust |
-| **Optimización fixpoint** | 🔄 | Fixpoint v4 hoy ~10-18 min → objetivo <10s |
-| **Sprint 8: Dogfooding + release v2.4.0** | ⏳ | Pendiente |
+| **Optimización fixpoint** | ✅ | Fixpoint v4 re-verificado en **5s** (112,368 B byte-IDENTICAL, 4 Ago) |
+| **Sprint 8: Dogfooding + release v2.4.0** | 🟢 en curso | **fuego: 116/116 compilan · 71/116 CORRECTOS (+10)** con la cadena 100% LÚMEN (40 de 116 no-corregidos son gaps conocidos: opcion/resultado, traits, closures, FFI/GUI, tuplas) |
 
 ### Arquitectura (actualizada)
 

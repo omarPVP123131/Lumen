@@ -191,7 +191,13 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Commit**: `be5e48e`.
 - **Pendientes**: Sprint 8 dogfooding stdlib (evaluar test_migracion en batería con normalización de orden de mapas) + release v2.4.0 → bootstrapping doble.
 
-
+**Progreso (4 Ago — sesión AI · Sprint 8: fixpoint v4 re-verificado + fuego 71/116 + orden de mapas):**
+- **Orden de claves de mapa NO-determinístico CONFIRMADO**: `im::HashMap` usa `RandomState` (seed aleatorio por proceso) → el orden varía incluso entre runs del mismo VM Rust (`{0,1,2}` → `{2,1,0}`). No es bug — semántica de hash map. Por eso `test_migracion` no entra a la batería exacta sin normalización (igual que stress_fecha por volatilidad de timing). Los `__map_nuevo`/`__map_claves` de la VM LÚMEN delegan al mismo native Rust y boxean en `mapas`/`arrs` — mismo comportamiento no-determinista.
+- **FIXPOINT v4 RE-VERIFICADO** (tras todos los cambios de la sesión: cortocircuito, enum/elegir/sea, dynamic Numero): `compiler_v4.nvc` regenerado (85,374 B) → self-compile (5s) → `v4_self_out.nvc` **112,368 bytes** (idéntico al tamaño histórico) → `v4_self_out2.nvc` **byte-IDENTICAL**. La cadena 100% LÚMEN sigue estable.
+- **fuego.ps1 (cadena 100% LÚMEN)**: **116/116 compilan · 71 CORRECTOS (+10 vs 61) · 43 INCOMPATIBLES · 2 timeouts · 0 fallos**. La mejora +10 viene del trabajo acumulado (entry `principal`, dynamic Numero/cualquiera, test_migracion).
+- **⚠️ Trampa del harness**: `fuego.ps1` debe ejecutarse con **pwsh (PS 7)**, NO `powershell` (5.1) — `Set-Content -Encoding utf8` en PS 5.1 escribe BOM UTF-8 (`EF BB BF`) en `target.txt` → la primera línea (ruta del ejemplo) queda corrupta → el driver falla → 0/116 `?ERROR?`. En pwsh 7 no hay BOM.
+- **43 incompatibles = gaps conocidos**: `ninguno`/`algun`/`exito`/`error` (Option/Result ~10 ejemplos: opcion, resultado, audio_demo, charts_demo, graficos_*, tilemap, tui_pro/tui_puro/tui_temas), `rasgo` (traits: 43_tipos_asociados, 44_extension_methods), closures `|x|` (lambda), tuplas/destructuring/params_default/genericos (feature partial), FFI/red/sistema/sqlite/json/csv (natives `__ffi_*` que la VM LÚMEN no implementa — corren headers pero divergen), `debug_parser3`+`gui_ventana` (timeouts GUI/loop).
+- **Pendientes**: u opcion/resultado (`ninguno`/`algun`/`exito`/`error` reales en el self-hosted — desbloquea ~10 ejemplos) → docs + AGENTS v2.4.0 + release → bootstrapping doble.
 
 ---
 
