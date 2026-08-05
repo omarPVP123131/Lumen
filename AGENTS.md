@@ -172,6 +172,16 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Commit**: `8c27abd`.
 - **Pendientes**: `44_extension_methods`/`math` (compiler issue `este`/extension methods, fallan en AMBAS VMs) → tipo `Any`/`cualquiera` real (desbloquea csv.nv/test_migracion) → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
 
+**Progreso (4 Ago — sesión AI · 44_extension_methods/math RESUELTOS — batería 39/40):**
+- **CAUSA RAÍZ `44_extension_methods`** ("Variable 'este' no definida"): `VM::new` (vm.rs) resolvía el entry con `__main__` → `main` → **`funcs.first()`**. Este ejemplo no tiene código top-level ni función `main` (es `principal`) → caía a `funcs.first()` = `entero_Formateable_a_formato` (start=0, ordenado por offset) → ejecutaba `Load este` sin scope antes de cualquier Call. El bytecode y el IR estaban correctos (funcs mangled `entero_Formateable_a_formato` con param `este`, call-site con receiver) — solo fallaba el arranque.
+- **Fix vm.rs `VM::new`**: cadena `__main__` → `main` → **`principal`** → si `funcs` está vacío (bytecode plano de tests unit) → `ip=0`; si hay funcs pero sin main/principal (librería pura como math.nv) → `ip=usize::MAX` → loop sale inmediato, terminación limpia sin ejecutar nada. (El antiguo fallback `funcs.first()` hacía que math.nv ejecutara `suma` con 0 args → "Variable 'a' no definida").
+- **Fix vm.nv (VM LÚMEN)** espejo: `fmain` ahora acepta `__main__`/`main`/**`principal`**; se eliminó el fallback `fmain=0` (re-ejecutaba func[0]); si `fmain<0` → `pc=999999999` (el loop sale por `pc>=largo(insn)/3`). Además el **Ret sin caller** (op22 con `coro_actual<0` y `rn<0` — entrada directa por principal, sin `__main__` que haga Call) → `fin=1` (antes `pc=0` → re-ejecutaba func[0] y crasheaba "Ge requires numbers or strings").
+- **Resultados**: `44_extension_methods` → "Numero: 42" + "Texto: 'Hola LÚMEN'" IDÉNTICO en ambas VMs · `math` → exit 0 sin output en ambas (librería pura) · cargo test **0 FAILED** (los 24 unit de vm que usaban bytecode plano sin funcs siguen pasando con el branch `funcs.is_empty() → ip=0`).
+- **Batería: OK=39/40** — únicos DIFF restantes: `stress_fecha` (timing real 0ms vs 16ms, flaky inherente). `test_vm.ps1` actualizado a 40 archivos (+`44_extension_methods`, +`math`).
+- **Commit**: `5809c96`.
+- **Pendientes**: tipo `Any`/`cualquiera` real (desbloquea csv.nv/test_migracion) → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
+
+
 ---
 
 ## Bugs Conocidos y Fixes Recientes
