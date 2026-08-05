@@ -4440,9 +4440,14 @@ fn is_leap(year: i64) -> bool {
 fn parse_iso8601_to_unix(s: &str) -> Result<i64, String> {
     // Accept: "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00" or "2024-01-15"
     let s = s.trim();
+    let s: String = if s.contains(' ') && !s.contains('T') {
+        s.replacen(' ', "T", 1)
+    } else {
+        s.to_string()
+    };
 
     // Remove trailing Z
-    let s = s.strip_suffix('Z').unwrap_or(s);
+    let s = s.strip_suffix('Z').unwrap_or(&s);
 
     let (date_part, time_part) = if let Some(idx) = s.find('T') {
         let (d, t) = s.split_at(idx);

@@ -1,5 +1,5 @@
 param(
-    [string[]]$Archivos
+    [string[]]$Archivos = @("test_arr","foreach","test_stdlib_mini","stress_test","demo_completo","match","enums","corutinas_demo","arrays","break","condicional","continue","destructuring","func","genericos","hello","lambda","loop","opcion","params_default","resultado","structs","tuplas","test_bool","test_bool_var","test_if","test_if2","test_if3","test_if4","test_math_abs","test_math_simple","test_import","test_simple_import","test_simple_import2","stress_fecha")
 )
 # Compara la VM Rust vs la VM en LUMEN (vm.nv) sobre varios .nv
 $root = "C:\Users\Omar\Documents\Documentos WEb\LumenRust"

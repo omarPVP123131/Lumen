@@ -838,8 +838,28 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         retornar 0.0 + __tiempo_ahora();
     }
     si nm == "__tiempo_formatear" || nm == "__time_format" {
-        entero t = a_entero(estado_pila(st, sp));
-        retornar box_str(__tiempo_formatear(t));
+        numero t = estado_pila(st, sp);
+        texto fmt = "%Y-%m-%dT%H:%M:%SZ";
+        if argc >= 2 {
+            t = estado_pila(st, sp - 1);
+            fmt = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        }
+        retornar box_str(__tiempo_formatear(a_entero(t), fmt));
+    }
+    si nm == "__tiempo_parsear" || nm == "__time_parse" {
+        texto s = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        if argc >= 2 {
+            s = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        }
+        retornar 0.0 + __tiempo_parsear(s);
+    }
+    si nm == "__tiempo_diferencia" || nm == "__time_diff" {
+        numero a = estado_pila(st, sp - 1);
+        numero b = estado_pila(st, sp);
+        if argc < 2 {
+            retornar 0.0;
+        }
+        retornar 0.0 + __tiempo_diferencia(a_entero(a), a_entero(b));
     }
     si nm == "__fs_listar" || nm == "__fs_listdir" {
         numero v = estado_pila(st, sp);
@@ -1006,9 +1026,10 @@ funcion entero main() {
     entero fmain = -1;
     entero fi2 = 0;
     while fi2 < largo(funn) {
-        si funn[fi2] == "__main__" { fmain = fi2; }
+        si funn[fi2] == "__main__" || funn[fi2] == "main" { fmain = fi2; }
         fi2 = fi2 + 1;
     }
+    si fmain < 0 && largo(funn) > 0 { fmain = 0; }
     si fmain >= 0 { pc = a_entero(fun[3 + fmain*3]); }
     numero st = __map_nuevo();
     st = __map_poner(st, "pila", __map_nuevo());
@@ -1205,7 +1226,8 @@ funcion entero main() {
                     numero nsc = __map_nuevo();
                     entero jp = 0;
                     while jp < npf {
-                        nsc = __map_poner(nsc, funp[ps + jp], estado_pila(st, sp - argc + 1 + jp));
+                        numero pv = estado_pila(st, sp - argc + 1 + jp);
+                        nsc = __map_poner(nsc, funp[ps + jp], pv);
                         jp = jp + 1;
                     }
                     sp = sp - argc;
