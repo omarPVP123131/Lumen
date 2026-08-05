@@ -181,6 +181,17 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Commit**: `5809c96`.
 - **Pendientes**: tipo `Any`/`cualquiera` real (desbloquea csv.nv/test_migracion) → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
 
+**Progreso (4 Ago — sesión AI · Tipo dinámico `Numero` real + `cualquiera`/`any` — test_migracion CORRECTO):**
+- **CAUSA RAÍZ**: `num` era `Type::Numero` → `type_to_info` lo mapeaba a **`TypeInfo::Decimal`** (tipo ESTRICTO) → el `can_assign` (sema.rs:3431, "Numero (dynamic type) accepts any value") era **código muerto** — `TypeInfo::Numero` jamás se producía. Por eso `cualquiera` (alias de `n`/`numero` para valores boxed) fallaba: `cualquiera claves = __map_claves(...)` → E031 "Lista(Numero) a Decimal", y `.largo()`/`[i]` en Decimal → E047/E044.
+- **Fix sema**: `Type::Numero => TypeInfo::Numero` (tipo dinámico REAL); `Type::Decimal` sigue → `TypeInfo::Decimal` (estricto, explícito). `Expr::Index` y MethodCall `largo`/`len`/`length` aceptan ahora `TypeInfo::Numero` (indexación → Numero; largo → Numero).
+- **Fix parser**: `parse_type` mapea identificadores `cualquiera`/`any` → `Type::Numero` (antes caían a `Type::Struct("cualquiera")` → `csv_cualquiera` con el prefijo de imports).
+- **Tests actualizados (4)**: `test_type_mismatch`/`test_arithmetic_type_error` (sema) y `test_semantic_error` (e2e) usaban `numero x = "hola"` como ejemplo de error de tipo — ahora `numero` es dinámico, cambiados a `entero`. `test_function_call_arg_type` usaba params `numero` → `entero`.
+- **Resultados**: `test_migracion` **correcto en ambas VMs** — assert (true×5), CSV parse/serialize (`{0:[...],1:[...],2:[...]}` Rust vs `{2,0,1}` LÚMEN — **orden de claves de mapa no-determinístico** entre VMs, inherente), calendarios Hijri (2088-09-01 AH) y Persa (-563-08-25 AP) idénticos. Se dejó FUERA de la batería exacta por el orden de claves (difiere por diseño como stress_fecha solo en volatilidad).
+- Batería **39/40** (solo stress_fecha flaky) · cargo test **0 FAILED**.
+- **Commit**: `be5e48e`.
+- **Pendientes**: Sprint 8 dogfooding stdlib (evaluar test_migracion en batería con normalización de orden de mapas) + release v2.4.0 → bootstrapping doble.
+
+
 
 ---
 
