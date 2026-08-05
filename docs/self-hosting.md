@@ -4,7 +4,7 @@
 
 ---
 
-## Estado Actual — 31 Julio 2026 (Sprint 5 ✅ — Self-hosting puro COMPLETADO)
+## Estado Actual — 4 Agosto 2026 (Sprint 7 🟢 — VM en LÚMEN funcional)
 
 ### Progreso
 
@@ -13,30 +13,35 @@
 | **Sprint 3: Bootstrap rápido** | ✅ 533ms | `__compile_nv` + builtins string eficientes + ArrayGet optimizado |
 | **Sprint 4: Self-hosting Total (mapas O(1))** | ✅ | `Value::Map` → `im::HashMap` con `Hash`/`Eq` manual |
 | **Sprint 5: Pipeline puro LÚMEN** | ✅ | `lexer.nv`→`parser.nv`→`codegen.nv`→`__codegen_a_nvc` sin `__compile_nv` |
-| `compiler_v4.nv` autocontenido | ✅ | 55,308 bytes (lexer+parser+codegen+main concatenados, sin imports) |
-| Autocompilación v4 (Rust→nvc) | ✅ ~193s | Source 52,160 bytes → Tokens 11,437 → Instrs 6,376 → 54,712 bytes |
-| **Ejecutar el autocompilado** | ✅ ~203s | `compiler_v4_self.nvc` recompila su propio source con resultado IDÉNTICO |
-| **Fixpoint confirmado** | ✅ | Run 2 == Run 1: 52,160/11,437/6,376 → 54,712 bytes — determinista y estable |
-| Tabla de funciones del self | ✅ 49 | `_lx_es_ident`…`codegen_print` + `__main__`, params y starts correctos |
-| **Self-hosting puro** (sin `__compile_nv`) | ✅ | El compilador LÚMEN se compila a sí mismo en LÚMEN |
+| **Sprint 6: Imports + Gramática** | ✅ | 6.1 imports ✅ · 6.2 gramática ✅ · 6.3 lexer CRLF ✅ · 6.4 enum/elegir/sea reales ✅ · 6.5 cortocircuito `&&`/`\|\|` ✅ · fixpoint v4 ✅ |
+| **Sprint 7: VM en LÚMEN (`vm.nv`)** | 🟢 funcional | Ejecuta `demo_completo.nvc` **89/89 líneas 0 diffs en ~0.9s** (era ~120s); corutinas reales byte-IDENTICAL; batería test_vm.ps1 **27/28** (solo `44_extension_methods`+`math`, pre-existentes, fallan en ambas VMs) |
+| **Bootstrapping doble** (vm.nv compilada por LÚMEN y auto-ejecutándose) | ⏳ | Próximo hito — 0 dependencias de Rust |
+| **Optimización fixpoint** | 🔄 | Fixpoint v4 hoy ~10-18 min → objetivo <10s |
+| **Sprint 8: Dogfooding + release v2.4.0** | ⏳ | Pendiente |
 
-### Arquitectura
+### Arquitectura (actualizada)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │     COMPILADOR LÚMEN EN LÚMEN (stdlib/compiler/)              │
 │                                                              │
-│  compiler_v4.nv  ✅  — autocontenido (55 KB, sin imports)     │
-│    • Concatena lexer.nv + parser.nv + codegen.nv + main       │
-│    • Pipeline: leer .nv → lexer → parser → codegen → .nvc     │
-│    • Genera compiler_v4_self.nvc (54,712 bytes)               │
+│  compiler_v4.nv  ✅  — autocontenido (lexer+parser+codegen+   │
+│                        main concatenados, ~100 KB)            │
+│  • Pipeline: leer .nv → lexer → parser → codegen → .nvc      │
+│  • Fixpoint confirmado: self recompila su source IDÉNTICO     │
+│  • Compila los 116 ejemplos de examples/ (fuego.ps1)          │
 │                                                              │
-│  compiler_v4.nvc  ✅  — compilado por Rust (bootstrap único)  │
-│  compiler_v4_self.nvc ✅ — compilado por LÚMEN puro           │
-│  fixpoint: self(compiler_v4.nv) == self(self(compiler_v4.nv)) │
+│  VM EN LÚMEN (vm.nv)  🟢 funcional  — ejecutador de .nvc      │
+│  • Dispatch opcodes 0-46, builtins bin() vía natives boxeados │
+│  • Bands boxed: arrays < -1e9, strings [1e9,2e9), mapas       │
+│    [2e9,3e9), struct 3e9, resultado 4e9, opcion 5e9, tupla    │
+│    6e9, enum 7e9, fn 8e9, bool 9e9                            │
+│  • demo_completo 0 diffs ~0.9s · corutinas reales (yield/     │
+│    resume/ret, intercambio st/sp/pc) · tareas, JSON, crypto,  │
+│    fs, env, tiempo — todo delegando a natives boxeados        │
 │                                                              │
-│  Pipeline: leer .nv → lexer.nv → parser.nv → codegen.nv       │
-│           → __codegen_a_nvc → .nvc → lumen run → OK (203s)   │
+│  Bootstrapping doble  ⏳  — compiler_v4 compila vm.nv →       │
+│  vm.nvc; la VM LÚMEN ejecuta vm.nvc (ejecutando .nvc)         │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -67,7 +72,7 @@
 
 ---
 
-## Sprint 6 — Prueba de Fuego + Imports + Gramática (31 Julio 2026) 🔄 EN CURSO
+## Sprint 6 — Prueba de Fuego + Imports + Gramática (31 Julio - 2 Agosto 2026) ✅ COMPLETADO
 
 ### Harness
 
@@ -221,7 +226,7 @@ si (_st_ch(st, 4, "<")) {
 >
 > ⚠️ **mini_fuego.ps1**: correr desde la raíz; los ejemplos van como parámetro (`mini_fuego.ps1 test_arr foreach`); el bucle del script corta si un ejemplo tarda demasiado (correr de a 1-2).
 
-**Siguiente**: `estructura` real en parser/codegen (desugar a `__map_nuevo`/`__map_poner`/`__map_get`; cierra stress_test `Punto` + demo_completo `j`) → `enum`/`elegir`/`sea` → `items`/`total` si persisten → fixpoint v4 → `fuego.ps1` → docs.
+**Siguiente**: ✅ COMPLETADO — `estructura`/`enum` reales vía desugar (6.4: enum/elegir/sea REALES — nodo `EnumInit`, `defecto:` con cadenas de `sino` reconstruidas desde el final por la persistencia de `im::HashMap`), cortocircuito `&&`/`||` real con JmpIf (6.5), **fixpoint v4 CONFIRMADO** (112,368 B byte-IDÉNTICO en self/self2) y **fuego.ps1: 116/116 compilan, 61 CORRECTOS, 0 fallos**. Detalles en AGENTS.md (Fixes 1-2 Agosto 2026).
 
 ---
 
@@ -232,19 +237,20 @@ si (_st_ch(st, 4, "<")) {
 | Tarea | Estado | Notas |
 |-------|--------|-------|
 | `importar` en parser puro: resolver módulos, fusionar ASTs, prefijo `modulo_` | ✅ | Verificado: `parser_parsear_con_base` + resolver `_imp_*` |
-| Keywords: `const` ✅, `para` ✅, `estructura`/`enum` 🟡 (skip tolerante, sin codegen real), `sea` 🟡 (skip-noop), `opcion`/`resultado`/`elegir` ⏳ | 🟡 | StructInit `T {}` → mapas ya genera código |
-| Closures `\|x\|`, params default, genéricos `<T>`, destructuring `_`, tuplas `(...)` | ⏳ | Sintaxis + codegen |
+| Keywords: `const`, `para`, `sea` (VarDecl real), `estructura`/`enum` (skip tolerante + StructInit `T {}` → mapas), `elegir`/`defecto:` reales | ✅ | 6.4: enum/elegir/sea REALES — EnumInit, `defecto:`, cadenas de `sino` (im::HashMap persistente) |
+| Closures `\|x\|`, params default, genéricos `<T>`, destructuring `_`, tuplas `(...)` | 🟡 | Soportados por el compilador Rust; parser puro tolerante (skip) — ver batería |
 | Arrays anidados, ArraySet `arr[i] = x` | ✅ | Verificado: `test_arr` y `foreach` CORRECTO (op 28/29/30) |
 | TryUnwrap top-level con error visible | ✅ | Cubierto por driver nuevo (`__tipo_de(fin)` en main de generar_v4.ps1) |
-| `fuego.ps1` → 100% OK+CORRECTO | ⏳ | Meta del sprint; re-correr tras regenerar v4 |
+| Cortocircuito `&&`/`\|\|` en codegen puro | ✅ | Helper `_cg_and_or` con JmpIf/Jmp reales (fixpoint v4 regresionado por And eager) |
+| Fixpoint v4 + `fuego.ps1` | ✅ | Fixpoint: self/self2 byte-IDÉNTICOS (112,368 B) · fuego: **116/116 compilan, 61 CORRECTOS, 0 fallos** |
 
 ### 🟢 Sprint 7 — VM en LÚMEN + optimización
 
 | Tarea | Estado | Notas |
 |-------|--------|-------|
-| `vm.nv` — ejecutador de .nvc en LÚMEN puro | ⏳ | stack, frames, dispatch, builtins |
-| Bootstrapping doble (compiler_v5 compila vm.nv; vm.nvc corre en VM LÚMEN) | ⏳ | 0 dependencias de Rust |
-| Optimización VM Rust (~200s → <10s) | ⏳ | 3.7M instrs del self-compile; tabla de salto, internamiento |
+| `vm.nv` — ejecutador de .nvc en LÚMEN puro | ✅ | Dispatch 0-46, builtins vía natives boxeados (JSON, tarea, coro, crypto, fs, env, tiempo, tipo_de), bandas boxed, **demo_completo 0 diffs ~0.9s**, **corutinas reales** (reanudar/ceder/ret con intercambio st/sp/pc), batería **27/28** (2 DIFFs pre-existentes en ambas VMs: `44_extension_methods`+`math`) |
+| Optimización VM LÚMEN (~200s → <10s) | 🔄 | `a_entero` O(n)→O(1) ya hecho (demo 120s→0.9s); falta tabla de salto + internamiento de strings en vm.nv; fixpoint v4 ~10-18 min → <10s |
+| Bootstrapping doble (compiler_v4 compila vm.nv; vm.nvc corre en VM LÚMEN) | ⏳ | 0 dependencias de Rust — hito final |
 | Fixpoint doble (compilador + VM) | ⏳ | |
 
 ### 🟢 Sprint 8 — Dogfooding completo (release v2.4.0)
