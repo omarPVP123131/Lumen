@@ -19,4 +19,5 @@ lcov.info
 # OS
 .DS_Store
 Thumbs.db
-*.exe
+*.exetest_async.txt
+test_salida.txt
