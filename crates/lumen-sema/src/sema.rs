@@ -2513,6 +2513,7 @@ impl SemanticAnalyzer {
                                     TypeInfo::Texto
                                 } else if callee == "__fs_listar" || callee == "__fs_listdir"
                                     || callee == "__env_listar" || callee == "__env_list"
+                                    || callee == "__lector_buffer" || callee == "__buf_reader"
                                 {
                                     TypeInfo::Lista(Box::new(TypeInfo::Texto))
                                 } else if callee == "__tarea_esperar" || callee == "__task_await" {

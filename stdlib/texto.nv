@@ -84,6 +84,12 @@ funcion texto recortar_fin(texto s) {
 /// Trim trailing whitespace (English alias)
 funcion texto trim_end(texto s) { retornar recortar_fin(s); }
 
+/// Primeros n caracteres de un texto
+/// First n characters of a string
+funcion texto hasta(texto s, entero n) {
+    retornar __str_subcadena(s, 0, n);
+}
+
 /// Divide un texto usando un delimitador
 /// Split a string using a delimiter
 funcion lista<texto> dividir(texto s, texto delimitador) {

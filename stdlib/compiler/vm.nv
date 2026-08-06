@@ -927,6 +927,28 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         arrs.agregar(bb);
         retornar 0.0 - 1000000000.0 - largo(arrs);
     }
+    si nm == "__lector_buffer" || nm == "__buf_reader" {
+        numero v = estado_pila(st, sp);
+        lista<texto> lines = __lector_buffer(str_at(stl, stl_din, a_entero(v - 1000000000)));
+        lista<numero> bb = [];
+        entero k = 0;
+        while k < largo(lines) {
+            bb.agregar(box_str(lines[k]));
+            k = k + 1;
+        }
+        arrs.agregar(bb);
+        retornar 0.0 - 1000000000.0 - largo(arrs);
+    }
+    si nm == "__escritor_buffer" || nm == "__buf_writer" {
+        numero vp = estado_pila(st, sp - argc + 1);
+        numero vc = estado_pila(st, sp);
+        __escribir_archivo(str_at(stl, stl_din, a_entero(vp - 1000000000)), str_at(stl, stl_din, a_entero(vc - 1000000000)));
+        numero r = __map_nuevo();
+        r = __map_poner(r, "ok", 1.0);
+        r = __map_poner(r, "v", 9000000001.0);
+        resl.agregar(r);
+        retornar 4000000000.0 + largo(resl) - 1;
+    }
     si nm == "__coro_crear" || nm == "__coro_create" {
         numero nmv = estado_pila(st, sp - argc + 1);
         texto fn = str_at(stl, stl_din, a_entero(nmv - 1000000000));
