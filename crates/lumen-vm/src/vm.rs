@@ -2865,6 +2865,24 @@ impl VM {
                         let val = map.get(&index).cloned().unwrap_or(Value::Int(0));
                         self.push(val);
                     }
+                    Value::Tuple(items) => {
+                        let idx = match &index {
+                            Value::Int(i) => *i,
+                            _ => {
+                                return Err(VmError::TypeError(
+                                    "ArrayGet requires integer index for tuples".to_string(),
+                                ))
+                            }
+                        };
+                        if idx < 0 || idx as usize >= items.len() {
+                            return Err(VmError::Runtime(format!(
+                                "Índice {} fuera de rango (largo: {})",
+                                idx,
+                                items.len()
+                            )));
+                        }
+                        self.push(items[idx as usize].clone());
+                    }
                     Value::Struct { fields, .. } => {
                         let field = match &index {
                             Value::Str(s) => s.to_string(),
@@ -4005,6 +4023,8 @@ impl VM {
                  40 => 40,     // TryUnwrap
                  41 => 41,     // OptionSome
                  42 => 42,     // OptionNone
+                 47 => 44,     // TupleNew
+                 48 => 45,     // TupleAccess
                  _ => 0,       // Nop
             }
         };
@@ -4042,12 +4062,12 @@ impl VM {
                 if (op >= 5 && op <= 19 && op != 4) || (op == 29 || op == 30 || op == 31) {
                     instr_bytes.push(0);
                     instr_bytes.push(vm_op);
-                } else if op == 28 {
-                    // ArrayNew: VM expects arg = nums idx (count); value lives in nums
+                } else if op == 28 || op == 47 || op == 48 {
+                    // ArrayNew/TupleNew/TupleAccess: VM expects arg = nums idx (value lives in nums)
                     let val = get_int(arg as usize) as f64;
                     nums_bytes.extend_from_slice(&val.to_le_bytes());
                     instr_bytes.push(4);
-                    instr_bytes.push(28);
+                    instr_bytes.push(vm_op);
                     instr_bytes.extend_from_slice(&num_cnt.to_le_bytes());
                     num_cnt += 1;
                 } else if op == 4 {

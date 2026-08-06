@@ -36,6 +36,10 @@ numero OP_ARRAY_SET = 30;
 numero OP_ENUM_CTOR = 43;
 numero OP_ENUM_VAR = 44;
 numero OP_ENUM_ARGC = 45;
+numero OP_TUPLE_NEW = 47;
+numero OP_TUPLE_GET = 48;
+
+numero dt_cnt = 0;
 
 // ── Estructura de bytecode ──────────────────────────────────
 // Una instrucción es un mapa: {op: opcode, arg: valor}
@@ -390,6 +394,19 @@ funcion numero _gen_expr(numero cg, numero node) {
         cg = _cg_emit(cg, _instr(OP_ARRAY_NEW, __map_obtener(cg, "int_tmp")));
         retornar cg;
     }
+
+    si a_texto(tp) == "Tupla" {
+        numero telems = __map_obtener(node, "elementos");
+        numero tec = __map_obtener(telems, "cnt");
+        numero tei = 0;
+        mientras tei < tec {
+            cg = _gen_expr(cg, __map_obtener(telems, a_texto(tei)));
+            tei = tei + 1;
+        }
+        cg = _cg_add_int(cg, tec);
+        cg = _cg_emit(cg, _instr(OP_TUPLE_NEW, __map_obtener(cg, "int_tmp")));
+        retornar cg;
+    }
     
     si a_texto(tp) == "Index" {
         numero obj = __map_obtener(node, "obj");
@@ -478,11 +495,36 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
         retornar cg;
     }
     
+    si a_texto(tp) == "Descomp" {
+        numero objts = __map_obtener(stmt, "objetivos");
+        numero oc = __map_obtener(objts, "cnt");
+        texto tmp = "__dt_" + a_texto(dt_cnt);
+        dt_cnt = dt_cnt + 1;
+        cg = _gen_expr(cg, __map_obtener(stmt, "expr"));
+        cg = _cg_add_str(cg, tmp);
+        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        numero oi = 0;
+        mientras oi < oc {
+            numero ot = __map_obtener(objts, a_texto(oi));
+            texto onm = a_texto(__map_obtener(ot, "nombre"));
+            si onm != "_" {
+                cg = _cg_add_str(cg, tmp);
+                cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+                cg = _cg_add_int(cg, oi);
+                cg = _cg_emit(cg, _instr(OP_PUSH_INT, __map_obtener(cg, "int_tmp")));
+                cg = _cg_emit(cg, _instr(OP_ARRAY_GET, 0));
+                cg = _cg_add_str(cg, onm);
+                cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+            }
+            oi = oi + 1;
+        }
+        retornar cg;
+    }
+    
     si a_texto(tp) == "Assign" {
         numero nombre = __map_obtener(stmt, "nombre");
         numero valor = __map_obtener(stmt, "valor");
-        si __map_contiene(stmt, "target") {
-            numero target = __map_obtener(stmt, "target");
+        si __map_contiene(stmt, "target") {            numero target = __map_obtener(stmt, "target");
             numero obj = __map_obtener(target, "obj");
             numero idx = __map_obtener(target, "idx");
             cg = _gen_expr(cg, obj);

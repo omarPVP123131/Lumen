@@ -1,2 +1,2 @@
-examples/demo_completo.nv
-C:\Users\Omar\Documents\Documentos WEb\LumenRust\stdlib\compiler\test_out.nvc
+examples/utils.nv
+C:\Users\Omar\Documents\Documentos WEb\LumenRust\stdlib\compiler\fuego_out.nvc

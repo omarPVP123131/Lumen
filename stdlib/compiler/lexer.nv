@@ -65,7 +65,13 @@ funcion numero lexer_tokenizar(texto s) {
         
         si _lx_es_digit(c) {
             entero st = i;
-            mientras i < n && (_lx_es_digit(chars[i]) || chars[i] == ".") { i = i + 1; }
+            numero dot = 0;
+            mientras i < n && (_lx_es_digit(chars[i]) ||
+                (chars[i] == "." && i + 1 < n && _lx_es_digit(chars[i + 1]) &&
+                 dot == 0 && i > st && chars[st - 1] != ".")) {
+                si chars[i] == "." { dot = 1; }
+                i = i + 1;
+            }
             texto num = sub_from_chars(chars, st, i);
             entero adv = i - st;
             numero t = __map_nuevo();

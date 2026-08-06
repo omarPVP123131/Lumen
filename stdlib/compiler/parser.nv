@@ -237,7 +237,8 @@ funcion numero _parse_pr(numero st) {
                 st_scan = _st_adv(st_scan);
             }
             numero st_despues_gt = _st_adv(st_scan);
-            si (_st_ch(st_scan, 4, ">") && _st_ch(st_despues_gt, 5, "(")) {
+            si (_st_ch(st_scan, 4, ">") &&
+                (_st_ch(st_despues_gt, 5, "(") || _st_ch(st_despues_gt, 5, "{"))) {
                 st = st_despues_gt;
             } sino {
                 st = st_pre;
@@ -360,6 +361,15 @@ funcion numero _parse_pr(numero st) {
             st = _st_adv(st);
             texto mn = a_texto(_st_tv(st));
             st = _st_adv(st);
+            numero mn_dig = 1;
+            numero mni = 0;
+            mientras mni < largo(mn) {
+                texto ch = __str_subcadena(mn, mni, mni + 1);
+                si !(ch >= "0" && ch <= "9") { mn_dig = 0; }
+                mni = mni + 1;
+            }
+            numero idx_int = 0;
+            si (mn_dig == 1) { idx_int = __str_a_entero(mn); }
             si (_st_ch(st, 5, "(")) {
                 st = _st_adv(st);
                 numero margs = __map_nuevo();
@@ -412,8 +422,13 @@ funcion numero _parse_pr(numero st) {
                 }
             } sino {
                 numero fld = __map_nuevo();
-                fld = __map_poner(fld, "tipo", "Texto");
-                fld = __map_poner(fld, "v", mn);
+                si (mn_dig == 1) {
+                    fld = __map_poner(fld, "tipo", "Literal");
+                    fld = __map_poner(fld, "v", idx_int);
+                } sino {
+                    fld = __map_poner(fld, "tipo", "Texto");
+                    fld = __map_poner(fld, "v", mn);
+                }
                 numero n2 = __map_nuevo();
                 n2 = __map_poner(n2, "tipo", "Index");
                 n2 = __map_poner(n2, "obj", base);
@@ -426,11 +441,69 @@ funcion numero _parse_pr(numero st) {
 
     si (_st_ch(st, 5, "(")) {
         st = _st_adv(st);
-        numero re = _parse_expr(st);
-        numero _en = __map_obtener(re, "node");
-        st = __map_obtener(re, "st");
+        numero telems = __map_nuevo();
+        numero tec = 0;
+        numero es_tupla = 0;
+        mientras (!_st_eof(st)) {
+            si (_st_ch(st, 5, ")")) { romper; }
+            si (tec > 0) {
+                si (_st_ch(st, 5, ",")) { es_tupla = 1; st = _st_adv(st); }
+            }
+            numero re = _parse_expr(st);
+            numero el = __map_obtener(re, "node");
+            st = __map_obtener(re, "st");
+            telems = __map_poner(telems, a_texto(tec), el);
+            tec = tec + 1;
+            si (!_st_ch(st, 5, ",") && !_st_ch(st, 5, ")")) { romper; }
+        }
         st = _st_adv(st);
-        retornar _res(st, _en);
+        si (es_tupla == 1) {
+            telems = __map_poner(telems, "cnt", tec);
+            numero nt = __map_nuevo();
+            nt = __map_poner(nt, "tipo", "Tupla");
+            nt = __map_poner(nt, "elementos", telems);
+            // Postfix inline: .0 / .1 / [i] sobre tuplas
+            mientras (!_st_eof(st)) {
+                si (_st_ch(st, 5, ".")) {
+                    st = _st_adv(st);
+                    texto mn2 = a_texto(_st_tv(st));
+                    st = _st_adv(st);
+                    numero mn2_dig = 1;
+                    numero mn2i = 0;
+                    mientras mn2i < largo(mn2) {
+                        texto ch2 = __str_subcadena(mn2, mn2i, mn2i + 1);
+                        si !(ch2 >= "0" && ch2 <= "9") { mn2_dig = 0; }
+                        mn2i = mn2i + 1;
+                    }
+                    numero fld2 = __map_nuevo();
+                    si (mn2_dig == 1) {
+                        fld2 = __map_poner(fld2, "tipo", "Literal");
+                        fld2 = __map_poner(fld2, "v", __str_a_entero(mn2));
+                    } sino {
+                        fld2 = __map_poner(fld2, "tipo", "Texto");
+                        fld2 = __map_poner(fld2, "v", mn2);
+                    }
+                    numero n3 = __map_nuevo();
+                    n3 = __map_poner(n3, "tipo", "Index");
+                    n3 = __map_poner(n3, "obj", nt);
+                    n3 = __map_poner(n3, "idx", fld2);
+                    nt = n3;
+                } sino si (_st_ch(st, 5, "[")) {
+                    st = _st_adv(st);
+                    numero re4 = _parse_expr(st);
+                    numero ie2 = __map_obtener(re4, "node");
+                    st = __map_obtener(re4, "st");
+                    st = _st_adv(st);
+                    numero n4 = __map_nuevo();
+                    n4 = __map_poner(n4, "tipo", "Index");
+                    n4 = __map_poner(n4, "obj", nt);
+                    n4 = __map_poner(n4, "idx", ie2);
+                    nt = n4;
+                } sino { romper; }
+            }
+            retornar _res(st, nt);
+        }
+        retornar _res(st, __map_obtener(telems, "0"));
     }
 
     // Array literal: [e1, e2, ...]
@@ -607,11 +680,133 @@ funcion numero _parse_stmt(numero st) {
         retornar _res(st, n);
     }
 
+    // Decl con tipo tupla: (entero, (texto, entero)) t = ...
+    si (_st_ch(st, 5, "(")) {
+        numero st_par = _st_adv(st);
+        numero nivel = 1;
+        mientras (!_st_eof(st_par) && nivel > 0) {
+            si (_st_ch(st_par, 5, "(")) { nivel = nivel + 1; }
+            sino si (_st_ch(st_par, 5, ")")) { nivel = nivel - 1; }
+            st_par = _st_adv(st_par);
+        }
+        si ((_st_tt(st_par) == 1 || (_st_tt(st_par) == 6 && !_st_tp(st_par))) &&
+            !_st_eof(st_par)) {
+            st = st_par;
+            texto nmp = a_texto(_st_tv(st));
+            st = _st_adv(st);
+            numero vlp = __map_nuevo();
+            vlp = __map_poner(vlp, "tipo", "Vacio");
+            si (_st_ch(st, 4, "=")) {
+                st = _st_adv(st);
+                numero rep = _parse_expr(st);
+                vlp = __map_obtener(rep, "node");
+                st = __map_obtener(rep, "st");
+            }
+            si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+            numero np = __map_nuevo();
+            np = __map_poner(np, "tipo", "VarDecl");
+            np = __map_poner(np, "nombre", nmp);
+            np = __map_poner(np, "tipo_var", "tupla");
+            np = __map_poner(np, "valor", vlp);
+            mapa_tipos_var = __map_poner(mapa_tipos_var, nmp, "tupla");
+            retornar _res(st, np);
+        }
+    }
+
+    // Decl con tipo genérico: Par<entero, texto> p = ...
+    si (tt == 1 || (tt == 6 && !_st_tp(st))) {
+        numero st_ckg = _st_adv(st);
+        si (_st_ch(st_ckg, 4, "<")) {
+            numero st_sc = st_ckg;
+            mientras (!_st_eof(st_sc) && !_st_ch(st_sc, 4, ">")) {
+                si (_st_ch(st_sc, 5, "(") || _st_ch(st_sc, 5, ")") ||
+                    _st_ch(st_sc, 5, "{") || _st_ch(st_sc, 5, "}") ||
+                    _st_ch(st_sc, 5, ";")) { romper; }
+                st_sc = _st_adv(st_sc);
+            }
+            numero st_adg = _st_adv(st_sc);
+            si (_st_ch(st_sc, 4, ">") && (_st_tt(st_adg) == 1 ||
+                (_st_tt(st_adg) == 6 && !_st_tp(st_adg)))) {
+                st = st_adg;
+                texto nmg = a_texto(_st_tv(st));
+                st = _st_adv(st);
+                numero vlg = __map_nuevo();
+                vlg = __map_poner(vlg, "tipo", "Vacio");
+                si (_st_ch(st, 4, "=")) {
+                    st = _st_adv(st);
+                    numero reg = _parse_expr(st);
+                    vlg = __map_obtener(reg, "node");
+                    st = __map_obtener(reg, "st");
+                }
+                si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+                numero ng = __map_nuevo();
+                ng = __map_poner(ng, "tipo", "VarDecl");
+                ng = __map_poner(ng, "nombre", nmg);
+                ng = __map_poner(ng, "tipo_var", tvs);
+                ng = __map_poner(ng, "valor", vlg);
+                mapa_tipos_var = __map_poner(mapa_tipos_var, nmg, tvs);
+                retornar _res(st, ng);
+            }
+        }
+    }
+
     si (tt == 6 && _st_tp(st)) {
         texto tvar = tvs;
         st = _st_tp_skip(st);
         texto nm = a_texto(_st_tv(st));
         st = _st_adv(st);
+        // Destructuring: entero x, texto y = (1, "hola")
+        si (_st_ch(st, 5, ",")) {
+            numero objetivos = __map_nuevo();
+            numero otc = 0;
+            numero ot0 = __map_nuevo();
+            ot0 = __map_poner(ot0, "nombre", nm);
+            ot0 = __map_poner(ot0, "tipo", tvar);
+            objetivos = __map_poner(objetivos, "0", ot0);
+            otc = 1;
+            mientras (!_st_eof(st)) {
+                si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                numero o_nm = "";
+                texto o_tp = "let";
+                si (_st_tt(st) == 1 && a_texto(_st_tv(st)) == "_") {
+                    o_nm = "_";
+                    st = _st_adv(st);
+                } sino {
+                    si (_st_tp(st)) {
+                        o_tp = a_texto(_st_tv(st));
+                        st = _st_tp_skip(st);
+                    }
+                    o_nm = a_texto(_st_tv(st));
+                    st = _st_adv(st);
+                }
+                numero ot = __map_nuevo();
+                ot = __map_poner(ot, "nombre", o_nm);
+                ot = __map_poner(ot, "tipo", o_tp);
+                objetivos = __map_poner(objetivos, a_texto(otc), ot);
+                otc = otc + 1;
+                si (!_st_ch(st, 5, ",")) { romper; }
+            }
+            si (_st_ch(st, 4, "=")) { st = _st_adv(st); }
+            numero rde = _parse_expr(st);
+            numero de = __map_obtener(rde, "node");
+            st = __map_obtener(rde, "st");
+            si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+            objetivos = __map_poner(objetivos, "cnt", otc);
+            numero nd = __map_nuevo();
+            nd = __map_poner(nd, "tipo", "Descomp");
+            nd = __map_poner(nd, "objetivos", objetivos);
+            nd = __map_poner(nd, "expr", de);
+            numero oi2 = 0;
+            mientras oi2 < otc {
+                texto onm2 = a_texto(__map_obtener(__map_obtener(objetivos, a_texto(oi2)), "nombre"));
+                si onm2 != "_" {
+                    texto otp2 = a_texto(__map_obtener(__map_obtener(objetivos, a_texto(oi2)), "tipo"));
+                    mapa_tipos_var = __map_poner(mapa_tipos_var, onm2, otp2);
+                }
+                oi2 = oi2 + 1;
+            }
+            retornar _res(st, nd);
+        }
         numero vl = __map_nuevo();
         vl = __map_poner(vl, "tipo", "Vacio");
         si (_st_ch(st, 4, "=")) {
@@ -1078,6 +1273,44 @@ funcion numero _parse_stmt(numero st) {
         numero re = _parse_expr(st);
         numero ex = __map_obtener(re, "node");
         st = __map_obtener(re, "st");
+        // Destructuring en asignación: p, q = (42, "mundo")
+        si (a_texto(__map_obtener(ex, "tipo")) == "Ident" && _st_ch(st, 5, ",")) {
+            numero objetivos2 = __map_nuevo();
+            numero otc2 = 0;
+            numero at0 = __map_nuevo();
+            at0 = __map_poner(at0, "nombre", a_texto(__map_obtener(ex, "nombre")));
+            at0 = __map_poner(at0, "tipo", "let");
+            objetivos2 = __map_poner(objetivos2, "0", at0);
+            otc2 = 1;
+            mientras (!_st_eof(st)) {
+                si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                numero atn = "";
+                si (_st_tt(st) == 1 && a_texto(_st_tv(st)) == "_") {
+                    atn = "_";
+                    st = _st_adv(st);
+                } sino {
+                    atn = a_texto(_st_tv(st));
+                    st = _st_adv(st);
+                }
+                numero at = __map_nuevo();
+                at = __map_poner(at, "nombre", atn);
+                at = __map_poner(at, "tipo", "let");
+                objetivos2 = __map_poner(objetivos2, a_texto(otc2), at);
+                otc2 = otc2 + 1;
+                si (!_st_ch(st, 5, ",")) { romper; }
+            }
+            si (_st_ch(st, 4, "=")) { st = _st_adv(st); }
+            numero rde2 = _parse_expr(st);
+            numero de2 = __map_obtener(rde2, "node");
+            st = __map_obtener(rde2, "st");
+            si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+            objetivos2 = __map_poner(objetivos2, "cnt", otc2);
+            numero nd2 = __map_nuevo();
+            nd2 = __map_poner(nd2, "tipo", "Descomp");
+            nd2 = __map_poner(nd2, "objetivos", objetivos2);
+            nd2 = __map_poner(nd2, "expr", de2);
+            retornar _res(st, nd2);
+        }
         si (_st_ch(st, 4, "=")) {
             st = _st_adv(st);
             numero re2 = _parse_expr(st);
