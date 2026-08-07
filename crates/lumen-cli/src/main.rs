@@ -557,8 +557,8 @@ fn main() {
 
 // ── Funciones auxiliares (sin cambios) ────────────────────────────
 
-fn resolve_or_exit(mut loader: ModuleLoader, source: &str, base_dir: &Path) -> Vec<DeclOrStmt> {
-    match loader.resolve_imports(source, base_dir) {
+fn resolve_or_exit(mut loader: ModuleLoader, source: &str, base_path: &Path) -> Vec<DeclOrStmt> {
+    match loader.resolve_imports(source, base_path) {
         Ok(p) => p,
         Err(e) => {
             match &e {
@@ -677,9 +677,8 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
         }
     };
     let base_path = Path::new(path);
-    let base_dir = base_path.parent().unwrap_or(Path::new("."));
     let loader = ModuleLoader::new(lib_dirs.to_vec());
-    let mut program = resolve_or_exit(loader, &source, base_dir);
+    let mut program = resolve_or_exit(loader, &source, base_path);
     let sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
@@ -840,8 +839,7 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
         process::exit(1);
     }
     let mut loader = ModuleLoader::new(lib_dirs.to_vec());
-    let base_dir = Path::new(path).parent().unwrap_or(Path::new("."));
-    let flat = match loader.resolve_imports(&source, base_dir) {
+    let flat = match loader.resolve_imports(&source, Path::new(path)) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("Error imports: {:?}", e);
@@ -891,9 +889,8 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
             process::exit(1);
         }
     };
-    let base_dir = Path::new(path).parent().unwrap_or(Path::new("."));
     let mut loader = ModuleLoader::new(lib_dirs.to_vec());
-    let program = match loader.resolve_imports(&source, base_dir) {
+    let program = match loader.resolve_imports(&source, Path::new(path)) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("Error imports: {:?}", e);

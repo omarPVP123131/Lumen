@@ -526,13 +526,12 @@ impl VM {
                 }
             };
             let base_path = std::path::Path::new(&path);
-            let base_dir = base_path.parent().unwrap_or(std::path::Path::new("."));
             let mut lib_dirs = vec![std::path::PathBuf::from("stdlib")];
             if let Ok(cwd) = std::env::current_dir() {
                 lib_dirs.push(cwd.join("stdlib"));
             }
             let mut loader = lumen_sema::loader::ModuleLoader::new(lib_dirs);
-            let mut program = match loader.resolve_imports(&source, base_dir) {
+            let mut program = match loader.resolve_imports(&source, base_path) {
                 Ok(p) => p,
                 Err(e) => {
                     self.push(Value::Error(Box::new(Value::str(format!("Loader error: {:?}", e)))));

@@ -49,6 +49,10 @@ impl ModuleLoader {
     }
 
     fn flatten(&mut self, program: Program, current_path: &Path) -> Result<Program, ModuleError> {
+        // Canonicalizar para comparar rutas de forma robusta (Windows: fs::canonicalize
+        // añade el prefijo \\?\ — comparar crudo vs canonical nunca da igualdad).
+        let current_norm = fs::canonicalize(current_path)
+            .unwrap_or_else(|_| current_path.to_path_buf());
         let mut result = Vec::new();
         for node in program {
             match node {
@@ -56,16 +60,16 @@ impl ModuleLoader {
                     if path == "ingles" || path == "english" {
                         continue;
                     }
-                    let current_dir = if current_path.is_dir() {
-                        current_path.to_path_buf()
+                    let current_dir = if current_norm.is_dir() {
+                        current_norm.clone()
                     } else {
-                        current_path
+                        current_norm
                             .parent()
                             .unwrap_or(Path::new("."))
                             .to_path_buf()
                     };
-                    let resolved = self.resolve_path(&path, &current_dir)?;
-                    if resolved == current_path {
+                    let resolved = self.resolve_path(&path, &current_dir, &current_norm)?;
+                    if resolved == current_norm {
                         // Self-import: el archivo se importa a sí mismo por nombre
                         // (p. ej. `examples/graficos_avanzado.nv` importando
                         // "graficos_avanzado.nv"). No-op para romper el ciclo.
@@ -109,12 +113,18 @@ impl ModuleLoader {
         Ok(result)
     }
 
-    fn resolve_path(&self, path: &str, current_dir: &Path) -> Result<PathBuf, ModuleError> {
+    fn resolve_path(&self, path: &str, current_dir: &Path, current_path: &Path) -> Result<PathBuf, ModuleError> {
         let extensions = [".nv", ".lumen"];
+        // Skip de auto-importación: si la ruta as-is cae sobre el archivo que se
+        // está aplanando (p. ej. `examples/graficos_avanzado.nv` importando
+        // "graficos_avanzado.nv"), continuar hacia los search_paths (stdlib).
+        let is_self = |p: &Path| -> bool {
+            fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()) == current_path
+        };
         if path.contains('.') || path.contains('/') || path.contains('\\') {
             // Try as-is (full path with extension)
             let p = current_dir.join(path);
-            if p.exists() {
+            if p.exists() && !is_self(&p) {
                 return Ok(fs::canonicalize(&p).unwrap_or(p));
             }
             for sp in &self.search_paths {
@@ -126,7 +136,7 @@ impl ModuleLoader {
             // Try with extensions
             for ext in &extensions {
                 let p = current_dir.join(format!("{}{}", path, ext));
-                if p.exists() {
+                if p.exists() && !is_self(&p) {
                     return Ok(fs::canonicalize(&p).unwrap_or(p));
                 }
             }
@@ -145,7 +155,7 @@ impl ModuleLoader {
         } else {
             for ext in &extensions {
                 let p = current_dir.join(format!("{}{}", path, ext));
-                if p.exists() {
+                if p.exists() && !is_self(&p) {
                     return Ok(fs::canonicalize(&p).unwrap_or(p));
                 }
             }
@@ -207,7 +217,6 @@ fn prefix_program(program: &mut Program, prefix: &str, known: &HashSet<String>) 
         prefix_node(node, prefix, &mut locals, true, known);
     }
 }
-
 fn prefix_node(
     node: &mut DeclOrStmt,
     prefix: &str,
