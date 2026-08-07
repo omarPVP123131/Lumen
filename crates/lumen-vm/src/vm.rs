@@ -2696,6 +2696,71 @@ impl VM {
                     _ => return Err(VmError::TypeError("BitOr requires integers".to_string())),
                 }
             }
+            Opcode::BitAnd => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                match (&a, &b) {
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a & b)),
+                    _ => return Err(VmError::TypeError("BitAnd requires integers".to_string())),
+                }
+            }
+            Opcode::ShiftLeft => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                match (&a, &b) {
+                    (Value::Int(a), Value::Int(b)) => {
+                        if *b < 0 || *b > 63 {
+                            return Err(VmError::Runtime(format!(
+                                "Desplazamiento {} fuera de rango (0-63)",
+                                b
+                            )));
+                        }
+                        self.push(Value::Int(a << *b as u32));
+                    }
+                    _ => return Err(VmError::TypeError("ShiftLeft requires integers".to_string())),
+                }
+            }
+            Opcode::ShiftRight => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                match (&a, &b) {
+                    (Value::Int(a), Value::Int(b)) => {
+                        if *b < 0 || *b > 63 {
+                            return Err(VmError::Runtime(format!(
+                                "Desplazamiento {} fuera de rango (0-63)",
+                                b
+                            )));
+                        }
+                        self.push(Value::Int(a >> *b as u32));
+                    }
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "ShiftRight requires integers".to_string(),
+                        ))
+                    }
+                }
+            }
+            Opcode::Concat => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                match (&a, &b) {
+                    (Value::Str(a), Value::Str(b)) => {
+                        let mut s = a.to_string();
+                        s.push_str(b);
+                        self.push(Value::str(s));
+                    }
+                    (Value::Array(a), Value::Array(b)) => {
+                        let mut v = a.as_ref().clone();
+                        v.extend(b.as_ref().clone());
+                        self.push(Value::arr(v));
+                    }
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "Concat requires strings or lists".to_string(),
+                        ))
+                    }
+                }
+            }
             Opcode::Neg => {
                 let a = self.pop()?;
                 match a {
@@ -4025,7 +4090,12 @@ impl VM {
                  42 => 42,     // OptionNone
                  47 => 44,     // TupleNew
                  48 => 45,     // TupleAccess
-                 _ => 0,       // Nop
+                 46 => 47,     // BitOr
+                 49 => 48,     // BitAnd
+                  50 => 49,     // ShiftLeft
+                  51 => 50,     // ShiftRight
+                  52 => 51,     // Concat
+                  _ => 0,       // Nop
             }
         };
 

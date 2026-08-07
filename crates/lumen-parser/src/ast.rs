@@ -190,6 +190,12 @@ pub enum Stmt {
         value: Box<Expr>,
         span: Span,
     },
+    ArraySet {
+        arr: Box<Expr>,
+        index: Box<Expr>,
+        value: Box<Expr>,
+        span: Span,
+    },
     Block {
         stmts: Vec<DeclOrStmt>,
         span: Span,
@@ -254,6 +260,11 @@ pub enum Expr {
     },
     Grouping {
         expr: Box<Expr>,
+        span: Span,
+    },
+    Cast {
+        expr: Box<Expr>,
+        cast_type: Type,
         span: Span,
     },
     List {
@@ -337,6 +348,7 @@ pub enum Expr {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum BinOp {
     Add,
+    Concat,
     Sub,
     Mul,
     Div,
@@ -350,6 +362,9 @@ pub enum BinOp {
     And,
     Or,
     BitOr,
+    BitAnd,
+    ShiftLeft,
+    ShiftRight,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -396,6 +411,7 @@ impl Expr {
             | Expr::Unary { span, .. }
             | Expr::Call { span, .. }
             | Expr::Grouping { span, .. }
+            | Expr::Cast { span, .. }
             | Expr::List { span, .. }
             | Expr::Index { span, .. }
             | Expr::MethodCall { span, .. }

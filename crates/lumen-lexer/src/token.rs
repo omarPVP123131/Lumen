@@ -135,6 +135,7 @@ pub enum TokenKind {
 
     // Operators
     Plus,         // +
+    PlusPlus,     // ++
     Minus,        // -
     Star,         // *
     Slash,        // /
@@ -150,6 +151,9 @@ pub enum TokenKind {
     AndAnd,       // &&
     OrOr,         // ||
     Pipe,         // |
+    Ampersand,    // &
+    ShiftLeft,    // <<
+    ShiftRight,   // >>
     Question,     // ?
 
     // Delimiters
@@ -226,7 +230,6 @@ impl TokenKind {
             "resultado" => Some(TokenKind::Resultado),
             "result" => Some(TokenKind::Result),
             "exito" => Some(TokenKind::Exito),
-            "ok" => Some(TokenKind::Ok),
             "error" => Some(TokenKind::ErrKeyword),
             "err" => Some(TokenKind::Err),
             "intentar" => Some(TokenKind::Intentar),

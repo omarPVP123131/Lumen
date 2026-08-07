@@ -51,6 +51,10 @@ pub enum Opcode {
     TupleAccess = 45,
     Mod = 46,
     BitOr = 47,
+    BitAnd = 48,
+    ShiftLeft = 49,
+    ShiftRight = 50,
+    Concat = 51,
 }
 
 impl Opcode {
@@ -104,6 +108,10 @@ impl Opcode {
             45 => Some(Opcode::TupleAccess),
             46 => Some(Opcode::Mod),
             47 => Some(Opcode::BitOr),
+            48 => Some(Opcode::BitAnd),
+            49 => Some(Opcode::ShiftLeft),
+            50 => Some(Opcode::ShiftRight),
+            51 => Some(Opcode::Concat),
             _ => None,
         }
     }

@@ -412,16 +412,59 @@ impl IRBuilder {
             Stmt::FieldAssign {
                 expr, field, value, ..
             } => {
-                let var_name = match expr.as_ref() {
-                    Expr::Ident { name, .. } => Some(name.clone()),
-                    _ => None,
-                };
-                self.gen_expr(expr);
-                self.emit(Instr::ConstStr(field.clone()));
+                // `arr[i].campo = v` — array element field mutation with write-back
+                if let Expr::Index {
+                    expr: base,
+                    index,
+                    ..
+                } = expr.as_ref()
+                {
+                    self.gen_expr(base);
+                    self.gen_expr(index);
+                    self.emit(Instr::ArrayGet);
+                    self.emit(Instr::ConstStr(field.clone()));
+                    self.gen_expr(value);
+                    self.emit(Instr::StructSet);
+                    self.gen_expr(base);
+                    self.gen_expr(index);
+                    self.emit(Instr::ArraySet);
+                    if let Expr::Ident { name, .. } = base.as_ref() {
+                        self.emit(Instr::Store(name.clone()));
+                    }
+                } else {
+                    let var_name = match expr.as_ref() {
+                        Expr::Ident { name, .. } => Some(name.clone()),
+                        _ => None,
+                    };
+                    self.gen_expr(expr);
+                    self.emit(Instr::ConstStr(field.clone()));
+                    self.gen_expr(value);
+                    self.emit(Instr::StructSet);
+                    if let Some(name) = var_name {
+                        self.emit(Instr::Store(name));
+                    }
+                }
+            }
+            Stmt::ArraySet {
+                arr,
+                index,
+                value,
+                ..
+            } => {
+                // `x.campo[i] = v` o `a[i] = v` — ArrayGet (base/campo) + ArraySet
+                self.gen_expr(arr);
+                self.gen_expr(index);
                 self.gen_expr(value);
-                self.emit(Instr::StructSet);
-                if let Some(name) = var_name {
-                    self.emit(Instr::Store(name));
+                self.emit(Instr::ArraySet);
+                if let Expr::Ident { name, .. } = arr.as_ref() {
+                    self.emit(Instr::Store(name.clone()));
+                } else if let Expr::FieldAccess { expr: base, field, .. } = arr.as_ref() {
+                    if let Expr::Ident { name, .. } = base.as_ref() {
+                        self.gen_expr(base);
+                        self.emit(Instr::ConstStr(field.clone()));
+                        self.emit(Instr::ArrayGet);
+                        self.emit(Instr::Store(name.clone()));
+                    }
                 }
             }
             Stmt::Expr { expr, .. } => {
@@ -675,6 +718,7 @@ impl IRBuilder {
                             self.gen_expr(right);
                             self.emit(Instr::Binary(match op {
                                 BinOp::Add => Op::Add,
+                                BinOp::Concat => Op::Concat,
                                 BinOp::Sub => Op::Sub,
                                 BinOp::Mul => Op::Mul,
                                 BinOp::Div => Op::Div,
@@ -686,6 +730,9 @@ impl IRBuilder {
                                 BinOp::Greater => Op::Greater,
                                 BinOp::GreaterEqual => Op::GreaterEqual,
                                 BinOp::BitOr => Op::BitOr,
+                                BinOp::BitAnd => Op::BitAnd,
+                                BinOp::ShiftLeft => Op::ShiftLeft,
+                                BinOp::ShiftRight => Op::ShiftRight,
                                 _ => unreachable!(),
                             }));
                         }
@@ -702,6 +749,7 @@ impl IRBuilder {
             Expr::Call { callee, args, .. } => {
                 let callee_inner = match callee.as_ref() {
                     Expr::Grouping { expr, .. } => expr.as_ref(),
+                    Expr::Cast { expr, .. } => expr.as_ref(),
                     other => other,
                 };
                 match callee_inner {
@@ -1117,6 +1165,9 @@ impl IRBuilder {
             Expr::Grouping { expr, .. } => {
                 self.gen_expr(expr);
             }
+            Expr::Cast { expr, .. } => {
+                self.gen_expr(expr);
+            }
             Expr::StructInit {
                 struct_name,
                 fields,
@@ -1375,6 +1426,7 @@ impl IRBuilder {
                 }
             }
             Expr::Grouping { expr, .. } => self.collect_expr_refs(expr, params, out),
+            Expr::Cast { expr, .. } => self.collect_expr_refs(expr, params, out),
             Expr::StructInit { fields, .. } => {
                 for (_, v) in fields {
                     self.collect_expr_refs(v, params, out);

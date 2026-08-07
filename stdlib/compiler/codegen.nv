@@ -33,6 +33,11 @@ numero OP_HALT = 27;
 numero OP_ARRAY_NEW = 28;
 numero OP_ARRAY_GET = 29;
 numero OP_ARRAY_SET = 30;
+numero OP_BIT_OR = 46;
+numero OP_BIT_AND = 49;
+numero OP_SHIFT_LEFT = 50;
+numero OP_SHIFT_RIGHT = 51;
+numero OP_CONCAT = 52;
 numero OP_ENUM_CTOR = 43;
 numero OP_ENUM_VAR = 44;
 numero OP_ENUM_ARGC = 45;
@@ -372,6 +377,11 @@ funcion numero _gen_expr(numero cg, numero node) {
         si a_texto(op) == "!=" { cg = _cg_emit(cg, _instr(OP_NEQ, 0)); }
         si a_texto(op) == ">=" { cg = _cg_emit(cg, _instr(OP_GE, 0)); }
         si a_texto(op) == "<=" { cg = _cg_emit(cg, _instr(OP_LE, 0)); }
+        si a_texto(op) == "|" { cg = _cg_emit(cg, _instr(OP_BIT_OR, 0)); }
+        si a_texto(op) == "&" { cg = _cg_emit(cg, _instr(OP_BIT_AND, 0)); }
+        si a_texto(op) == "<<" { cg = _cg_emit(cg, _instr(OP_SHIFT_LEFT, 0)); }
+        si a_texto(op) == ">>" { cg = _cg_emit(cg, _instr(OP_SHIFT_RIGHT, 0)); }
+        si a_texto(op) == "++" { cg = _cg_emit(cg, _instr(OP_CONCAT, 0)); }
         retornar cg;
     }
     

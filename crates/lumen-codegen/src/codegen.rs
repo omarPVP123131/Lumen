@@ -163,6 +163,7 @@ impl Codegen {
             Instr::Binary(op) => {
                 let opcode = match op {
                     Op::Add => Opcode::Add,
+                    Op::Concat => Opcode::Concat,
                     Op::Sub => Opcode::Sub,
                     Op::Mul => Opcode::Mul,
                     Op::Div => Opcode::Div,
@@ -176,6 +177,9 @@ impl Codegen {
                     Op::And => Opcode::And,
                     Op::Or => Opcode::Or,
                     Op::BitOr => Opcode::BitOr,
+                    Op::BitAnd => Opcode::BitAnd,
+                    Op::ShiftLeft => Opcode::ShiftLeft,
+                    Op::ShiftRight => Opcode::ShiftRight,
                     _ => Opcode::Nop,
                 };
                 self.bytecode.instructions.push(Instruction::Simple(opcode));

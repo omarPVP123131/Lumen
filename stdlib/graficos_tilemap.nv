@@ -73,10 +73,10 @@ funcion void init(entero renderer) { iniciar(renderer); }
 // ============================================================
 
 funcion entero __i32_le(entero val, entero buf, entero off) {
-    __ffi_poke(buf, off, val && 255);
-    __ffi_poke(buf, off + 1, (val >> 8) && 255);
-    __ffi_poke(buf, off + 2, (val >> 16) && 255);
-    __ffi_poke(buf, off + 3, (val >> 24) && 255);
+    __ffi_poke(buf, off, val & 255);
+    __ffi_poke(buf, off + 1, (val >> 8) & 255);
+    __ffi_poke(buf, off + 2, (val >> 16) & 255);
+    __ffi_poke(buf, off + 3, (val >> 24) & 255);
     retornar 0;
 }
 
@@ -175,9 +175,9 @@ funcion entero __color_por_tile(entero tile_id) {
 
 /// Desempaqueta color RGB de un entero empaquetado (0xRRGGBB)
 /// Retorna el valor del componente (0-255)
-funcion entero __r(entero rgb) { retornar (rgb >> 16) && 255; }
-funcion entero __g(entero rgb) { retornar (rgb >> 8) && 255; }
-funcion entero __b(entero rgb) { retornar rgb && 255; }
+funcion entero __r(entero rgb) { retornar (rgb >> 16) & 255; }
+funcion entero __g(entero rgb) { retornar (rgb >> 8) & 255; }
+funcion entero __b(entero rgb) { retornar rgb & 255; }
 
 // ============================================================
 // CREAR TILEMAP / CREATE TILEMAP

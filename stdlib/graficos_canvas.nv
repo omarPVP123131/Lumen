@@ -69,10 +69,10 @@ funcion void init(entero renderer) { iniciar(renderer); }
 
 /// Escribe un entero 32-bit little-endian en un buffer
 funcion entero __i32_le(entero val, entero buf, entero off) {
-    __ffi_poke(buf, off, val && 255);
-    __ffi_poke(buf, off + 1, (val >> 8) && 255);
-    __ffi_poke(buf, off + 2, (val >> 16) && 255);
-    __ffi_poke(buf, off + 3, (val >> 24) && 255);
+    __ffi_poke(buf, off, val & 255);
+    __ffi_poke(buf, off + 1, (val >> 8) & 255);
+    __ffi_poke(buf, off + 2, (val >> 16) & 255);
+    __ffi_poke(buf, off + 3, (val >> 24) & 255);
     retornar 0;
 }
 
@@ -343,6 +343,19 @@ funcion void fill_triangle(entero x1, entero y1, entero x2, entero y2,
 // ============================================================
 
 /// Dibuja un rectángulo con esquinas redondeadas (borde solamente)
+/// Dibuja un rectángulo relleno (fill) por scanlines
+funcion void rectangulo_relleno(entero x, entero y, entero w, entero h,
+        entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    __set_color(r, g, b, a);
+    entero yy = 0;
+    mientras yy < h {
+        __raw_line(x, y + yy, x + w - 1, y + yy);
+        yy = yy + 1;
+    }
+}
+
 funcion void rectangulo_redondeado(entero x, entero y, entero w, entero h,
         entero radio, entero r, entero g, entero b, entero a) {
     si __ren == 0 { retornar; }
@@ -684,7 +697,7 @@ funcion void texto(entero x, entero y, texto s,
 
     entero i = 0;
     mientras i < s.largo() {
-        entero ch = __str_ord(s[i]);
+        entero ch = __str_ord(s[i])[0];
         si ch < 32 { ch = 32; }
         si ch > 126 { ch = 126; }
         entero idx = (ch - 32) * 7;
@@ -693,7 +706,7 @@ funcion void texto(entero x, entero y, texto s,
             entero bits = font[idx + row];
             entero col = 0;
             mientras col < 5 {
-                si ((bits >> (4 - col)) && 1) == 1 {
+                si ((bits >> (4 - col)) & 1) == 1 {
                     __raw_pixel(x + i * 6 + col, y + row);
                 }
                 col = col + 1;

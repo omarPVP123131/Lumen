@@ -57,11 +57,33 @@ impl Parser {
             TokenKind::Float,
             TokenKind::String,
             TokenKind::Boolean,
-        ]) || (self.check_ident() && self.check_ident_next())
+            ]) || (self.check_ident() && self.check_ident_next())
             || self.check_next_is_tuple_type()
             || self.check_ident_next_is_generic_type()
         {
-            self.parse_declaration().map(DeclOrStmt::Decl)
+            if self.check(&[
+                TokenKind::Numero,
+                TokenKind::Entero,
+                TokenKind::Decimal,
+                TokenKind::Texto,
+                TokenKind::Booleano,
+                TokenKind::Lista,
+                TokenKind::Array,
+                TokenKind::Resultado,
+                TokenKind::Result,
+                TokenKind::Opcion,
+                TokenKind::Option,
+                TokenKind::Number,
+                TokenKind::Integer,
+                TokenKind::Float,
+                TokenKind::String,
+                TokenKind::Boolean,
+            ]) && self.check_next(&[TokenKind::LeftParen])
+            {
+                self.parse_expr_or_assign().map(DeclOrStmt::Stmt)
+            } else {
+                self.parse_declaration().map(DeclOrStmt::Decl)
+            }
         } else if self.check(&[TokenKind::Async]) {
             self.parse_async_function().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Funcion, TokenKind::Function]) {
@@ -135,8 +157,24 @@ impl Parser {
 
     fn parse_declaration(&mut self) -> Option<Decl> {
         let start = self.peek().span;
-        let var_type = self.parse_type()?;
+        let mut var_type = self.parse_type()?;
         let name = self.expect_ident()?;
+
+        // C-style array type: `entero paleta_r[] = [...]`
+        if self.check(&[TokenKind::LeftBracket]) {
+            self.advance();
+            if !self.check(&[TokenKind::RightBracket]) {
+                self.error(
+                    "E022",
+                    "Se esperaba ']' para cerrar el tipo arreglo",
+                    self.peek().span,
+                    "Agrega ']' después de '['",
+                );
+                return None;
+            }
+            self.advance();
+            var_type = Type::Lista(Box::new(var_type));
+        }
 
         if self.check(&[TokenKind::Comma]) {
             return self.parse_destructure_decl(var_type, name, start);
@@ -234,7 +272,45 @@ impl Parser {
         let start = self.peek().span;
         self.advance();
         let return_type = self.parse_type()?;
-        let name = self.expect_ident()?;
+        // Function name: ident or keyword (e.g. `funcion void texto(...)`)
+        let name = match self.peek().kind {
+            TokenKind::Ident(ref s) => {
+                let s = s.clone();
+                self.advance();
+                s
+            }
+            _ => {
+                let kw = self.peek().kind.as_str();
+                if kw.is_empty() {
+                    self.advance();
+                    self.error(
+                        "E011",
+                        "Se esperaba un nombre de función",
+                        start,
+                        "Escribe un identificador para la función",
+                    );
+                    return None;
+                }
+                let kw = kw.to_string();
+                self.advance();
+                kw
+            }
+        };
+
+        if self.check(&[TokenKind::Equal]) {
+            self.advance();
+            let saved_nsi = self.no_struct_init;
+            self.no_struct_init = false;
+            let e = self.parse_expression().map(Box::new);
+            self.no_struct_init = saved_nsi;
+            self.expect_semicolon();
+            return Some(Decl::Variable {
+                var_type: return_type,
+                name,
+                init: e,
+                span: Span::merge(&start, &self.previous().span),
+            });
+        }
 
         let (type_params, type_param_bounds) = self.parse_type_params();
 
@@ -896,7 +972,6 @@ impl Parser {
         }
         self.advance();
         let saved = self.no_struct_init;
-        self.no_struct_init = true;
         while !self.check(&[TokenKind::RightBrace]) && !self.is_at_end() {
             if self.check(&[TokenKind::Eof]) {
                 break;
@@ -1411,11 +1486,48 @@ impl Parser {
             }
         } else {
             let expr = self.parse_expression()?;
-            self.expect_semicolon();
-            Some(Stmt::Expr {
-                expr: Box::new(expr),
-                span: Span::merge(&start, &self.previous().span),
-            })
+            if self.check(&[TokenKind::Equal]) {
+                self.advance();
+                let value = Box::new(self.parse_expression()?);
+                self.expect_semicolon();
+                match expr {
+                    Expr::FieldAccess {
+                        expr: target,
+                        field,
+                        ..
+                    } => Some(Stmt::FieldAssign {
+                        expr: target,
+                        field,
+                        value,
+                        span: Span::merge(&start, &self.previous().span),
+                    }),
+                    Expr::Index {
+                        expr: target,
+                        index,
+                        ..
+                    } => Some(Stmt::ArraySet {
+                        arr: target,
+                        index,
+                        value,
+                        span: Span::merge(&start, &self.previous().span),
+                    }),
+                    _ => {
+                        self.error(
+                            "E024",
+                            "No se puede asignar a esta expresión",
+                            start,
+                            "Solo se puede asignar a variables, índices y campos de struct",
+                        );
+                        None
+                    }
+                }
+            } else {
+                self.expect_semicolon();
+                Some(Stmt::Expr {
+                    expr: Box::new(expr),
+                    span: Span::merge(&start, &self.previous().span),
+                })
+            }
         }
     }
 
@@ -1496,6 +1608,7 @@ impl Parser {
             TokenKind::LessEqual,
             TokenKind::Greater,
             TokenKind::GreaterEqual,
+            TokenKind::Ampersand,
         ]) {
             let op = match self.peek().kind {
                 TokenKind::EqualEqual => BinOp::Equal,
@@ -1504,6 +1617,7 @@ impl Parser {
                 TokenKind::LessEqual => BinOp::LessEqual,
                 TokenKind::Greater => BinOp::Greater,
                 TokenKind::GreaterEqual => BinOp::GreaterEqual,
+                TokenKind::Ampersand => BinOp::BitAnd,
                 _ => unreachable!(),
             };
             self.advance();
@@ -1521,12 +1635,35 @@ impl Parser {
     }
 
     fn parse_addition(&mut self) -> Option<Expr> {
-        let mut left = self.parse_multiplication()?;
-        while self.check(&[TokenKind::Plus, TokenKind::Minus, TokenKind::Pipe]) {
+        let mut left = self.parse_shift()?;
+        while self.check(&[TokenKind::Plus, TokenKind::PlusPlus, TokenKind::Minus, TokenKind::Pipe]) {
             let op = match self.peek().kind {
                 TokenKind::Plus => BinOp::Add,
+                TokenKind::PlusPlus => BinOp::Concat,
                 TokenKind::Minus => BinOp::Sub,
                 TokenKind::Pipe => BinOp::BitOr,
+                _ => unreachable!(),
+            };
+            self.advance();
+            let right = self.parse_shift()?;
+            let span = Span::merge(&left.span(), &right.span());
+            left = Expr::Binary {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+                resolved_method: None,
+                span,
+            };
+        }
+        Some(left)
+    }
+
+    fn parse_shift(&mut self) -> Option<Expr> {
+        let mut left = self.parse_multiplication()?;
+        while self.check(&[TokenKind::ShiftLeft, TokenKind::ShiftRight]) {
+            let op = match self.peek().kind {
+                TokenKind::ShiftLeft => BinOp::ShiftLeft,
+                TokenKind::ShiftRight => BinOp::ShiftRight,
                 _ => unreachable!(),
             };
             self.advance();
@@ -1693,8 +1830,17 @@ impl Parser {
                                 }
                             }
                             _ => {
-                                self.error("E024", "Se esperaba un nombre de campo o índice numérico después de '.'", t.span, "Escribe el nombre del campo o un número");
-                                return Some(expr);
+                                let field_name = t.kind.as_str();
+                                if field_name.is_empty() {
+                                    self.error("E024", "Se esperaba un nombre de campo o índice numérico después de '.'", t.span, "Escribe el nombre del campo o un número");
+                                    return Some(expr);
+                                }
+                                let span = Span::merge(&start, &self.previous().span);
+                                expr = Expr::FieldAccess {
+                                    expr: Box::new(expr),
+                                    field: field_name.to_string(),
+                                    span,
+                                };
                             }
                         }
                     }
@@ -1729,14 +1875,15 @@ impl Parser {
                     span,
                 };
             } else if self.check(&[TokenKind::Como, TokenKind::As]) {
-                // Cast `X como T` — no-op de tipado: consume la keyword y el tipo,
-                // el valor pasa tal cual (sin instrucción extra en bytecode).
+                // Cast `X como T` — no-op de bytecode (el valor pasa tal cual),
+                // pero con tipado real en el análisis semántico.
                 self.advance();
-                let _cast_type = self.parse_type()?;
+                let cast_type = self.parse_type()?;
                 let cast_span = expr.span();
                 let cast_merge = Span::merge(&cast_span, &self.previous().span);
-                expr = Expr::Grouping {
+                expr = Expr::Cast {
                     expr: Box::new(expr),
+                    cast_type,
                     span: cast_merge,
                 };
             } else {
@@ -1913,6 +2060,9 @@ impl Parser {
                     items.push(self.parse_expression()?);
                     while self.check(&[TokenKind::Comma]) {
                         self.advance();
+                        if self.check(&[TokenKind::RightBracket]) {
+                            break;
+                        }
                         items.push(self.parse_expression()?);
                     }
                 }
@@ -1932,6 +2082,10 @@ impl Parser {
                 })
             }
             _ => {
+                let kw = token.kind.as_str();
+                if !kw.is_empty() {
+                    return self.parse_call_or_ident(kw.to_string(), span);
+                }
                 self.error(
                     "E020",
                     format!("Expresión inesperada: {:?}", token.kind),
@@ -2412,7 +2566,27 @@ impl Parser {
                 }
             }
             TokenKind::Ident(name) => {
-                if self.check(&[TokenKind::Less]) && self.is_next_type_in_type_context() {
+                if name == "list" || name == "Lista" {
+                    if self.check(&[TokenKind::Less]) {
+                        self.advance();
+                        let inner = self.parse_type()?;
+                        if !self.check(&[TokenKind::Greater]) {
+                            self.error(
+                                "E021",
+                                "Se esperaba '>' para cerrar el tipo lista",
+                                token.span,
+                                "Agrega '>' después del tipo interno",
+                            );
+                            return None;
+                        }
+                        self.advance();
+                        Some(Type::Lista(Box::new(inner)))
+                    } else {
+                        Some(Type::Lista(Box::new(Type::Entero)))
+                    }
+                } else if name == "string" {
+                    Some(Type::Texto)
+                } else if self.check(&[TokenKind::Less]) && self.is_next_type_in_type_context() {
                     let args = self.parse_type_args()?;
                     Some(Type::GenericStruct { name, args })
                 } else if name == "cualquiera" || name == "any" {
@@ -2920,13 +3094,20 @@ impl Parser {
                 Some("rasgo".to_string())
             }
             _ => {
-                self.error(
-                    "E011",
-                    "Se esperaba un nombre de campo",
-                    token.span,
-                    "Escribe un identificador",
-                );
-                None
+                let kw = token.kind.as_str();
+                if !kw.is_empty() {
+                    let kw = kw.to_string();
+                    self.advance();
+                    Some(kw)
+                } else {
+                    self.error(
+                        "E011",
+                        "Se esperaba un nombre de campo",
+                        token.span,
+                        "Escribe un identificador",
+                    );
+                    None
+                }
             }
         }
     }
@@ -3112,6 +3293,7 @@ impl Spannable for Expr {
             | Expr::Unary { span, .. }
             | Expr::Call { span, .. }
             | Expr::Grouping { span, .. }
+            | Expr::Cast { span, .. }
             | Expr::List { span, .. }
             | Expr::Index { span, .. }
             | Expr::MethodCall { span, .. }

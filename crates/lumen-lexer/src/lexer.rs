@@ -107,7 +107,14 @@ impl Lexer {
                     ));
                 }
                 // Operators and delimiters
-                Some('+') => tokens.push(self.single_token(TokenKind::Plus)),
+                Some('+') => {
+                    if self.peek() == Some('+') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::PlusPlus));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Plus));
+                    }
+                }
                 Some('-') => tokens.push(self.single_token(TokenKind::Minus)),
                 Some('*') => tokens.push(self.single_token(TokenKind::Star)),
                 Some('/') => tokens.push(self.single_token(TokenKind::Slash)),
@@ -146,7 +153,10 @@ impl Lexer {
                     }
                 }
                 Some('<') => {
-                    if self.peek() == Some('=') {
+                    if self.peek() == Some('<') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::ShiftLeft));
+                    } else if self.peek() == Some('=') {
                         self.advance();
                         tokens.push(self.double_token(TokenKind::LessEqual));
                     } else {
@@ -154,7 +164,10 @@ impl Lexer {
                     }
                 }
                 Some('>') => {
-                    if self.peek() == Some('=') {
+                    if self.peek() == Some('>') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::ShiftRight));
+                    } else if self.peek() == Some('=') {
                         self.advance();
                         tokens.push(self.double_token(TokenKind::GreaterEqual));
                     } else {
@@ -167,12 +180,7 @@ impl Lexer {
                         self.advance();
                         tokens.push(self.double_token(TokenKind::AndAnd));
                     } else {
-                        self.errors.push(LexError {
-                            code: "E005".to_string(),
-                            message: "Se esperaba '&&'".to_string(),
-                            pos: self.prev_pos(),
-                            suggestion: "Usa '&&' para el operador lógico Y".to_string(),
-                        });
+                        tokens.push(self.single_token(TokenKind::Ampersand));
                     }
                 }
                 Some('|') => {
@@ -196,6 +204,23 @@ impl Lexer {
                             num.push(self.advance().unwrap());
                         } else {
                             break;
+                        }
+                    }
+                    // Hex literal: 0x8B4513 → decimal value
+                    if num == "0" && matches!(self.peek(), Some('x') | Some('X')) {
+                        self.advance();
+                        let mut hex = String::new();
+                        while let Some(h) = self.peek() {
+                            if h.is_ascii_hexdigit() {
+                                hex.push(self.advance().unwrap());
+                            } else {
+                                break;
+                            }
+                        }
+                        if !hex.is_empty() {
+                            if let Ok(v) = u64::from_str_radix(&hex, 16) {
+                                num = v.to_string();
+                            }
                         }
                     }
                     tokens.push(Token::new(
@@ -533,10 +558,22 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_and() {
-        let (_, errors) = tokenize_with_errors("&");
-        assert!(!errors.is_empty());
-        assert_eq!(errors[0].code, "E005");
+    fn test_ampersand_token() {
+        let tokens = tokenize("&");
+        assert_eq!(tokens, vec![TokenKind::Ampersand, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_shift_tokens() {
+        let tokens = tokenize("<< >>");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::ShiftLeft,
+                TokenKind::ShiftRight,
+                TokenKind::Eof
+            ]
+        );
     }
 
     #[test]

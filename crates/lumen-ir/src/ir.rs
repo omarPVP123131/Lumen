@@ -13,6 +13,7 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Op {
     Add,
+    Concat,
     Sub,
     Mul,
     Div,
@@ -26,6 +27,9 @@ pub enum Op {
     And,
     Or,
     BitOr,
+    BitAnd,
+    ShiftLeft,
+    ShiftRight,
     Negate,
     Not,
 }

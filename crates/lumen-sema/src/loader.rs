@@ -18,6 +18,8 @@ pub enum ModuleError {
 pub struct ModuleLoader {
     search_paths: Vec<PathBuf>,
     visited: HashSet<PathBuf>,
+    emitted: HashSet<PathBuf>,
+    known_prefixes: HashSet<String>,
 }
 
 impl ModuleLoader {
@@ -25,6 +27,8 @@ impl ModuleLoader {
         Self {
             search_paths,
             visited: HashSet::new(),
+            emitted: HashSet::new(),
+            known_prefixes: HashSet::new(),
         }
     }
 
@@ -38,11 +42,13 @@ impl ModuleLoader {
         base_path: &Path,
     ) -> Result<Program, ModuleError> {
         self.visited.clear();
+        self.emitted.clear();
+        self.known_prefixes.clear();
         let program = parse_source(source, base_path)?;
         self.flatten(program, base_path)
     }
 
-    fn flatten(&mut self, program: Program, current_dir: &Path) -> Result<Program, ModuleError> {
+    fn flatten(&mut self, program: Program, current_path: &Path) -> Result<Program, ModuleError> {
         let mut result = Vec::new();
         for node in program {
             match node {
@@ -50,7 +56,20 @@ impl ModuleLoader {
                     if path == "ingles" || path == "english" {
                         continue;
                     }
+                    let current_dir = current_path.parent().unwrap_or(Path::new("."));
                     let resolved = self.resolve_path(&path, current_dir)?;
+                    if resolved == current_path {
+                        // Self-import: el archivo se importa a sí mismo por nombre
+                        // (p. ej. `examples/graficos_avanzado.nv` importando
+                        // "graficos_avanzado.nv"). No-op para romper el ciclo.
+                        continue;
+                    }
+                    if !self.emitted.insert(resolved.clone()) {
+                        // Ya aplanado antes (import directo + transitivo):
+                        // p. ej. `tui_core.nv` vía `tui.nv` y también directo.
+                        // La copia ya insertada lleva su prefijo correcto.
+                        continue;
+                    }
                     if !self.visited.insert(resolved.clone()) {
                         return Err(ModuleError::Circular {
                             path: resolved,
@@ -63,7 +82,7 @@ impl ModuleLoader {
                     })?;
                     let imported_program = parse_source(&source, &resolved)?;
                     let parent = resolved.parent().unwrap_or(Path::new("."));
-                    let flat = self.flatten(imported_program, parent)?;
+                    let flat = self.flatten(imported_program, &resolved)?;
                     self.visited.remove(&resolved);
                     let prefix = alias.unwrap_or_else(|| {
                         resolved
@@ -72,8 +91,9 @@ impl ModuleLoader {
                             .unwrap_or("module")
                             .to_string()
                     });
+                    self.known_prefixes.insert(prefix.clone());
                     let mut prefixed = flat;
-                    prefix_program(&mut prefixed, &prefix);
+                    prefix_program(&mut prefixed, &prefix, &self.known_prefixes);
                     result.extend(prefixed);
                 }
                 other => result.push(other),
@@ -174,21 +194,33 @@ fn parse_source(source: &str, path: &Path) -> Result<Program, ModuleError> {
     Ok(program)
 }
 
-fn prefix_program(program: &mut Program, prefix: &str) {
+fn prefix_program(program: &mut Program, prefix: &str, known: &HashSet<String>) {
     let mut locals = HashSet::new();
     for node in program.iter_mut() {
-        prefix_node(node, prefix, &mut locals, true);
+        prefix_node(node, prefix, &mut locals, true, known);
     }
 }
 
-fn prefix_node(node: &mut DeclOrStmt, prefix: &str, locals: &mut HashSet<String>, top_level: bool) {
+fn prefix_node(
+    node: &mut DeclOrStmt,
+    prefix: &str,
+    locals: &mut HashSet<String>,
+    top_level: bool,
+    known: &HashSet<String>,
+) {
     match node {
-        DeclOrStmt::Decl(d) => prefix_decl(d, prefix, locals, top_level),
-        DeclOrStmt::Stmt(s) => prefix_stmt(s, prefix, locals, top_level),
+        DeclOrStmt::Decl(d) => prefix_decl(d, prefix, locals, top_level, known),
+        DeclOrStmt::Stmt(s) => prefix_stmt(s, prefix, locals, top_level, known),
     }
 }
 
-fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_level: bool) {
+fn prefix_decl(
+    decl: &mut Decl,
+    prefix: &str,
+    locals: &mut HashSet<String>,
+    top_level: bool,
+    known: &HashSet<String>,
+) {
     match decl {
         Decl::Variable {
             var_type,
@@ -196,14 +228,16 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             init,
             ..
         } => {
-            prefix_type(var_type, prefix);
+            prefix_type(var_type, prefix, known);
             if top_level {
-                *name = format!("{}_{}", prefix, name);
+                if !is_known_prefixed(name, known) {
+                    *name = format!("{}_{}", prefix, name);
+                }
             } else {
                 locals.insert(name.clone());
             }
             if let Some(expr) = init {
-                prefix_expr(expr, prefix, locals);
+                prefix_expr(expr, prefix, locals, known);
             }
         }
         Decl::Const {
@@ -212,28 +246,32 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             value,
             ..
         } => {
-            prefix_type(var_type, prefix);
+            prefix_type(var_type, prefix, known);
             if top_level {
-                *name = format!("{}_{}", prefix, name);
+                if !is_known_prefixed(name, known) {
+                    *name = format!("{}_{}", prefix, name);
+                }
             } else {
                 locals.insert(name.clone());
             }
-            prefix_expr(value, prefix, locals);
+            prefix_expr(value, prefix, locals, known);
         }
         Decl::Destructure { targets, init, .. } => {
             for target in targets.iter_mut() {
                 if let Some(ref mut t_type) = target.var_type {
-                    prefix_type(t_type, prefix);
+                    prefix_type(t_type, prefix, known);
                 }
                 if target.name != "_" {
                     if top_level {
-                        target.name = format!("{}_{}", prefix, target.name);
+                        if !is_known_prefixed(&target.name, known) {
+                            target.name = format!("{}_{}", prefix, target.name);
+                        }
                     } else {
                         locals.insert(target.name.clone());
                     }
                 }
             }
-            prefix_expr(init, prefix, locals);
+            prefix_expr(init, prefix, locals, known);
         }
         Decl::Function {
             return_type,
@@ -244,14 +282,16 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             ..
         } => {
             let type_params_set: HashSet<String> = type_params.iter().cloned().collect();
-            prefix_type_with_params(return_type, prefix, &type_params_set);
+            prefix_type_with_params(return_type, prefix, &type_params_set, known);
             if top_level {
-                *name = format!("{}_{}", prefix, name);
+                if !is_known_prefixed(name, known) {
+                    *name = format!("{}_{}", prefix, name);
+                }
             }
             for p in params.iter_mut() {
-                prefix_type_with_params(&mut p.param_type, prefix, &type_params_set);
+                prefix_type_with_params(&mut p.param_type, prefix, &type_params_set, known);
                 if let Some(default) = &mut p.default {
-                    prefix_expr(default, prefix, locals);
+                    prefix_expr(default, prefix, locals, known);
                 }
             }
             let mut func_locals = locals.clone();
@@ -259,7 +299,7 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
                 func_locals.insert(p.name.clone());
             }
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut func_locals, false);
+                prefix_node(node, prefix, &mut func_locals, false, known);
             }
         }
         Decl::Struct {
@@ -269,31 +309,37 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             ..
         } => {
             if top_level {
-                *name = format!("{}_{}", prefix, name);
+                if !is_known_prefixed(name, known) {
+                    *name = format!("{}_{}", prefix, name);
+                }
             }
             let type_params_set: HashSet<String> = type_params.iter().cloned().collect();
             for field in fields.iter_mut() {
-                prefix_type_with_params(&mut field.field_type, prefix, &type_params_set);
+                prefix_type_with_params(&mut field.field_type, prefix, &type_params_set, known);
             }
         }
         Decl::Enum { name, variants, .. } => {
             if top_level {
-                *name = format!("{}_{}", prefix, name);
+                if !is_known_prefixed(name, known) {
+                    *name = format!("{}_{}", prefix, name);
+                }
             }
             for variant in variants.iter_mut() {
                 for t in variant.types.iter_mut() {
-                    prefix_type(t, prefix);
+                    prefix_type(t, prefix, known);
                 }
             }
         }
         Decl::Rasgo { name, methods, .. } => {
             if top_level {
-                *name = format!("{}_{}", prefix, name);
+                if !is_known_prefixed(name, known) {
+                    *name = format!("{}_{}", prefix, name);
+                }
             }
             for method in methods.iter_mut() {
-                prefix_type(&mut method.return_type, prefix);
+                prefix_type(&mut method.return_type, prefix, known);
                 for p in method.params.iter_mut() {
-                    prefix_type(&mut p.param_type, prefix);
+                    prefix_type(&mut p.param_type, prefix, known);
                 }
             }
         }
@@ -304,24 +350,30 @@ fn prefix_decl(decl: &mut Decl, prefix: &str, locals: &mut HashSet<String>, top_
             methods,
             ..
         } => {
-            prefix_type(target_type, prefix);
+            prefix_type(target_type, prefix, known);
             for assoc in associated_types.iter_mut() {
-                prefix_type(&mut assoc.target_type, prefix);
+                prefix_type(&mut assoc.target_type, prefix, known);
             }
             for method_decl in methods.iter_mut() {
-                prefix_decl(method_decl, prefix, locals, top_level);
+                prefix_decl(method_decl, prefix, locals, top_level, known);
             }
         }
     }
 }
 
-fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top_level: bool) {
+fn prefix_stmt(
+    stmt: &mut Stmt,
+    prefix: &str,
+    locals: &mut HashSet<String>,
+    _top_level: bool,
+    known: &HashSet<String>,
+) {
     match stmt {
         Stmt::Assignment { name, value, .. } => {
-            if !locals.contains(name.as_str()) {
+            if !locals.contains(name.as_str()) && !is_known_prefixed(name, known) {
                 *name = format!("{}_{}", prefix, name);
             }
-            prefix_expr(value, prefix, locals);
+            prefix_expr(value, prefix, locals, known);
         }
         Stmt::If {
             condition,
@@ -329,25 +381,25 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
             else_body,
             ..
         } => {
-            prefix_expr(condition, prefix, locals);
+            prefix_expr(condition, prefix, locals, known);
             let mut if_locals = locals.clone();
             for node in then_body.iter_mut() {
-                prefix_node(node, prefix, &mut if_locals, false);
+                prefix_node(node, prefix, &mut if_locals, false, known);
             }
             if let Some(body) = else_body {
                 let mut else_locals = locals.clone();
                 for node in body.iter_mut() {
-                    prefix_node(node, prefix, &mut else_locals, false);
+                    prefix_node(node, prefix, &mut else_locals, false, known);
                 }
             }
         }
         Stmt::While {
             condition, body, ..
         } => {
-            prefix_expr(condition, prefix, locals);
+            prefix_expr(condition, prefix, locals, known);
             let mut while_locals = locals.clone();
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut while_locals, false);
+                prefix_node(node, prefix, &mut while_locals, false, known);
             }
         }
         Stmt::For {
@@ -361,15 +413,15 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
             if let Decl::Variable { name, .. } = init.as_mut() {
                 for_locals.insert(name.clone());
             }
-            prefix_expr(condition, prefix, &for_locals);
-            prefix_stmt(update, prefix, &mut for_locals, false);
+            prefix_expr(condition, prefix, &for_locals, known);
+            prefix_stmt(update, prefix, &mut for_locals, false, known);
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut for_locals, false);
+                prefix_node(node, prefix, &mut for_locals, false, known);
             }
         }
         Stmt::Return { value, .. } => {
             if let Some(expr) = value {
-                prefix_expr(expr, prefix, locals);
+                prefix_expr(expr, prefix, locals, known);
             }
         }
         Stmt::ForEach {
@@ -380,19 +432,19 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
         } => {
             let mut foreach_locals = locals.clone();
             foreach_locals.insert(var_name.clone());
-            prefix_expr(expr, prefix, &foreach_locals);
+            prefix_expr(expr, prefix, &foreach_locals, known);
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut foreach_locals, false);
+                prefix_node(node, prefix, &mut foreach_locals, false, known);
             }
         }
         Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
         Stmt::GuardLet {
             value, else_body, ..
         } => {
-            prefix_expr(value, prefix, locals);
+            prefix_expr(value, prefix, locals, known);
             let mut guard_locals = locals.clone();
             for node in else_body.iter_mut() {
-                prefix_node(node, prefix, &mut guard_locals, false);
+                prefix_node(node, prefix, &mut guard_locals, false, known);
             }
         }
         Stmt::Match {
@@ -401,35 +453,40 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
             default,
             ..
         } => {
-            prefix_expr(expr, prefix, locals);
+            prefix_expr(expr, prefix, locals, known);
             for arm in arms.iter_mut() {
-                prefix_expr(&mut arm.value, prefix, locals);
+                prefix_expr(&mut arm.value, prefix, locals, known);
                 if let Some(ref mut guard) = arm.guard {
-                    prefix_expr(guard, prefix, locals);
+                    prefix_expr(guard, prefix, locals, known);
                 }
                 let mut arm_locals = locals.clone();
                 for node in arm.body.iter_mut() {
-                    prefix_node(node, prefix, &mut arm_locals, false);
+                    prefix_node(node, prefix, &mut arm_locals, false, known);
                 }
             }
             if let Some(body) = default {
                 let mut def_locals = locals.clone();
                 for node in body.iter_mut() {
-                    prefix_node(node, prefix, &mut def_locals, false);
+                    prefix_node(node, prefix, &mut def_locals, false, known);
                 }
             }
         }
         Stmt::Expr { expr, .. } => {
-            prefix_expr(expr, prefix, locals);
+            prefix_expr(expr, prefix, locals, known);
         }
         Stmt::FieldAssign { expr, value, .. } => {
-            prefix_expr(expr, prefix, locals);
-            prefix_expr(value, prefix, locals);
+            prefix_expr(expr, prefix, locals, known);
+            prefix_expr(value, prefix, locals, known);
+        }
+        Stmt::ArraySet { arr, index, value, .. } => {
+            prefix_expr(arr, prefix, locals, known);
+            prefix_expr(index, prefix, locals, known);
+            prefix_expr(value, prefix, locals, known);
         }
         Stmt::Block { stmts, .. } => {
             let mut block_locals = locals.clone();
             for node in stmts.iter_mut() {
-                prefix_node(node, prefix, &mut block_locals, false);
+                prefix_node(node, prefix, &mut block_locals, false, known);
             }
         }
         Stmt::Destructure { targets, value, .. } => {
@@ -438,7 +495,7 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
                     target.name = format!("{}_{}", prefix, target.name);
                 }
             }
-            prefix_expr(value, prefix, locals);
+            prefix_expr(value, prefix, locals, known);
         }
         Stmt::IfLet {
             value,
@@ -446,33 +503,33 @@ fn prefix_stmt(stmt: &mut Stmt, prefix: &str, locals: &mut HashSet<String>, _top
             else_body,
             ..
         } => {
-            prefix_expr(value, prefix, locals);
+            prefix_expr(value, prefix, locals, known);
             for node in then_body.iter_mut() {
-                prefix_node(node, prefix, locals, false);
+                prefix_node(node, prefix, locals, false, known);
             }
             if let Some(eb) = else_body {
                 for node in eb.iter_mut() {
-                    prefix_node(node, prefix, locals, false);
+                    prefix_node(node, prefix, locals, false, known);
                 }
             }
         }
     }
 }
 
-fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
+fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &HashSet<String>) {
     match expr {
         Expr::Int { .. } | Expr::Float { .. } | Expr::Str { .. } | Expr::Bool { .. } => {}
         Expr::Ident { name, .. } => {
-            if !locals.contains(name.as_str()) && !is_builtin(name) {
+            if !locals.contains(name.as_str()) && !is_builtin(name) && !is_known_prefixed(name, known) {
                 *name = format!("{}_{}", prefix, name);
             }
         }
         Expr::Binary { left, right, .. } => {
-            prefix_expr(left, prefix, locals);
-            prefix_expr(right, prefix, locals);
+            prefix_expr(left, prefix, locals, known);
+            prefix_expr(right, prefix, locals, known);
         }
         Expr::Unary { operand, .. } => {
-            prefix_expr(operand, prefix, locals);
+            prefix_expr(operand, prefix, locals, known);
         }
         Expr::Call {
             callee,
@@ -480,20 +537,40 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             type_args,
             ..
         } => {
-            prefix_expr(callee, prefix, locals);
+            prefix_expr(callee, prefix, locals, known);
             for arg in args.iter_mut() {
-                prefix_expr(arg, prefix, locals);
+                prefix_expr(arg, prefix, locals, known);
             }
             for ta in type_args.iter_mut() {
-                prefix_type(ta, prefix);
+                prefix_type(ta, prefix, known);
             }
         }
         Expr::Grouping { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals);
+            prefix_expr(inner, prefix, locals, known);
+        }
+        Expr::Cast {
+            expr: inner,
+            cast_type,
+            ..
+        } => {
+            prefix_expr(inner, prefix, locals, known);
+            if let Type::Struct(name) = cast_type {
+                if !name.is_empty() && name != "Infer" && !is_known_prefixed(name, known) {
+                    let prefixed = format!("{}{}", prefix, name);
+                    *name = prefixed;
+                }
+            } else if let Type::Lista(inner_t) = cast_type {
+                if let Type::Struct(name) = inner_t.as_mut() {
+                    if !name.is_empty() && name != "Infer" && !is_known_prefixed(name, known) {
+                        let prefixed = format!("{}{}", prefix, name);
+                        *name = prefixed;
+                    }
+                }
+            }
         }
         Expr::List { items, .. } => {
             for item in items.iter_mut() {
-                prefix_expr(item, prefix, locals);
+                prefix_expr(item, prefix, locals, known);
             }
         }
         Expr::Index {
@@ -501,25 +578,25 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             index,
             ..
         } => {
-            prefix_expr(target, prefix, locals);
-            prefix_expr(index, prefix, locals);
+            prefix_expr(target, prefix, locals, known);
+            prefix_expr(index, prefix, locals, known);
         }
         Expr::MethodCall {
             expr: target, args, ..
         } => {
-            prefix_expr(target, prefix, locals);
+            prefix_expr(target, prefix, locals, known);
             for arg in args.iter_mut() {
-                prefix_expr(arg, prefix, locals);
+                prefix_expr(arg, prefix, locals, known);
             }
         }
         Expr::Lambda { params, body, .. } => {
             let mut lambda_locals = locals.clone();
             for p in params.iter_mut() {
-                prefix_type(&mut p.param_type, prefix);
+                prefix_type(&mut p.param_type, prefix, known);
                 lambda_locals.insert(p.name.clone());
             }
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut lambda_locals, false);
+                prefix_node(node, prefix, &mut lambda_locals, false, known);
             }
         }
         Expr::StructInit {
@@ -530,35 +607,35 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
         } => {
             *struct_name = format!("{}_{}", prefix, struct_name);
             for (_, value) in fields.iter_mut() {
-                prefix_expr(value, prefix, locals);
+                prefix_expr(value, prefix, locals, known);
             }
             for ta in type_args.iter_mut() {
-                prefix_type(ta, prefix);
+                prefix_type(ta, prefix, known);
             }
         }
         Expr::FieldAccess { expr: target, .. } => {
-            prefix_expr(target, prefix, locals);
+            prefix_expr(target, prefix, locals, known);
         }
         Expr::Exito { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals);
+            prefix_expr(inner, prefix, locals, known);
         }
         Expr::Error { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals);
+            prefix_expr(inner, prefix, locals, known);
         }
         Expr::Intentar { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals);
+            prefix_expr(inner, prefix, locals, known);
         }
         Expr::Algun { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals);
+            prefix_expr(inner, prefix, locals, known);
         }
         Expr::Ninguno { .. } => {}
         Expr::Tuple { items, .. } => {
             for item in items.iter_mut() {
-                prefix_expr(item, prefix, locals);
+                prefix_expr(item, prefix, locals, known);
             }
         }
         Expr::TupleAccess { expr: target, .. } => {
-            prefix_expr(target, prefix, locals);
+            prefix_expr(target, prefix, locals, known);
         }
         Expr::EnumCtor {
             enum_name, args, ..
@@ -567,7 +644,7 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
                 *enum_name = format!("{}_{}", prefix, enum_name);
             }
             for arg in args.iter_mut() {
-                prefix_expr(arg, prefix, locals);
+                prefix_expr(arg, prefix, locals, known);
             }
         }
         Expr::Ternary {
@@ -576,65 +653,72 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>) {
             false_branch,
             ..
         } => {
-            prefix_expr(condition, prefix, locals);
-            prefix_expr(true_branch, prefix, locals);
-            prefix_expr(false_branch, prefix, locals);
+            prefix_expr(condition, prefix, locals, known);
+            prefix_expr(true_branch, prefix, locals, known);
+            prefix_expr(false_branch, prefix, locals, known);
         }
         Expr::Esperar { expr, .. } => {
-            prefix_expr(expr, prefix, locals);
+            prefix_expr(expr, prefix, locals, known);
         }
     }
 }
 
-fn prefix_type_with_params(t: &mut Type, prefix: &str, type_params: &HashSet<String>) {
+fn prefix_type_with_params(
+    t: &mut Type,
+    prefix: &str,
+    type_params: &HashSet<String>,
+    known: &HashSet<String>,
+) {
     match t {
         Type::Struct(name) if type_params.contains(name.as_str()) => {
             // Don't prefix type parameter names
         }
         Type::GenericStruct { name, args } => {
-            if !type_params.contains(name.as_str()) {
+            if !type_params.contains(name.as_str()) && !is_known_prefixed(name, known) {
                 *name = format!("{}_{}", prefix, name);
             }
             for arg in args.iter_mut() {
-                prefix_type_with_params(arg, prefix, type_params);
+                prefix_type_with_params(arg, prefix, type_params, known);
             }
         }
-        Type::Lista(inner) => prefix_type_with_params(inner, prefix, type_params),
+        Type::Lista(inner) => prefix_type_with_params(inner, prefix, type_params, known),
         Type::Func {
             param_types,
             return_type,
         } => {
             for p in param_types.iter_mut() {
-                prefix_type_with_params(p, prefix, type_params);
+                prefix_type_with_params(p, prefix, type_params, known);
             }
-            prefix_type_with_params(return_type, prefix, type_params);
+            prefix_type_with_params(return_type, prefix, type_params, known);
         }
-        Type::Struct(name) if name != "Infer" => {
+        Type::Struct(name) if name != "Infer" && !is_known_prefixed(name, known) => {
             *name = format!("{}_{}", prefix, name);
         }
         Type::Resultado { ok, err } => {
-            prefix_type_with_params(ok, prefix, type_params);
-            prefix_type_with_params(err, prefix, type_params);
+            prefix_type_with_params(ok, prefix, type_params, known);
+            prefix_type_with_params(err, prefix, type_params, known);
         }
         Type::Opcion(inner) => {
-            prefix_type_with_params(inner, prefix, type_params);
+            prefix_type_with_params(inner, prefix, type_params, known);
         }
         Type::Tuple(types) => {
             for t in types.iter_mut() {
-                prefix_type_with_params(t, prefix, type_params);
+                prefix_type_with_params(t, prefix, type_params, known);
             }
         }
         _ => {}
     }
 }
 
-fn prefix_type(t: &mut Type, prefix: &str) {
+fn prefix_type(t: &mut Type, prefix: &str, known: &HashSet<String>) {
     match t {
-        Type::Lista(inner) => prefix_type(inner, prefix),
+        Type::Lista(inner) => prefix_type(inner, prefix, known),
         Type::GenericStruct { name, args } => {
-            *name = format!("{}_{}", prefix, name);
+            if !is_known_prefixed(name, known) {
+                *name = format!("{}_{}", prefix, name);
+            }
             for arg in args.iter_mut() {
-                prefix_type(arg, prefix);
+                prefix_type(arg, prefix, known);
             }
         }
         Type::Func {
@@ -642,29 +726,35 @@ fn prefix_type(t: &mut Type, prefix: &str) {
             return_type,
         } => {
             for p in param_types.iter_mut() {
-                prefix_type(p, prefix);
+                prefix_type(p, prefix, known);
             }
-            prefix_type(return_type, prefix);
+            prefix_type(return_type, prefix, known);
         }
         Type::Struct(name) => {
-            if name != "Infer" {
+            if name != "Infer" && !is_known_prefixed(name, known) {
                 *name = format!("{}_{}", prefix, name);
             }
         }
         Type::Resultado { ok, err } => {
-            prefix_type(ok, prefix);
-            prefix_type(err, prefix);
+            prefix_type(ok, prefix, known);
+            prefix_type(err, prefix, known);
         }
         Type::Opcion(inner) => {
-            prefix_type(inner, prefix);
+            prefix_type(inner, prefix, known);
         }
         Type::Tuple(types) => {
             for t in types.iter_mut() {
-                prefix_type(t, prefix);
+                prefix_type(t, prefix, known);
             }
         }
         _ => {}
     }
+}
+
+fn is_known_prefixed(name: &str, known: &HashSet<String>) -> bool {
+    known
+        .iter()
+        .any(|p| !p.is_empty() && name.starts_with(&format!("{}_", p)))
 }
 
 fn is_builtin(name: &str) -> bool {

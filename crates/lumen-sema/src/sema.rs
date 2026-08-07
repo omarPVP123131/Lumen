@@ -434,6 +434,7 @@ impl SemanticAnalyzer {
                 self.resolve_op_expr_var(right, var_types);
             }
             Expr::Grouping { expr, .. } => self.resolve_op_expr_var(expr, var_types),
+            Expr::Cast { expr, .. } => self.resolve_op_expr_var(expr, var_types),
             Expr::Unary { operand, .. } => self.resolve_op_expr_var(operand, var_types),
             Expr::Call { callee, args, .. } => {
                 self.resolve_op_expr_var(callee, var_types);
@@ -558,7 +559,8 @@ impl SemanticAnalyzer {
             BinOp::LessEqual => Some("menor_o_igual"),
             BinOp::Greater => Some("mayor"),
             BinOp::GreaterEqual => Some("mayor_o_igual"),
-            BinOp::And | BinOp::Or | BinOp::BitOr => None,
+            BinOp::And | BinOp::Or | BinOp::BitOr | BinOp::BitAnd | BinOp::ShiftLeft
+            | BinOp::ShiftRight | BinOp::Concat => None,
         }
     }
 
@@ -1366,6 +1368,40 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
+            Stmt::ArraySet { arr, index, value, span } => {
+                let arr_type = self.analyze_expr(arr);
+                let _ = self.analyze_expr(index);
+                let value_type = self.analyze_expr(value);
+                match &arr_type {
+                    TypeInfo::Lista(inner) => {
+                        if !can_assign(inner, &value_type)
+                            && !(**inner == TypeInfo::Numero || value_type == TypeInfo::Numero)
+                        {
+                            self.errors.push(SemError {
+                                code: "E031".to_string(),
+                                message: format!(
+                                    "No puedes asignar un valor de tipo '{:?}' a un elemento de tipo '{:?}'",
+                                    value_type, inner
+                                ),
+                                span: *span,
+                                suggestion: "Usa un valor del mismo tipo que la lista".to_string(),
+                            });
+                        }
+                    }
+                    _ => {
+                        self.errors.push(SemError {
+                            code: "E060".to_string(),
+                            message: format!(
+                                "Solo puedes asignar por índice a listas, no a '{:?}'",
+                                arr_type
+                            ),
+                            span: *span,
+                            suggestion: "Usa una lista como destino de la asignación".to_string(),
+                        });
+                    }
+                }
+                TypeInfo::Void
+            }
             Stmt::Expr { expr, .. } => self.analyze_expr(expr),
             Stmt::Block { stmts, .. } => {
                 self.scopes.push(Scope::new());
@@ -1507,7 +1543,8 @@ impl SemanticAnalyzer {
                         BinOp::LessEqual => "menor_o_igual",
                         BinOp::Greater => "mayor",
                         BinOp::GreaterEqual => "mayor_o_igual",
-                        BinOp::And | BinOp::Or | BinOp::BitOr => "",
+                        BinOp::And | BinOp::Or | BinOp::BitOr | BinOp::BitAnd | BinOp::ShiftLeft
+                        | BinOp::ShiftRight | BinOp::Concat => "",
                     }
                 };
                 let has_op_overload = |t: &TypeInfo, op: &BinOp| -> bool {
@@ -1534,7 +1571,45 @@ impl SemanticAnalyzer {
                     false
                 };
                 match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::BitOr => {
+                    BinOp::Concat => {
+                        if lt == TypeInfo::Texto && rt == TypeInfo::Texto {
+                            TypeInfo::Texto
+                        } else if let (TypeInfo::Lista(li), TypeInfo::Lista(ri)) = (&lt, &rt) {
+                            if li == ri || **li == TypeInfo::Numero || **ri == TypeInfo::Numero {
+                                TypeInfo::Lista(Box::new(if **li == TypeInfo::Numero {
+                                    ri.as_ref().clone()
+                                } else {
+                                    li.as_ref().clone()
+                                }))
+                            } else {
+                                self.errors.push(SemError {
+                                    code: "E035".to_string(),
+                                    message: format!(
+                                        "No se puede concatenar listas de tipos diferentes: {:?} y {:?}",
+                                        lt, rt
+                                    ),
+                                    span: *span,
+                                    suggestion: "Usa el mismo tipo de elemento en ambas listas"
+                                        .to_string(),
+                                });
+                                TypeInfo::Void
+                            }
+                        } else {
+                            self.errors.push(SemError {
+                                code: "E035".to_string(),
+                                message: format!(
+                                    "El operador ++ requiere texto o listas: {:?} y {:?}",
+                                    lt, rt
+                                ),
+                                span: *span,
+                                suggestion: "Usa texto o listas con el mismo tipo de elemento"
+                                    .to_string(),
+                            });
+                            TypeInfo::Void
+                        }
+                    }
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::BitOr
+                    | BinOp::BitAnd | BinOp::ShiftLeft | BinOp::ShiftRight => {
                         if matches!(op, BinOp::Add)
                             && ((lt == TypeInfo::Texto
                                 && (rt == TypeInfo::Texto
@@ -1599,7 +1674,8 @@ impl SemanticAnalyzer {
                         }
                     }
                     BinOp::Less | BinOp::LessEqual | BinOp::Greater | BinOp::GreaterEqual => {
-                        if (is_numeric(&lt) && is_numeric(&rt))
+                        if is_numeric(&lt)
+                            || is_numeric(&rt)
                             || lt == rt
                             || has_op_overload(&lt, op)
                         {
@@ -1618,18 +1694,8 @@ impl SemanticAnalyzer {
                         }
                     }
                     BinOp::And | BinOp::Or => {
-                        if lt != TypeInfo::Booleano || rt != TypeInfo::Booleano {
-                            self.errors.push(SemError {
-                                code: "E037".to_string(),
-                                message: format!(
-                                    "Operador lógico requiere booleanos, no '{:?}' y '{:?}'",
-                                    lt, rt
-                                ),
-                                span: *span,
-                                suggestion: "Ambos operandos deben ser de tipo 'booleano'"
-                                    .to_string(),
-                            });
-                        }
+                        // Truthiness dinámica (paridad con el VM): cualquier valor
+                        // es válido; el cortocircuito evalúa is_truthy en runtime.
                         TypeInfo::Booleano
                     }
                 }
@@ -1672,6 +1738,7 @@ impl SemanticAnalyzer {
             } => {
                 let callee_inner = match callee.as_ref() {
                     Expr::Grouping { expr, .. } => expr.as_ref(),
+                    Expr::Cast { expr, .. } => expr.as_ref(),
                     other => other,
                 };
                 let mut arg_types = Vec::new();
@@ -2956,6 +3023,34 @@ impl SemanticAnalyzer {
                 }
             }
             Expr::Grouping { expr, .. } => self.analyze_expr(expr),
+            Expr::Cast { expr, cast_type, span } => {
+                self.analyze_expr(expr);
+                let ti = match cast_type {
+                    Type::Entero => TypeInfo::Entero,
+                    Type::Decimal => TypeInfo::Decimal,
+                    Type::Numero => TypeInfo::Numero,
+                    Type::Texto => TypeInfo::Texto,
+                    Type::Booleano => TypeInfo::Booleano,
+                    Type::Lista(inner) => {
+                        let it = self.type_to_info(inner.as_ref().clone());
+                        TypeInfo::Lista(Box::new(it))
+                    }
+                    Type::Struct(name) => {
+                        let t = self.type_to_info(Type::Struct(name.clone()));
+                        if t == TypeInfo::Void {
+                            self.errors.push(SemError {
+                                code: "E060".to_string(),
+                                message: format!("El tipo '{}' no existe para el cast", name),
+                                span: *span,
+                                suggestion: "Usa un tipo válido después de 'como'".to_string(),
+                            });
+                        }
+                        t
+                    }
+                    _ => TypeInfo::Void,
+                };
+                ti
+            }
             Expr::Exito { expr, span } => {
                 let inner = self.analyze_expr(expr);
                 if inner == TypeInfo::Void {
@@ -3613,15 +3708,19 @@ mod tests {
     }
 
     #[test]
-    fn test_comparison_type_error() {
+    fn test_comparison_numeric_any_type() {
+        // Numeric comparisons accept any type on either side (runtime truthiness,
+        // parity con el VM: `i < n` con tipos mixtos es válido).
         let errors = analyze(r#"booleano b = 1 < "hola";"#);
-        assert!(!errors.is_empty());
+        assert!(errors.is_empty());
     }
 
     #[test]
-    fn test_logical_type_error() {
+    fn test_logical_dynamic_truthiness() {
+        // && / || aceptan cualquier valor (truthiness dinámica en runtime,
+        // parity con el VM: `mientras i < n && cs[i] != "\n"`).
         let errors = analyze("booleano b = verdadero && 1;");
-        assert!(!errors.is_empty());
+        assert!(errors.is_empty());
     }
 
     #[test]

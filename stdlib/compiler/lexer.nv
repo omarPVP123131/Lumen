@@ -4,6 +4,7 @@
 
 funcion booleano _lx_es_ident(texto c) { retornar (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c == "_"; }
 funcion booleano _lx_es_digit(texto c) { retornar c >= "0" && c <= "9"; }
+funcion booleano _lx_es_hex(texto c) { retornar (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F"); }
 funcion booleano _lx_es_punct(texto c) { retornar c == ";" || c == "(" || c == ")" || c == "{" || c == "}" || c == "," || c == "." || c == "[" || c == "]" || c == ":"; }
 
 funcion numero lexer_tokenizar(texto s) {
@@ -66,6 +67,30 @@ funcion numero lexer_tokenizar(texto s) {
         si _lx_es_digit(c) {
             entero st = i;
             numero dot = 0;
+            // Hex literal: 0x8B4513 → valor decimal
+            si chars[st] == "0" && st + 1 < n && (chars[st + 1] == "x" || chars[st + 1] == "X") {
+                i = st + 2;
+                entero hv = 0;
+                mientras i < n && _lx_es_hex(chars[i]) {
+                    texto ch = chars[i];
+                    entero dv = 0;
+                    si ch >= "0" && ch <= "9" { dv = __str_a_entero(ch); }
+                    sino {
+                        entero oc = __str_ord(ch)[0];
+                        si ch >= "a" && ch <= "f" { dv = oc - 97 + 10; }
+                        sino { dv = oc - 65 + 10; }
+                    }
+                    hv = hv * 16 + dv;
+                    i = i + 1;
+                }
+                texto num = a_texto(hv);
+                entero adv = i - st;
+                numero t = __map_nuevo();
+                t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num);
+                t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+                tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+                cl = cl + adv; continuar;
+            }
             mientras i < n && (_lx_es_digit(chars[i]) ||
                 (chars[i] == "." && i + 1 < n && _lx_es_digit(chars[i + 1]) &&
                  dot == 0 && i > st && chars[st - 1] != ".")) {
@@ -131,7 +156,7 @@ funcion numero lexer_tokenizar(texto s) {
         // Multi-character operators (|| && == != <= >=)
         si i + 1 < n {
             texto op2 = c + chars[i + 1];
-            si op2 == "||" || op2 == "&&" || op2 == "==" || op2 == "!=" || op2 == "<=" || op2 == ">=" {
+            si op2 == "||" || op2 == "&&" || op2 == "==" || op2 == "!=" || op2 == "<=" || op2 == ">=" || op2 == "<<" || op2 == ">>" || op2 == "++" {
                 numero t = __map_nuevo();
                 t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op2);
                 t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);

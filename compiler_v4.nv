@@ -7,6 +7,7 @@
 
 funcion booleano _lx_es_ident(texto c) { retornar (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c == "_"; }
 funcion booleano _lx_es_digit(texto c) { retornar c >= "0" && c <= "9"; }
+funcion booleano _lx_es_hex(texto c) { retornar (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F"); }
 funcion booleano _lx_es_punct(texto c) { retornar c == ";" || c == "(" || c == ")" || c == "{" || c == "}" || c == "," || c == "." || c == "[" || c == "]" || c == ":"; }
 
 funcion numero lexer_tokenizar(texto s) {
@@ -32,6 +33,10 @@ funcion numero lexer_tokenizar(texto s) {
     kw = __map_poner(kw, "opcion", 1); kw = __map_poner(kw, "resultado", 1);
     kw = __map_poner(kw, "sea", 1); kw = __map_poner(kw, "let", 1);
     kw = __map_poner(kw, "en", 1); kw = __map_poner(kw, "in", 1);
+    kw = __map_poner(kw, "algun", 1); kw = __map_poner(kw, "some", 1);
+    kw = __map_poner(kw, "ninguno", 1); kw = __map_poner(kw, "none", 1);
+    kw = __map_poner(kw, "rasgo", 1); kw = __map_poner(kw, "trait", 1);
+    kw = __map_poner(kw, "impl", 1);
     
     // Normalize CRLF to LF and remove stray CR to avoid off-by-one tokenization
     texto s2 = __str_reemplazar(s, "\r\n", "\n");
@@ -64,7 +69,37 @@ funcion numero lexer_tokenizar(texto s) {
         
         si _lx_es_digit(c) {
             entero st = i;
-            mientras i < n && (_lx_es_digit(chars[i]) || chars[i] == ".") { i = i + 1; }
+            numero dot = 0;
+            // Hex literal: 0x8B4513 → valor decimal
+            si chars[st] == "0" && st + 1 < n && (chars[st + 1] == "x" || chars[st + 1] == "X") {
+                i = st + 2;
+                entero hv = 0;
+                mientras i < n && _lx_es_hex(chars[i]) {
+                    texto ch = chars[i];
+                    entero dv = 0;
+                    si ch >= "0" && ch <= "9" { dv = __str_a_entero(ch); }
+                    sino {
+                        entero oc = __str_ord(ch)[0];
+                        si ch >= "a" && ch <= "f" { dv = oc - 97 + 10; }
+                        sino { dv = oc - 65 + 10; }
+                    }
+                    hv = hv * 16 + dv;
+                    i = i + 1;
+                }
+                texto num = a_texto(hv);
+                entero adv = i - st;
+                numero t = __map_nuevo();
+                t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num);
+                t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+                tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+                cl = cl + adv; continuar;
+            }
+            mientras i < n && (_lx_es_digit(chars[i]) ||
+                (chars[i] == "." && i + 1 < n && _lx_es_digit(chars[i + 1]) &&
+                 dot == 0 && i > st && chars[st - 1] != ".")) {
+                si chars[i] == "." { dot = 1; }
+                i = i + 1;
+            }
             texto num = sub_from_chars(chars, st, i);
             entero adv = i - st;
             numero t = __map_nuevo();
@@ -124,7 +159,7 @@ funcion numero lexer_tokenizar(texto s) {
         // Multi-character operators (|| && == != <= >=)
         si i + 1 < n {
             texto op2 = c + chars[i + 1];
-            si op2 == "||" || op2 == "&&" || op2 == "==" || op2 == "!=" || op2 == "<=" || op2 == ">=" {
+            si op2 == "||" || op2 == "&&" || op2 == "==" || op2 == "!=" || op2 == "<=" || op2 == ">=" || op2 == "<<" || op2 == ">>" || op2 == "++" {
                 numero t = __map_nuevo();
                 t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op2);
                 t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
@@ -210,6 +245,13 @@ funcion texto sub_from_chars(lista<texto> cs, entero st, entero fin) {
 // Architecture: Map-based state (passed as parameter, updated via _res pattern).
 // Each parse function returns {st: updated_state, node: ast_node}.
 
+// Funciones anónimas (IIFE) hoisteadas durante el parseo — se fusionan al Programa
+lista<numero> lambdas_hoistadas = [];
+entero lambda_cnt = 0;
+// Traits/impl: tipo -> {metodo -> mangled}; variables -> tipo (para resolver n.metodo())
+numero mapa_impls = __map_nuevo();
+numero mapa_tipos_var = __map_nuevo();
+
 // ── State Helpers ──────────────────────────────────────────────
 funcion numero _st_tk(numero st) {
     numero pos = __map_obtener(st, "pos");
@@ -259,16 +301,20 @@ funcion booleano _st_tp(numero st) {
     texto v = a_texto(_st_tv(st));
     retornar _st_tt(st) == 6 && (v == "entero" || v == "texto" ||
            v == "decimal" || v == "booleano" || v == "numero" || v == "void" ||
-           v == "lista" || v == "diccionario");
+           v == "lista" || v == "diccionario" ||
+           v == "opcion" || v == "resultado");
 }
 
-// Avanza tras el tipo en una declaración, saltando genéricos "lista<entero>"
+// Avanza tras el tipo en una declaración, saltando genéricos "lista<entero>",
+// "opcion<entero>", "resultado<entero, texto>"
 funcion numero _st_tp_skip(numero st) {
     st = _st_adv(st);
     si _st_ch(st, 4, "<") {
         st = _st_adv(st);
-        si _st_tp(st) { st = _st_adv(st); }
-        si _st_ch(st, 4, ">") { st = _st_adv(st); }
+        mientras (!_st_eof(st)) {
+            si _st_ch(st, 4, ">") { st = _st_adv(st); romper; }
+            st = _st_adv(st);
+        }
     }
     retornar st;
 }
@@ -327,12 +373,88 @@ funcion numero _parse_pr(numero st) {
         retornar _res(st, n);
     }
 
+    // Función anónima (IIFE): funcion(params) { body } (args)
+    si (tt == 6 && (tvs == "funcion" || tvs == "function")) {
+        numero st_chk = _st_adv(st);
+        si (_st_ch(st_chk, 5, "(")) {
+            st = _st_adv(st_chk);
+            numero lams = __map_nuevo();
+            numero lc = 0;
+            mientras (!_st_eof(st)) {
+                si (_st_ch(st, 5, ")")) { romper; }
+                si (lc > 0) {
+                    si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                }
+                texto pt2 = a_texto(_st_tv(st));
+                si (_st_tp(st)) {
+                    st = _st_tp_skip(st);
+                } sino {
+                    st = _st_adv(st);
+                }
+                texto pn2 = a_texto(_st_tv(st));
+                st = _st_adv(st);
+                numero pm2 = __map_nuevo();
+                pm2 = __map_poner(pm2, "nombre", pn2);
+                pm2 = __map_poner(pm2, "tipo", pt2);
+                lams = __map_poner(lams, a_texto(lc), pm2);
+                lc = lc + 1;
+            }
+            st = _st_adv(st);
+            lams = __map_poner(lams, "cnt", lc);
+            numero rf = _parse_blk(st);
+            numero fbody = __map_obtener(rf, "node");
+            st = __map_obtener(rf, "st");
+            texto lname = "__lambda_" + a_texto(lambda_cnt);
+            numero lf = __map_nuevo();
+            lf = __map_poner(lf, "tipo", "Func");
+            lf = __map_poner(lf, "nombre", lname);
+            lf = __map_poner(lf, "params", lams);
+            lf = __map_poner(lf, "cuerpo", fbody);
+            lambdas_hoistadas.agregar(lf);
+            lambda_cnt = lambda_cnt + 1;
+            // IIFE: si sigue (args), construye Call(callee=lname)
+            si (_st_ch(st, 5, "(")) {
+                st = _st_adv(st);
+                numero largs = __map_nuevo();
+                numero lac = 0;
+                mientras (!_st_eof(st)) {
+                    si (_st_ch(st, 5, ")")) { romper; }
+                    si (lac > 0) {
+                        si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                    }
+                    numero rea = _parse_expr(st);
+                    largs = __map_poner(largs, a_texto(lac), __map_obtener(rea, "node"));
+                    st = __map_obtener(rea, "st");
+                    lac = lac + 1;
+                }
+                st = _st_adv(st);
+                largs = __map_poner(largs, "cnt", lac);
+                numero cn = __map_nuevo();
+                cn = __map_poner(cn, "tipo", "Call");
+                cn = __map_poner(cn, "callee", lname);
+                cn = __map_poner(cn, "args", largs);
+                retornar _res(st, cn);
+            }
+            numero lid = __map_nuevo();
+            lid = __map_poner(lid, "tipo", "Ident");
+            lid = __map_poner(lid, "nombre", lname);
+            retornar _res(st, lid);
+        }
+    }
+
     si (tt == 6 && (tvs == "verdadero" || tvs == "true" ||
                      tvs == "falso" || tvs == "false")) {
         st = _st_adv(st);
         numero n = __map_nuevo();
         n = __map_poner(n, "tipo", "Bool");
         n = __map_poner(n, "v", tvs);
+        retornar _res(st, n);
+    }
+
+    si (tt == 6 && (tvs == "ninguno" || tvs == "none")) {
+        st = _st_adv(st);
+        numero n = __map_nuevo();
+        n = __map_poner(n, "tipo", "Ninguno");
         retornar _res(st, n);
     }
 
@@ -354,7 +476,8 @@ funcion numero _parse_pr(numero st) {
                 st_scan = _st_adv(st_scan);
             }
             numero st_despues_gt = _st_adv(st_scan);
-            si (_st_ch(st_scan, 4, ">") && _st_ch(st_despues_gt, 5, "(")) {
+            si (_st_ch(st_scan, 4, ">") &&
+                (_st_ch(st_despues_gt, 5, "(") || _st_ch(st_despues_gt, 5, "{"))) {
                 st = st_despues_gt;
             } sino {
                 st = st_pre;
@@ -477,6 +600,15 @@ funcion numero _parse_pr(numero st) {
             st = _st_adv(st);
             texto mn = a_texto(_st_tv(st));
             st = _st_adv(st);
+            numero mn_dig = 1;
+            numero mni = 0;
+            mientras mni < largo(mn) {
+                texto ch = __str_subcadena(mn, mni, mni + 1);
+                si !(ch >= "0" && ch <= "9") { mn_dig = 0; }
+                mni = mni + 1;
+            }
+            numero idx_int = 0;
+            si (mn_dig == 1) { idx_int = __str_a_entero(mn); }
             si (_st_ch(st, 5, "(")) {
                 st = _st_adv(st);
                 numero margs = __map_nuevo();
@@ -496,9 +628,25 @@ funcion numero _parse_pr(numero st) {
                 }
                 st = _st_adv(st);
                 margs = __map_poner(margs, "cnt", mc);
+                // Resolver método de trait: n.metodo() → Tipo_Trait_metodo(n, ...)
+                texto callee_final = mn;
+                si a_texto(__map_obtener(base, "tipo")) == "Ident" {
+                    texto bn = a_texto(__map_obtener(base, "nombre"));
+                    numero bt_v = __map_obtener(mapa_tipos_var, bn);
+                    si a_texto(__tipo_de(bt_v)) == "texto" {
+                        texto bt = a_texto(bt_v);
+                        numero impl_t = __map_obtener(mapa_impls, bt);
+                        si a_texto(__tipo_de(impl_t)) == "diccionario" || a_texto(__tipo_de(impl_t)) == "mapa" {
+                            numero m_v = __map_obtener(impl_t, mn);
+                            si a_texto(__tipo_de(m_v)) == "texto" && a_texto(m_v) != "" {
+                                callee_final = a_texto(m_v);
+                            }
+                        }
+                    }
+                }
                 numero nm2 = __map_nuevo();
                 nm2 = __map_poner(nm2, "tipo", "Call");
-                nm2 = __map_poner(nm2, "callee", mn);
+                nm2 = __map_poner(nm2, "callee", callee_final);
                 nm2 = __map_poner(nm2, "args", margs);
                 si ((mn == "agregar" || mn == "push") &&
                     a_texto(__map_obtener(base, "tipo")) == "Ident") {
@@ -513,8 +661,13 @@ funcion numero _parse_pr(numero st) {
                 }
             } sino {
                 numero fld = __map_nuevo();
-                fld = __map_poner(fld, "tipo", "Texto");
-                fld = __map_poner(fld, "v", mn);
+                si (mn_dig == 1) {
+                    fld = __map_poner(fld, "tipo", "Literal");
+                    fld = __map_poner(fld, "v", idx_int);
+                } sino {
+                    fld = __map_poner(fld, "tipo", "Texto");
+                    fld = __map_poner(fld, "v", mn);
+                }
                 numero n2 = __map_nuevo();
                 n2 = __map_poner(n2, "tipo", "Index");
                 n2 = __map_poner(n2, "obj", base);
@@ -527,11 +680,69 @@ funcion numero _parse_pr(numero st) {
 
     si (_st_ch(st, 5, "(")) {
         st = _st_adv(st);
-        numero re = _parse_expr(st);
-        numero _en = __map_obtener(re, "node");
-        st = __map_obtener(re, "st");
+        numero telems = __map_nuevo();
+        numero tec = 0;
+        numero es_tupla = 0;
+        mientras (!_st_eof(st)) {
+            si (_st_ch(st, 5, ")")) { romper; }
+            si (tec > 0) {
+                si (_st_ch(st, 5, ",")) { es_tupla = 1; st = _st_adv(st); }
+            }
+            numero re = _parse_expr(st);
+            numero el = __map_obtener(re, "node");
+            st = __map_obtener(re, "st");
+            telems = __map_poner(telems, a_texto(tec), el);
+            tec = tec + 1;
+            si (!_st_ch(st, 5, ",") && !_st_ch(st, 5, ")")) { romper; }
+        }
         st = _st_adv(st);
-        retornar _res(st, _en);
+        si (es_tupla == 1) {
+            telems = __map_poner(telems, "cnt", tec);
+            numero nt = __map_nuevo();
+            nt = __map_poner(nt, "tipo", "Tupla");
+            nt = __map_poner(nt, "elementos", telems);
+            // Postfix inline: .0 / .1 / [i] sobre tuplas
+            mientras (!_st_eof(st)) {
+                si (_st_ch(st, 5, ".")) {
+                    st = _st_adv(st);
+                    texto mn2 = a_texto(_st_tv(st));
+                    st = _st_adv(st);
+                    numero mn2_dig = 1;
+                    numero mn2i = 0;
+                    mientras mn2i < largo(mn2) {
+                        texto ch2 = __str_subcadena(mn2, mn2i, mn2i + 1);
+                        si !(ch2 >= "0" && ch2 <= "9") { mn2_dig = 0; }
+                        mn2i = mn2i + 1;
+                    }
+                    numero fld2 = __map_nuevo();
+                    si (mn2_dig == 1) {
+                        fld2 = __map_poner(fld2, "tipo", "Literal");
+                        fld2 = __map_poner(fld2, "v", __str_a_entero(mn2));
+                    } sino {
+                        fld2 = __map_poner(fld2, "tipo", "Texto");
+                        fld2 = __map_poner(fld2, "v", mn2);
+                    }
+                    numero n3 = __map_nuevo();
+                    n3 = __map_poner(n3, "tipo", "Index");
+                    n3 = __map_poner(n3, "obj", nt);
+                    n3 = __map_poner(n3, "idx", fld2);
+                    nt = n3;
+                } sino si (_st_ch(st, 5, "[")) {
+                    st = _st_adv(st);
+                    numero re4 = _parse_expr(st);
+                    numero ie2 = __map_obtener(re4, "node");
+                    st = __map_obtener(re4, "st");
+                    st = _st_adv(st);
+                    numero n4 = __map_nuevo();
+                    n4 = __map_poner(n4, "tipo", "Index");
+                    n4 = __map_poner(n4, "obj", nt);
+                    n4 = __map_poner(n4, "idx", ie2);
+                    nt = n4;
+                } sino { romper; }
+            }
+            retornar _res(st, nt);
+        }
+        retornar _res(st, __map_obtener(telems, "0"));
     }
 
     // Array literal: [e1, e2, ...]
@@ -581,9 +792,10 @@ funcion entero _prec(texto op) {
     si (op == "||") { retornar 1; }
     si (op == "&&") { retornar 2; }
     si (op == "==" || op == "!=" || op == "<" || op == ">"
-        || op == "<=" || op == ">=") { retornar 3; }
-    si (op == "+" || op == "-") { retornar 4; }
-    si (op == "*" || op == "/" || op == "%") { retornar 5; }
+        || op == "<=" || op == ">=" || op == "&") { retornar 3; }
+    si (op == "+" || op == "-" || op == "|" || op == "++") { retornar 4; }
+    si (op == "<<" || op == ">>") { retornar 5; }
+    si (op == "*" || op == "/" || op == "%") { retornar 6; }
     retornar 0;
 }
 
@@ -695,12 +907,87 @@ funcion numero _parse_stmt(numero st) {
             st = __map_obtener(re, "st");
         }
         si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+        // Inferir tipo desde StructInit: sea c = Caja { ... } → c:Caja
+        si a_texto(__map_obtener(vl, "tipo")) == "StructInit" {
+            svar = a_texto(__map_obtener(vl, "nombre"));
+        }
         numero n = __map_nuevo();
         n = __map_poner(n, "tipo", "VarDecl");
         n = __map_poner(n, "nombre", nm);
         n = __map_poner(n, "tipo_var", svar);
         n = __map_poner(n, "valor", vl);
+        mapa_tipos_var = __map_poner(mapa_tipos_var, nm, svar);
         retornar _res(st, n);
+    }
+
+    // Decl con tipo tupla: (entero, (texto, entero)) t = ...
+    si (_st_ch(st, 5, "(")) {
+        numero st_par = _st_adv(st);
+        numero nivel = 1;
+        mientras (!_st_eof(st_par) && nivel > 0) {
+            si (_st_ch(st_par, 5, "(")) { nivel = nivel + 1; }
+            sino si (_st_ch(st_par, 5, ")")) { nivel = nivel - 1; }
+            st_par = _st_adv(st_par);
+        }
+        si ((_st_tt(st_par) == 1 || (_st_tt(st_par) == 6 && !_st_tp(st_par))) &&
+            !_st_eof(st_par)) {
+            st = st_par;
+            texto nmp = a_texto(_st_tv(st));
+            st = _st_adv(st);
+            numero vlp = __map_nuevo();
+            vlp = __map_poner(vlp, "tipo", "Vacio");
+            si (_st_ch(st, 4, "=")) {
+                st = _st_adv(st);
+                numero rep = _parse_expr(st);
+                vlp = __map_obtener(rep, "node");
+                st = __map_obtener(rep, "st");
+            }
+            si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+            numero np = __map_nuevo();
+            np = __map_poner(np, "tipo", "VarDecl");
+            np = __map_poner(np, "nombre", nmp);
+            np = __map_poner(np, "tipo_var", "tupla");
+            np = __map_poner(np, "valor", vlp);
+            mapa_tipos_var = __map_poner(mapa_tipos_var, nmp, "tupla");
+            retornar _res(st, np);
+        }
+    }
+
+    // Decl con tipo genérico: Par<entero, texto> p = ...
+    si (tt == 1 || (tt == 6 && !_st_tp(st))) {
+        numero st_ckg = _st_adv(st);
+        si (_st_ch(st_ckg, 4, "<")) {
+            numero st_sc = st_ckg;
+            mientras (!_st_eof(st_sc) && !_st_ch(st_sc, 4, ">")) {
+                si (_st_ch(st_sc, 5, "(") || _st_ch(st_sc, 5, ")") ||
+                    _st_ch(st_sc, 5, "{") || _st_ch(st_sc, 5, "}") ||
+                    _st_ch(st_sc, 5, ";")) { romper; }
+                st_sc = _st_adv(st_sc);
+            }
+            numero st_adg = _st_adv(st_sc);
+            si (_st_ch(st_sc, 4, ">") && (_st_tt(st_adg) == 1 ||
+                (_st_tt(st_adg) == 6 && !_st_tp(st_adg)))) {
+                st = st_adg;
+                texto nmg = a_texto(_st_tv(st));
+                st = _st_adv(st);
+                numero vlg = __map_nuevo();
+                vlg = __map_poner(vlg, "tipo", "Vacio");
+                si (_st_ch(st, 4, "=")) {
+                    st = _st_adv(st);
+                    numero reg = _parse_expr(st);
+                    vlg = __map_obtener(reg, "node");
+                    st = __map_obtener(reg, "st");
+                }
+                si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+                numero ng = __map_nuevo();
+                ng = __map_poner(ng, "tipo", "VarDecl");
+                ng = __map_poner(ng, "nombre", nmg);
+                ng = __map_poner(ng, "tipo_var", tvs);
+                ng = __map_poner(ng, "valor", vlg);
+                mapa_tipos_var = __map_poner(mapa_tipos_var, nmg, tvs);
+                retornar _res(st, ng);
+            }
+        }
     }
 
     si (tt == 6 && _st_tp(st)) {
@@ -708,6 +995,58 @@ funcion numero _parse_stmt(numero st) {
         st = _st_tp_skip(st);
         texto nm = a_texto(_st_tv(st));
         st = _st_adv(st);
+        // Destructuring: entero x, texto y = (1, "hola")
+        si (_st_ch(st, 5, ",")) {
+            numero objetivos = __map_nuevo();
+            numero otc = 0;
+            numero ot0 = __map_nuevo();
+            ot0 = __map_poner(ot0, "nombre", nm);
+            ot0 = __map_poner(ot0, "tipo", tvar);
+            objetivos = __map_poner(objetivos, "0", ot0);
+            otc = 1;
+            mientras (!_st_eof(st)) {
+                si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                numero o_nm = "";
+                texto o_tp = "let";
+                si (_st_tt(st) == 1 && a_texto(_st_tv(st)) == "_") {
+                    o_nm = "_";
+                    st = _st_adv(st);
+                } sino {
+                    si (_st_tp(st)) {
+                        o_tp = a_texto(_st_tv(st));
+                        st = _st_tp_skip(st);
+                    }
+                    o_nm = a_texto(_st_tv(st));
+                    st = _st_adv(st);
+                }
+                numero ot = __map_nuevo();
+                ot = __map_poner(ot, "nombre", o_nm);
+                ot = __map_poner(ot, "tipo", o_tp);
+                objetivos = __map_poner(objetivos, a_texto(otc), ot);
+                otc = otc + 1;
+                si (!_st_ch(st, 5, ",")) { romper; }
+            }
+            si (_st_ch(st, 4, "=")) { st = _st_adv(st); }
+            numero rde = _parse_expr(st);
+            numero de = __map_obtener(rde, "node");
+            st = __map_obtener(rde, "st");
+            si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+            objetivos = __map_poner(objetivos, "cnt", otc);
+            numero nd = __map_nuevo();
+            nd = __map_poner(nd, "tipo", "Descomp");
+            nd = __map_poner(nd, "objetivos", objetivos);
+            nd = __map_poner(nd, "expr", de);
+            numero oi2 = 0;
+            mientras oi2 < otc {
+                texto onm2 = a_texto(__map_obtener(__map_obtener(objetivos, a_texto(oi2)), "nombre"));
+                si onm2 != "_" {
+                    texto otp2 = a_texto(__map_obtener(__map_obtener(objetivos, a_texto(oi2)), "tipo"));
+                    mapa_tipos_var = __map_poner(mapa_tipos_var, onm2, otp2);
+                }
+                oi2 = oi2 + 1;
+            }
+            retornar _res(st, nd);
+        }
         numero vl = __map_nuevo();
         vl = __map_poner(vl, "tipo", "Vacio");
         si (_st_ch(st, 4, "=")) {
@@ -722,6 +1061,7 @@ funcion numero _parse_stmt(numero st) {
         n = __map_poner(n, "nombre", nm);
         n = __map_poner(n, "tipo_var", tvar);
         n = __map_poner(n, "valor", vl);
+        mapa_tipos_var = __map_poner(mapa_tipos_var, nm, tvar);
         retornar _res(st, n);
     }
 
@@ -744,6 +1084,90 @@ funcion numero _parse_stmt(numero st) {
         n = __map_poner(n, "tipo_var", "const");
         n = __map_poner(n, "valor", vl);
         retornar _res(st, n);
+    }
+
+    si (tt == 6 && (tvs == "rasgo" || tvs == "trait")) {
+        st = _st_adv(st);
+        st = _st_adv(st); // nombre del rasgo
+        si (_st_ch(st, 5, "{")) { st = _st_adv(st); }
+        mientras (!_st_eof(st)) {
+            si (_st_ch(st, 5, "}")) { romper; }
+            st = _st_adv(st);
+        }
+        si (_st_ch(st, 5, "}")) { st = _st_adv(st); }
+        numero nrv = __map_nuevo();
+        nrv = __map_poner(nrv, "tipo", "Vacio");
+        retornar _res(st, nrv);
+    }
+
+    si (tt == 6 && tvs == "impl") {
+        st = _st_adv(st);
+        texto trait_nm = a_texto(_st_tv(st));
+        st = _st_adv(st);
+        si (_st_kw(st, "para") || _st_kw(st, "for")) { st = _st_adv(st); }
+        texto type_nm = a_texto(_st_tv(st));
+        si (_st_tp(st)) { st = _st_tp_skip(st); } sino { st = _st_adv(st); }
+        si (_st_ch(st, 5, "{")) { st = _st_adv(st); }
+        mientras (!_st_eof(st)) {
+            si (_st_ch(st, 5, "}")) { romper; }
+            numero mtt = _st_tt(st);
+            texto mvv = a_texto(_st_tv(st));
+            si ((mtt == 6 || mtt == 1) && (mvv == "funcion" || mvv == "function")) {
+                numero pfx = _st_adv(st);
+                numero st_rt = pfx;
+                si (_st_tp(st_rt)) { st_rt = _st_tp_skip(st_rt); }
+                texto mnm = a_texto(_st_tv(st_rt));
+                st = _st_adv(st_rt);
+                si (_st_ch(st, 5, "(")) { st = _st_adv(st); }
+                numero mpar = __map_nuevo();
+                numero mpc = 0;
+                mientras (!_st_eof(st)) {
+                    si (_st_ch(st, 5, ")")) { romper; }
+                    si (mpc > 0) {
+                        si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                    }
+                    texto ptt = a_texto(_st_tv(st));
+                    texto ppn = "";
+                    si (_st_tp(st)) {
+                        st = _st_tp_skip(st);
+                        ppn = a_texto(_st_tv(st));
+                        st = _st_adv(st);
+                    } sino {
+                        ppn = ptt;
+                        st = _st_adv(st);
+                    }
+                    numero pmm = __map_nuevo();
+                    pmm = __map_poner(pmm, "nombre", ppn);
+                    pmm = __map_poner(pmm, "tipo", ptt);
+                    mpar = __map_poner(mpar, a_texto(mpc), pmm);
+                    mpc = mpc + 1;
+                }
+                st = _st_adv(st);
+                mpar = __map_poner(mpar, "cnt", mpc);
+                numero rmb = _parse_blk(st);
+                numero mbod = __map_obtener(rmb, "node");
+                st = __map_obtener(rmb, "st");
+                texto mangled = type_nm + "_" + trait_nm + "_" + mnm;
+                numero mf = __map_nuevo();
+                mf = __map_poner(mf, "tipo", "Func");
+                mf = __map_poner(mf, "nombre", mangled);
+                mf = __map_poner(mf, "params", mpar);
+                mf = __map_poner(mf, "cuerpo", mbod);
+                lambdas_hoistadas.agregar(mf);
+                numero mtabla = __map_obtener(mapa_impls, type_nm);
+                si a_texto(__tipo_de(mtabla)) != "diccionario" && a_texto(__tipo_de(mtabla)) != "mapa" {
+                    mtabla = __map_nuevo();
+                }
+                mtabla = __map_poner(mtabla, mnm, mangled);
+                mapa_impls = __map_poner(mapa_impls, type_nm, mtabla);
+            } sino {
+                st = _st_adv(st);
+            }
+        }
+        si (_st_ch(st, 5, "}")) { st = _st_adv(st); }
+        numero nv = __map_nuevo();
+        nv = __map_poner(nv, "tipo", "Vacio");
+        retornar _res(st, nv);
     }
 
     si (tt == 6 && (tvs == "para" || tvs == "for")) {
@@ -923,64 +1347,64 @@ funcion numero _parse_stmt(numero st) {
                 st = __map_obtener(rc_v, "st");
                 si (_st_ch(st, 5, ":")) { st = _st_adv(st); }
                 // body del caso: statements hasta `}` o `caso` (sin consumir el `}` — es el cierre del elegir)
-                numero stmts_c = __map_nuevo();
-                numero sc2 = 0;
-                mientras (!_st_eof(st) && !_st_ch(st, 5, "}")) {
-                    numero cbt = _st_tt(st);
-                    texto cbv = a_texto(_st_tv(st));
-                    si ((cbt == 1 || cbt == 6) &&
-                        (cbv == "caso" || cbv == "case" || cbv == "defecto" ||
-                         cbv == "default")) { romper; }
-                    numero rs2 = _parse_stmt(st);
-                    numero sn2 = __map_obtener(rs2, "node");
-                    st = __map_obtener(rs2, "st");
-                    stmts_c = __map_poner(stmts_c, a_texto(sc2), sn2);
-                    sc2 = sc2 + 1;
-                }
-                stmts_c = __map_poner(stmts_c, "cnt", sc2);
-                // caso defecto/default: rama else del último If
-                si ((_st_tt(st) == 1 || _st_tt(st) == 6) &&
-                    (a_texto(_st_tv(st)) == "defecto" ||
-                     a_texto(_st_tv(st)) == "default")) {
-                    st = _st_adv(st);
-                    si (_st_ch(st, 5, ":")) { st = _st_adv(st); }
-                    numero stmts_d = __map_nuevo();
-                    numero sd = 0;
-                    mientras (!_st_eof(st) && !_st_ch(st, 5, "}")) {
-                        numero rsd = _parse_stmt(st);
-                        numero snd = __map_obtener(rsd, "node");
-                        st = __map_obtener(rsd, "st");
-                        stmts_d = __map_poner(stmts_d, a_texto(sd), snd);
-                        sd = sd + 1;
-                    }
-                    stmts_d = __map_poner(stmts_d, "cnt", sd);
-                    numero b_d = __map_nuevo();
-                    b_d = __map_poner(b_d, "tipo", "Block");
-                    b_d = __map_poner(b_d, "cuerpo", stmts_d);
-                    dblock = b_d;
-                    romper;
-                }
-                numero b_c = __map_nuevo();
-                b_c = __map_poner(b_c, "tipo", "Block");
-                b_c = __map_poner(b_c, "cuerpo", stmts_c);
-                numero cmp = __map_nuevo();
-                cmp = __map_poner(cmp, "tipo", "Binary");
-                cmp = __map_poner(cmp, "op", "==");
-                cmp = __map_poner(cmp, "izq", sel);
-                cmp = __map_poner(cmp, "der", cval);
-                numero ifn = __map_nuevo();
-                ifn = __map_poner(ifn, "tipo", "If");
-                ifn = __map_poner(ifn, "cond", cmp);
-                ifn = __map_poner(ifn, "cuerpo", b_c);
-                numero _sv = __map_nuevo();
-                _sv = __map_poner(_sv, "tipo", "Vacio");
-                ifn = __map_poner(ifn, "sino", _sv);
-                ifns = __map_poner(ifns, a_texto(ic), ifn);
-                ic = ic + 1;
-            } sino {
-                st = _st_adv(st);
-            }
-        }
+                 numero stmts_c = __map_nuevo();
+                 numero sc2 = 0;
+                 mientras (!_st_eof(st) && !_st_ch(st, 5, "}")) {
+                     numero cbt = _st_tt(st);
+                     texto cbv = a_texto(_st_tv(st));
+                     si ((cbt == 1 || cbt == 6) &&
+                         (cbv == "caso" || cbv == "case" || cbv == "defecto" ||
+                          cbv == "default")) { romper; }
+                     numero rs2 = _parse_stmt(st);
+                     numero sn2 = __map_obtener(rs2, "node");
+                     st = __map_obtener(rs2, "st");
+                     stmts_c = __map_poner(stmts_c, a_texto(sc2), sn2);
+                     sc2 = sc2 + 1;
+                 }
+                 stmts_c = __map_poner(stmts_c, "cnt", sc2);
+                 numero b_c = __map_nuevo();
+                 b_c = __map_poner(b_c, "tipo", "Block");
+                 b_c = __map_poner(b_c, "cuerpo", stmts_c);
+                 numero cmp = __map_nuevo();
+                 cmp = __map_poner(cmp, "tipo", "Binary");
+                 cmp = __map_poner(cmp, "op", "==");
+                 cmp = __map_poner(cmp, "izq", sel);
+                 cmp = __map_poner(cmp, "der", cval);
+                 numero ifn = __map_nuevo();
+                 ifn = __map_poner(ifn, "tipo", "If");
+                 ifn = __map_poner(ifn, "cond", cmp);
+                 ifn = __map_poner(ifn, "cuerpo", b_c);
+                 numero _sv = __map_nuevo();
+                 _sv = __map_poner(_sv, "tipo", "Vacio");
+                 ifn = __map_poner(ifn, "sino", _sv);
+                 ifns = __map_poner(ifns, a_texto(ic), ifn);
+                 ic = ic + 1;
+                 // caso defecto/default: rama else del último If (tras construir el ifn actual)
+                 si ((_st_tt(st) == 1 || _st_tt(st) == 6) &&
+                     (a_texto(_st_tv(st)) == "defecto" ||
+                      a_texto(_st_tv(st)) == "default")) {
+                     st = _st_adv(st);
+                     si (_st_ch(st, 5, ":")) { st = _st_adv(st); }
+                     numero stmts_d = __map_nuevo();
+                     numero sd = 0;
+                     mientras (!_st_eof(st) && !_st_ch(st, 5, "}")) {
+                         numero rsd = _parse_stmt(st);
+                         numero snd = __map_obtener(rsd, "node");
+                         st = __map_obtener(rsd, "st");
+                         stmts_d = __map_poner(stmts_d, a_texto(sd), snd);
+                         sd = sd + 1;
+                     }
+                     stmts_d = __map_poner(stmts_d, "cnt", sd);
+                     numero b_d = __map_nuevo();
+                     b_d = __map_poner(b_d, "tipo", "Block");
+                     b_d = __map_poner(b_d, "cuerpo", stmts_d);
+                     dblock = b_d;
+                     romper;
+                 }
+             } sino {
+                 st = _st_adv(st);
+             }
+         }
         si (_st_ch(st, 5, "}")) { st = _st_adv(st); }
         // Construir la cadena desde el final: __map_poner NO muta el mapa original
         si (ic > 0) {
@@ -1089,6 +1513,44 @@ funcion numero _parse_stmt(numero st) {
         numero re = _parse_expr(st);
         numero ex = __map_obtener(re, "node");
         st = __map_obtener(re, "st");
+        // Destructuring en asignación: p, q = (42, "mundo")
+        si (a_texto(__map_obtener(ex, "tipo")) == "Ident" && _st_ch(st, 5, ",")) {
+            numero objetivos2 = __map_nuevo();
+            numero otc2 = 0;
+            numero at0 = __map_nuevo();
+            at0 = __map_poner(at0, "nombre", a_texto(__map_obtener(ex, "nombre")));
+            at0 = __map_poner(at0, "tipo", "let");
+            objetivos2 = __map_poner(objetivos2, "0", at0);
+            otc2 = 1;
+            mientras (!_st_eof(st)) {
+                si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                numero atn = "";
+                si (_st_tt(st) == 1 && a_texto(_st_tv(st)) == "_") {
+                    atn = "_";
+                    st = _st_adv(st);
+                } sino {
+                    atn = a_texto(_st_tv(st));
+                    st = _st_adv(st);
+                }
+                numero at = __map_nuevo();
+                at = __map_poner(at, "nombre", atn);
+                at = __map_poner(at, "tipo", "let");
+                objetivos2 = __map_poner(objetivos2, a_texto(otc2), at);
+                otc2 = otc2 + 1;
+                si (!_st_ch(st, 5, ",")) { romper; }
+            }
+            si (_st_ch(st, 4, "=")) { st = _st_adv(st); }
+            numero rde2 = _parse_expr(st);
+            numero de2 = __map_obtener(rde2, "node");
+            st = __map_obtener(rde2, "st");
+            si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+            objetivos2 = __map_poner(objetivos2, "cnt", otc2);
+            numero nd2 = __map_nuevo();
+            nd2 = __map_poner(nd2, "tipo", "Descomp");
+            nd2 = __map_poner(nd2, "objetivos", objetivos2);
+            nd2 = __map_poner(nd2, "expr", de2);
+            retornar _res(st, nd2);
+        }
         si (_st_ch(st, 4, "=")) {
             st = _st_adv(st);
             numero re2 = _parse_expr(st);
@@ -1116,6 +1578,12 @@ funcion numero _parse_stmt(numero st) {
         n = __map_poner(n, "tipo", "ExprStmt");
         n = __map_poner(n, "expr", ex);
         retornar _res(st, n);
+    }
+
+    si (_st_ch(st, 5, "{")) {
+        numero rb3 = _parse_blk(st);
+        numero b3 = __map_obtener(rb3, "node");
+        retornar _res(__map_obtener(rb3, "st"), b3);
     }
 
     si (!_st_eof(st)) {
@@ -1200,6 +1668,13 @@ funcion numero _parse_decl(numero st) {
             numero pm = __map_nuevo();
             pm = __map_poner(pm, "nombre", pn);
             pm = __map_poner(pm, "tipo", pt);
+            pm = __map_poner(pm, "defecto", 0);
+            si (_st_ch(st, 4, "=")) {
+                st = _st_adv(st);
+                numero rdf = _parse_expr(st);
+                pm = __map_poner(pm, "defecto", __map_obtener(rdf, "node"));
+                st = __map_obtener(rdf, "st");
+            }
             prms = __map_poner(prms, a_texto(pc), pm);
             pc = pc + 1;
         }
@@ -1266,6 +1741,7 @@ funcion numero _parse_prog(numero st) {
     prog = __map_poner(prog, "tipo", "Programa");
     numero stmts = __map_nuevo();
     numero sc = 0;
+    lambdas_hoistadas = [];
     mientras (!_st_eof(st)) {
         si (_st_ch(st, 5, ";") || _st_ch(st, 5, "}")) {
             st = _st_adv(st);
@@ -1284,6 +1760,14 @@ funcion numero _parse_prog(numero st) {
         st = __map_obtener(r, "st");
         stmts = __map_poner(stmts, a_texto(sc), __map_obtener(r, "node"));
         sc = sc + 1;
+    }
+    stmts = __map_poner(stmts, "cnt", sc);
+    // Fusionar funciones anónimas hoisteadas (IIFE) al Programa
+    entero li = 0;
+    mientras li < largo(lambdas_hoistadas) {
+        stmts = __map_poner(stmts, a_texto(sc), lambdas_hoistadas[li]);
+        sc = sc + 1;
+        li = li + 1;
     }
     stmts = __map_poner(stmts, "cnt", sc);
     prog = __map_poner(prog, "cuerpo", stmts);
@@ -1735,9 +2219,18 @@ numero OP_HALT = 27;
 numero OP_ARRAY_NEW = 28;
 numero OP_ARRAY_GET = 29;
 numero OP_ARRAY_SET = 30;
+numero OP_BIT_OR = 46;
+numero OP_BIT_AND = 49;
+numero OP_SHIFT_LEFT = 50;
+numero OP_SHIFT_RIGHT = 51;
+numero OP_CONCAT = 52;
 numero OP_ENUM_CTOR = 43;
 numero OP_ENUM_VAR = 44;
 numero OP_ENUM_ARGC = 45;
+numero OP_TUPLE_NEW = 47;
+numero OP_TUPLE_GET = 48;
+
+numero dt_cnt = 0;
 
 // ── Estructura de bytecode ──────────────────────────────────
 // Una instrucción es un mapa: {op: opcode, arg: valor}
@@ -1824,7 +2317,81 @@ funcion numero _cg_emit_jmp_if(numero cg, numero target) {
     retornar cg;
 }
 
+//   JmpIf salta cuando el valor es FALSY. Eval con short-circuit para && y ||:
+//   &&: izq falsy -> false; der falsy -> false; ambos -> true
+//   ||: izq truthy -> true; si no, der decide
+funcion numero _cg_and_or(numero cg, numero izq, numero der, numero es_and) {
+    si es_and == 1 {
+        cg = _gen_expr(cg, izq);
+        numero j1 = __map_obtener(cg, "pos");
+        cg = _cg_emit_jmp_if(cg, 0);
+        cg = _gen_expr(cg, der);
+        numero j2 = __map_obtener(cg, "pos");
+        cg = _cg_emit_jmp_if(cg, 0);
+        cg = _cg_add_int(cg, 1);
+        cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+        numero jm = __map_obtener(cg, "pos");
+        cg = _cg_emit_jmp(cg, 0);
+        numero lf = __map_obtener(cg, "pos");
+        cg = _cg_add_int(cg, 0);
+        cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+        numero le = __map_obtener(cg, "pos");
+        cg = _cg_patch(cg, j1, lf);
+        cg = _cg_patch(cg, j2, lf);
+        cg = _cg_patch(cg, jm, le);
+        retornar cg;
+    }
+    // OR
+    cg = _gen_expr(cg, izq);
+    numero k1 = __map_obtener(cg, "pos");
+    cg = _cg_emit_jmp_if(cg, 0);
+    cg = _cg_add_int(cg, 1);
+    cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+    numero km = __map_obtener(cg, "pos");
+    cg = _cg_emit_jmp(cg, 0);
+    numero lb = __map_obtener(cg, "pos");
+    cg = _gen_expr(cg, der);
+    numero k2 = __map_obtener(cg, "pos");
+    cg = _cg_emit_jmp_if(cg, 0);
+    cg = _cg_add_int(cg, 1);
+    cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+    numero jm2 = __map_obtener(cg, "pos");
+    cg = _cg_emit_jmp(cg, 0);
+    numero lf2 = __map_obtener(cg, "pos");
+    cg = _cg_add_int(cg, 0);
+    cg = _cg_emit(cg, _instr(OP_PUSH_BOOL, __map_obtener(cg, "int_tmp")));
+    numero le2 = __map_obtener(cg, "pos");
+    cg = _cg_patch(cg, k1, lb);
+    cg = _cg_patch(cg, km, le2);
+    cg = _cg_patch(cg, k2, lf2);
+    cg = _cg_patch(cg, jm2, le2);
+    retornar cg;
+}
+
 funcion numero _cg_emit_call(numero cg, numero name, numero argc) {
+    // Default params: inline missing defaults antes del Call (como el IR de Rust)
+    numero funcs = __map_obtener(cg, "funcs");
+    numero fcnt = __map_obtener(cg, "func_cnt");
+    numero fi = 0;
+    mientras fi < fcnt {
+        numero f = __map_obtener(funcs, a_texto(fi));
+        si a_texto(__map_obtener(f, "nombre")) == a_texto(name) {
+            numero params = __map_obtener(f, "params");
+            numero pcnt = __map_obtener(params, "cnt");
+            numero pd = __map_obtener(f, "defectos");
+            numero ai2 = argc;
+            mientras ai2 < pcnt {
+                numero d = __map_obtener(pd, a_texto(ai2));
+                si d != 0 {
+                    cg = _gen_expr(cg, d);
+                    argc = argc + 1;
+                }
+                ai2 = ai2 + 1;
+            }
+            romper;
+        }
+        fi = fi + 1;
+    }
     cg = _cg_add_str(cg, name);
     numero str_idx = __map_obtener(cg, "str_tmp");
     cg = _cg_add_int(cg, argc);
@@ -1895,6 +2462,11 @@ funcion numero _gen_expr(numero cg, numero node) {
         si a_texto(callee) == "error" && argc == 1 {
             cg = _gen_expr(cg, __map_obtener(args, "0"));
             cg = _cg_emit(cg, _instr(39, 0)); // ResultErr
+            retornar cg;
+        }
+        si a_texto(callee) == "algun" && argc == 1 {
+            cg = _gen_expr(cg, __map_obtener(args, "0"));
+            cg = _cg_emit(cg, _instr(41, 0)); // OptionSome
             retornar cg;
         }
         // Generate code for arguments
@@ -1975,6 +2547,8 @@ funcion numero _gen_expr(numero cg, numero node) {
         numero op = __map_obtener(node, "op");
         numero izq = __map_obtener(node, "izq");
         numero der = __map_obtener(node, "der");
+        si a_texto(op) == "&&" { retornar _cg_and_or(cg, izq, der, 1); }
+        si a_texto(op) == "||" { retornar _cg_and_or(cg, izq, der, 0); }
         cg = _gen_expr(cg, izq);
         cg = _gen_expr(cg, der);
         
@@ -1989,8 +2563,11 @@ funcion numero _gen_expr(numero cg, numero node) {
         si a_texto(op) == "!=" { cg = _cg_emit(cg, _instr(OP_NEQ, 0)); }
         si a_texto(op) == ">=" { cg = _cg_emit(cg, _instr(OP_GE, 0)); }
         si a_texto(op) == "<=" { cg = _cg_emit(cg, _instr(OP_LE, 0)); }
-        si a_texto(op) == "&&" { cg = _cg_emit(cg, _instr(OP_AND, 0)); }
-        si a_texto(op) == "||" { cg = _cg_emit(cg, _instr(OP_OR, 0)); }
+        si a_texto(op) == "|" { cg = _cg_emit(cg, _instr(OP_BIT_OR, 0)); }
+        si a_texto(op) == "&" { cg = _cg_emit(cg, _instr(OP_BIT_AND, 0)); }
+        si a_texto(op) == "<<" { cg = _cg_emit(cg, _instr(OP_SHIFT_LEFT, 0)); }
+        si a_texto(op) == ">>" { cg = _cg_emit(cg, _instr(OP_SHIFT_RIGHT, 0)); }
+        si a_texto(op) == "++" { cg = _cg_emit(cg, _instr(OP_CONCAT, 0)); }
         retornar cg;
     }
     
@@ -2011,6 +2588,19 @@ funcion numero _gen_expr(numero cg, numero node) {
         }
         cg = _cg_add_int(cg, ec);
         cg = _cg_emit(cg, _instr(OP_ARRAY_NEW, __map_obtener(cg, "int_tmp")));
+        retornar cg;
+    }
+
+    si a_texto(tp) == "Tupla" {
+        numero telems = __map_obtener(node, "elementos");
+        numero tec = __map_obtener(telems, "cnt");
+        numero tei = 0;
+        mientras tei < tec {
+            cg = _gen_expr(cg, __map_obtener(telems, a_texto(tei)));
+            tei = tei + 1;
+        }
+        cg = _cg_add_int(cg, tec);
+        cg = _cg_emit(cg, _instr(OP_TUPLE_NEW, __map_obtener(cg, "int_tmp")));
         retornar cg;
     }
     
@@ -2034,6 +2624,11 @@ funcion numero _gen_expr(numero cg, numero node) {
         numero expr_n = __map_obtener(node, "expr");
         cg = _gen_expr(cg, expr_n);
         cg = _cg_emit(cg, _instr(39, 0)); // ResultErr
+        retornar cg;
+    }
+    
+    si a_texto(tp) == "Ninguno" {
+        cg = _cg_emit(cg, _instr(42, 0)); // OptionNone
         retornar cg;
     }
     
@@ -2096,11 +2691,36 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
         retornar cg;
     }
     
+    si a_texto(tp) == "Descomp" {
+        numero objts = __map_obtener(stmt, "objetivos");
+        numero oc = __map_obtener(objts, "cnt");
+        texto tmp = "__dt_" + a_texto(dt_cnt);
+        dt_cnt = dt_cnt + 1;
+        cg = _gen_expr(cg, __map_obtener(stmt, "expr"));
+        cg = _cg_add_str(cg, tmp);
+        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        numero oi = 0;
+        mientras oi < oc {
+            numero ot = __map_obtener(objts, a_texto(oi));
+            texto onm = a_texto(__map_obtener(ot, "nombre"));
+            si onm != "_" {
+                cg = _cg_add_str(cg, tmp);
+                cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+                cg = _cg_add_int(cg, oi);
+                cg = _cg_emit(cg, _instr(OP_PUSH_INT, __map_obtener(cg, "int_tmp")));
+                cg = _cg_emit(cg, _instr(OP_ARRAY_GET, 0));
+                cg = _cg_add_str(cg, onm);
+                cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+            }
+            oi = oi + 1;
+        }
+        retornar cg;
+    }
+    
     si a_texto(tp) == "Assign" {
         numero nombre = __map_obtener(stmt, "nombre");
         numero valor = __map_obtener(stmt, "valor");
-        si __map_contiene(stmt, "target") {
-            numero target = __map_obtener(stmt, "target");
+        si __map_contiene(stmt, "target") {            numero target = __map_obtener(stmt, "target");
             numero obj = __map_obtener(target, "obj");
             numero idx = __map_obtener(target, "idx");
             cg = _gen_expr(cg, obj);
@@ -2271,11 +2891,20 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
             pi = pi + 1;
         }
         pm = __map_poner(pm, "cnt", pn);
+        numero pd = __map_nuevo();
+        entero pj = 0;
+        mientras pj < pn {
+            numero p = __map_obtener(params, a_texto(pj));
+            pd = __map_poner(pd, a_texto(pj), __map_obtener(p, "defecto"));
+            pj = pj + 1;
+        }
+        pd = __map_poner(pd, "cnt", pn);
         numero funcs = __map_obtener(cg, "funcs");
         numero fc = __map_obtener(cg, "func_cnt");
         numero f = __map_nuevo();
         f = __map_poner(f, "nombre", nombre);
         f = __map_poner(f, "params", pm);
+        f = __map_poner(f, "defectos", pd);
         f = __map_poner(f, "start", start);
         funcs = __map_poner(funcs, a_texto(fc), f);
         cg = __map_poner(cg, "funcs", funcs);
@@ -2320,29 +2949,41 @@ funcion numero codegen_generar(numero ast) {
         i = i + 1;
     }
     
-    // Register __main__ (top-level code) starting at current pos
-    numero main_start = __map_obtener(cg, "pos");
-    numero funcs = __map_obtener(cg, "funcs");
-    numero fc = __map_obtener(cg, "func_cnt");
-    numero pm = __map_nuevo();
-    pm = __map_poner(pm, "cnt", 0);
-    numero f = __map_nuevo();
-    f = __map_poner(f, "nombre", "__main__");
-    f = __map_poner(f, "params", pm);
-    f = __map_poner(f, "start", main_start);
-    funcs = __map_poner(funcs, a_texto(fc), f);
-    cg = __map_poner(cg, "funcs", funcs);
-    cg = __map_poner(cg, "func_cnt", fc + 1);
-    
-    // Pass 2: emit top-level (non-Func) statements
-    i = 0;
-    mientras i < cnt {
-        numero stmt = __map_obtener(cuerpo, a_texto(i));
-        numero stp = __map_obtener(stmt, "tipo");
-        si a_texto(stp) != "Func" {
-            cg = _gen_stmt(cg, stmt);
+    // Contar código top-level (no-Func): si no hay, no se crea __main__
+    // (la VM arranca en `principal`/`main` por fallback, como el pipeline Rust)
+    entero top_cnt = 0;
+    entero ti = 0;
+    mientras ti < cnt {
+        numero stt = __map_obtener(cuerpo, a_texto(ti));
+        texto sttp = a_texto(__map_obtener(stt, "tipo"));
+        si sttp != "Func" && sttp != "Vacio" { top_cnt = top_cnt + 1; }
+        ti = ti + 1;
+    }
+    si top_cnt > 0 {
+        // Register __main__ (top-level code) starting at current pos
+        numero main_start = __map_obtener(cg, "pos");
+        numero funcs = __map_obtener(cg, "funcs");
+        numero fc = __map_obtener(cg, "func_cnt");
+        numero pm = __map_nuevo();
+        pm = __map_poner(pm, "cnt", 0);
+        numero f = __map_nuevo();
+        f = __map_poner(f, "nombre", "__main__");
+        f = __map_poner(f, "params", pm);
+        f = __map_poner(f, "start", main_start);
+        funcs = __map_poner(funcs, a_texto(fc), f);
+        cg = __map_poner(cg, "funcs", funcs);
+        cg = __map_poner(cg, "func_cnt", fc + 1);
+        
+        // Pass 2: emit top-level (non-Func) statements
+        i = 0;
+        mientras i < cnt {
+            numero stmt = __map_obtener(cuerpo, a_texto(i));
+            numero stp = __map_obtener(stmt, "tipo");
+            si a_texto(stp) != "Func" {
+                cg = _gen_stmt(cg, stmt);
+            }
+            i = i + 1;
         }
-        i = i + 1;
     }
     
     cg = _cg_emit(cg, _instr(OP_HALT, 0));

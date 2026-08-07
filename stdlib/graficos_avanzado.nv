@@ -52,10 +52,10 @@ funcion booleano __cargar_mixer() {
 
 /// Escribe un entero 32-bit little-endian en un buffer
 funcion entero __i32_le(entero val, entero buf, entero off) {
-    __ffi_poke(buf, off, val && 255);
-    __ffi_poke(buf, off + 1, (val >> 8) && 255);
-    __ffi_poke(buf, off + 2, (val >> 16) && 255);
-    __ffi_poke(buf, off + 3, (val >> 24) && 255);
+    __ffi_poke(buf, off, val & 255);
+    __ffi_poke(buf, off + 1, (val >> 8) & 255);
+    __ffi_poke(buf, off + 2, (val >> 16) & 255);
+    __ffi_poke(buf, off + 3, (val >> 24) & 255);
     retornar 0;
 }
 

@@ -263,7 +263,7 @@ funcion texto dialogo_input(texto mensaje) {
             }
         }
         si k == "ESC" { retornar ""; }
-        si k.largo() == 1 && __str_ord(k) >= 32 && __str_ord(k) <= 126 {
+        si k.largo() == 1 && __str_ord(k)[0] >= 32 && __str_ord(k)[0] <= 126 {
             entrada = entrada + k;
             tui_core__tc_escribir(k, 13 + entrada.largo() - 1, 11);
         }
@@ -463,7 +463,7 @@ funcion texto editor(texto titulo, entero ancho, entero alto) {
                 total = total - 1;
             }
         }
-        sino si k.largo() == 1 && __str_ord(k) >= 32 && __str_ord(k) <= 126 {
+        sino si k.largo() == 1 && __str_ord(k)[0] >= 32 && __str_ord(k)[0] <= 126 {
             texto ln = __map_obtener(lineas, cy);
             lineas = __map_poner(lineas, cy, _hasta(ln, cx) + k + _desde(ln, cx));
             cx = cx + 1;

@@ -186,13 +186,6 @@ funcion void __dibujar_titulo(entero x, entero y, texto titulo,
     graficos_canvas_texto(tx, y, titulo, r, g, b, 255);
 }
 
-/// Dibuja etiquetas en el eje X
-funcion void __etiquetas_x(entero x0, entero y1, lista<texto> etiquetas,
-        entero num, entero r, entero g, entero b) {
-    entero paso = (x1 - x0) / num; // x1 not available here, need to compute
-    // This is called from the specific chart functions
-}
-
 /// Convierte valor decimal a texto con 1 decimal
 funcion texto __formatear_valor(decimal val) {
     entero ent = val como entero;

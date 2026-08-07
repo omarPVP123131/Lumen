@@ -606,6 +606,13 @@ impl Formatter {
                 self.fmt_expr(expr);
                 self.push(")");
             }
+            Expr::Cast { expr, cast_type, .. } => {
+                self.push("(");
+                self.fmt_expr(expr);
+                self.push(" como ");
+                self.push(&format_type(cast_type));
+                self.push(")");
+            }
             Expr::Tuple { items, .. } => {
                 self.push("(");
                 for (i, item) in items.iter().enumerate() {
@@ -677,6 +684,7 @@ fn format_type(t: &Type) -> String {
 fn fmt_binop(op: &BinOp) -> &'static str {
     match op {
         BinOp::Add => "+",
+        BinOp::Concat => "++",
         BinOp::Sub => "-",
         BinOp::Mul => "*",
         BinOp::Div => "/",
@@ -690,6 +698,9 @@ fn fmt_binop(op: &BinOp) -> &'static str {
         BinOp::And => "&&",
         BinOp::Or => "||",
         BinOp::BitOr => "|",
+        BinOp::BitAnd => "&",
+        BinOp::ShiftLeft => "<<",
+        BinOp::ShiftRight => ">>",
     }
 }
 

@@ -553,9 +553,10 @@ funcion entero _prec(texto op) {
     si (op == "||") { retornar 1; }
     si (op == "&&") { retornar 2; }
     si (op == "==" || op == "!=" || op == "<" || op == ">"
-        || op == "<=" || op == ">=") { retornar 3; }
-    si (op == "+" || op == "-") { retornar 4; }
-    si (op == "*" || op == "/" || op == "%") { retornar 5; }
+        || op == "<=" || op == ">=" || op == "&") { retornar 3; }
+    si (op == "+" || op == "-" || op == "|" || op == "++") { retornar 4; }
+    si (op == "<<" || op == ">>") { retornar 5; }
+    si (op == "*" || op == "/" || op == "%") { retornar 6; }
     retornar 0;
 }
 
