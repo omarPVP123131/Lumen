@@ -4,7 +4,7 @@ importar "io.nv";
 importar "red.nv";
 
 // --- Diccionario ---
-d = coleccion_mapa_nuevo();
+cualquiera d = coleccion_mapa_nuevo();
 d = coleccion_mapa_poner(d, "Ana", 30);
 d = coleccion_mapa_poner(d, "Luis", 25);
 imprimir("Ana: ", coleccion_mapa_obtener(d, "Ana"));
@@ -12,22 +12,22 @@ imprimir("contiene Ana: ", coleccion_mapa_contiene(d, "Ana"));
 imprimir("longitud: ", coleccion_mapa_longitud(d));
 
 // --- Conjunto ---
-s = coleccion_conjunto_nuevo();
+cualquiera s = coleccion_conjunto_nuevo();
 s = coleccion_conjunto_agregar(s, "manzana");
 s = coleccion_conjunto_agregar(s, "pera");
 imprimir("tiene manzana: ", coleccion_conjunto_tiene(s, "manzana"));
 
 // --- Deque ---
-dq = coleccion_deque_nuevo();
+cualquiera dq = coleccion_deque_nuevo();
 dq = coleccion_deque_agregar_final(dq, 1);
 dq = coleccion_deque_agregar_final(dq, 2);
 dq = coleccion_deque_agregar_frente(dq, 0);
 imprimir("deque longitud: ", coleccion_deque_longitud(dq));
-frente = coleccion_deque_quitar_frente(dq);
+cualquiera frente = coleccion_deque_quitar_frente(dq);
 imprimir("deque frente: ", frente);
 
 // --- Monticulo ---
-hp = coleccion_monticulo_nuevo();
+cualquiera hp = coleccion_monticulo_nuevo();
 hp = coleccion_monticulo_agregar(hp, 5);
 hp = coleccion_monticulo_agregar(hp, 1);
 hp = coleccion_monticulo_agregar(hp, 10);
@@ -35,7 +35,7 @@ imprimir("monticulo ver: ", coleccion_monticulo_ver(hp));
 imprimir("monticulo largo: ", coleccion_monticulo_longitud(hp));
 
 // --- Enlazada ---
-ll = coleccion_enlazada_nuevo();
+cualquiera ll = coleccion_enlazada_nuevo();
 ll = coleccion_enlazada_agregar_final(ll, "x");
 ll = coleccion_enlazada_agregar_final(ll, "y");
 ll = coleccion_enlazada_agregar_frente(ll, "z");
@@ -53,7 +53,7 @@ imprimir("pad start: ", texto_padding_inicio("42", 5, "0"));
 imprimir("pad end: ", texto_padding_fin("42", 5, "."));
 
 // --- Encoding ---
-bytes = texto_codificar_utf8("Hola");
+cualquiera bytes = texto_codificar_utf8("Hola");
 imprimir("bytes count: ", bytes);
 
 // --- IO ---

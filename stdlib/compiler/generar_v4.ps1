@@ -1,4 +1,5 @@
 # Genera compiler_v4.nv: concatenación autocontenida
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $header = @'
 // compiler_v4.nv - Compilador autocontenido (self-hosting)
 // Generado: concatenación de lexer.nv + parser.nv + codegen.nv + main
@@ -55,5 +56,6 @@ numero fin = ejecutar_pipeline();
 si (__tipo_de(fin) == "Error") { imprimir("FALLO: ", fin); }
 '@
 $content = "$header`n$lexer`n$parser`n$codegen`n$main"
-[System.IO.File]::WriteAllText("compiler_v4.nv", $content, (New-Object System.Text.UTF8Encoding $false))
-Write-Host "compiler_v4.nv creado: $((Get-Item compiler_v4.nv).Length) bytes"
+$outPath = Join-Path $scriptDir "compiler_v4.nv"
+[System.IO.File]::WriteAllText($outPath, $content, (New-Object System.Text.UTF8Encoding $false))
+Write-Host "compiler_v4.nv creado: $((Get-Item $outPath).Length) bytes"

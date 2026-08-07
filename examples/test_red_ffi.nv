@@ -1,22 +1,9 @@
+// Test de red.nv via HTTP - API actual
 importar "red.nv";
 
 imprimir("=== Red Test via FFI ===");
 
-// Conectar a un servidor HTTP
-sea fd = red_conectar("93.184.216.34", 80); // example.com
-imprimir("fd: ", fd);
-
-si fd >= 0 {
-    sea req = "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n";
-    sea enviado = red_enviar(fd, req);
-    imprimir("enviado: ", enviado);
-    
-    sea resp = red_recibir(fd, 4096);
-    imprimir("recibido (", resp.largo(), " bytes)");
-    imprimir(resp);
-    
-    red_cerrar(fd);
-    imprimir("cerrado OK");
-}
+resultado<texto, texto> resp = red_http_obtener("http://example.com/");
+imprimir("resp: ", resp);
 
 imprimir("--- FIN ---");

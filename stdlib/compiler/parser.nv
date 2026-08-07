@@ -514,7 +514,10 @@ funcion numero _parse_pr(numero st) {
         mientras (!_st_eof(st)) {
             si (_st_ch(st, 5, "]")) { romper; }
             si (ec > 0) {
-                si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
+                si (_st_ch(st, 5, ",")) {
+                    st = _st_adv(st);
+                    si (_st_ch(st, 5, "]")) { romper; }
+                }
             }
             numero re = _parse_expr(st);
             numero elen = __map_obtener(re, "node");
@@ -1386,7 +1389,20 @@ funcion numero _parse_decl(numero st) {
             si (!_st_eof(st) && _st_tt(st) == 1) {
                 texto tv = a_texto(_st_tv(st));
                 numero st_adelante = _st_adv(st);
-                si (!_st_eof(st_adelante) && _st_tt(st_adelante) == 1) {
+                si (_st_ch(st_adelante, 4, "<")) {
+                    // Tipo genérico custom: `funcion list<string> foo()` — saltar <...>
+                    numero st_scan = st_adelante;
+                    mientras (!_st_eof(st_scan) && !_st_ch(st_scan, 4, ">")) {
+                        si (_st_ch(st_scan, 5, "(") || _st_ch(st_scan, 5, ")") ||
+                            _st_ch(st_scan, 5, "{") || _st_ch(st_scan, 5, "}") ||
+                            _st_ch(st_scan, 5, ";")) { romper; }
+                        st_scan = _st_adv(st_scan);
+                    }
+                    si (_st_ch(st_scan, 4, ">")) {
+                        tr = tv;
+                        st = _st_adv(st_scan);
+                    }
+                } sino si (!_st_eof(st_adelante) && _st_tt(st_adelante) == 1) {
                     tr = tv;
                     st = st_adelante;
                 }
@@ -1408,6 +1424,21 @@ funcion numero _parse_decl(numero st) {
             } sino {
                 st = _st_adv(st);
             }
+        }
+        // VarDecl estilo C: `funcion T X = expr;` (variable top-level, sin cuerpo)
+        si (_st_ch(st, 4, "=")) {
+            st = _st_adv(st);
+            numero re = _parse_expr(st);
+            numero vl = __map_obtener(re, "node");
+            st = __map_obtener(re, "st");
+            si (_st_ch(st, 5, ";")) { st = _st_adv(st); }
+            numero n = __map_nuevo();
+            n = __map_poner(n, "tipo", "VarDecl");
+            n = __map_poner(n, "nombre", nm);
+            n = __map_poner(n, "tipo_var", tr);
+            n = __map_poner(n, "valor", vl);
+            mapa_tipos_var = __map_poner(mapa_tipos_var, nm, tr);
+            retornar _res(st, n);
         }
         st = _st_adv(st); // (
         numero prms = __map_nuevo();

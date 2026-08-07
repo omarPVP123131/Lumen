@@ -1,13 +1,9 @@
+// Test HTTP via red.nv
 importar "red.nv";
-importar "texto.nv";
 
 imprimir("=== HTTP Test via FFI ===");
 
-sea resp = red_http_get("8.8.8.8", 80, "/");
-imprimir("respuesta: ", resp.largo(), " bytes");
-
-si resp.largo() > 0 {
-    imprimir("(primeros 200): ", texto_hasta(resp, 200));
-}
+resultado<texto, texto> resp = red_http_obtener("http://example.com/");
+imprimir("respuesta: ", resp);
 
 imprimir("--- FIN ---");

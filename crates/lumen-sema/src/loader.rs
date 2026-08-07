@@ -56,8 +56,15 @@ impl ModuleLoader {
                     if path == "ingles" || path == "english" {
                         continue;
                     }
-                    let current_dir = current_path.parent().unwrap_or(Path::new("."));
-                    let resolved = self.resolve_path(&path, current_dir)?;
+                    let current_dir = if current_path.is_dir() {
+                        current_path.to_path_buf()
+                    } else {
+                        current_path
+                            .parent()
+                            .unwrap_or(Path::new("."))
+                            .to_path_buf()
+                    };
+                    let resolved = self.resolve_path(&path, &current_dir)?;
                     if resolved == current_path {
                         // Self-import: el archivo se importa a sí mismo por nombre
                         // (p. ej. `examples/graficos_avanzado.nv` importando

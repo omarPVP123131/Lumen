@@ -1,17 +1,9 @@
+// Test de red.nv - escucha TCP
 importar "red.nv";
 
 imprimir("=== Red Test ===");
 
-// Inicializar Winsock manualmente primero
-sea w = __ffi_cargar("ws2_32.dll");
-imprimir("w: ", w);
-sea wsa = __ffi_asignar(400);
-sea r = __ffi_llamar(w, "WSAStartup", "entero,entero", [514, wsa], "entero");
-imprimir("WSAStartup: ", r);
-__ffi_liberar(wsa, 400);
-
-// Socket
-sea fd = red_socket();
-imprimir("socket: ", fd);
+booleano esc = red_tcp_escuchar("127.0.0.1:0");
+imprimir("escuchar: ", esc);
 
 imprimir("--- FIN ---");
