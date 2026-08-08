@@ -1,9 +1,0 @@
-importar ingles;
-
-function float convertir_moneda(float monto, float tasa) {
-    return monto * tasa;
-}
-
-print(convertir_moneda(100.0, 0.92));
-print(convertir_moneda(50.0, 1.1));
-print(convertir_moneda(200.0, 0.0078));

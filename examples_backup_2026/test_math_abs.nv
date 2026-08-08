@@ -1,2 +1,0 @@
-importar "matematicas.nv";
-imprimir("abs(-5) = ", matematicas_abs(-5));

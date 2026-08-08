@@ -1,3 +1,0 @@
-Nombre: LUMEN
-Version: 1.6.0
-Lenguaje: ES/EN

@@ -1,5 +1,0 @@
-texto nombre = "Ana";
-entero edad = 28;
-decimal altura = 1.68;
-
-imprimir("Me llamo {nombre}, tengo {edad} años y mido {altura}m");

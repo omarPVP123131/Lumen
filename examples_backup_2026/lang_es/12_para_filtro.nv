@@ -1,9 +1,0 @@
-importar ingles;
-
-lista<entero> datos = [5, 12, 8, 25, 3, 18];
-
-para val in datos {
-    si (val > 10) {
-        imprimir(val);
-    }
-}

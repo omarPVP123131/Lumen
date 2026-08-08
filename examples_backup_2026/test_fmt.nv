@@ -1,7 +1,0 @@
-funcion entero suma(entero a, entero b) {
-    retornar a + b;
-}
-
-entero res = suma(3, 7);
-
-imprimir(res);

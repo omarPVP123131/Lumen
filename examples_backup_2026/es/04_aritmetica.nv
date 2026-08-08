@@ -1,8 +1,0 @@
-entero a = 10;
-entero b = 3;
-
-imprimir(a + b);
-imprimir(a - b);
-imprimir(a * b);
-imprimir(a / b);
-imprimir(a % b);

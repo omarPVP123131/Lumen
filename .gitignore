@@ -8,6 +8,9 @@ target/
 *.swp
 *.swo
 
+# OpenCode
+.opencode/
+
 # Bytecode outputs
 *.nvc
 

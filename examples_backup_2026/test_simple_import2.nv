@@ -1,2 +1,0 @@
-importar "simple_test2.nv";
-imprimir(simple_test2_potencia(2, 8));

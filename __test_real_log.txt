@@ -1,8 +1,0 @@
-[2026-01-15 10:30:00] INFO Inicio del sistema
-[2026-01-15 10:30:05] DEBUG Configuración cargada
-[2026-01-15 10:30:10] INFO Servidor iniciado en puerto 8080
-[2026-01-15 10:35:22] WARN Conexion lenta detectada
-[2026-01-15 10:40:00] ERROR Timeout en base de datos
-[2026-01-15 10:40:05] INFO Reintentando conexion
-[2026-01-15 10:40:10] INFO Conexion restablecida
-[2026-01-15 10:45:00] INFO Proceso completado

@@ -1,3 +1,0 @@
-Linea 1: Inicio del log
-Linea 2: Evento registrado
-Linea 3: Proceso completado

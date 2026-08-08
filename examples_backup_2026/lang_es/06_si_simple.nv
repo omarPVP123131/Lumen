@@ -1,7 +1,0 @@
-importar ingles;
-
-entero puntaje = 85;
-
-si (puntaje >= 60) {
-    imprimir("Aprobado");
-}

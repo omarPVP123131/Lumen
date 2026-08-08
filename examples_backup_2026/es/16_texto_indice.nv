@@ -1,4 +1,0 @@
-texto s = "Lumen";
-imprimir(s[0]);
-imprimir(s[1]);
-imprimir(s[2]);
