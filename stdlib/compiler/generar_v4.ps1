@@ -5,9 +5,9 @@ $header = @'
 // Generado: concatenación de lexer.nv + parser.nv + codegen.nv + main
 // Sin imports - el parser LÚMEN puede compilarlo completo
 '@
-$lexer = Get-Content "lexer.nv" -Raw
-$parser = Get-Content "parser.nv" -Raw
-$codegen = Get-Content "codegen.nv" -Raw
+$lexer = Get-Content (Join-Path $scriptDir "lexer.nv") -Raw
+$parser = Get-Content (Join-Path $scriptDir "parser.nv") -Raw
+$codegen = Get-Content (Join-Path $scriptDir "codegen.nv") -Raw
 $main = @'
 // ── Main: compila el target indicado en target.txt ──
 // target.txt contiene dos líneas: ruta_entrada .nv / ruta_salida .nvc

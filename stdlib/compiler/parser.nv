@@ -222,7 +222,7 @@ funcion numero _parse_pr(numero st) {
     // Identifier or function call
     si (tt == 1 || (tt == 6 && !_st_tp(st) &&
          tvs != "verdadero" && tvs != "true" &&
-         tvs != "falso" && tvs != "false")) {
+         tvs != "falso" && tvs != "false" && tvs != "como")) {
         texto nm = tvs;
         st = _st_adv(st);
         numero base = __map_nuevo();
@@ -434,6 +434,16 @@ funcion numero _parse_pr(numero st) {
                 n2 = __map_poner(n2, "obj", base);
                 n2 = __map_poner(n2, "idx", fld);
                 base = n2;
+            }
+        }
+        // Cast no-op: expr como Tipo
+        si (_st_ch(st, 6, "como")) {
+            st = _st_adv(st);
+            si (!_st_eof(st)) { st = _st_adv(st); }
+            mientras (_st_ch(st, 4, "<")) {
+                st = _st_adv(st);
+                mientras (!_st_eof(st) && !_st_ch(st, 4, ">")) { st = _st_adv(st); }
+                si (!_st_eof(st)) { st = _st_adv(st); }
             }
         }
         retornar _res(st, base);
@@ -1671,6 +1681,19 @@ funcion numero _imp_prefijar(numero nodo, texto prefijo, numero propias, numero 
             j = j + 1;
         }
         nodo = __map_poner(nodo, "args", args);
+        retornar nodo;
+    }
+    si (tp == "Lista") {
+        numero elems = __map_obtener(nodo, "elementos");
+        numero lc = __map_obtener(elems, "cnt");
+        numero j = 0;
+        mientras (j < lc) {
+            numero eln = __map_obtener(elems, a_texto(j));
+            elems = __map_poner(elems, a_texto(j),
+                _imp_prefijar(eln, prefijo, propias, importadas));
+            j = j + 1;
+        }
+        nodo = __map_poner(nodo, "elementos", elems);
         retornar nodo;
     }
     si (tp == "Binary") {
