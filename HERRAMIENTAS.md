@@ -1,6 +1,6 @@
 # LÚMEN — Herramientas y Desarrollo
 
-**v2.0.0 — Guía del Desarrollador**
+**v2.4.0 — Guía del Desarrollador**
 
 Guía completa de herramientas, comandos, CI/CD y flujo de trabajo.
 
@@ -659,4 +659,4 @@ cargo publish -p lumen-cli
 
 ---
 
-*LÚMEN v1.6.0 — Julio 2026*
+*LÚMEN v2.4.0 — Agosto 2026*

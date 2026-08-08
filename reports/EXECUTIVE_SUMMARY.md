@@ -2,6 +2,8 @@
 
 **Versión:** 1.2.0 | **Fecha:** Julio 2026 | **Tests:** 294 pasando, 0 warnings
 
+> **Sincronizado (6 Ago 2026):** Reporte histórico de la auditoría de julio. Los archivos `test_agents/K01-K20.nv` **no están presentes** en el repo actual — `test_agents/` contiene 45 archivos (01-10, J01-J15, S01-S15, debug_*). Proyecto actual: v2.4.0, ~378 tests, 375/375 en cargo test.
+
 ---
 
 ## Resumen del Proyecto
@@ -64,4 +66,4 @@ LÚMEN es un lenguaje de programación educativo con sintaxis nativa en español
 
 - `reports/TEST_REPORT.md` — Análisis exhaustivo de tests
 - `reports/AUDIT_REPORT.md` — Auditoría completa del código fuente
-- Archivos de test nuevos: `test_agents/K01_*.nv` — `test_agents/K20_*.nv`
+- Archivos de test en repo: `test_agents/` — 45 archivos (01-10, J01-J15, S01-S15, debug_*)

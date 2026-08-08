@@ -5,6 +5,8 @@
 **Scope:** All 7 crates (lexer, parser, sema, ir, codegen, vm, cli)  
 **Methodology:** Static analysis + code review by 3 autonomous review agents
 
+> **Synced (2026-08-06):** Historical audit report. The `test_agents/K01-K20.nv` files are **not present** in the current repo — `test_agents/` contains 45 files (01-10, J01-J15, S01-S15, debug_*). Current state: v2.4.0, ~378 tests, 375/375 in cargo test.
+
 ---
 
 ## Verdict: **NEEDS WORK** ⚠️
@@ -242,7 +244,7 @@ docs/language.md                        + importar ingles documentation
 docs/spec/error-codes.md                + E070 error code
 AGENTS.md                               + Phase 32b documentation
 test_agents/*.nv                        + importar ingles; to all 65 files
-test_agents/K01_K20.nv                  + 20 new test files
+test_agents/K01_K20.nv                  + 20 new test files (NOT in repo — see sync note)
 reports/                                + This audit report suite
 ```
 

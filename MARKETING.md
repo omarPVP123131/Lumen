@@ -1,6 +1,6 @@
 # LÚMEN — El Lenguaje que Ilumina
 
-**v1.6.0 — Documento de Posicionamiento y Visión**
+**v2.4.0 — Documento de Posicionamiento y Visión**
 
 > *"Programar no debería ser un lujo en inglés. Debería ser un derecho en tu idioma."*
 
@@ -81,7 +81,7 @@ nombre = "Ana"; // El compilador deduce: texto
 - `Opcion<T>` para nulabilidad segura
 - Sum types con `enum`
 
-### 5. Baterías Incluidas (v1.6.0)
+### 5. Baterías Incluidas (v2.4.0)
 
 | Herramienta | Comando |
 |-------------|---------|
@@ -141,7 +141,7 @@ imprimir("Hola {nombre}, tienes {edad} años y mides {altura}m");
 
 ## ⚠️ Lo Malo (Honestidad Total)
 
-### 1. Todavía Joven (v1.6.0)
+### 1. Todavía Joven (v2.4.0)
 
 LÚMEN tiene menos de 2 años. No está en producción en ningún lado. Úsalo para aprender,
 enseñar, prototipar — no para tu sistema bancario. Todavía.
@@ -255,4 +255,4 @@ estáticos, genéricos, traits, pattern matching y mensajes de error pedagógico
 
 ---
 
-*LÚMEN v1.6.0 — Julio 2026 · Hecho con convicción, no con hype.*
+*LÚMEN v2.4.0 — Agosto 2026 · Hecho con convicción, no con hype.*

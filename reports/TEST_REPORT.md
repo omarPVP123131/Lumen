@@ -1,7 +1,7 @@
 # LÚMEN — Comprehensive Test Agent Report
 
 **Generated:** 2026-07-21  
-**Version:** LÚMEN 1.2.0 (294 Rust tests passing, 0 warnings)  
+**Version:** LÚMEN 2.4.0 (~378 tests: 375/375 cargo test + batería .nv) — reporte histórico de 1.2.0 (294 tests)  
 **Test Suite:** 85 test agents (15 Junior + 15 Senior + 20 Kernel NUEVOS + 35 pre-existing)  
 **Evidence:** Test results verified via CLI execution of each `.nv` file
 
@@ -132,19 +132,19 @@
 
 ---
 
-## Rust Unit Test Suite (294 tests)
+## Rust Unit Test Suite (294 tests — actual: ~378)
 
-| Crate | Tests | Type | Status |
+| Crate | Tests (hoy) | Type | Status |
 |-------|-------|------|--------|
-| lumen-lexer | 24 | unit | ✅ 24/24 |
+| lumen-lexer | 25 | unit | ✅ 25/25 |
 | lumen-parser | 42 | unit | ✅ 42/42 |
-| lumen-sema | 43 | unit | ✅ 43/43 |
+| lumen-sema | 49 | unit | ✅ 49/49 |
 | lumen-ir | 20 | unit + folding | ✅ 20/20 |
 | lumen-codegen | 13 | unit | ✅ 13/13 |
 | lumen-codegen | 5 | proptest | ✅ 5/5 |
 | lumen-vm | 45 | unit | ✅ 45/45 |
-| lumen-vm | 102 | e2e | ✅ 102/102 |
-| **TOTAL** | **294** | | **✅ 294/294** |
+| lumen-vm | 166 | e2e | ✅ 166/166 |
+| **TOTAL** | **~378** | | **✅ 375/375 cargo test** |
 
 ---
 

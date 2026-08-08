@@ -1,6 +1,6 @@
-# Siguientes Pasos — Roadmap LÚMEN v2.3 → v3.0
+# Siguientes Pasos — Roadmap LÚMEN v2.4 → v3.0
 
-**Estado actual:** Fases 0-185 completas + Self-hosting total (mapas O(1)) + **Self-hosting puro (Sprint 5: fixpoint confirmado, 31 Julio 2026)**. Lenguaje, herramientas, stdlib, concurrencia, GUI/TUI/GFX, portabilidad.
+**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 116/116 compilan · 108 CORRECTOS** (6 Ago 2026). Pendiente: bootstrapping doble + release v2.4.0.
 
 ---
 
@@ -16,7 +16,7 @@
 
 | Área | Complejidad | Impacto | Razón |
 |------|-------------|---------|-------|
-| **Optimización VM para self-hosting** | 🟡 Media | 🟡 Medio | El self-compile puro tarda ~200s (VM LÚMEN interpretada); optimizar haría el bootstrap práctico |
+| **Bootstrapping doble + release v2.4.0** | 🟡 Media | 🟡 Alto | vm.nv compilada por el compilador LÚMEN (hito final del self-hosting) + tag/release |
 | **Fixes y pulido** | 🟢 Baja | 🔥 Alto | Estabilidad general, edge cases |
 
 ## 🔵 Prioridad Baja — Muy Complejo + Nicho
@@ -51,25 +51,15 @@
 - 11 bugs críticos arreglados (saltos, TryUnwrap, print multi-arg, break/continue, escapes, keywords, forward decls)
 - LÚMEN ya no depende de `__compile_nv` para compilarse
 
-### 🟢 En curso: **Sprint 6-8 — LÚMEN autosuficiente (dogfooding total)**
+### 🟢 Completado: **Sprint 6-8 — LÚMEN autosuficiente (dogfooding total, 31 Jul - 6 Ago 2026)**
 
-**Sprint 6 — Imports + Gramática completa (compiler_v5 modular)** — prueba de fuego: 115/115 compilan, 29/115 ejecutan correctamente
-- **6.1 `importar` en el pipeline puro** (P0 — ~50 ejemplos fallan por esto): resolver módulos, fusionar ASTs, prefijo `modulo_` en funciones y calls internos; compiler_v5 deja de ser concatenación (lexer/parser/codegen como módulos reales)
-- **6.2 Keywords core faltantes**: `const`, `para`/`para cada` (for+foreach), `estructura` (campos, `T { ... }`, acceso `.campo`), `enum`/`opcion`/`resultado` (+ variantes), `elegir`/`sea` (match + if-let/while-let), closures `|x|`, params default `b = 10`, genéricos `<T>` (sintaxis), destructuring `_`, tuplas `(...)`
-- **6.3 Runtime**: arrays anidados `arr[i][j]`, ArraySet `arr[i] = x`, propagación de errores TryUnwrap en top-level (actualmente silenciosa)
-- **Verificación**: `fuego.ps1` → 100% OK+CORRECTO en todos los ejemplos que Rust puede ejecutar
-
-**Sprint 7 — VM en LÚMEN + optimización (~200s → <10s)**
-- 7.1 `vm.nv` — ejecutador de .nvc en LÚMEN puro (stack, frames, dispatch de opcodes, builtins)
-- 7.2 Bootstrapping doble: compiler_v5 compila vm.nv → vm.nvc corre en la VM LÚMEN → **0 dependencias de Rust**
-- 7.3 Optimización VM Rust: tabla de salto, internamiento de strings, evitar clones (3.7M instrs del self-compile)
-- 7.4 Fixpoint doble: compilador Y VM compilados y ejecutados por sí mismos
-
-**Sprint 8 — Dogfooding completo (release v2.4.0)**
-- 8.1 Compilar el stdlib COMPLETO con compiler_v5 (matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos)
-- 8.2 Ejecutar los 115 ejemplos con la cadena 100% LÚMEN
-- 8.3 Benchmarks vs Rust (compilación y ejecución)
-- 8.4 Docs + AGENTS v2.4.0 + release
+- **6.1 `importar` en el pipeline puro** ✅ — resolver `_imp_*` + `parser_parsear_con_base`, self-import detectado (canonicalize en loader.rs)
+- **6.2-6.4 Gramática real** ✅ — `sea`/`const` (VarDecl), StructInit `T {}` → mapas, `.campo` → Index+Texto, `elegir`/`defecto:`/`caso`, enum `Nombre::Miembro(args)`, `algun`/`ninguno`/`exito`/`error`, cortocircuito `&&`/`||`, closures IIFE, params default, traits `rasgo`/`impl`/`este`, cast `como`
+- **6.3 Runtime** ✅ — arrays anidados, ArraySet `arr[i] = x`, TryUnwrap top-level con `__tipo_de(fin)`, floats con `.`, lexer CRLF/UTF-8 seguro (`__str_subcadena_chars` nativo)
+- **FIXPOINT v4 CONFIRMADO** ✅ — self/self2 byte-IDENTICAL (SHA-256 90048DC9…), 5s
+- **Sprint 7 — VM en LÚMEN** ✅ — `vm.nv` (dispatch 0-46, corutinas reales, handlers JSON/tarea/coro/crypto/fs/env/tiempo/hilo/mutex/calendario), demo 120s → 0.9s, batería 39/40
+- **Sprint 8 — Dogfooding** ✅ — stdlib completo compila; **fuego.ps1: 116/116 compilan · 108 CORRECTOS · 4 INCOMPATIBLES · 4 TIMEOUT · 0 fallos**; benchmarks: compile x5.4, run x231 (mediana x2-6)
+- **Pendiente:** bootstrapping doble (compiler_v4 compila vm.nv → vm.nvc corre en VM LÚMEN → 0 dependencias de Rust) → release v2.4.0
 
 ### Después: **AI/ML (Fases 186-200) + Docs**
 - AI/ML + Data Science — feature más solicitada para un lenguaje moderno

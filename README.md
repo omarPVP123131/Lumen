@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-2.0.0-orange)
-![Tests](https://img.shields.io/badge/tests-371%20passing-brightgreen)
-![Fases](https://img.shields.io/badge/fases-0--170%20completadas-blueviolet)
+![Version](https://img.shields.io/badge/version-2.4.0-orange)
+![Tests](https://img.shields.io/badge/tests-378%20passing-brightgreen)
+![Fases](https://img.shields.io/badge/fases-0--185%20completadas%2Bblueviolet)
 
 > **El primer lenguaje de programación moderno con el español como ciudadano de primera clase.**
 > Pipeline completo escrito en Rust: Lexer → Parser → Sema → IR → Optimizador → Bytecode → VM.
@@ -149,7 +149,7 @@ docker compose up  # Incluye lumen + lumen-repl
 
 ---
 
-## 📊 Estado del Proyecto (v2.0.0)
+## 📊 Estado del Proyecto (v2.4.0)
 
 ```
 Lenguaje Core         ████████████████████ 100% (0-60)
@@ -159,13 +159,15 @@ Stdlib Extendida      ███████████████████�
 Runtime & Sistema     ████████████████████ 100% (111-130)
 Concurrencia & Async  ████████████████████ 100% (131-150)
 GUI, TUI & Juegos     ████████████████████ 100% (151-170)
-Portabilidad          █████░░░░░░░░░░░░░░░  25% (171-185)
+Portabilidad          ████████████████████ 100% (171-185)
+Self-hosting          ████████████████████ 100% (compilador LÚMEN en LÚMEN, fixpoint)
 AI/ML & Cloud         ░░░░░░░░░░░░░░░░░░░░   0% (186-220)
 ```
 
-- ✅ **371 tests** pasando, ~0 warnings
-- ✅ **45+ ejemplos** `.nv` funcionales
+- ✅ **~378 tests** pasando, ~0 warnings (375/375 cargo test)
+- ✅ **116 ejemplos** `.nv` — 108/108 CORRECTOS en la cadena 100% LÚMEN (fuego.ps1)
 - ✅ **15 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg, wasm
+- ✅ **Self-hosting total**: compiler_v4.nv se compila a sí mismo (fixpoint byte-idéntico, 5s) + VM en LÚMEN (vm.nv)
 - ✅ **Docker** multi-stage + docker-compose
 - ✅ **WASM** playground con JS interop integrado
 - ✅ **Sintaxis dual ES/EN** en todo el stdlib

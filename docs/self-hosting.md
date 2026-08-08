@@ -239,18 +239,19 @@ si (_st_ch(st, 4, "<")) {
 |-------|--------|-------|
 | `importar` en parser puro: resolver módulos, fusionar ASTs, prefijo `modulo_` | ✅ | Verificado: `parser_parsear_con_base` + resolver `_imp_*` |
 | Keywords: `const`, `para`, `sea` (VarDecl real), `estructura`/`enum` (skip tolerante + StructInit `T {}` → mapas), `elegir`/`defecto:` reales | ✅ | 6.4: enum/elegir/sea REALES — EnumInit, `defecto:`, cadenas de `sino` (im::HashMap persistente) |
-| Closures `\|x\|`, params default, genéricos `<T>`, destructuring `_`, tuplas `(...)` | 🟡 | Soportados por el compilador Rust; parser puro tolerante (skip) — ver batería |
+| Closures `\|x\|`, params default, genéricos `<T>`, destructuring `_`, tuplas `(...)` | ✅ | Closures IIFE (`funcion(){}(args)` hoisted → `__lambda_N`), params default inlineados en call-site, genéricos, `como` cast — todos REALES (commits 6d88fca, ee35e2d) |
 | Arrays anidados, ArraySet `arr[i] = x` | ✅ | Verificado: `test_arr` y `foreach` CORRECTO (op 28/29/30) |
 | TryUnwrap top-level con error visible | ✅ | Cubierto por driver nuevo (`__tipo_de(fin)` en main de generar_v4.ps1) |
 | Cortocircuito `&&`/`\|\|` en codegen puro | ✅ | Helper `_cg_and_or` con JmpIf/Jmp reales (fixpoint v4 regresionado por And eager) |
-| Fixpoint v4 + `fuego.ps1` | ✅ | Fixpoint: self/self2 byte-IDÉNTICOS (112,368 B) · fuego: **116/116 compilan, 61 CORRECTOS, 0 fallos** |
+| Traits `rasgo`/`impl`/`este` | ✅ | `impl Trait para Tipo` → métodos mangled `Tipo_Trait_metodo` + resolución `n.metodo()` por tipo de var (commit 9328fec) |
+| Fixpoint v4 + `fuego.ps1` | ✅ | Fixpoint: self/self2 byte-IDÉNTICOS (SHA-256 90048DC9…) · fuego: **116/116 compilan, 108 CORRECTOS, 0 fallos** |
 
 ### 🟢 Sprint 7 — VM en LÚMEN + optimización
 
 | Tarea | Estado | Notas |
 |-------|--------|-------|
-| `vm.nv` — ejecutador de .nvc en LÚMEN puro | ✅ | Dispatch 0-46, builtins vía natives boxeados (JSON, tarea, coro, crypto, fs, env, tiempo, tipo_de), bandas boxed, **demo_completo 0 diffs ~0.9s**, **corutinas reales** (reanudar/ceder/ret con intercambio st/sp/pc), batería **27/28** (2 DIFFs pre-existentes en ambas VMs: `44_extension_methods`+`math`) |
-| Optimización VM LÚMEN (~200s → <10s) | 🔄 | `a_entero` O(n)→O(1) (demo 120s→0.9s); falta tabla de salto + internamiento de strings en vm.nv — la VM Rust ya está optimizada (COW Arc) |
+| `vm.nv` — ejecutador de .nvc en LÚMEN puro | ✅ | Dispatch 0-46, builtins vía natives boxeados (JSON, tarea, coro, crypto, fs, env, tiempo, tipo_de), bandas boxed, **demo_completo 0 diffs ~0.9s**, **corutinas reales** (reanudar/ceder/ret con intercambio st/sp/pc), `fmain` acepta `__main__`/`main`/`principal`, handlers tiempo/hilo/mutex/calendario, batería **39/40** (solo `stress_fecha` flaky por timing) |
+| Optimización VM LÚMEN (~200s → <10s) | ✅ | `a_entero` O(n)→O(1) (demo 120s→0.9s), guards de banda [3e9,9e9) para ints reales grandes, fix `__map_poner` persistente (cadenas `sino` reconstruidas desde el final) |
 | **Optimización VM Rust (causa del O(n²) del fixpoint)** | ✅ | **COW con `Arc`** en `Value::Str(Arc<str>)`/`Value::Array(Arc<Vec<Value>>)`: clonar Values grandes = O(1) (antes Load/ArrayGet/`__str_subcadena_chars` clonaban listas enteras → O(n²)). **Fixpoint v4: 861s → 20.1s (43x)**, self_out2 byte-IDENTICAL (112,368 B) |
 | Bootstrapping doble (compiler_v4 compila vm.nv; vm.nvc corre en VM LÚMEN) | ⏳ | 0 dependencias de Rust — hito final |
 | Fixpoint doble (compilador + VM) | ⏳ | |
@@ -259,10 +260,10 @@ si (_st_ch(st, 4, "<")) {
 
 | Tarea | Estado | Notas |
 |-------|--------|-------|
-| Compilar stdlib completo con compiler_v5 | ⏳ | matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos |
-| Ejecutar 115 ejemplos con cadena 100% LÚMEN | ⏳ | |
-| Benchmarks vs Rust | ⏳ | |
-| Docs + AGENTS v2.4.0 + release | ⏳ | |
+| Compilar stdlib completo con compiler_v5 | ✅ | matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos — stdlib completo compila con el pipeline puro (fuego 116/116 compilan) |
+| Ejecutar 115 ejemplos con cadena 100% LÚMEN | ✅ | **fuego.ps1: 116/116 compilan · 108 CORRECTOS · 4 INCOMPATIBLES · 4 TIMEOUT · 0 fallos** (restantes: SDL/negativos por diseño/no-deterministas/GUI/FFI) |
+| Benchmarks vs Rust | ✅ | `scripts/benchmark_vs_rust.ps1`: compile x5.4, run x231 (intérprete-en-intérprete; mediana x2-6) |
+| Docs + AGENTS v2.4.0 + release | ⏳ | Docs sincronizadas (6 Ago 2026); falta tag/release oficial |
 
 ---
 

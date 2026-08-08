@@ -249,7 +249,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | 171 | **WASM backend** | Compilar a WebAssembly para ejecución en navegadores | ✅ v1.7.0 — VM refactorizada, crate lumen-wasm |
 | 172 | **WASM: WASI** | Ejecutar en servidores/serverless vía WASI | ✅ build + CI + test |
 | 173 | **WASM: JS interop** | Llamar funciones JS desde LÚMEN y viceversa | ✅ 17 bridge functions |
-| 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | ✅ Pipeline LÚMEN→.nvc→ejecuta; **Sprint 5 (31 Jul): fixpoint puro confirmado** — `compiler_v4_self.nvc` (54,712 bytes) se autocompila con output idéntico, ~200s |
+| 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | ✅ Pipeline LÚMEN→.nvc→ejecuta; **Sprint 5-8 (31 Jul-6 Ago): fixpoint puro confirmado** — `compiler_v4_self.nvc` byte-IDÉNTICO (SHA-256 90048DC9…), 5s; **VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x COW Arc)**; **fuego: 108/116 ejemplos CORRECTOS**; pendiente bootstrapping doble |
 | 175 | **Docker Image** | `lumen:latest`, multi-stage, slim | ✅ Dockerfile |
 | 176 | **Docker Compose** | Servicios lumen + lumen-repl | ✅ docker-compose.yml |
 | 177 | **GitHub Action** | CI build/test/clippy/fmt/coverage | ✅ .github/workflows/ |
@@ -354,7 +354,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 - ✅ **WASM**: compila a wasm32-unknown-unknown
 
 ### 📋 Lo que falta
-- **Self-hosting completo (Fase 174)**: Pipeline LÚMEN→LÚMEN→.nvc→ejecuta ✅ (Sprint 2). Bootstrap completo ✅ (Sprint 3: `__compile_nv`, 533ms). HashMap O(1) ✅ (Sprint 4: `Value::Map` Vec→HashMap). **Self-hosting puro ✅ (Sprint 5, 31 Jul: fixpoint confirmado — `compiler_v4_self.nvc` 54,712 bytes, 3 runs idénticos 193s/203s/197s).** Pendiente: optimizar VM para hacer el self-compile práctico (~200s → objetivo <10s).
+- **Self-hosting completo (Fase 174)**: Pipeline LÚMEN→LÚMEN→.nvc→ejecuta ✅ (Sprint 2). Bootstrap ✅ (Sprint 3: `__compile_nv`, 533ms). HashMap O(1) ✅ (Sprint 4). **Self-hosting puro ✅ (Sprint 5, 31 Jul: fixpoint 54,712 B).** **Sprint 6 ✅ gramática completa (enum/elegir/sea/traits/closures/params-default).** **Sprint 7 ✅ VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x, COW Arc).** **Sprint 8 ✅ dogfooding: fuego 116/116 compilan · 108 CORRECTOS (6 Ago).** Pendiente: bootstrapping doble + release v2.4.0.
 - **SQLite ORM (Fase 116)**: mapeo objeto-relacional mínimo sobre SQLite.
 - **AsyncGen (Fase 149)**: `async generador { }` — generadores asíncronos.
 - **TreeView (Fase 169)**: widget TreeView con drag-drop y multi-selección.

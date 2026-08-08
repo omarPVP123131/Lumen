@@ -1,6 +1,6 @@
 # LÚMEN — Manual del Lenguaje
 
-**v1.6.0 — La Biblia de LÚMEN**
+**v2.4.0 — La Biblia de LÚMEN**
 
 > Un lenguaje de programación en español diseñado para aprender a programar sin fricción.  
 > Simple, expresivo, y con esteroides de Rust por dentro.
@@ -1154,4 +1154,4 @@ TypeVar            (genéricos sin restricción)
 
 ---
 
-*LÚMEN v1.4.0 — Creado con amor por la comunidad. Julio 2026.*
+*LÚMEN v2.4.0 — Creado con amor por la comunidad. Agosto 2026.*
