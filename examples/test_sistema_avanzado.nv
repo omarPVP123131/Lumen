@@ -1,4 +1,5 @@
 importar "sistema.nv";
+importar "archivos.nv";
 
 imprimir("=== Sistema Test ===");
 
@@ -33,6 +34,7 @@ imprimir("--- Temp ---");
 sea dir = sistema_temp_directorio();
 imprimir("temp dir: ", dir);
 sea tmp = sistema_temp_archivo();
-imprimir("temp archivo: ", tmp);
+imprimir("temp archivo existe: ", archivos_existe_archivo(tmp));
 
 imprimir("--- FIN ---");
+

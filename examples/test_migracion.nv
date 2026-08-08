@@ -14,7 +14,7 @@ imprimir("assert_eq (en): ", testing_assert_eq("hola", "hola"));
 // CSV
 sea csv_data = "nombre,edad\nAna,30\nLuis,25";
 sea parsed = csv_parsear(csv_data);
-imprimir("csv parsed: ", parsed);
+imprimir("csv parsed filas: ", __map_claves(parsed).largo());
 sea back = csv_serializar(parsed);
 imprimir("csv back: ", back);
 

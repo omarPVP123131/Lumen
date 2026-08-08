@@ -20,7 +20,21 @@ funcion cualquiera parsear(texto datos) {
 funcion cualquiera parse(texto data) { retornar parsear(data); }
 
 funcion texto serializar(cualquiera filas) {
-    cualquiera claves = __map_claves(filas);
+    lista<numero> claves = __map_claves(filas);
+    entero n = claves.largo();
+    entero a = 0;
+    mientras a < n {
+        entero b = a + 1;
+        mientras b < n {
+            si claves[b] < claves[a] {
+                cualquiera tmp = claves[a];
+                claves[a] = claves[b];
+                claves[b] = tmp;
+            }
+            b = b + 1;
+        }
+        a = a + 1;
+    }
     texto res = "";
     entero i = 0;
     mientras i < claves.largo() {

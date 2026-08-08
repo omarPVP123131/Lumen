@@ -3,7 +3,7 @@ importar "json.nv";
 imprimir("=== JSON Test ===");
 
 sea parsed = json_parsear("{\"nombre\": \"Ana\", \"edad\": 30}");
-imprimir("parsed: ", parsed);
+imprimir("nombre: ", __map_obtener(parsed, "nombre"));
 
 sea serialized = json_serializar(parsed);
 imprimir("serialized: ", serialized);
