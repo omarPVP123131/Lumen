@@ -334,6 +334,19 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         }
         retornar largo(__str_a_caracteres(str_at(stl, stl_din, a_entero(v - 1000000000)))) + 0.0;
     }
+    si nm == "agregar" || nm == "push" || nm == "append" {
+        numero v = estado_pila(st, sp - 1);
+        lista<numero> orig = arrs[a_entero(0.0 - v - 1000000000.0) - 1];
+        lista<numero> l2 = [];
+        entero k = 0;
+        while k < largo(orig) {
+            l2.agregar(orig[k]);
+            k = k + 1;
+        }
+        l2.agregar(estado_pila(st, sp));
+        arrs.agregar(l2);
+        retornar 0.0 - 1000000000.0 - largo(arrs);
+    }
     si nm == "a_texto" || nm == "to_texto" || nm == "__str_from" {
         numero v = estado_pila(st, sp);
         stl_din.agregar(a_texto_v(v));
@@ -1477,9 +1490,15 @@ funcion entero main() {
                         }
                         sp = sp + 1;
                     } sino {
-                        lista<numero> arr = arrs[a_entero(0.0 - v - 1000000000.0) - 1];
-                        st = estado_pila_poner(st, sp + 1, arr[a_entero(ixv)]);
-                        sp = sp + 1;
+                        si v >= 6000000000 && v < 7000000000 {
+                            lista<numero> tl = arrs[a_entero(v - 6000000000)];
+                            st = estado_pila_poner(st, sp + 1, tl[a_entero(ixv)]);
+                            sp = sp + 1;
+                        } sino {
+                            lista<numero> arr = arrs[a_entero(0.0 - v - 1000000000.0) - 1];
+                            st = estado_pila_poner(st, sp + 1, arr[a_entero(ixv)]);
+                            sp = sp + 1;
+                        }
                     }
                 }
             }

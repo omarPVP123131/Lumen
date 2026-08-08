@@ -307,14 +307,18 @@ funcion booleano _st_tp(numero st) {
 }
 
 // Avanza tras el tipo en una declaración, saltando genéricos "lista<entero>",
-// "opcion<entero>", "resultado<entero, texto>"
+// "opcion<entero>", "resultado<entero, texto>", anidados "lista<lista<numero>>"
+// (el lexer emite ">>" como un solo token: equivale a DOS cierres)
 funcion numero _st_tp_skip(numero st) {
     st = _st_adv(st);
     si _st_ch(st, 4, "<") {
         st = _st_adv(st);
+        entero prof = 1;
         mientras (!_st_eof(st)) {
-            si _st_ch(st, 4, ">") { st = _st_adv(st); romper; }
-            st = _st_adv(st);
+            si _st_ch(st, 4, ">") { prof = prof - 1; st = _st_adv(st); si prof <= 0 { romper; } }
+            sino si _st_ch(st, 4, ">>") { prof = prof - 2; st = _st_adv(st); si prof <= 0 { romper; } }
+            sino si _st_ch(st, 4, "<") { prof = prof + 1; st = _st_adv(st); }
+            sino { st = _st_adv(st); }
         }
     }
     retornar st;
@@ -682,7 +686,7 @@ funcion numero _parse_pr(numero st) {
             si (!_st_eof(st)) { st = _st_adv(st); }
             mientras (_st_ch(st, 4, "<")) {
                 st = _st_adv(st);
-                mientras (!_st_eof(st) && !_st_ch(st, 4, ">")) { st = _st_adv(st); }
+                mientras (!_st_eof(st) && !_st_ch(st, 4, ">") && !_st_ch(st, 4, ">>")) { st = _st_adv(st); }
                 si (!_st_eof(st)) { st = _st_adv(st); }
             }
         }
@@ -1504,7 +1508,7 @@ funcion numero _parse_stmt(numero st) {
         si ((_st_tt(st_ck) == 1) || (_st_tt(st_ck) == 6 && !_st_tp(st_ck))) {
             numero st_nm = st_ck;
             si (_st_ch(st_nm, 4, "<")) {
-                mientras (!_st_eof(st_nm) && !_st_ch(st_nm, 4, ">")) { st_nm = _st_adv(st_nm); }
+                mientras (!_st_eof(st_nm) && !_st_ch(st_nm, 4, ">") && !_st_ch(st_nm, 4, ">>")) { st_nm = _st_adv(st_nm); }
                 st_nm = _st_adv(st_nm);
             }
             si (_st_tt(st_nm) == 1 || (_st_tt(st_nm) == 6 && !_st_tp(st_nm))) {
@@ -1745,7 +1749,7 @@ funcion numero _parse_decl(numero st) {
         st = _st_adv(st);
         st = _st_adv(st); // nombre
         si (_st_ch(st, 4, "<")) {
-            mientras (!_st_eof(st) && !_st_ch(st, 4, ">")) { st = _st_adv(st); }
+            mientras (!_st_eof(st) && !_st_ch(st, 4, ">") && !_st_ch(st, 4, ">>")) { st = _st_adv(st); }
             st = _st_adv(st);
         }
         si (_st_ch(st, 5, "{")) {
@@ -3038,6 +3042,24 @@ funcion numero codegen_generar(numero ast) {
                 cg = _gen_stmt(cg, stmt);
             }
             i = i + 1;
+        }
+        
+        // Si existe una función `main`/`principal`, el top-level (__main__) debe
+        // llamarla al final (convención del pipeline Rust: __main__ → Call main → Halt)
+        numero funcs_m = __map_obtener(cg, "funcs");
+        numero fcnt_m = __map_obtener(cg, "func_cnt");
+        entero fm = 0;
+        texto nmain = "";
+        mientras fm < fcnt_m {
+            numero f_m = __map_obtener(funcs_m, a_texto(fm));
+            texto fn_m = a_texto(__map_obtener(f_m, "nombre"));
+            si nmain == "" {
+                si fn_m == "main" || fn_m == "principal" { nmain = fn_m; }
+            }
+            fm = fm + 1;
+        }
+        si nmain != "" {
+            cg = _cg_emit_call(cg, nmain, 0);
         }
     }
     

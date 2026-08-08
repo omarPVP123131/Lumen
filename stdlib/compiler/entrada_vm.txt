@@ -1,1 +1,1 @@
-examples/math.nvc
+C:\Users\Omar\Documents\Documentos WEb\LumenRust\stdlib\compiler\bat_math.nvc

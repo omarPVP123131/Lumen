@@ -798,6 +798,24 @@ funcion numero codegen_generar(numero ast) {
             }
             i = i + 1;
         }
+        
+        // Si existe una función `main`/`principal`, el top-level (__main__) debe
+        // llamarla al final (convención del pipeline Rust: __main__ → Call main → Halt)
+        numero funcs_m = __map_obtener(cg, "funcs");
+        numero fcnt_m = __map_obtener(cg, "func_cnt");
+        entero fm = 0;
+        texto nmain = "";
+        mientras fm < fcnt_m {
+            numero f_m = __map_obtener(funcs_m, a_texto(fm));
+            texto fn_m = a_texto(__map_obtener(f_m, "nombre"));
+            si nmain == "" {
+                si fn_m == "main" || fn_m == "principal" { nmain = fn_m; }
+            }
+            fm = fm + 1;
+        }
+        si nmain != "" {
+            cg = _cg_emit_call(cg, nmain, 0);
+        }
     }
     
     cg = _cg_emit(cg, _instr(OP_HALT, 0));
