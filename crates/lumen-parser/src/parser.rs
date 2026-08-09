@@ -127,8 +127,10 @@ impl Parser {
         } else if self.check(&[TokenKind::Para, TokenKind::For]) {
             if self.check_next(&[TokenKind::LeftParen]) {
                 self.parse_for().map(DeclOrStmt::Stmt)
-            } else {
+            } else if self.is_foreach_like() {
                 self.parse_foreach().map(DeclOrStmt::Stmt)
+            } else {
+                self.parse_for().map(DeclOrStmt::Stmt)
             }
         } else if self.check(&[TokenKind::Retornar, TokenKind::Return]) {
             self.parse_return().map(DeclOrStmt::Stmt)
@@ -1138,7 +1140,27 @@ impl Parser {
         if has_paren {
             self.advance();
         }
-        let init = Box::new(self.parse_declaration()?);
+        let init = if self.is_for_init_decl() {
+            Box::new(self.parse_declaration()?)
+        } else {
+            let start_i = self.peek().span;
+            let name = self.expect_ident()?;
+            if !self.check(&[TokenKind::Equal]) {
+                return None;
+            }
+            self.advance();
+            let value = Box::new(self.parse_expression()?);
+            if !self.check(&[TokenKind::Semicolon]) {
+                return None;
+            }
+            self.advance();
+            Box::new(Decl::Variable {
+                var_type: Type::Struct("Infer".to_string()),
+                name,
+                init: Some(value),
+                span: Span::merge(&start_i, &self.previous().span),
+            })
+        };
         let condition = Box::new(self.parse_expression()?);
         if !self.check(&[TokenKind::Semicolon]) {
             return None;
@@ -2767,6 +2789,39 @@ impl Parser {
         } else {
             false
         }
+    }
+
+    /// For-init is a typed declaration: `entero i = 0`, `lista<entero> l = []`, custom type `Punto p`.
+    fn is_for_init_decl(&self) -> bool {
+        if self.is_type_at(self.pos) {
+            return true;
+        }
+        if self.check_ident() && self.check_ident_next() {
+            return true;
+        }
+        self.check_ident_next_is_generic_type()
+    }
+
+    /// `para [tipo] ident (en|in) expr { ... }` — foreach without parens.
+    fn is_foreach_like(&self) -> bool {
+        let mut p = self.pos + 1;
+        if p >= self.tokens.len() {
+            return false;
+        }
+        if self.is_type_at(p) {
+            p += 1;
+        }
+        if p >= self.tokens.len() {
+            return false;
+        }
+        if !matches!(self.tokens[p].kind, TokenKind::Ident(_)) {
+            return false;
+        }
+        p += 1;
+        if p >= self.tokens.len() {
+            return false;
+        }
+        matches!(self.tokens[p].kind, TokenKind::En | TokenKind::In)
     }
 
     /// Starting from an Ident at `start_pos` followed by `<`, find the token after the matching `>`.

@@ -265,6 +265,15 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - cargo test OK (375/375 con pre-commit), **commit `295a57e`** (6 files, +81/−18).
 - **Pendientes**: release v2.4.0 (tag + CHANGELOG bootstrapping) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
 
+**Progreso (8 Ago, tarde — sesión AI · `para` clásico paridad Rust↔LÚMEN — fuego 113/117):**
+- **Causa raíz `tui_test_min16/17/18` (asimetría `para`)**: (1) el parser RUST exigía init tipado en el `para` clásico (`para (i = 0; ...)` → no parseaba; min18); (2) el `para` clásico SIN paréntesis (`para entero i = 0; cond; paso { }` → min16/17) caía al foreach en Rust (E011) y al foreach roto en el self (producía programa vacío — el self NO lo soportaba mejor). Los 3 tienen semántica correcta (`xxxxx`).
+- **Fix parser.rs**: `parse_for` con `is_for_init_decl()` (keyword de tipo / tipo custom `Punto p` / genérico `<T>`) y si no, construye `Decl::Variable` con `Type::Infer` (consume el `;`); dispatch `para` sin `(` usa `is_foreach_like()` (lookahead puro: `[tipo]? ident (en|in)`) → foreach solo con `en`/`in`, si no `parse_for`. Los helpers reusan `is_type_at`/`check_ident_next`.
+- **Fix parser.nv (self)**: helper `_st_es_foreach(st)` (lookahead puro por posición sobre `tokens`, skip de keywords de tipo, ident → `en`/`in`) + branch de clásico sin paréntesis (parse init/cond/paso con `_parse_stmt`/`_parse_expr` + desugar `init; mientras (cond) { cuerpo; paso; }` idéntico al clásico con `(`). El foreach existente queda intacto como fallback.
+- **Verificado**: los 3 tui_test_min **OK+CORRECTO** en la cadena 100% LÚMEN (nvc self == nvc Rust, `xxxxx`); **FIXPOINT v4 CONFIRMADO** SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` (compiler_v4.nv 135,465 B → .nvc 150,684 B, ~5s, self==self2 byte-idéntico); cargo test 0 FAILED; batería `test_vm.ps1` **39/40** (solo stress_fecha flaky).
+- **fuego.ps1: 117/117 compilan · 113 CORRECTOS (+5) · 1 INCOMPATIBLE · 3 TIMEOUT · 0 fallos**. Restantes honestos: `graficos_demo` (SDL renderer — imprime header y diverge, por diseño), timeouts `debug_parser3` (loop), `graficos_completo`/`gui_ventana` (GUI).
+- ⚠️ **Trampa harness**: `test_vm.ps1` debe correrse desde la RAÍZ del repo — `entrada_vm.txt` contiene rutas relativas `examples/x.nvc`; desde `stdlib/compiler` la VM LÚMEN no encuentra el archivo → FALLAS masivas falsas (OK=1 FALLAS=30).
+- **Pendientes**: release v2.4.0 (tag + docs) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
+
 
 ---
 
@@ -282,6 +291,14 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 |-----|---------|-----|
 | **`WSAGetLastError` devolvía 0 en la VM LÚMEN** (y en la VM Rust directa si había una llamada a función guest entre dos FFI calls): `RandomState::new()` (std `HashMap::new()` en el prólogo de llamada a función + `im::HashMap::new()` en `__map_nuevo`/defaults de handlers) obtiene entropía del OS **y limpia el last-error TLS del hilo en Windows** → `probe_wsa2.nv`/`test_connect_direct`/`test_quick_connect`/`test_socket_debug` divergían (0 vs 10093) | `crates/lumen-vm/src/vm.rs` (prologo `scope` ×3 + `locals` + 37× `ImMap::new`), `value.rs` (`FixHasher` + tipo `Value::Map`), `coro_ffi.rs`, `min_json.rs` | Nuevo `FixHasher` (FNV determinista, sin entropía) para TODOS los mapas internos del VM: `HashMap<String, Value, FixHasher>` en locals/scope y `ImMap<Value, Value, FixHasher>` en `Value::Map` (`ImMap::with_hasher(FixHasher::default())`). Diagnóstico por instrumentación temporal (probes `GLE-CHANGE`/`PROLOGUE`/`OP` revertidas; ffi_log en `%TEMP%\opencode\ffi_log.txt`) |
 | **Verificado**: `probe_wsa2.nv` + `test_connect_direct` + `test_quick_connect` + `test_socket_debug` **byte-IDÉNTICOS en ambas VMs (10093/10093)** · batería `test_vm.ps1` 39/40 (solo `stress_fecha` flaky timing pre-existente) · cargo test 375/375 · diff final solo +fix (sin instrumentación) | — | — |
+
+### Fixes 8 Agosto 2026 — `para` clásico: paridad Rust ↔ LÚMEN (tui_test_min16/17/18)
+| Bug | Archivo | Fix |
+|-----|---------|-----|
+| `para (i = 0; cond; paso)` — init sin tipo: el parser Rust exigía declaración tipada → no parseaba (min18) | `crates/lumen-parser/src/parser.rs` (`parse_for` + `is_for_init_decl`) | Init tipado vía `parse_declaration`, si no `Decl::Variable` con `Type::Infer` (consume `;`) |
+| `para entero i = 0; cond; paso { }` sin paréntesis: Rust lo reenviaba a foreach → E011 (min16/17) | `crates/lumen-parser/src/parser.rs` (dispatch + `is_foreach_like`) | Lookahead puro `[tipo]? ident (en\|in)` → foreach solo con `en`/`in`, si no `parse_for` |
+| Self-hosted idem: producía programa vacío (foreach roto con `=`) | `stdlib/compiler/parser.nv` (`_st_es_foreach` + branch clásico sin paréntesis) | Helper lookahead por posición sobre `tokens` (skip keywords de tipo, ident → `en`/`in`) + parse init/cond/paso con `_parse_stmt`/`_parse_expr` y desugar idéntico al clásico con `(` |
+| **Verificado**: `tui_test_min16/17/18` **OK+CORRECTO** en la cadena 100% LÚMEN (byte-idénticos) · FIXPOINT v4 SHA-256 `3DA624D6…` self==self2 (135,465 B → 150,684 B, ~5s) · cargo test 0 FAILED · batería 39/40 · **fuego.ps1 117/117 · 113 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 3 TIMEOUT (debug_parser3/graficos_completo/gui_ventana) · 0 fallos** | — | — |
 
 ### Fixes 30 Julio 2026 — Sprint 4 (HashMap)
 | Bug | Archivo | Fix |
