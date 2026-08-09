@@ -270,6 +270,13 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 
 ## Bugs Conocidos y Fixes Recientes
 
+### Fixes 8 Agosto 2026 — Handlers FFI/archivos/JSON en la VM LÚMEN (batería 39/40)
+| Bug | Archivo | Fix |
+|-----|---------|-----|
+| **`__map_obtener` devolvía Values del host sin boxear** (Str real → crash "Ge requires numbers or strings" en `a_texto_v`) y **Void con mapas JSON** (el key boxed 1e9+N no coincidía con las claves strings reales de `__json_parsear`) | `stdlib/compiler/vm.nv` (bin ~662) | Lookup dual: primero key boxed (mapas del guest, ej. demo_completo) → si `__tipo_de(v) == "nulo"` reintenta con `str_at` desboxeado (mapas JSON) · boxeo por tipo real vía `__tipo_de`/`a_texto` del host: texto→`box_str`, booleano→9e9+1/9e9, lista→`arrs`, diccionario→`mapas` → **`test_json_avanzado` CORRECTO** (Ana / {"edad":30,"nombre":"Ana"}) |
+| **`__existe_archivo` sin handler en bin()** → fallback `retornar 0.0` (imprimía "0" en vez de "false") | `stdlib/compiler/vm.nv` (bin ~997) | Handler nuevo: desboxea ruta + devuelve 9e9+1/9e9 (bool boxed) · añadidos también `__leer_archivo` (con `intentar`, el native devuelve Resultado) y `__escribir_archivo` → **`test_sistema_directo`/`test_sistema_avanzado` CORRECTOS** |
+| **Verificado**: `test_sistema_directo`/`test_sistema_avanzado`/`test_json_avanzado`/`demo_completo`/`test_csv_avanzado`/`test_migracion`/`jr_fecha` byte-IDÉNTICOS · batería `test_vm.ps1` 39/40 (solo `stress_fecha` flaky timing) · 19 checks cruzados con `vm_self.nvc` (FFI/red/socket/corutinas/import) todos OK · `vm_self.nvc` regenerado (96,808 B) con compiler_v4 (target.txt 2 líneas) · cargo test OK | — | — |
+
 ### Fixes 8 Agosto 2026 — TLS de Winsock borrado por `RandomState` (FFI socket)
 | Bug | Archivo | Fix |
 |-----|---------|-----|

@@ -1,6 +1,6 @@
 # Siguientes Pasos — Roadmap LÚMEN v2.4 → v3.0
 
-**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 116/116 compilan · 108 CORRECTOS** (6 Ago 2026). Pendiente: bootstrapping doble + release v2.4.0.
+**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 116/116 compilan · 108 CORRECTOS** (6 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos byte-idénticos** (8 Ago 2026, batería 39/40). Pendiente: release v2.4.1 (tag).
 
 ---
 
@@ -16,7 +16,7 @@
 
 | Área | Complejidad | Impacto | Razón |
 |------|-------------|---------|-------|
-| **Bootstrapping doble + release v2.4.0** | 🟡 Media | 🟡 Alto | vm.nv compilada por el compilador LÚMEN (hito final del self-hosting) + tag/release |
+| **Bootstrapping doble + release v2.4.1** | 🟡 Media | 🟡 Alto | vm.nv compilada por el compilador LÚMEN (hito final del self-hosting, ✅ hecho) + tag/release |
 | **Fixes y pulido** | 🟢 Baja | 🔥 Alto | Estabilidad general, edge cases |
 
 ## 🔵 Prioridad Baja — Muy Complejo + Nicho
@@ -59,7 +59,8 @@
 - **FIXPOINT v4 CONFIRMADO** ✅ — self/self2 byte-IDENTICAL (SHA-256 90048DC9…), 5s
 - **Sprint 7 — VM en LÚMEN** ✅ — `vm.nv` (dispatch 0-46, corutinas reales, handlers JSON/tarea/coro/crypto/fs/env/tiempo/hilo/mutex/calendario), demo 120s → 0.9s, batería 39/40
 - **Sprint 8 — Dogfooding** ✅ — stdlib completo compila; **fuego.ps1: 116/116 compilan · 108 CORRECTOS · 4 INCOMPATIBLES · 4 TIMEOUT · 0 fallos**; benchmarks: compile x5.4, run x231 (mediana x2-6)
-- **Pendiente:** bootstrapping doble (compiler_v4 compila vm.nv → vm.nvc corre en VM LÚMEN → 0 dependencias de Rust) → release v2.4.0
+- **Paridad VM LÚMEN-Rust (8 Ago 2026)** ✅ — `__map_obtener` con boxeo por tipo real + lookup dual (keys boxed guest vs strings JSON host); handlers `__existe_archivo`/`__leer_archivo`/`__escribir_archivo` → **test_json_avanzado, test_sistema_directo, test_sistema_avanzado byte-IDÉNTICOS** · batería 39/40 (solo `stress_fecha` flaky timing) · `vm_self.nvc` regenerado (96,808 B)
+- **Pendiente:** release v2.4.1 (tag)
 
 ### Después: **AI/ML (Fases 186-200) + Docs**
 - AI/ML + Data Science — feature más solicitada para un lenguaje moderno

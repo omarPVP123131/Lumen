@@ -4,6 +4,15 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
+## v2.4.1 — 8 Agosto 2026
+
+### Arreglado (VM LÚMEN `vm.nv` — paridad con la VM Rust)
+- **`__map_obtener` con mapas JSON**: devolvía `Void` (el key boxed 1e9+N no coincidía con las claves strings reales del host) y Values del host sin boxear (Str real → crash "Ge requires numbers or strings"). Ahora lookup dual (key boxed del guest → desboxeado para JSON) + boxeo por tipo real (`__tipo_de`/`a_texto` del host: texto→`box_str`, booleano→9e9+1/9e9, lista→`arrs`, diccionario→`mapas`) → **`test_json_avanzado` CORRECTO**
+- **Handlers de archivos faltantes**: `__existe_archivo`/`__file_exists` (bool boxed, antes "0" en vez de "false"), `__leer_archivo`/`__file_read` (con `intentar`, el native devuelve Resultado), `__escribir_archivo`/`__file_write` → **`test_sistema_directo`/`test_sistema_avanzado` CORRECTOS**
+- **Verificado**: batería `test_vm.ps1` 39/40 (solo `stress_fecha` flaky timing) · 7 tests sistema/JSON/csv/migración byte-IDÉNTICOS · 19 checks cruzados con `vm_self.nvc` (96,808 B, regenerado con compiler_v4) todos OK · cargo test OK
+
+---
+
 ## v2.4.0 — 6 Agosto 2026
 
 ### Agregado

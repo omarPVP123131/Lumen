@@ -660,7 +660,26 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         retornar 2000000000.0 + largo(mapas) - 1;
     }
     si nm == "__map_obtener" {
-        retornar __map_obtener(mapas[a_entero(estado_pila(st, sp - 1) - 2000000000)], estado_pila(st, sp));
+        numero kv = estado_pila(st, sp);
+        numero v = __map_obtener(mapas[a_entero(estado_pila(st, sp - 1) - 2000000000)], kv);
+        si __tipo_de(v) == "nulo" {
+            v = __map_obtener(mapas[a_entero(estado_pila(st, sp - 1) - 2000000000)], str_at(stl, stl_din, a_entero(kv - 1000000000)));
+        }
+        texto tv = __tipo_de(v);
+        si tv == "texto" { retornar box_str(v); }
+        si tv == "booleano" {
+            si a_texto(v) == "true" { retornar 9000000001.0; }
+            retornar 9000000000.0;
+        }
+        si tv == "lista" {
+            arrs.agregar(v);
+            retornar 0.0 - 1000000000.0 - largo(arrs);
+        }
+        si tv == "diccionario" {
+            mapas.agregar(v);
+            retornar 2000000000.0 + largo(mapas) - 1;
+        }
+        retornar v + 0.0;
     }
     si nm == "__map_longitud" {
         retornar __map_longitud(mapas[a_entero(estado_pila(st, sp) - 2000000000)]) + 0.0;
@@ -986,6 +1005,21 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         }
         arrs.agregar(bb);
         retornar 0.0 - 1000000000.0 - largo(arrs);
+    }
+    si nm == "__leer_archivo" || nm == "__file_read" {
+        numero v = estado_pila(st, sp);
+        retornar box_str(intentar __leer_archivo(str_at(stl, stl_din, a_entero(v - 1000000000))));
+    }
+    si nm == "__escribir_archivo" || nm == "__file_write" {
+        numero vp = estado_pila(st, sp - 1);
+        numero vc = estado_pila(st, sp);
+        __escribir_archivo(str_at(stl, stl_din, a_entero(vp - 1000000000)), str_at(stl, stl_din, a_entero(vc - 1000000000)));
+        retornar 0.0;
+    }
+    si nm == "__existe_archivo" || nm == "__file_exists" {
+        numero v = estado_pila(st, sp);
+        si __existe_archivo(str_at(stl, stl_din, a_entero(v - 1000000000))) { retornar 9000000001.0; }
+        retornar 9000000000.0;
     }
     si nm == "__env_listar" || nm == "__env_list" {
         lista<texto> vars = __env_listar();
