@@ -44,7 +44,10 @@ fn try_registered_call(js: &str) -> Option<String> {
     let after_paren = js.find('(')?;
     let rest = &js[after_paren + 1..];
     let fn_name_end = rest.find(',')?;
-    let fn_name = rest[..fn_name_end].trim().trim_matches('\'').trim_matches('"');
+    let fn_name = rest[..fn_name_end]
+        .trim()
+        .trim_matches('\'')
+        .trim_matches('"');
 
     if let Some(_js_func_body) = registry.get(fn_name) {
         // We can only call it through real JS eval since the funcs are JS strings
@@ -68,6 +71,7 @@ pub struct LumenRuntime {
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
+#[allow(clippy::new_without_default)]
 impl LumenRuntime {
     /// Crea una nueva instancia del runtime. Registra automáticamente
     /// el callback `JS_EVAL` para que las builtins `__js_eval` y `__js_call`
@@ -110,7 +114,7 @@ impl LumenRuntime {
         let js_code = format!(
             "if(!window.__lumen_call){{window.__lumen_call=function(n,a){{return'';}};}}
              window.__lumen_bridge_{} = {};",
-            name.replace('-', "_").replace('.', "_"),
+            name.replace(['-', '.'], "_"),
             js_func_string
         );
         let _ = js_sys::eval(&js_code);
@@ -123,7 +127,7 @@ impl LumenRuntime {
             map.remove(name);
         }
         // Remove from global scope
-        let safe_name = name.replace('-', "_").replace('.', "_");
+        let safe_name = name.replace(['-', '.'], "_");
         let _ = js_sys::eval(&format!("delete window.__lumen_bridge_{};", safe_name));
     }
 

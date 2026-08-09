@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+#[allow(clippy::upper_case_acronyms)]
 type HWND = isize;
 
 #[derive(Clone, Debug)]
@@ -28,15 +29,6 @@ struct GuiState {
 }
 
 static GUI_STATE: Mutex<Option<GuiState>> = Mutex::new(None);
-
-macro_rules! ws {
-    ($s:expr) => {{
-        let mut v: Vec<u16> = $s.encode_utf16().collect();
-        v.push(0);
-        v
-    }};
-}
-// ws! macro available via macro_rules! in this file
 
 pub unsafe extern "system" fn wnd_proc(
     hwnd: HWND,

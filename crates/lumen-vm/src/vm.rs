@@ -1,12 +1,11 @@
 use crate::value::{FixHasher, Value};
+use chrono::{Datelike, TimeZone, Timelike, Utc};
 use im::HashMap as ImMap;
 use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
 use std::collections::HashMap;
-#[cfg(feature = "full")]
 use std::sync::Arc;
 use std::sync::OnceLock;
 use unicode_normalization::UnicodeNormalization;
-use chrono::{TimeZone, Datelike, Timelike, Utc};
 
 pub static JS_EVAL: OnceLock<fn(&str) -> String> = OnceLock::new();
 #[cfg(feature = "full")]
@@ -67,6 +66,12 @@ impl VmError {
     }
 }
 
+#[cfg(feature = "full")]
+type ChannelCell = (
+    Option<std::sync::mpsc::Sender<Value>>,
+    Option<std::sync::mpsc::Receiver<Value>>,
+);
+
 pub struct VM {
     stack: Vec<Value>,
     locals: Vec<HashMap<String, Value, FixHasher>>,
@@ -93,17 +98,21 @@ pub struct VM {
     main_saved: Option<(Vec<Value>, Vec<HashMap<String, Value, FixHasher>>, usize)>,
     tcp_listener: Option<std::net::TcpListener>,
     #[cfg(feature = "full")]
+    #[allow(dead_code)]
     cluster_streams: HashMap<String, std::net::TcpStream>,
     #[cfg(feature = "full")]
+    #[allow(dead_code)]
     scope_handles: Vec<HashMap<String, Value, FixHasher>>,
     #[cfg(feature = "full")]
     thread_handles: HashMap<String, std::thread::JoinHandle<Value>>,
     #[cfg(feature = "full")]
-    channels: HashMap<String, (Option<std::sync::mpsc::Sender<Value>>, Option<std::sync::mpsc::Receiver<Value>>)>,
+    #[allow(clippy::type_complexity)]
+    channels: HashMap<String, ChannelCell>,
     #[cfg(feature = "full")]
     mutexes: HashMap<String, std::sync::Mutex<Value>>,
     #[cfg(feature = "full")]
-    actors: HashMap<String, (Option<std::sync::mpsc::Sender<Value>>, Option<std::sync::mpsc::Receiver<Value>>)>,
+    #[allow(clippy::type_complexity)]
+    actors: HashMap<String, ChannelCell>,
     #[cfg(feature = "full")]
     generators: HashMap<String, String>,
     #[cfg(feature = "full")]
@@ -318,16 +327,26 @@ impl VM {
 
         if name == "__str_slice" || name == "__str_subcadena" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            let start = args.get(1).and_then(|v| match v {
-                Value::Int(i) => Some(*i as usize),
-                _ => v.as_num().map(|f| f as usize),
-            }).unwrap_or(0);
-            let end = args.get(2).and_then(|v| match v {
-                Value::Int(i) => {
-                    if *i == -1 { Some(s.len()) } else { Some(*i as usize) }
-                }
-                _ => v.as_num().map(|f| f as usize),
-            }).unwrap_or(s.len());
+            let start = args
+                .get(1)
+                .and_then(|v| match v {
+                    Value::Int(i) => Some(*i as usize),
+                    _ => v.as_num().map(|f| f as usize),
+                })
+                .unwrap_or(0);
+            let end = args
+                .get(2)
+                .and_then(|v| match v {
+                    Value::Int(i) => {
+                        if *i == -1 {
+                            Some(s.len())
+                        } else {
+                            Some(*i as usize)
+                        }
+                    }
+                    _ => v.as_num().map(|f| f as usize),
+                })
+                .unwrap_or(s.len());
             let start = start.min(s.len());
             let end = end.min(s.len()).max(start);
             let sub: String = s.chars().skip(start).take(end - start).collect();
@@ -378,8 +397,16 @@ impl VM {
                 Some(Value::Array(a)) => a.clone(),
                 _ => Arc::new(vec![]),
             };
-            let st = args.get(1).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(0);
-            let en = args.get(2).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(-1);
+            let st = args
+                .get(1)
+                .and_then(|v| v.as_num())
+                .map(|f| f as i64)
+                .unwrap_or(0);
+            let en = args
+                .get(2)
+                .and_then(|v| v.as_num())
+                .map(|f| f as i64)
+                .unwrap_or(-1);
             let n = cs.len() as i64;
             let st = st.max(0).min(n);
             let en = if en < 0 { n } else { en.max(0).min(n) };
@@ -399,7 +426,9 @@ impl VM {
                     _ => v.as_num().map(|f| f as i64),
                 })
                 .unwrap_or(0);
-            let c = char::from_u32(n as u32).map(|c| c.to_string()).unwrap_or_default();
+            let c = char::from_u32(n as u32)
+                .map(|c| c.to_string())
+                .unwrap_or_default();
             self.push(Value::str(c));
             return Some(Ok(()));
         }
@@ -442,13 +471,15 @@ impl VM {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             use std::io::Write;
-            match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-                Ok(mut file) => {
-                    match file.write_all(content.as_bytes()) {
-                        Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
-                        Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
-                    }
-                }
+            match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+            {
+                Ok(mut file) => match file.write_all(content.as_bytes()) {
+                    Ok(_) => self.push(Value::Exito(Box::new(Value::Bool(true)))),
+                    Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
+                },
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
@@ -457,10 +488,13 @@ impl VM {
         if name == "__file_write_binary" || name == "__escribir_archivo_bin" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let bytes = match args.get(1) {
-                Some(Value::Array(arr)) => arr.iter().filter_map(|v| match v {
-                    Value::Int(n) if *n >= 0 && *n <= 255 => Some(*n as u8),
-                    _ => None,
-                }).collect::<Vec<u8>>(),
+                Some(Value::Array(arr)) => arr
+                    .iter()
+                    .filter_map(|v| match v {
+                        Value::Int(n) if *n >= 0 && *n <= 255 => Some(*n as u8),
+                        _ => None,
+                    })
+                    .collect::<Vec<u8>>(),
                 _ => Vec::new(),
             };
             match std::fs::write(&path, &bytes) {
@@ -495,23 +529,36 @@ impl VM {
         }
 
         if name == "__num_a_f64_bytes" || name == "__numero_a_bytes_f64" {
-            let n = args.first().map(|v| match v {
-                Value::Int(i) => *i as f64,
-                Value::Float(f) => *f,
-                _ => 0.0,
-            }).unwrap_or(0.0);
-            let bytes: Vec<Value> = n.to_le_bytes().iter().map(|&b| Value::Int(b as i64)).collect();
+            let n = args
+                .first()
+                .map(|v| match v {
+                    Value::Int(i) => *i as f64,
+                    Value::Float(f) => *f,
+                    _ => 0.0,
+                })
+                .unwrap_or(0.0);
+            let bytes: Vec<Value> = n
+                .to_le_bytes()
+                .iter()
+                .map(|&b| Value::Int(b as i64))
+                .collect();
             self.push(Value::arr(bytes));
             return Some(Ok(()));
         }
 
-        if name == "__codegen_a_nvc" || name == "__codegen_a_nvc" {
+        if name == "__codegen_a_nvc" {
             // Takes a codegen map, returns Array<Int> of .nvc bytes
             let cg = args.first().cloned().unwrap_or(Value::Void);
             let result = self.codegen_to_nvc(cg);
             return match result {
-                Ok(bytes) => { self.push(bytes); Some(Ok(())) }
-                Err(_) => { self.push(Value::Error(Box::new(Value::str("codegen_to_nvc failed")))); Some(Ok(())) }
+                Ok(bytes) => {
+                    self.push(bytes);
+                    Some(Ok(()))
+                }
+                Err(_) => {
+                    self.push(Value::Error(Box::new(Value::str("codegen_to_nvc failed"))));
+                    Some(Ok(()))
+                }
             };
         }
 
@@ -534,15 +581,25 @@ impl VM {
             let mut program = match loader.resolve_imports(&source, base_path) {
                 Ok(p) => p,
                 Err(e) => {
-                    self.push(Value::Error(Box::new(Value::str(format!("Loader error: {:?}", e)))));
+                    self.push(Value::Error(Box::new(Value::str(format!(
+                        "Loader error: {:?}",
+                        e
+                    )))));
                     return Some(Ok(()));
                 }
             };
             let sema = lumen_sema::sema::SemanticAnalyzer::new();
             let sem_errors = sema.analyze(&mut program);
             if !sem_errors.is_empty() {
-                let msg = sem_errors.iter().map(|e| format!("{}", e.message)).collect::<Vec<_>>().join("; ");
-                self.push(Value::Error(Box::new(Value::str(format!("Sem error: {}", msg)))));
+                let msg = sem_errors
+                    .iter()
+                    .map(|e| e.message.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                self.push(Value::Error(Box::new(Value::str(format!(
+                    "Sem error: {}",
+                    msg
+                )))));
                 return Some(Ok(()));
             }
             let builder = lumen_ir::builder::IRBuilder::new();
@@ -550,7 +607,10 @@ impl VM {
             let codegen = lumen_codegen::codegen::Codegen::new();
             let (bytecode, _) = codegen.generate(&ir);
             let bytes_vec = bytecode.encode();
-            let bytes: Vec<Value> = bytes_vec.into_iter().map(|b| Value::Int(b as i64)).collect();
+            let bytes: Vec<Value> = bytes_vec
+                .into_iter()
+                .map(|b| Value::Int(b as i64))
+                .collect();
             self.push(Value::arr(bytes));
             return Some(Ok(()));
         }
@@ -615,7 +675,9 @@ impl VM {
 
         if name == "__map_set" || name == "__map_poner" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let m = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let k = it.next().unwrap_or(Value::Void);
             let v = it.next().unwrap_or(Value::Void);
             match m {
@@ -630,7 +692,9 @@ impl VM {
 
         if name == "__map_get" || name == "__map_obtener" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let m = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let k = it.next().unwrap_or(Value::Void);
             match m {
                 Value::Map(m) => {
@@ -674,7 +738,9 @@ impl VM {
 
         if name == "__map_contains" || name == "__map_contiene" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let m = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let k = it.next().unwrap_or(Value::Void);
             match m {
                 Value::Map(m) => self.push(Value::Bool(m.contains_key(&k))),
@@ -694,7 +760,9 @@ impl VM {
 
         if name == "__set_add" || name == "__conjunto_agregar" {
             let mut it = args.clone().into_iter();
-            let s = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let s = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let item = it.next().unwrap_or(Value::Void);
             match s {
                 Value::Map(mut m) => {
@@ -708,7 +776,9 @@ impl VM {
 
         if name == "__set_has" || name == "__conjunto_tiene" {
             let mut it = args.clone().into_iter();
-            let s = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let s = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let item = it.next().unwrap_or(Value::Void);
             match s {
                 Value::Map(m) => self.push(Value::Bool(m.contains_key(&item))),
@@ -719,12 +789,18 @@ impl VM {
 
         if name == "__set_union" || name == "__conjunto_unir" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
-            let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let a = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let b = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match (a, b) {
                 (Value::Map(mut m1), Value::Map(m2)) => {
                     for (k, v) in m2 {
-                        if !m1.contains_key(&k) { m1.insert(k, v); }
+                        if !m1.contains_key(&k) {
+                            m1.insert(k, v);
+                        }
                     }
                     self.push(Value::Map(m1));
                 }
@@ -735,14 +811,16 @@ impl VM {
 
         if name == "__set_inter" || name == "__conjunto_interseccion" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
-            let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let a = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let b = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match (a, b) {
                 (Value::Map(m1), Value::Map(m2)) => {
-                    let r: ImMap<Value, Value, FixHasher> = m1
-                        .into_iter()
-                        .filter(|(k, _)| m2.contains_key(k))
-                        .collect();
+                    let r: ImMap<Value, Value, FixHasher> =
+                        m1.into_iter().filter(|(k, _)| m2.contains_key(k)).collect();
                     self.push(Value::Map(r));
                 }
                 _ => return builtin_err(VmError::TypeError("__set_inter espera conjuntos".into())),
@@ -752,8 +830,12 @@ impl VM {
 
         if name == "__set_diff" || name == "__conjunto_diferencia" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
-            let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let a = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let b = it
+                .next()
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match (a, b) {
                 (Value::Map(m1), Value::Map(m2)) => {
                     let r: ImMap<Value, Value, FixHasher> = m1
@@ -1410,7 +1492,8 @@ impl VM {
                 let layout = match std::alloc::Layout::from_size_align(size, align) {
                     Ok(l) => l,
                     Err(_) => {
-                        self.push(Value::Error(Box::new(Value::str("Layout inválido para liberar",
+                        self.push(Value::Error(Box::new(Value::str(
+                            "Layout inválido para liberar",
                         ))));
                         return Some(Ok(()));
                     }
@@ -1487,8 +1570,7 @@ impl VM {
                     }
                     Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
                 },
-                None => self.push(Value::Error(Box::new(Value::str("Bcrypt no disponible",
-                )))),
+                None => self.push(Value::Error(Box::new(Value::str("Bcrypt no disponible")))),
             }
             return Some(Ok(()));
         }
@@ -1503,8 +1585,7 @@ impl VM {
                     }
                     Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
                 },
-                None => self.push(Value::Error(Box::new(Value::str("Bcrypt no disponible",
-                )))),
+                None => self.push(Value::Error(Box::new(Value::str("Bcrypt no disponible")))),
             }
             return Some(Ok(()));
         }
@@ -1582,7 +1663,8 @@ impl VM {
             let secret = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let parts: Vec<&str> = token.split('.').collect();
             if parts.len() != 3 {
-                self.push(Value::Error(Box::new(Value::str("JWT inválido: se esperan 3 partes",
+                self.push(Value::Error(Box::new(Value::str(
+                    "JWT inválido: se esperan 3 partes",
                 ))));
                 return Some(Ok(()));
             }
@@ -1590,8 +1672,7 @@ impl VM {
             let expected_sig = hmac_sha256(sig_input.as_bytes(), secret.as_bytes());
             let actual_sig = base64url_decode(parts[2]);
             if actual_sig != expected_sig {
-                self.push(Value::Error(Box::new(Value::str("Firma JWT inválida",
-                ))));
+                self.push(Value::Error(Box::new(Value::str("Firma JWT inválida"))));
                 return Some(Ok(()));
             }
             match base64url_decode_to_string(parts[1]) {
@@ -1713,8 +1794,7 @@ impl VM {
             let coro_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(coro) = self.coroutines.get(&coro_id) {
                 if coro.is_done {
-                    self.push(Value::Error(Box::new(Value::str("Coroutine terminada",
-                    ))));
+                    self.push(Value::Error(Box::new(Value::str("Coroutine terminada"))));
                     return Some(Ok(()));
                 }
             }
@@ -1977,8 +2057,7 @@ impl VM {
             let bc = self.bytecode.clone();
             let handle = std::thread::spawn(move || {
                 let mut vm = VM::new(bc);
-                vm.run_function(&fn_name, fn_args)
-                    .unwrap_or(Value::Void)
+                vm.run_function(&fn_name, fn_args).unwrap_or(Value::Void)
             });
             let hid = format!("thread_{}", self.thread_handles.len());
             self.thread_handles.insert(hid.clone(), handle);
@@ -2047,7 +2126,8 @@ impl VM {
 
         if name == "__mutex_nuevo" || name == "__mutex_new" {
             let mid = format!("mutex_{}", self.mutexes.len());
-            self.mutexes.insert(mid.clone(), std::sync::Mutex::new(Value::Void));
+            self.mutexes
+                .insert(mid.clone(), std::sync::Mutex::new(Value::Void));
             self.push(Value::str(mid));
             return Some(Ok(()));
         }
@@ -2062,7 +2142,8 @@ impl VM {
                 // Execute function while holding lock
                 let bc = self.bytecode.clone();
                 let mut vm = VM::new(bc);
-                vm.run_function(&fn_name, vec![fn_arg]).unwrap_or(Value::Void)
+                vm.run_function(&fn_name, vec![fn_arg])
+                    .unwrap_or(Value::Void)
             } else {
                 Value::Error(Box::new(Value::str("Mutex not found")))
             };
@@ -2092,7 +2173,8 @@ impl VM {
                         .collect();
                     self.push(Value::arr(mapped));
                 }
-                _ => self.push(Value::Error(Box::new(Value::str("stream_map espera una lista",
+                _ => self.push(Value::Error(Box::new(Value::str(
+                    "stream_map espera una lista",
                 )))),
             }
             return Some(Ok(()));
@@ -2108,16 +2190,17 @@ impl VM {
                         .iter()
                         .filter(|item| {
                             let mut vm = VM::new(bc.clone());
-                            match vm.run_function(&fn_name, vec![(*item).clone()]) {
-                                Ok(Value::Bool(true)) => true,
-                                _ => false,
-                            }
+                            matches!(
+                                vm.run_function(&fn_name, vec![(*item).clone()]),
+                                Ok(Value::Bool(true))
+                            )
                         })
                         .cloned()
                         .collect();
                     self.push(Value::arr(filtered));
                 }
-                _ => self.push(Value::Error(Box::new(Value::str("stream_filter espera una lista",
+                _ => self.push(Value::Error(Box::new(Value::str(
+                    "stream_filter espera una lista",
                 )))),
             }
             return Some(Ok(()));
@@ -2136,12 +2219,13 @@ impl VM {
                 Value::Array(items) => {
                     let bc = self.bytecode.clone();
                     let mut handles = Vec::new();
-                    for item in items.iter().cloned() {
+                    for item in items.iter() {
                         let bc_clone = bc.clone();
                         let fn_clone = fn_name.clone();
+                        let item_clone = (*item).clone();
                         handles.push(std::thread::spawn(move || {
                             let mut vm = VM::new(bc_clone);
-                            vm.run_function(&fn_clone, vec![item.clone()])
+                            vm.run_function(&fn_clone, vec![item_clone])
                                 .unwrap_or(Value::Void)
                         }));
                     }
@@ -2151,7 +2235,8 @@ impl VM {
                         .collect();
                     self.push(Value::arr(results));
                 }
-                _ => self.push(Value::Error(Box::new(Value::str("par_map espera una lista",
+                _ => self.push(Value::Error(Box::new(Value::str(
+                    "par_map espera una lista",
                 )))),
             }
             return Some(Ok(()));
@@ -2320,8 +2405,11 @@ impl VM {
         None
     }
     pub fn run(&mut self) -> Result<(), VmError> {
-        let profile = !std::env::var("LUMEN_PROFILE").unwrap_or_default().is_empty();
-        let mut prof: std::collections::HashMap<String, (u64, f64)> = std::collections::HashMap::new();
+        let profile = !std::env::var("LUMEN_PROFILE")
+            .unwrap_or_default()
+            .is_empty();
+        let mut prof: std::collections::HashMap<String, (u64, f64)> =
+            std::collections::HashMap::new();
         let prof_start = std::time::Instant::now();
         loop {
             if self.ip >= self.bytecode.instructions.len() {
@@ -2352,8 +2440,11 @@ impl VM {
             if profile {
                 let t0 = std::time::Instant::now();
                 let opname = match &instr {
-                    Instruction::WithIdx(op @ Opcode::Call, nidx) => {
-                        format!("Call:{}", self.bytecode.names.get(*nidx).cloned().unwrap_or_default())
+                    Instruction::WithIdx(_op @ Opcode::Call, nidx) => {
+                        format!(
+                            "Call:{}",
+                            self.bytecode.names.get(*nidx).cloned().unwrap_or_default()
+                        )
                     }
                     Instruction::Simple(op) => format!("{:?}", op),
                     Instruction::WithNum(op, _) => format!("{:?}", op),
@@ -2373,14 +2464,21 @@ impl VM {
         }
         if profile {
             let total = prof_start.elapsed().as_secs_f64();
-            let mut v: Vec<(String, u64, f64)> = prof
-                .into_iter()
-                .map(|(k, (c, t))| (k, c, t))
-                .collect();
+            let mut v: Vec<(String, u64, f64)> =
+                prof.into_iter().map(|(k, (c, t))| (k, c, t)).collect();
             v.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-            eprintln!("=== PROFILE total={:.1}s instrs={} ===", total, self.instr_count);
+            eprintln!(
+                "=== PROFILE total={:.1}s instrs={} ===",
+                total, self.instr_count
+            );
             for (k, c, t) in v {
-                eprintln!("{:20} {:>12} calls {:>10.3}s ({:>5.1}%)", k, c, t, t / total * 100.0);
+                eprintln!(
+                    "{:20} {:>12} calls {:>10.3}s ({:>5.1}%)",
+                    k,
+                    c,
+                    t,
+                    t / total * 100.0
+                );
             }
         }
         Ok(())
@@ -2422,7 +2520,8 @@ impl VM {
         if let Some(func) = self.find_func(name) {
             let func_start = func.start;
             let func_params = func.params.clone();
-            let mut scope = HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
+            let mut scope =
+                HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
             for (i, param_name) in func_params.iter().enumerate() {
                 if let Some(arg) = args.get(i) {
                     scope.insert(param_name.clone(), arg.clone());
@@ -2638,7 +2737,11 @@ impl VM {
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Bool(*a < *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Bool(a < b)),
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a < b)),
-                    _ => return Err(VmError::TypeError("Lt requires numbers or strings".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "Lt requires numbers or strings".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Le => {
@@ -2650,7 +2753,11 @@ impl VM {
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Bool(*a <= *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Bool(a <= b)),
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a <= b)),
-                    _ => return Err(VmError::TypeError("Le requires numbers or strings".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "Le requires numbers or strings".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Gt => {
@@ -2662,7 +2769,11 @@ impl VM {
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Bool(*a > *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Bool(a > b)),
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a > b)),
-                    _ => return Err(VmError::TypeError("Gt requires numbers or strings".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "Gt requires numbers or strings".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Ge => {
@@ -2674,7 +2785,11 @@ impl VM {
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Bool(*a >= *b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Bool(a >= b)),
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a >= b)),
-                    _ => return Err(VmError::TypeError("Ge requires numbers or strings".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "Ge requires numbers or strings".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::And => {
@@ -2716,7 +2831,11 @@ impl VM {
                         }
                         self.push(Value::Int(a << *b as u32));
                     }
-                    _ => return Err(VmError::TypeError("ShiftLeft requires integers".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "ShiftLeft requires integers".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::ShiftRight => {
@@ -2774,6 +2893,7 @@ impl VM {
             }
             Opcode::Ret => {
                 let ret_val = self.pop().unwrap_or(Value::Void);
+                #[cfg(feature = "full")]
                 if let Some(coro_id) = self.current_coro.clone() {
                     if let Some(coro) = self.coroutines.get_mut(&coro_id) {
                         coro.is_done = true;
@@ -2820,7 +2940,9 @@ impl VM {
                 };
                 match struct_val {
                     Value::Struct { fields, .. } => {
-                        let val = fields.iter().find(|(name, _)| name.as_str() == field.as_str());
+                        let val = fields
+                            .iter()
+                            .find(|(name, _)| name.as_str() == field.as_str());
                         match val {
                             Some((_, v)) => self.push(v.clone()),
                             None => {
@@ -2852,7 +2974,9 @@ impl VM {
                 };
                 match struct_val {
                     Value::Struct { name, mut fields } => {
-                        let pos = fields.iter().position(|(n, _)| n.as_str() == field.as_str());
+                        let pos = fields
+                            .iter()
+                            .position(|(n, _)| n.as_str() == field.as_str());
                         match pos {
                             Some(i) => {
                                 fields[i] = (field.to_string(), new_val);
@@ -2914,15 +3038,17 @@ impl VM {
                             }
                         };
                         if idx < 0 {
-                            return Err(VmError::Runtime(format!(
-                                "Índice {} fuera de rango", idx
-                            )));
+                            return Err(VmError::Runtime(format!("Índice {} fuera de rango", idx)));
                         }
                         match s.chars().nth(idx as usize) {
                             Some(c) => self.push(Value::str(c.to_string())),
-                            None => return Err(VmError::Runtime(format!(
-                                "Índice {} fuera de rango (largo: {})", idx, s.chars().count()
-                            ))),
+                            None => {
+                                return Err(VmError::Runtime(format!(
+                                    "Índice {} fuera de rango (largo: {})",
+                                    idx,
+                                    s.chars().count()
+                                )))
+                            }
                         }
                     }
                     Value::Map(map) => {
@@ -2952,7 +3078,11 @@ impl VM {
                             Value::Str(s) => s.to_string(),
                             _ => "".to_string(),
                         };
-                        let val = fields.iter().find(|(n, _)| n == &field).map(|(_, v)| v.clone()).unwrap_or(Value::Int(0));
+                        let val = fields
+                            .iter()
+                            .find(|(n, _)| n == &field)
+                            .map(|(_, v)| v.clone())
+                            .unwrap_or(Value::Int(0));
                         self.push(val);
                     }
                     _ => {
@@ -3147,7 +3277,8 @@ impl VM {
                     };
                     self.locals[write_idx].insert(name, val);
                 }
-            }            Opcode::Call => {
+            }
+            Opcode::Call => {
                 let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
                 let argc_idx = self.ip;
                 self.ip += 1;
@@ -3179,7 +3310,8 @@ impl VM {
                         func_name: name.clone(),
                         return_ip: self.ip,
                     });
-                    let mut scope = HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
+                    let mut scope =
+                        HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
                     for (i, param_name) in func_params.iter().enumerate() {
                         if let Some(arg) = args.get(i) {
                             scope.insert(param_name.clone(), arg.clone());
@@ -3268,20 +3400,32 @@ impl VM {
                             _ => v.as_num().map(|f| f as i64),
                         })
                         .unwrap_or(0);
-                    let c = char::from_u32(n as u32).map(|c| c.to_string()).unwrap_or_default();
+                    let c = char::from_u32(n as u32)
+                        .map(|c| c.to_string())
+                        .unwrap_or_default();
                     self.push(Value::str(c));
                 } else if name == "__str_slice" || name == "__str_subcadena" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    let start = args.get(1).and_then(|v| match v {
-                        Value::Int(i) => Some(*i as usize),
-                        _ => v.as_num().map(|f| f as usize),
-                    }).unwrap_or(0);
-                    let end = args.get(2).and_then(|v| match v {
-                        Value::Int(i) => {
-                            if *i == -1 { Some(s.len()) } else { Some(*i as usize) }
-                        }
-                        _ => v.as_num().map(|f| f as usize),
-                    }).unwrap_or(s.len());
+                    let start = args
+                        .get(1)
+                        .and_then(|v| match v {
+                            Value::Int(i) => Some(*i as usize),
+                            _ => v.as_num().map(|f| f as usize),
+                        })
+                        .unwrap_or(0);
+                    let end = args
+                        .get(2)
+                        .and_then(|v| match v {
+                            Value::Int(i) => {
+                                if *i == -1 {
+                                    Some(s.len())
+                                } else {
+                                    Some(*i as usize)
+                                }
+                            }
+                            _ => v.as_num().map(|f| f as usize),
+                        })
+                        .unwrap_or(s.len());
                     let start = start.min(s.len());
                     let end = end.min(s.len()).max(start);
                     let sub: String = s.chars().skip(start).take(end - start).collect();
@@ -3311,10 +3455,18 @@ impl VM {
                 } else if name == "__str_subcadena_chars" || name == "__str_slice_chars" {
                     let cs = match args.first() {
                         Some(Value::Array(a)) => a.clone(),
-                _ => Arc::new(vec![]),
+                        _ => Arc::new(vec![]),
                     };
-                    let st = args.get(1).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(0);
-                    let en = args.get(2).and_then(|v| v.as_num()).map(|f| f as i64).unwrap_or(-1);
+                    let st = args
+                        .get(1)
+                        .and_then(|v| v.as_num())
+                        .map(|f| f as i64)
+                        .unwrap_or(0);
+                    let en = args
+                        .get(2)
+                        .and_then(|v| v.as_num())
+                        .map(|f| f as i64)
+                        .unwrap_or(-1);
                     let n = cs.len() as i64;
                     let st = st.max(0).min(n);
                     let en = if en < 0 { n } else { en.max(0).min(n) };
@@ -3327,7 +3479,9 @@ impl VM {
                     self.push(Value::Map(ImMap::with_hasher(FixHasher::default())));
                 } else if name == "__map_set" || name == "__map_poner" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let m = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let k = it.next().unwrap_or(Value::Void);
                     let v = it.next().unwrap_or(Value::Void);
                     match m {
@@ -3339,7 +3493,9 @@ impl VM {
                     }
                 } else if name == "__map_get" || name == "__map_obtener" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let m = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let k = it.next().unwrap_or(Value::Void);
                     match m {
                         Value::Map(m) => {
@@ -3348,13 +3504,19 @@ impl VM {
                         _ => return Err(VmError::TypeError("__map_get espera diccionario".into())),
                     }
                 } else if name == "__map_len" || name == "__map_longitud" {
-                    let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let m = args
+                        .into_iter()
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match m {
                         Value::Map(m) => self.push(Value::Int(m.len() as i64)),
                         _ => return Err(VmError::TypeError("__map_len espera diccionario".into())),
                     }
                 } else if name == "__map_keys" || name == "__map_claves" {
-                    let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let m = args
+                        .into_iter()
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match m {
                         Value::Map(m) => {
                             self.push(Value::arr(m.into_iter().map(|(k, _)| k).collect()));
@@ -3365,7 +3527,9 @@ impl VM {
                     }
                 } else if name == "__map_contains" || name == "__map_contiene" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let m = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let k = it.next().unwrap_or(Value::Void);
                     match m {
                         Value::Map(m) => self.push(Value::Bool(m.contains_key(&k))),
@@ -3379,7 +3543,9 @@ impl VM {
                     self.push(Value::Map(ImMap::with_hasher(FixHasher::default())));
                 } else if name == "__set_add" || name == "__conjunto_agregar" {
                     let mut it = args.into_iter();
-                    let s = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let s = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let item = it.next().unwrap_or(Value::Void);
                     match s {
                         Value::Map(mut m) => {
@@ -3390,7 +3556,9 @@ impl VM {
                     }
                 } else if name == "__set_has" || name == "__conjunto_tiene" {
                     let mut it = args.into_iter();
-                    let s = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let s = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let item = it.next().unwrap_or(Value::Void);
                     match s {
                         Value::Map(m) => self.push(Value::Bool(m.contains_key(&item))),
@@ -3398,12 +3566,18 @@ impl VM {
                     }
                 } else if name == "__set_union" || name == "__conjunto_unir" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
-                    let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let a = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let b = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match (a, b) {
                         (Value::Map(mut m1), Value::Map(m2)) => {
                             for (k, v) in m2 {
-                                if !m1.contains_key(&k) { m1.insert(k, v); }
+                                if !m1.contains_key(&k) {
+                                    m1.insert(k, v);
+                                }
                             }
                             self.push(Value::Map(m1));
                         }
@@ -3411,22 +3585,28 @@ impl VM {
                     }
                 } else if name == "__set_inter" || name == "__conjunto_interseccion" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
-                    let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let a = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let b = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match (a, b) {
                         (Value::Map(m1), Value::Map(m2)) => {
-                            let r: ImMap<Value, Value, FixHasher> = m1
-                                .into_iter()
-                                .filter(|(k, _)| m2.contains_key(k))
-                                .collect();
+                            let r: ImMap<Value, Value, FixHasher> =
+                                m1.into_iter().filter(|(k, _)| m2.contains_key(k)).collect();
                             self.push(Value::Map(r));
                         }
                         _ => return Err(VmError::TypeError("__set_inter espera conjuntos".into())),
                     }
                 } else if name == "__set_diff" || name == "__conjunto_diferencia" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
-                    let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let a = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let b = it
+                        .next()
+                        .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match (a, b) {
                         (Value::Map(m1), Value::Map(m2)) => {
                             let r: ImMap<Value, Value, FixHasher> = m1
@@ -3774,9 +3954,7 @@ impl VM {
                             }
                             Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                         },
-                        None => {
-                            self.push(Value::Error(Box::new(Value::str("Sin listener"))))
-                        }
+                        None => self.push(Value::Error(Box::new(Value::str("Sin listener")))),
                     }
                 } else if name == "__http_server" || name == "__http_servidor" {
                     let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
@@ -3800,7 +3978,8 @@ impl VM {
                         func_name: name.clone(),
                         return_ip: self.ip,
                     });
-                    let mut scope = HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
+                    let mut scope =
+                        HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
                     for (i, param_name) in func_params.iter().enumerate() {
                         if let Some(arg) = args.get(i) {
                             scope.insert(param_name.clone(), arg.clone());
@@ -4015,11 +4194,25 @@ impl VM {
         let get_instr = |idx: usize| -> Option<(i64, i64)> {
             match instrs_map.get(&Value::str(idx.to_string())) {
                 Some(Value::Map(m)) => {
-                    let op = m.get(&Value::str("op"))
-                        .and_then(|v| if let Value::Int(o) = v { Some(*o) } else { None })
+                    let op = m
+                        .get(&Value::str("op"))
+                        .and_then(|v| {
+                            if let Value::Int(o) = v {
+                                Some(*o)
+                            } else {
+                                None
+                            }
+                        })
                         .unwrap_or(0);
-                    let arg = m.get(&Value::str("arg"))
-                        .and_then(|v| if let Value::Int(a) = v { Some(*a) } else { None })
+                    let arg = m
+                        .get(&Value::str("arg"))
+                        .and_then(|v| {
+                            if let Value::Int(a) = v {
+                                Some(*a)
+                            } else {
+                                None
+                            }
+                        })
                         .unwrap_or(0);
                     Some((op, arg))
                 }
@@ -4051,50 +4244,50 @@ impl VM {
         //          Load=5, Store=6, Add=7, ... Halt=27, Mod=46
         let cg_to_vm = |cg_op: i64| -> u8 {
             match cg_op {
-                1 => 2,       // PushNum → VM PushNum (f64)
-                2 => 3,       // PushStr
-                3 => 1,       // PushInt
-                4 => 4,       // PushBool
-                5 => 7,       // Add
-                6 => 8,       // Sub
-                7 => 9,       // Mul
-                8 => 10,      // Div
-                9 => 46,      // Mod
-                10 => 11,     // Eq
-                11 => 12,     // Neq
-                12 => 13,     // Lt
-                13 => 14,     // Le
-                14 => 15,     // Gt
-                15 => 16,     // Ge
-                16 => 17,     // And
-                17 => 18,     // Or
-                18 => 20,     // Not
-                19 => 19,     // Neg
-                20 => 6,      // Store
-                21 => 5,      // Load
-                22 => 25,     // Jmp
-                23 => 26,     // JmpIf
-                24 => 21,     // Call
-                25 => 22,     // Ret
-                26 => 23,     // Print
-                27 => 27,     // Halt
-                 28 => 28,     // ArrayNew
-                 29 => 29,     // ArrayGet
-                 30 => 30,     // ArraySet
-                 31 => 31,     // ArrayLen
-                 38 => 38,     // ResultOk
-                 39 => 39,     // ResultErr
-                 40 => 40,     // TryUnwrap
-                 41 => 41,     // OptionSome
-                 42 => 42,     // OptionNone
-                 47 => 44,     // TupleNew
-                 48 => 45,     // TupleAccess
-                 46 => 47,     // BitOr
-                 49 => 48,     // BitAnd
-                  50 => 49,     // ShiftLeft
-                  51 => 50,     // ShiftRight
-                  52 => 51,     // Concat
-                  _ => 0,       // Nop
+                1 => 2,   // PushNum → VM PushNum (f64)
+                2 => 3,   // PushStr
+                3 => 1,   // PushInt
+                4 => 4,   // PushBool
+                5 => 7,   // Add
+                6 => 8,   // Sub
+                7 => 9,   // Mul
+                8 => 10,  // Div
+                9 => 46,  // Mod
+                10 => 11, // Eq
+                11 => 12, // Neq
+                12 => 13, // Lt
+                13 => 14, // Le
+                14 => 15, // Gt
+                15 => 16, // Ge
+                16 => 17, // And
+                17 => 18, // Or
+                18 => 20, // Not
+                19 => 19, // Neg
+                20 => 6,  // Store
+                21 => 5,  // Load
+                22 => 25, // Jmp
+                23 => 26, // JmpIf
+                24 => 21, // Call
+                25 => 22, // Ret
+                26 => 23, // Print
+                27 => 27, // Halt
+                28 => 28, // ArrayNew
+                29 => 29, // ArrayGet
+                30 => 30, // ArraySet
+                31 => 31, // ArrayLen
+                38 => 38, // ResultOk
+                39 => 39, // ResultErr
+                40 => 40, // TryUnwrap
+                41 => 41, // OptionSome
+                42 => 42, // OptionNone
+                47 => 44, // TupleNew
+                48 => 45, // TupleAccess
+                46 => 47, // BitOr
+                49 => 48, // BitAnd
+                50 => 49, // ShiftLeft
+                51 => 50, // ShiftRight
+                52 => 51, // Concat
+                _ => 0,   // Nop
             }
         };
 
@@ -4128,7 +4321,7 @@ impl VM {
                 let vm_op = cg_to_vm(op);
 
                 // Simple ops (5-19 except 4) plus array ops (29-31; 28 needs WithIdx)
-                if (op >= 5 && op <= 19 && op != 4) || (op == 29 || op == 30 || op == 31) {
+                if (5..=19).contains(&op) || (op == 29 || op == 30 || op == 31) {
                     instr_bytes.push(0);
                     instr_bytes.push(vm_op);
                 } else if op == 28 || op == 47 || op == 48 {
@@ -4296,7 +4489,7 @@ impl VM {
             for pi in 0..pcount {
                 let pname = match fparams.get(&Value::str(pi.to_string())) {
                     Some(Value::Str(s)) => s.to_string(),
-                _ => String::new(),
+                    _ => String::new(),
                 };
                 func_bytes.extend_from_slice(&(pname.len() as u32).to_le_bytes());
                 func_bytes.extend_from_slice(pname.as_bytes());
@@ -4450,6 +4643,7 @@ fn hmac_sha256(data: &[u8], key: &[u8]) -> Vec<u8> {
 }
 
 // ── Date helpers ─────────────────────────────────
+#[cfg_attr(not(feature = "full"), allow(dead_code))]
 fn format_timestamp(timestamp: i64, fmt: &str) -> String {
     if let Some(dt) = Utc.timestamp_opt(timestamp, 0).single() {
         if fmt.is_empty() {
@@ -4473,6 +4667,7 @@ fn format_timestamp(timestamp: i64, fmt: &str) -> String {
     }
 }
 
+#[cfg_attr(not(feature = "full"), allow(dead_code))]
 fn unix_timestamp_to_iso8601(timestamp: i64) -> String {
     // Simple algorithm: convert seconds since epoch to yyyy-mm-ddThh:mm:ssZ
     let secs = if timestamp >= 0 {
@@ -4530,10 +4725,12 @@ fn unix_timestamp_to_iso8601(timestamp: i64) -> String {
     )
 }
 
+#[cfg_attr(not(feature = "full"), allow(dead_code))]
 fn is_leap(year: i64) -> bool {
     (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 }
 
+#[cfg_attr(not(feature = "full"), allow(dead_code))]
 fn parse_iso8601_to_unix(s: &str) -> Result<i64, String> {
     // Accept: "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00" or "2024-01-15"
     let s = s.trim();
@@ -4593,6 +4790,7 @@ fn parse_iso8601_to_unix(s: &str) -> Result<i64, String> {
     Ok(total_secs)
 }
 
+#[cfg_attr(not(feature = "full"), allow(dead_code))]
 fn days_since_epoch(year: i64, month: u32, day: u32) -> i64 {
     let mut total = 0i64;
     let mut y = 1970;

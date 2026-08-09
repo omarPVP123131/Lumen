@@ -5,7 +5,8 @@
 pub struct Coroutine {
     pub ip: usize,
     pub stack: Vec<crate::value::Value>,
-    pub locals: Vec<std::collections::HashMap<String, crate::value::Value, crate::value::FixHasher>>,
+    pub locals:
+        Vec<std::collections::HashMap<String, crate::value::Value, crate::value::FixHasher>>,
     pub fn_name: String,
     pub is_done: bool,
 }

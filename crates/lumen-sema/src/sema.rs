@@ -559,8 +559,13 @@ impl SemanticAnalyzer {
             BinOp::LessEqual => Some("menor_o_igual"),
             BinOp::Greater => Some("mayor"),
             BinOp::GreaterEqual => Some("mayor_o_igual"),
-            BinOp::And | BinOp::Or | BinOp::BitOr | BinOp::BitAnd | BinOp::ShiftLeft
-            | BinOp::ShiftRight | BinOp::Concat => None,
+            BinOp::And
+            | BinOp::Or
+            | BinOp::BitOr
+            | BinOp::BitAnd
+            | BinOp::ShiftLeft
+            | BinOp::ShiftRight
+            | BinOp::Concat => None,
         }
     }
 
@@ -1368,7 +1373,12 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
-            Stmt::ArraySet { arr, index, value, span } => {
+            Stmt::ArraySet {
+                arr,
+                index,
+                value,
+                span,
+            } => {
                 let arr_type = self.analyze_expr(arr);
                 let _ = self.analyze_expr(index);
                 let value_type = self.analyze_expr(value);
@@ -1543,8 +1553,13 @@ impl SemanticAnalyzer {
                         BinOp::LessEqual => "menor_o_igual",
                         BinOp::Greater => "mayor",
                         BinOp::GreaterEqual => "mayor_o_igual",
-                        BinOp::And | BinOp::Or | BinOp::BitOr | BinOp::BitAnd | BinOp::ShiftLeft
-                        | BinOp::ShiftRight | BinOp::Concat => "",
+                        BinOp::And
+                        | BinOp::Or
+                        | BinOp::BitOr
+                        | BinOp::BitAnd
+                        | BinOp::ShiftLeft
+                        | BinOp::ShiftRight
+                        | BinOp::Concat => "",
                     }
                 };
                 let has_op_overload = |t: &TypeInfo, op: &BinOp| -> bool {
@@ -1608,8 +1623,15 @@ impl SemanticAnalyzer {
                             TypeInfo::Void
                         }
                     }
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::BitOr
-                    | BinOp::BitAnd | BinOp::ShiftLeft | BinOp::ShiftRight => {
+                    BinOp::Add
+                    | BinOp::Sub
+                    | BinOp::Mul
+                    | BinOp::Div
+                    | BinOp::Mod
+                    | BinOp::BitOr
+                    | BinOp::BitAnd
+                    | BinOp::ShiftLeft
+                    | BinOp::ShiftRight => {
                         if matches!(op, BinOp::Add)
                             && ((lt == TypeInfo::Texto
                                 && (rt == TypeInfo::Texto
@@ -1994,7 +2016,8 @@ impl SemanticAnalyzer {
                                         ok: Box::new(TypeInfo::Texto),
                                         err: Box::new(TypeInfo::Texto),
                                     }
-                                } else if callee == "__file_write" || callee == "__escribir_archivo"
+                                } else if callee == "__file_write"
+                                    || callee == "__escribir_archivo"
                                     || callee == "__file_append"
                                     || callee == "__agregar_archivo"
                                 {
@@ -2025,7 +2048,8 @@ impl SemanticAnalyzer {
                                         ok: Box::new(TypeInfo::Booleano),
                                         err: Box::new(TypeInfo::Texto),
                                     }
-                                } else if callee == "__file_write_binary" || callee == "__escribir_archivo_bin"
+                                } else if callee == "__file_write_binary"
+                                    || callee == "__escribir_archivo_bin"
                                 {
                                     if args.len() != 2 {
                                         self.errors.push(SemError {
@@ -2040,7 +2064,9 @@ impl SemanticAnalyzer {
                                                 .to_string(),
                                         });
                                     }
-                                    if args.len() >= 1 && !can_assign(&TypeInfo::Texto, &arg_types[0]) {
+                                    if !args.is_empty()
+                                        && !can_assign(&TypeInfo::Texto, &arg_types[0])
+                                    {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
                                             message: format!("El argumento 1 de '{}' debe ser 'texto', no '{:?}'", callee, arg_types[0]),
@@ -2048,7 +2074,12 @@ impl SemanticAnalyzer {
                                             suggestion: "Pasa un valor de tipo texto".to_string(),
                                         });
                                     }
-                                    if args.len() >= 2 && !can_assign(&TypeInfo::Lista(Box::new(TypeInfo::Entero)), &arg_types[1]) {
+                                    if args.len() >= 2
+                                        && !can_assign(
+                                            &TypeInfo::Lista(Box::new(TypeInfo::Entero)),
+                                            &arg_types[1],
+                                        )
+                                    {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
                                             message: format!("El argumento 2 de '{}' debe ser 'Array<Int>', no '{:?}'", callee, arg_types[1]),
@@ -2060,7 +2091,8 @@ impl SemanticAnalyzer {
                                         ok: Box::new(TypeInfo::Booleano),
                                         err: Box::new(TypeInfo::Texto),
                                     }
-                                } else if callee == "__num_a_f64_bytes" || callee == "__numero_a_bytes_f64"
+                                } else if callee == "__num_a_f64_bytes"
+                                    || callee == "__numero_a_bytes_f64"
                                 {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
@@ -2075,31 +2107,40 @@ impl SemanticAnalyzer {
                                         });
                                     }
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
-                                } else if callee == "__file_bytes" || callee == "__leer_bytes"
-                                {
+                                } else if callee == "__file_bytes" || callee == "__leer_bytes" {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
                                             code: "E040".to_string(),
-                                            message: format!("'{}' espera 1 argumento (ruta), no {}", callee, args.len()),
+                                            message: format!(
+                                                "'{}' espera 1 argumento (ruta), no {}",
+                                                callee,
+                                                args.len()
+                                            ),
                                             span: *span,
-                                            suggestion: "Pasa 1 argumento: ruta del archivo".to_string(),
+                                            suggestion: "Pasa 1 argumento: ruta del archivo"
+                                                .to_string(),
                                         });
                                     }
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
-                                } else if callee == "__a_f64_bytes" || callee == "__bytes_a_f64"
-                                {
+                                } else if callee == "__a_f64_bytes" || callee == "__bytes_a_f64" {
                                     TypeInfo::Numero
-                                } else if callee == "__compile_nv" || callee == "__compilar_nv"
-                                {
+                                } else if callee == "__compile_nv" || callee == "__compilar_nv" {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
                                             code: "E040".to_string(),
-                                            message: format!("'{}' espera 1 argumento (ruta), no {}", callee, args.len()),
+                                            message: format!(
+                                                "'{}' espera 1 argumento (ruta), no {}",
+                                                callee,
+                                                args.len()
+                                            ),
                                             span: *span,
-                                            suggestion: "Pasa 1 argumento: ruta del archivo .nv".to_string(),
+                                            suggestion: "Pasa 1 argumento: ruta del archivo .nv"
+                                                .to_string(),
                                         });
                                     }
-                                    if args.len() >= 1 && !can_assign(&TypeInfo::Texto, &arg_types[0]) {
+                                    if !args.is_empty()
+                                        && !can_assign(&TypeInfo::Texto, &arg_types[0])
+                                    {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
                                             message: format!("El argumento 1 de '{}' debe ser 'texto', no '{:?}'", callee, arg_types[0]),
@@ -2108,8 +2149,7 @@ impl SemanticAnalyzer {
                                         });
                                     }
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
-                                } else if callee == "__codegen_a_nvc"
-                                {
+                                } else if callee == "__codegen_a_nvc" {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
                                             code: "E040".to_string(),
@@ -2122,7 +2162,9 @@ impl SemanticAnalyzer {
                                             suggestion: "Pasa 1 argumento: codegen map".to_string(),
                                         });
                                     }
-                                    if args.len() >= 1 && !can_assign(&TypeInfo::Numero, &arg_types[0]) {
+                                    if !args.is_empty()
+                                        && !can_assign(&TypeInfo::Numero, &arg_types[0])
+                                    {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
                                             message: format!("El argumento 1 de '{}' debe ser 'numero', no '{:?}'", callee, arg_types[0]),
@@ -2259,7 +2301,9 @@ impl SemanticAnalyzer {
                                     }
                                     if let Some(got) = arg_types.first() {
                                         match got {
-                                            TypeInfo::Lista(_) | TypeInfo::Texto | TypeInfo::Numero => {}
+                                            TypeInfo::Lista(_)
+                                            | TypeInfo::Texto
+                                            | TypeInfo::Numero => {}
                                             _ => {
                                                 self.errors.push(SemError {
                                                     code: "E041".to_string(),
@@ -2301,35 +2345,6 @@ impl SemanticAnalyzer {
                                     }
                                     TypeInfo::Texto
                                 } else if callee == "__tarea_esperar" || callee == "__task_await" {
-                                    if args.len() != 1 {
-                                        self.errors.push(SemError {
-                                            code: "E040".to_string(),
-                                            message: format!(
-                                                "'{}' espera 1 argumento (task ID), no {}",
-                                                callee,
-                                                args.len()
-                                            ),
-                                            span: *span,
-                                            suggestion:
-                                                "Pasa el ID de la tarea como único argumento"
-                                                    .to_string(),
-                                        });
-                                    }
-                                    if let Some(got) = arg_types.first() {
-                                        if !can_assign(&TypeInfo::Texto, got) {
-                                            self.errors.push(SemError {
-                                                code: "E041".to_string(),
-                                                message: format!(
-                                                    "'{}' espera un texto (task ID), no '{:?}'",
-                                                    callee, got
-                                                ),
-                                                span: *span,
-                                                suggestion:
-                                                    "Pasa un valor de tipo texto como task ID"
-                                                        .to_string(),
-                                            });
-                                        }
-                                    }
                                     TypeInfo::Entero
                                 } else if callee == "__js_eval"
                                     || callee == "__js_evaluar"
@@ -2347,34 +2362,23 @@ impl SemanticAnalyzer {
                                     || callee == "__gui_close"
                                 {
                                     TypeInfo::Booleano
-                                } else if callee == "__gui_id"
-                                    || callee == "__gui_hwnd"
-                                {
+                                } else if callee == "__gui_id" || callee == "__gui_hwnd" {
                                     TypeInfo::Entero
-                                } else if callee == "__ffi_cargar"
-                                    || callee == "__ffi_load"
-                                {
+                                } else if callee == "__ffi_cargar" || callee == "__ffi_load" {
                                     TypeInfo::Texto
                                 } else if callee == "__ffi_llamar"
                                     || callee == "__ffi_call"
-                                {
-                                    TypeInfo::Entero
-                                } else if callee == "__ffi_asignar"
+                                    || callee == "__ffi_asignar"
                                     || callee == "__ffi_alloc"
-                                {
-                                    TypeInfo::Entero
-                                } else if callee == "__ffi_liberar"
+                                    || callee == "__ffi_liberar"
                                     || callee == "__ffi_free"
                                     || callee == "__ffi_escribir"
                                     || callee == "__ffi_write"
                                 {
                                     TypeInfo::Entero
-                                } else if callee == "__ffi_leer"
-                                    || callee == "__ffi_read"
-                                {
+                                } else if callee == "__ffi_leer" || callee == "__ffi_read" {
                                     TypeInfo::Texto
-                                } else if callee == "__ffi_peek"
-                                {
+                                } else if callee == "__ffi_peek" {
                                     TypeInfo::Entero
                                 } else if callee == "__aes_encriptar"
                                     || callee == "__aes_encrypt"
@@ -2451,142 +2455,221 @@ impl SemanticAnalyzer {
                                     || callee == "__temporizador_esperar"
                                     || callee == "__tcp_connect_async"
                                     || callee == "__tcp_conectar_async"
+                                    || callee == "__hilo_esperar"
+                                    || callee == "__thread_join"
+                                    || callee == "__canal_recibir"
+                                    || callee == "__channel_recv"
+                                    || callee == "__actor_recibir"
+                                    || callee == "__actor_recv"
+                                    || callee == "__generador_siguiente"
+                                    || callee == "__generator_next"
+                                    || callee == "__stream_colectar"
+                                    || callee == "__stream_collect"
+                                    || callee == "__stream_desde"
+                                    || callee == "__stream_from"
+                                    || callee == "__stream_mapear"
+                                    || callee == "__stream_map"
+                                    || callee == "__stream_filtrar"
+                                    || callee == "__stream_filter"
+                                    || callee == "__par_mapear"
+                                    || callee == "__par_map"
+                                    || callee == "__par_unir"
+                                    || callee == "__par_join"
+                                    || callee == "__seleccionar"
+                                    || callee == "__select"
+                                    || callee == "__mutex_bloquear"
+                                    || callee == "__mutex_lock"
+                                    || callee == "__hilo_lanzar"
+                                    || callee == "__thread_spawn"
+                                    || callee == "__canal_nuevo"
+                                    || callee == "__channel_new"
+                                    || callee == "__mutex_nuevo"
+                                    || callee == "__mutex_new"
+                                    || callee == "__actor_nuevo"
+                                    || callee == "__actor_new"
+                                    || callee == "__generador_nuevo"
+                                    || callee == "__generator_new"
+                                    || callee == "__scope_lanzar"
+                                    || callee == "__scope_spawn"
+                                    || callee == "__scope_nuevo"
+                                    || callee == "__scope_new"
+                                    || callee == "__supervisor_nuevo"
+                                    || callee == "__supervisor_new"
+                                    || callee == "__cluster_conectar"
+                                    || callee == "__cluster_connect"
+                                    || callee == "__http_servidor"
+                                    || callee == "__http_server"
+                                    || callee == "__rwlock_nuevo"
+                                    || callee == "__rwlock_new"
+                                    || callee == "__arc_nuevo"
+                                    || callee == "__arc_new"
                                 {
                                     TypeInfo::Texto
-                                } else if callee == "__hilo_esperar" || callee == "__thread_join"
-                                    || callee == "__canal_recibir" || callee == "__channel_recv"
-                                    || callee == "__actor_recibir" || callee == "__actor_recv"
-                                    || callee == "__generador_siguiente" || callee == "__generator_next"
-                                    || callee == "__stream_colectar" || callee == "__stream_collect"
-                                    || callee == "__stream_desde" || callee == "__stream_from"
-                                    || callee == "__stream_mapear" || callee == "__stream_map"
-                                    || callee == "__stream_filtrar" || callee == "__stream_filter"
-                                    || callee == "__par_mapear" || callee == "__par_map"
-                                    || callee == "__par_unir" || callee == "__par_join"
-                                    || callee == "__seleccionar" || callee == "__select"
-                                    || callee == "__mutex_bloquear" || callee == "__mutex_lock"
-                                {
-                                    TypeInfo::Texto
-                                } else if callee == "__hilo_lanzar" || callee == "__thread_spawn"
-                                    || callee == "__canal_nuevo" || callee == "__channel_new"
-                                    || callee == "__mutex_nuevo" || callee == "__mutex_new"
-                                    || callee == "__actor_nuevo" || callee == "__actor_new"
-                                    || callee == "__generador_nuevo" || callee == "__generator_new"
-                                    || callee == "__scope_lanzar" || callee == "__scope_spawn"
-                                    || callee == "__scope_nuevo" || callee == "__scope_new"
-                                    || callee == "__supervisor_nuevo" || callee == "__supervisor_new"
-                                    || callee == "__cluster_conectar" || callee == "__cluster_connect"
-                                    || callee == "__http_servidor" || callee == "__http_server"
-                                    || callee == "__rwlock_nuevo" || callee == "__rwlock_new"
-                                    || callee == "__arc_nuevo" || callee == "__arc_new"
-                                {
-                                    TypeInfo::Texto
-                                } else if callee == "__tcp_conectar" || callee == "__tcp_connect"
-                                    || callee == "__tcp_escuchar" || callee == "__tcp_listen"
-                                    || callee == "__canal_enviar" || callee == "__channel_send"
-                                    || callee == "__actor_enviar" || callee == "__actor_send"
-                                    || callee == "__cluster_enviar" || callee == "__cluster_send"
-                                    || callee == "__tcp_aceptar" || callee == "__tcp_accept"
+                                } else if callee == "__tcp_conectar"
+                                    || callee == "__tcp_connect"
+                                    || callee == "__tcp_escuchar"
+                                    || callee == "__tcp_listen"
+                                    || callee == "__canal_enviar"
+                                    || callee == "__channel_send"
+                                    || callee == "__actor_enviar"
+                                    || callee == "__actor_send"
+                                    || callee == "__cluster_enviar"
+                                    || callee == "__cluster_send"
+                                    || callee == "__tcp_aceptar"
+                                    || callee == "__tcp_accept"
                                 {
                                     TypeInfo::Booleano
-                                } else if callee == "__dormir" || callee == "__sleep"
-                                    || callee == "__scope_cancelar" || callee == "__scope_cancel"
-                                    || callee == "__supervisor_agregar" || callee == "__supervisor_add"
-                                    || callee == "__supervisor_iniciar" || callee == "__supervisor_start"
-                                    || callee == "__arc_asignar" || callee == "__arc_set"
+                                } else if callee == "__dormir"
+                                    || callee == "__sleep"
+                                    || callee == "__scope_cancelar"
+                                    || callee == "__scope_cancel"
+                                    || callee == "__supervisor_agregar"
+                                    || callee == "__supervisor_add"
+                                    || callee == "__supervisor_iniciar"
+                                    || callee == "__supervisor_start"
+                                    || callee == "__arc_asignar"
+                                    || callee == "__arc_set"
                                 {
                                     TypeInfo::Void
                                 } else if callee == "__tipo_de" || callee == "__typeof" {
                                     TypeInfo::Texto
                                 } else if callee == "__str_ord" || callee == "__str_codigo" {
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
-                                } else if callee == "__str_chr" || callee == "__str_caracter" {
+                                } else if callee == "__str_chr"
+                                    || callee == "__str_caracter"
+                                    || callee == "__str_slice"
+                                    || callee == "__str_subcadena"
+                                    || callee == "__str_concat_list"
+                                    || callee == "__str_concatenar_lista"
+                                    || callee == "__str_reemplazar"
+                                    || callee == "__str_replace"
+                                    || callee == "__str_subcadena_chars"
+                                    || callee == "__str_slice_chars"
+                                {
                                     TypeInfo::Texto
-                                } else if callee == "__str_slice" || callee == "__str_subcadena" {
-                                    TypeInfo::Texto
-                                } else if callee == "__str_concat_list" || callee == "__str_concatenar_lista" {
-                                    TypeInfo::Texto
-                                } else if callee == "__str_starts_with" || callee == "__str_empieza_con" {
+                                } else if callee == "__str_starts_with"
+                                    || callee == "__str_empieza_con"
+                                {
                                     TypeInfo::Booleano
-                                } else if callee == "__str_to_chars" || callee == "__str_a_caracteres" {
+                                } else if callee == "__str_to_chars"
+                                    || callee == "__str_a_caracteres"
+                                {
                                     TypeInfo::Lista(Box::new(TypeInfo::Texto))
-                                } else if callee == "__str_reemplazar" || callee == "__str_replace" {
-                                    TypeInfo::Texto
-                                } else if callee == "__str_subcadena_chars" || callee == "__str_slice_chars" {
-                                    TypeInfo::Texto
                                 } else if callee == "__map_contiene" || callee == "__map_contains" {
                                     TypeInfo::Booleano
                                 } else if callee == "__map_claves" || callee == "__map_keys" {
                                     TypeInfo::Lista(Box::new(TypeInfo::Numero))
-                                } else if callee == "__map_obtener" || callee == "__map_get"
-                                    || callee == "__map_nuevo" || callee == "__map_new"
-                                    || callee == "__map_poner" || callee == "__map_set" {
+                                } else if callee == "__map_obtener"
+                                    || callee == "__map_get"
+                                    || callee == "__map_nuevo"
+                                    || callee == "__map_new"
+                                    || callee == "__map_poner"
+                                    || callee == "__map_set"
+                                {
                                     TypeInfo::Numero
-                                } else if callee == "__encoding_utf8" || callee == "__codificacion_utf8" {
+                                } else if callee == "__encoding_utf8"
+                                    || callee == "__codificacion_utf8"
+                                {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
                                             code: "E040".to_string(),
-                                            message: format!("'{}' espera 1 argumento (texto), no {}", callee, args.len()),
+                                            message: format!(
+                                                "'{}' espera 1 argumento (texto), no {}",
+                                                callee,
+                                                args.len()
+                                            ),
                                             span: *span,
-                                            suggestion: "Pasa 1 texto para codificar a UTF-8".to_string(),
+                                            suggestion: "Pasa 1 texto para codificar a UTF-8"
+                                                .to_string(),
                                         });
                                     }
                                     if let Some(got) = arg_types.first() {
                                         if !can_assign(&TypeInfo::Texto, got) {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
-                                                message: format!("'{}' espera 'texto', no '{:?}'", callee, got),
+                                                message: format!(
+                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    callee, got
+                                                ),
                                                 span: *span,
-                                                suggestion: "Pasa un valor de tipo texto".to_string(),
+                                                suggestion: "Pasa un valor de tipo texto"
+                                                    .to_string(),
                                             });
                                         }
                                     }
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
-                                } else if callee == "__encoding_from_utf8" || callee == "__desde_utf8" {
+                                } else if callee == "__encoding_from_utf8"
+                                    || callee == "__desde_utf8"
+                                {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
                                             code: "E040".to_string(),
-                                            message: format!("'{}' espera 1 argumento (Array<Int>), no {}", callee, args.len()),
+                                            message: format!(
+                                                "'{}' espera 1 argumento (Array<Int>), no {}",
+                                                callee,
+                                                args.len()
+                                            ),
                                             span: *span,
-                                            suggestion: "Pasa 1 Array<Int> con bytes UTF-8".to_string(),
+                                            suggestion: "Pasa 1 Array<Int> con bytes UTF-8"
+                                                .to_string(),
                                         });
                                     }
                                     if let Some(got) = arg_types.first() {
-                                        if !can_assign(&TypeInfo::Lista(Box::new(TypeInfo::Entero)), got) {
+                                        if !can_assign(
+                                            &TypeInfo::Lista(Box::new(TypeInfo::Entero)),
+                                            got,
+                                        ) {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
-                                                message: format!("'{}' espera 'Array<Int>', no '{:?}'", callee, got),
+                                                message: format!(
+                                                    "'{}' espera 'Array<Int>', no '{:?}'",
+                                                    callee, got
+                                                ),
                                                 span: *span,
-                                                suggestion: "Pasa un valor de tipo lista<entero>".to_string(),
+                                                suggestion: "Pasa un valor de tipo lista<entero>"
+                                                    .to_string(),
                                             });
                                         }
                                     }
                                     TypeInfo::Texto
-                                } else if callee == "__regex_is_match" || callee == "__regex_coincide" {
+                                } else if callee == "__regex_is_match"
+                                    || callee == "__regex_coincide"
+                                {
                                     TypeInfo::Booleano
-                                } else if callee == "__http_get" || callee == "__http_obtener"
-                                    || callee == "__http_post" || callee == "__http_enviar" {
-                                    TypeInfo::Texto
-                                } else if callee == "__hash_sha256" || callee == "__hash_sha512" {
+                                } else if callee == "__http_get"
+                                    || callee == "__http_obtener"
+                                    || callee == "__http_post"
+                                    || callee == "__http_enviar"
+                                    || callee == "__hash_sha256"
+                                    || callee == "__hash_sha512"
+                                {
                                     TypeInfo::Texto
                                 } else if callee == "__coro_ceder" || callee == "__coro_yield" {
                                     TypeInfo::Void
-                                } else if callee == "__unicode_normalize" || callee == "__unicode_normalizar"
-                                    || callee == "__str_padding_inicio" || callee == "__str_pad_start"
-                                    || callee == "__str_padding_fin" || callee == "__str_pad_end"
-                                    || callee == "__tiempo_formatear" || callee == "__time_format"
-                                    || callee == "__coro_crear" || callee == "__coro_create"
+                                } else if callee == "__unicode_normalize"
+                                    || callee == "__unicode_normalizar"
+                                    || callee == "__str_padding_inicio"
+                                    || callee == "__str_pad_start"
+                                    || callee == "__str_padding_fin"
+                                    || callee == "__str_pad_end"
+                                    || callee == "__tiempo_formatear"
+                                    || callee == "__time_format"
+                                    || callee == "__coro_crear"
+                                    || callee == "__coro_create"
                                 {
                                     TypeInfo::Texto
-                                } else if callee == "__fs_listar" || callee == "__fs_listdir"
-                                    || callee == "__env_listar" || callee == "__env_list"
-                                    || callee == "__lector_buffer" || callee == "__buf_reader"
-                                    || callee == "__regex_capturar" || callee == "__regex_captures"
+                                } else if callee == "__fs_listar"
+                                    || callee == "__fs_listdir"
+                                    || callee == "__env_listar"
+                                    || callee == "__env_list"
+                                    || callee == "__lector_buffer"
+                                    || callee == "__buf_reader"
+                                    || callee == "__regex_capturar"
+                                    || callee == "__regex_captures"
                                 {
                                     TypeInfo::Lista(Box::new(TypeInfo::Texto))
-                                } else if callee == "__tarea_esperar" || callee == "__task_await" {
-                                    TypeInfo::Decimal
-                                } else if callee == "__str_a_entero" || callee == "__texto_a_entero" {
+                                } else if callee == "__str_a_entero" || callee == "__texto_a_entero"
+                                {
                                     TypeInfo::Entero
                                 } else if callee.starts_with("__") {
                                     TypeInfo::Decimal
@@ -2798,9 +2881,8 @@ impl SemanticAnalyzer {
                                     ),
                                 });
                             } else if arg_types.len() == 1
-                                && !can_assign(&*inner, &arg_types[0])
-                                && !(*inner == TypeInfo::Numero
-                                    || arg_types[0] == TypeInfo::Numero)
+                                && !can_assign(&inner, &arg_types[0])
+                                && !(*inner == TypeInfo::Numero || arg_types[0] == TypeInfo::Numero)
                             {
                                 self.errors.push(SemError {
                                     code: "E046".to_string(),
@@ -2842,7 +2924,8 @@ impl SemanticAnalyzer {
                                     method, expr_type
                                 ),
                                 span: *span,
-                                suggestion: "'largo' solo se puede llamar en listas y texto".to_string(),
+                                suggestion: "'largo' solo se puede llamar en listas y texto"
+                                    .to_string(),
                             });
                             TypeInfo::Entero
                         }
@@ -3024,7 +3107,11 @@ impl SemanticAnalyzer {
                 }
             }
             Expr::Grouping { expr, .. } => self.analyze_expr(expr),
-            Expr::Cast { expr, cast_type, span } => {
+            Expr::Cast {
+                expr,
+                cast_type,
+                span,
+            } => {
                 self.analyze_expr(expr);
                 let ti = match cast_type {
                     Type::Entero => TypeInfo::Entero,

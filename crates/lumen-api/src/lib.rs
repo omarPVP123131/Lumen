@@ -109,9 +109,8 @@ impl LumenEngine {
     pub fn run(&mut self, source: &str) -> Result<String, String> {
         let bytecode_data = self.compile(source)?;
 
-        let (bytecode, _) =
-            lumen_codegen::Bytecode::decode(&bytecode_data)
-                .map_err(|e| format!("Decode error: {}", e))?;
+        let (bytecode, _) = lumen_codegen::Bytecode::decode(&bytecode_data)
+            .map_err(|e| format!("Decode error: {}", e))?;
 
         let mut vm = VM::new(bytecode);
         vm.run().map_err(|e| format!("Runtime error: {:?}", e))?;

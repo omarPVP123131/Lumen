@@ -606,7 +606,9 @@ impl Formatter {
                 self.fmt_expr(expr);
                 self.push(")");
             }
-            Expr::Cast { expr, cast_type, .. } => {
+            Expr::Cast {
+                expr, cast_type, ..
+            } => {
                 self.push("(");
                 self.fmt_expr(expr);
                 self.push(" como ");

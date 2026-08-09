@@ -568,11 +568,7 @@ mod tests {
         let tokens = tokenize("<< >>");
         assert_eq!(
             tokens,
-            vec![
-                TokenKind::ShiftLeft,
-                TokenKind::ShiftRight,
-                TokenKind::Eof
-            ]
+            vec![TokenKind::ShiftLeft, TokenKind::ShiftRight, TokenKind::Eof]
         );
     }
 

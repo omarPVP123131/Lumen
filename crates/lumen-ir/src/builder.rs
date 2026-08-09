@@ -414,9 +414,7 @@ impl IRBuilder {
             } => {
                 // `arr[i].campo = v` — array element field mutation with write-back
                 if let Expr::Index {
-                    expr: base,
-                    index,
-                    ..
+                    expr: base, index, ..
                 } = expr.as_ref()
                 {
                     self.gen_expr(base);
@@ -446,10 +444,7 @@ impl IRBuilder {
                 }
             }
             Stmt::ArraySet {
-                arr,
-                index,
-                value,
-                ..
+                arr, index, value, ..
             } => {
                 // `x.campo[i] = v` o `a[i] = v` — ArrayGet (base/campo) + ArraySet
                 self.gen_expr(arr);
@@ -458,7 +453,10 @@ impl IRBuilder {
                 self.emit(Instr::ArraySet);
                 if let Expr::Ident { name, .. } = arr.as_ref() {
                     self.emit(Instr::Store(name.clone()));
-                } else if let Expr::FieldAccess { expr: base, field, .. } = arr.as_ref() {
+                } else if let Expr::FieldAccess {
+                    expr: base, field, ..
+                } = arr.as_ref()
+                {
                     if let Expr::Ident { name, .. } = base.as_ref() {
                         self.gen_expr(base);
                         self.emit(Instr::ConstStr(field.clone()));
@@ -786,10 +784,10 @@ impl IRBuilder {
                                     | "__str_caracter"
                                     | "__file_read"
                                     | "__leer_archivo"
-                                     | "__file_write"
-                                     | "__escribir_archivo"
-                                     | "__file_append"
-                                     | "__agregar_archivo"
+                                    | "__file_write"
+                                    | "__escribir_archivo"
+                                    | "__file_append"
+                                    | "__agregar_archivo"
                                     | "__file_exists"
                                     | "__existe_archivo"
                                     | "__time_now"

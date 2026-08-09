@@ -1,7 +1,7 @@
+use im::HashMap;
 use std::fmt;
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::sync::Arc;
-use im::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct FixHasher {
@@ -69,9 +69,16 @@ impl PartialEq for Value {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Array(a), Value::Array(b)) => a.as_ref() == b.as_ref(),
             (Value::Func(a), Value::Func(b)) => a == b,
-            (Value::Struct { name: na, fields: fa }, Value::Struct { name: nb, fields: fb }) => {
-                na == nb && fa == fb
-            }
+            (
+                Value::Struct {
+                    name: na,
+                    fields: fa,
+                },
+                Value::Struct {
+                    name: nb,
+                    fields: fb,
+                },
+            ) => na == nb && fa == fb,
             (
                 Value::Enum {
                     name: na,
@@ -296,8 +303,7 @@ impl fmt::Display for Value {
                 write!(f, "({})", items.join(", "))
             }
             Value::Map(map) => {
-                let items: Vec<String> =
-                    map.iter().map(|(k, v)| format!("{}: {}", k, v)).collect();
+                let items: Vec<String> = map.iter().map(|(k, v)| format!("{}: {}", k, v)).collect();
                 write!(f, "{{{} }}", items.join(", "))
             }
             Value::Void => write!(f, "void"),

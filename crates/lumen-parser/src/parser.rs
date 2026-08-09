@@ -59,7 +59,7 @@ impl Parser {
             TokenKind::Float,
             TokenKind::String,
             TokenKind::Boolean,
-            ]) || (self.check_ident() && self.check_ident_next())
+        ]) || (self.check_ident() && self.check_ident_next())
             || self.check_next_is_tuple_type()
             || self.check_ident_next_is_generic_type()
         {
@@ -1660,7 +1660,12 @@ impl Parser {
 
     fn parse_addition(&mut self) -> Option<Expr> {
         let mut left = self.parse_shift()?;
-        while self.check(&[TokenKind::Plus, TokenKind::PlusPlus, TokenKind::Minus, TokenKind::Pipe]) {
+        while self.check(&[
+            TokenKind::Plus,
+            TokenKind::PlusPlus,
+            TokenKind::Minus,
+            TokenKind::Pipe,
+        ]) {
             let op = match self.peek().kind {
                 TokenKind::Plus => BinOp::Add,
                 TokenKind::PlusPlus => BinOp::Concat,
@@ -1785,89 +1790,87 @@ impl Parser {
                 self.advance();
                 let token = self.advance();
                 match token {
-                    Some(t) => {
-                        match t.kind {
-                            TokenKind::Ident(s) => {
-                                if self.check(&[TokenKind::LeftParen]) {
-                                    self.advance();
-                                    let mut args = Vec::new();
-                                    if !self.check(&[TokenKind::RightParen]) {
+                    Some(t) => match t.kind {
+                        TokenKind::Ident(s) => {
+                            if self.check(&[TokenKind::LeftParen]) {
+                                self.advance();
+                                let mut args = Vec::new();
+                                if !self.check(&[TokenKind::RightParen]) {
+                                    args.push(self.parse_expression()?);
+                                    while self.check(&[TokenKind::Comma]) {
+                                        self.advance();
                                         args.push(self.parse_expression()?);
-                                        while self.check(&[TokenKind::Comma]) {
-                                            self.advance();
-                                            args.push(self.parse_expression()?);
-                                        }
                                     }
-                                    if !self.check(&[TokenKind::RightParen]) {
-                                        self.error(
-                                            "E015",
-                                            "Se esperaba ')'",
-                                            start,
-                                            "Agrega ')' para cerrar la llamada al método",
-                                        );
-                                        return Some(expr);
-                                    }
-                                    self.advance();
-                                    let span = Span::merge(&start, &self.previous().span);
-                                    expr = Expr::MethodCall {
-                                        expr: Box::new(expr),
-                                        method: s,
-                                        args,
-                                        resolved_func: None,
-                                        span,
-                                    };
-                                } else {
-                                    let span = Span::merge(&start, &self.previous().span);
-                                    expr = Expr::FieldAccess {
-                                        expr: Box::new(expr),
-                                        field: s,
-                                        span,
-                                    };
                                 }
-                            }
-                            TokenKind::NumLiteral(n) => {
-                                let span = Span::merge(&start, &self.previous().span);
-                                if let Some(dot_pos) = n.find('.') {
-                                    let int_part: usize = n[..dot_pos].parse().unwrap_or(0);
-                                    let frac_str = &n[dot_pos + 1..];
-                                    expr = Expr::TupleAccess {
-                                        expr: Box::new(expr),
-                                        index: int_part,
-                                        span,
-                                    };
-                                    if !frac_str.is_empty() {
-                                        let frac_val: usize = frac_str.parse().unwrap_or(0);
-                                        let frac_span = Span::merge(&span, &span);
-                                        expr = Expr::TupleAccess {
-                                            expr: Box::new(expr),
-                                            index: frac_val,
-                                            span: frac_span,
-                                        };
-                                    }
-                                } else {
-                                    let index: usize = n.parse().unwrap_or(0);
-                                    expr = Expr::TupleAccess {
-                                        expr: Box::new(expr),
-                                        index,
-                                        span,
-                                    };
-                                }
-                            }
-                            _ => {
-                                let field_name = t.kind.as_str();
-                                if field_name.is_empty() {
-                                    self.error("E024", "Se esperaba un nombre de campo o índice numérico después de '.'", t.span, "Escribe el nombre del campo o un número");
+                                if !self.check(&[TokenKind::RightParen]) {
+                                    self.error(
+                                        "E015",
+                                        "Se esperaba ')'",
+                                        start,
+                                        "Agrega ')' para cerrar la llamada al método",
+                                    );
                                     return Some(expr);
                                 }
+                                self.advance();
+                                let span = Span::merge(&start, &self.previous().span);
+                                expr = Expr::MethodCall {
+                                    expr: Box::new(expr),
+                                    method: s,
+                                    args,
+                                    resolved_func: None,
+                                    span,
+                                };
+                            } else {
                                 let span = Span::merge(&start, &self.previous().span);
                                 expr = Expr::FieldAccess {
                                     expr: Box::new(expr),
-                                    field: field_name.to_string(),
+                                    field: s,
                                     span,
                                 };
                             }
                         }
-                    }
+                        TokenKind::NumLiteral(n) => {
+                            let span = Span::merge(&start, &self.previous().span);
+                            if let Some(dot_pos) = n.find('.') {
+                                let int_part: usize = n[..dot_pos].parse().unwrap_or(0);
+                                let frac_str = &n[dot_pos + 1..];
+                                expr = Expr::TupleAccess {
+                                    expr: Box::new(expr),
+                                    index: int_part,
+                                    span,
+                                };
+                                if !frac_str.is_empty() {
+                                    let frac_val: usize = frac_str.parse().unwrap_or(0);
+                                    let frac_span = Span::merge(&span, &span);
+                                    expr = Expr::TupleAccess {
+                                        expr: Box::new(expr),
+                                        index: frac_val,
+                                        span: frac_span,
+                                    };
+                                }
+                            } else {
+                                let index: usize = n.parse().unwrap_or(0);
+                                expr = Expr::TupleAccess {
+                                    expr: Box::new(expr),
+                                    index,
+                                    span,
+                                };
+                            }
+                        }
+                        _ => {
+                            let field_name = t.kind.as_str();
+                            if field_name.is_empty() {
+                                self.error("E024", "Se esperaba un nombre de campo o índice numérico después de '.'", t.span, "Escribe el nombre del campo o un número");
+                                return Some(expr);
+                            }
+                            let span = Span::merge(&start, &self.previous().span);
+                            expr = Expr::FieldAccess {
+                                expr: Box::new(expr),
+                                field: field_name.to_string(),
+                                span,
+                            };
+                        }
+                    },
                     None => return Some(expr),
                 }
             } else if self.check(&[TokenKind::LeftParen]) {

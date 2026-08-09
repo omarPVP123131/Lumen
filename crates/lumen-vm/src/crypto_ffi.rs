@@ -10,6 +10,7 @@ macro_rules! uc16 {
     }};
 }
 
+#[allow(clippy::upper_case_acronyms)]
 type NTSTATUS = i32;
 const STATUS_SUCCESS: i32 = 0;
 const STATUS_BUFFER_TOO_SMALL: i32 = 0xC0000023u32 as i32;

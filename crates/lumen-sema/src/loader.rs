@@ -51,8 +51,8 @@ impl ModuleLoader {
     fn flatten(&mut self, program: Program, current_path: &Path) -> Result<Program, ModuleError> {
         // Canonicalizar para comparar rutas de forma robusta (Windows: fs::canonicalize
         // añade el prefijo \\?\ — comparar crudo vs canonical nunca da igualdad).
-        let current_norm = fs::canonicalize(current_path)
-            .unwrap_or_else(|_| current_path.to_path_buf());
+        let current_norm =
+            fs::canonicalize(current_path).unwrap_or_else(|_| current_path.to_path_buf());
         let mut result = Vec::new();
         for node in program {
             match node {
@@ -92,7 +92,7 @@ impl ModuleLoader {
                         message: format!("No se pudo leer '{}': {}", resolved.display(), e),
                     })?;
                     let imported_program = parse_source(&source, &resolved)?;
-                    let parent = resolved.parent().unwrap_or(Path::new("."));
+                    let _parent = resolved.parent().unwrap_or(Path::new("."));
                     let flat = self.flatten(imported_program, &resolved)?;
                     self.visited.remove(&resolved);
                     let prefix = alias.unwrap_or_else(|| {
@@ -113,7 +113,12 @@ impl ModuleLoader {
         Ok(result)
     }
 
-    fn resolve_path(&self, path: &str, current_dir: &Path, current_path: &Path) -> Result<PathBuf, ModuleError> {
+    fn resolve_path(
+        &self,
+        path: &str,
+        current_dir: &Path,
+        current_path: &Path,
+    ) -> Result<PathBuf, ModuleError> {
         let extensions = [".nv", ".lumen"];
         // Skip de auto-importación: si la ruta as-is cae sobre el archivo que se
         // está aplanando (p. ej. `examples/graficos_avanzado.nv` importando
@@ -299,10 +304,8 @@ fn prefix_decl(
         } => {
             let type_params_set: HashSet<String> = type_params.iter().cloned().collect();
             prefix_type_with_params(return_type, prefix, &type_params_set, known);
-            if top_level {
-                if !is_known_prefixed(name, known) {
-                    *name = format!("{}_{}", prefix, name);
-                }
+            if top_level && !is_known_prefixed(name, known) {
+                *name = format!("{}_{}", prefix, name);
             }
             for p in params.iter_mut() {
                 prefix_type_with_params(&mut p.param_type, prefix, &type_params_set, known);
@@ -324,10 +327,8 @@ fn prefix_decl(
             type_params,
             ..
         } => {
-            if top_level {
-                if !is_known_prefixed(name, known) {
-                    *name = format!("{}_{}", prefix, name);
-                }
+            if top_level && !is_known_prefixed(name, known) {
+                *name = format!("{}_{}", prefix, name);
             }
             let type_params_set: HashSet<String> = type_params.iter().cloned().collect();
             for field in fields.iter_mut() {
@@ -335,10 +336,8 @@ fn prefix_decl(
             }
         }
         Decl::Enum { name, variants, .. } => {
-            if top_level {
-                if !is_known_prefixed(name, known) {
-                    *name = format!("{}_{}", prefix, name);
-                }
+            if top_level && !is_known_prefixed(name, known) {
+                *name = format!("{}_{}", prefix, name);
             }
             for variant in variants.iter_mut() {
                 for t in variant.types.iter_mut() {
@@ -347,10 +346,8 @@ fn prefix_decl(
             }
         }
         Decl::Rasgo { name, methods, .. } => {
-            if top_level {
-                if !is_known_prefixed(name, known) {
-                    *name = format!("{}_{}", prefix, name);
-                }
+            if top_level && !is_known_prefixed(name, known) {
+                *name = format!("{}_{}", prefix, name);
             }
             for method in methods.iter_mut() {
                 prefix_type(&mut method.return_type, prefix, known);
@@ -494,7 +491,9 @@ fn prefix_stmt(
             prefix_expr(expr, prefix, locals, known);
             prefix_expr(value, prefix, locals, known);
         }
-        Stmt::ArraySet { arr, index, value, .. } => {
+        Stmt::ArraySet {
+            arr, index, value, ..
+        } => {
             prefix_expr(arr, prefix, locals, known);
             prefix_expr(index, prefix, locals, known);
             prefix_expr(value, prefix, locals, known);
@@ -536,7 +535,10 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &
     match expr {
         Expr::Int { .. } | Expr::Float { .. } | Expr::Str { .. } | Expr::Bool { .. } => {}
         Expr::Ident { name, .. } => {
-            if !locals.contains(name.as_str()) && !is_builtin(name) && !is_known_prefixed(name, known) {
+            if !locals.contains(name.as_str())
+                && !is_builtin(name)
+                && !is_known_prefixed(name, known)
+            {
                 *name = format!("{}_{}", prefix, name);
             }
         }
@@ -813,10 +815,10 @@ fn is_builtin(name: &str) -> bool {
             | "__str_dividir"
             | "__file_read"
             | "__leer_archivo"
-             | "__file_write"
-             | "__escribir_archivo"
-             | "__file_append"
-             | "__agregar_archivo"
+            | "__file_write"
+            | "__escribir_archivo"
+            | "__file_append"
+            | "__agregar_archivo"
             | "__file_write_binary"
             | "__escribir_archivo_bin"
             | "__num_a_f64_bytes"
