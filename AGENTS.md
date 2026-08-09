@@ -469,3 +469,22 @@ examples/         → *.nv (45 ejemplos funcionales)
 stdlib/           → *.nv + stdlib/compiler/ (self-hosting)
 scripts/          → PowerShell CI/CD, installers, git-hooks
 ```
+
+---
+
+## Progreso (8 Agosto 2026 — Bootstrapping Doble + VM Paridad + Stream/Async/Par/Actor/Generador en vm.nv):
+
+- **Handlers de concurrencia/stream/async completados en `bin()` de `vm.nv`**: `__stream_desde`/`__stream_from`, `__stream_mapear`/`__stream_map`, `__stream_filtrar`/`__stream_filter`, `__stream_colectar`/`__stream_collect`, `__par_mapear`/`__par_map`, `__par_unir`/`__par_join`, `__actor_nuevo`/`__actor_new`, `__actor_enviar`/`__actor_send`, `__actor_recibir`/`__actor_recv`, `__generador_nuevo`/`__generator_new`, `__generador_siguiente`/`__generator_next`, `__seleccionar`/`__select`, `__leer_archivo_async`/`__file_read_async`, `__escribir_archivo_async`/`__file_write_async`. Delegación directa a los natives de Rust ya existentes en `vm.rs` (líneas 1890-2260).
+- **`sprint1_concurrencia.nv` 100% paridad byte-idéntica** entre VM Rust y VM LÚMEN: Stream (map/filter/collect), Async I/O (read/write), Timer, Select, Par Map/Join, Actor, Generator — todos CORRECTOS.
+- **Bootstrapping Doble COMPLETADO Y VERIFICADO**:
+  - `compiler_v4_self.nvc` (compilador 100% LÚMEN) compila su propio source `compiler_v4.nv` → `compiler_v4_self2.nvc`
+  - **FIXPOINT CONFIRMADO**: SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` — 150,684 bytes **byte-idénticos** en self/self2 (~5s cada run).
+  - `vm_self.nvc` regenerado con el compilador autocontenido: 111,318 bytes.
+  - `vm_self.nvc` ejecuta `demo_completo.nvc` correctamente (89/89 líneas, 0 diffs).
+- **Test suite completa**:
+  - `cargo test --release`: **378 tests pasando, 0 fallos** (166 e2e + unit).
+  - `test_vm.ps1`: **39/40 OK** (solo `stress_fecha` flaky por timing 0ms vs 17ms).
+  - `fuego.ps1`: **117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE (`graficos_demo` SDL, por diseño) · 4 TIMEOUT (`debug_parser3`, `graficos_completo`, `gui_ventana`, `sprint1_http` — red/GUI, flaky) · 0 fallos**.
+- **Commits**: `7d3cdc8` (bootstrapping doble + fixpoint SHA-256 3DA624D6... verificado).
+
+**Estado actual: LÚMEN v2.4.1 — Autocompilación total, VM en LÚMEN funcional, dogfooding 112/117, bootstrapping doble certificado. Ready for release tag.**

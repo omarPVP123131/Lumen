@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-2.4.0-orange)
+![Version](https://img.shields.io/badge/version-2.4.1-orange)
 ![Tests](https://img.shields.io/badge/tests-378%20passing-brightgreen)
 ![Fases](https://img.shields.io/badge/fases-0--185%20completadas%2Bblueviolet)
 

@@ -1,6 +1,6 @@
 # Siguientes Pasos — Roadmap LÚMEN v2.4 → v3.0
 
-**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 116/116 compilan · 108 CORRECTOS** (6 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos byte-idénticos** (8 Ago 2026, batería 39/40). Pendiente: release v2.4.1 (tag).
+**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 117/117 compilan · 112 CORRECTOS** (8 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos/concurrencia/stream/async byte-idénticos** (8 Ago 2026, batería 39/40). **Bootstrapping doble (compilador + VM) CONFIRMADO con fixpoint SHA-256 `3DA624D6...` (150,684 B)**. Pendiente: release v2.4.1 (tag).
 
 ---
 
@@ -16,7 +16,7 @@
 
 | Área | Complejidad | Impacto | Razón |
 |------|-------------|---------|-------|
-| **Bootstrapping doble + release v2.4.1** | 🟡 Media | 🟡 Alto | vm.nv compilada por el compilador LÚMEN (hito final del self-hosting, ✅ hecho) + tag/release |
+| **Bootstrapping doble + release v2.4.1** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv compilada por el compilador LÚMEN + fixpoint certificado. Solo falta tag/release. |
 | **Fixes y pulido** | 🟢 Baja | 🔥 Alto | Estabilidad general, edge cases |
 
 ## 🔵 Prioridad Baja — Muy Complejo + Nicho
@@ -51,16 +51,16 @@
 - 11 bugs críticos arreglados (saltos, TryUnwrap, print multi-arg, break/continue, escapes, keywords, forward decls)
 - LÚMEN ya no depende de `__compile_nv` para compilarse
 
-### 🟢 Completado: **Sprint 6-8 — LÚMEN autosuficiente (dogfooding total, 31 Jul - 6 Ago 2026)**
+### 🟢 Completado: **Sprint 6-8 — LÚMEN autosuficiente (dogfooding total, 31 Jul - 8 Ago 2026)**
 
 - **6.1 `importar` en el pipeline puro** ✅ — resolver `_imp_*` + `parser_parsear_con_base`, self-import detectado (canonicalize en loader.rs)
 - **6.2-6.4 Gramática real** ✅ — `sea`/`const` (VarDecl), StructInit `T {}` → mapas, `.campo` → Index+Texto, `elegir`/`defecto:`/`caso`, enum `Nombre::Miembro(args)`, `algun`/`ninguno`/`exito`/`error`, cortocircuito `&&`/`||`, closures IIFE, params default, traits `rasgo`/`impl`/`este`, cast `como`
 - **6.3 Runtime** ✅ — arrays anidados, ArraySet `arr[i] = x`, TryUnwrap top-level con `__tipo_de(fin)`, floats con `.`, lexer CRLF/UTF-8 seguro (`__str_subcadena_chars` nativo)
-- **FIXPOINT v4 CONFIRMADO** ✅ — self/self2 byte-IDENTICAL (SHA-256 90048DC9…), 5s
+- **FIXPOINT v4 CONFIRMADO** ✅ — self/self2 byte-IDENTICAL (SHA-256 90048DC9… → 3DA624D6…), 5s
 - **Sprint 7 — VM en LÚMEN** ✅ — `vm.nv` (dispatch 0-46, corutinas reales, handlers JSON/tarea/coro/crypto/fs/env/tiempo/hilo/mutex/calendario), demo 120s → 0.9s, batería 39/40
-- **Sprint 8 — Dogfooding** ✅ — stdlib completo compila; **fuego.ps1: 116/116 compilan · 108 CORRECTOS · 4 INCOMPATIBLES · 4 TIMEOUT · 0 fallos**; benchmarks: compile x5.4, run x231 (mediana x2-6)
-- **Paridad VM LÚMEN-Rust (8 Ago 2026)** ✅ — `__map_obtener` con boxeo por tipo real + lookup dual (keys boxed guest vs strings JSON host); handlers `__existe_archivo`/`__leer_archivo`/`__escribir_archivo` → **test_json_avanzado, test_sistema_directo, test_sistema_avanzado byte-IDÉNTICOS** · batería 39/40 (solo `stress_fecha` flaky timing) · `vm_self.nvc` regenerado (96,808 B)
-- **Pendiente:** release v2.4.1 (tag)
+- **Sprint 8 — Dogfooding** ✅ — stdlib completo compila; **fuego.ps1: 117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos**; benchmarks: compile x5.4, run x231 (mediana x2-6)
+- **Paridad VM LÚMEN-Rust (8 Ago 2026)** ✅ — `__map_obtener` con boxeo por tipo real + lookup dual (keys boxed guest vs strings JSON host); handlers `__existe_archivo`/`__leer_archivo`/`__escribir_archivo` → **test_json_avanzado, test_sistema_directo, test_sistema_avanzado byte-IDÉNTICOS** · batería 39/40 (solo `stress_fecha` flaky timing) · `vm_self.nvc` regenerado (111,318 B) · **Stream/Async/Par/Actor/Generator 100% delegados** · `sprint1_concurrencia` 100% paridad
+- **Bootstrapping doble CONFIRMADO** ✅ — SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` (150,684 B byte-idénticos en self/self2)
 
 ### Después: **AI/ML (Fases 186-200) + Docs**
 - AI/ML + Data Science — feature más solicitada para un lenguaje moderno

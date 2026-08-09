@@ -1,2 +1,2 @@
-stdlib/compiler/vm.nv
-stdlib/compiler/vm_self.nvc
+examples/utils.nv
+C:\Users\Omar\Documents\Documentos WEb\LumenRust\stdlib\compiler\fuego_out.nvc

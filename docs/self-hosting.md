@@ -32,7 +32,7 @@
 │  • Fixpoint confirmado: self recompila su source IDÉNTICO     │
 │  • Compila los 116 ejemplos de examples/ (fuego.ps1)          │
 │                                                              │
-│  VM EN LÚMEN (vm.nv)  🟢 funcional  — ejecutador de .nvc      │
+│  VM EN LÚMEN (vm.nv)  ✅ funcional  — ejecutador de .nvc      │
 │  • Dispatch opcodes 0-46, builtins bin() vía natives boxeados │
 │  • Bands boxed: arrays < -1e9, strings [1e9,2e9), mapas       │
 │    [2e9,3e9), struct 3e9, resultado 4e9, opcion 5e9, tupla    │
@@ -40,9 +40,13 @@
 │  • demo_completo 0 diffs ~0.9s · corutinas reales (yield/     │
 │    resume/ret, intercambio st/sp/pc) · tareas, JSON, crypto,  │
 │    fs, env, tiempo — todo delegando a natives boxeados        │
+│  • **Stream/Async/Par/Actor/Generator: 100% delegados a       │
+│    natives Rust (vm.rs 1890-2260) — sprint1_concurrencia      │
+│    byte-IDENTICAL en ambas VMs**                              │
 │                                                              │
-│  Bootstrapping doble  ⏳  — compiler_v4 compila vm.nv →       │
+│  Bootstrapping doble  ✅  — compiler_v4 compila vm.nv →       │
 │  vm.nvc; la VM LÚMEN ejecuta vm.nvc (ejecutando .nvc)         │
+│  • Fixpoint doble: SHA-256 3DA624D6... (150,684 B byte-id.)  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -253,17 +257,17 @@ si (_st_ch(st, 4, "<")) {
 | `vm.nv` — ejecutador de .nvc en LÚMEN puro | ✅ | Dispatch 0-46, builtins vía natives boxeados (JSON, tarea, coro, crypto, fs, env, tiempo, tipo_de), bandas boxed, **demo_completo 0 diffs ~0.9s**, **corutinas reales** (reanudar/ceder/ret con intercambio st/sp/pc), `fmain` acepta `__main__`/`main`/`principal`, handlers tiempo/hilo/mutex/calendario, batería **39/40** (solo `stress_fecha` flaky por timing) |
 | Optimización VM LÚMEN (~200s → <10s) | ✅ | `a_entero` O(n)→O(1) (demo 120s→0.9s), guards de banda [3e9,9e9) para ints reales grandes, fix `__map_poner` persistente (cadenas `sino` reconstruidas desde el final) |
 | **Optimización VM Rust (causa del O(n²) del fixpoint)** | ✅ | **COW con `Arc`** en `Value::Str(Arc<str>)`/`Value::Array(Arc<Vec<Value>>)`: clonar Values grandes = O(1) (antes Load/ArrayGet/`__str_subcadena_chars` clonaban listas enteras → O(n²)). **Fixpoint v4: 861s → 20.1s (43x)**, self_out2 byte-IDENTICAL (112,368 B) |
-| Bootstrapping doble (compiler_v4 compila vm.nv; vm.nvc corre en VM LÚMEN) | ⏳ | 0 dependencias de Rust — hito final |
-| Fixpoint doble (compilador + VM) | ⏳ | |
+| **Bootstrapping doble** (compiler_v4 compila vm.nv; vm.nvc corre en VM LÚMEN) | ✅ | **0 dependencias de Rust — HITO FINAL CUMPLIDO** · Fixpoint SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` (150,684 B byte-id.) |
+| **Stream/Async/Par/Actor/Generator handlers en `vm.nv`** | ✅ | `__stream_*`, `__par_*`, `__actor_*`, `__generador_*`, `__select`, `__*_async` → delegados a natives Rust (vm.rs 1890-2260) · `sprint1_concurrencia` 100% paridad |
 
 ### 🟢 Sprint 8 — Dogfooding completo (release v2.4.0)
 
 | Tarea | Estado | Notas |
 |-------|--------|-------|
 | Compilar stdlib completo con compiler_v5 | ✅ | matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos — stdlib completo compila con el pipeline puro (fuego 116/116 compilan) |
-| Ejecutar 115 ejemplos con cadena 100% LÚMEN | ✅ | **fuego.ps1: 116/116 compilan · 108 CORRECTOS · 4 INCOMPATIBLES · 4 TIMEOUT · 0 fallos** (restantes: SDL/negativos por diseño/no-deterministas/GUI/FFI) |
+| Ejecutar 115 ejemplos con cadena 100% LÚMEN | ✅ | **fuego.ps1: 117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos** (restantes: SDL/negativos por diseño/no-deterministas/GUI/FFI) |
 | Benchmarks vs Rust | ✅ | `scripts/benchmark_vs_rust.ps1`: compile x5.4, run x231 (intérprete-en-intérprete; mediana x2-6) |
-| Docs + AGENTS v2.4.0 + release | ⏳ | Docs sincronizadas (6 Ago 2026); falta tag/release oficial |
+| Docs + AGENTS v2.4.1 + release | 🟡 | Docs sincronizadas (8 Ago 2026); falta tag/release oficial |
 
 ---
 

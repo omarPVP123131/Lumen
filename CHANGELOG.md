@@ -6,17 +6,30 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ## v2.4.1 — 8 Agosto 2026
 
+### Agregado (VM LÚMEN `vm.nv` — Stream/Async/Par/Actor/Generator completados)
+- **Handlers de streams**: `__stream_desde`/`__stream_from`, `__stream_mapear`/`__stream_map`, `__stream_filtrar`/`__stream_filter`, `__stream_colectar`/`__stream_collect` — delegados a natives Rust
+- **Iteradores paralelos**: `__par_mapear`/`__par_map`, `__par_unir`/`__par_join` — delegados a natives Rust
+- **Actores**: `__actor_nuevo`/`__actor_new`, `__actor_enviar`/`__actor_send`, `__actor_recibir`/`__actor_recv` — delegados a natives Rust
+- **Generadores**: `__generador_nuevo`/`__generator_new`, `__generador_siguiente`/`__generator_next` — delegados a natives Rust
+- **Select/Async I/O**: `__seleccionar`/`__select`, `__leer_archivo_async`/`__file_read_async`, `__escribir_archivo_async`/`__file_write_async` — delegados a natives Rust
+- **`sprint1_concurrencia.nv` 100% paridad byte-idéntica** entre VM Rust y VM LÚMEN (Stream, Async I/O, Timer, Select, Par Map/Join, Actor, Generator)
+
 ### Arreglado (VM LÚMEN `vm.nv` — paridad con la VM Rust)
 - **`__map_obtener` con mapas JSON**: devolvía `Void` (el key boxed 1e9+N no coincidía con las claves strings reales del host) y Values del host sin boxear (Str real → crash "Ge requires numbers or strings"). Ahora lookup dual (key boxed del guest → desboxeado para JSON) + boxeo por tipo real (`__tipo_de`/`a_texto` del host: texto→`box_str`, booleano→9e9+1/9e9, lista→`arrs`, diccionario→`mapas`) → **`test_json_avanzado` CORRECTO**
 - **Handlers de archivos faltantes**: `__existe_archivo`/`__file_exists` (bool boxed, antes "0" en vez de "false"), `__leer_archivo`/`__file_read` (con `intentar`, el native devuelve Resultado), `__escribir_archivo`/`__file_write` → **`test_sistema_directo`/`test_sistema_avanzado` CORRECTOS**
-- **Verificado**: batería `test_vm.ps1` 39/40 (solo `stress_fecha` flaky timing) · 7 tests sistema/JSON/csv/migración byte-IDÉNTICOS · 19 checks cruzados con `vm_self.nvc` (96,808 B, regenerado con compiler_v4) todos OK · cargo test OK
+- **Verificado**: batería `test_vm.ps1` 39/40 (solo `stress_fecha` flaky timing) · 7 tests sistema/JSON/csv/migración byte-IDÉNTICOS · 19 checks cruzados con `vm_self.nvc` (111,318 B, regenerado con compiler_v4) todos OK · cargo test OK
 
 ### Arreglado (sintaxis `para` — paridad Rust ↔ LÚMEN)
 - **Init sin tipo en `para` clásico** (`para (i = 0; ...)`): el parser Rust exigía declaración tipada. Ahora `parse_for` usa `is_for_init_decl()` (keyword de tipo, tipo custom `Punto p`, o genérico) y en caso contrario construye un `Decl::Variable` con `Type::Infer` consumiendo el `;`
 - **`para` clásico sin paréntesis** (`para entero i = 0; cond; paso { }`): el parser Rust lo reenviaba a foreach → E011. Nuevo dispatch con `is_foreach_like()` (lookahead puro: `[tipo]? ident (en|in)`) → foreach solo si hay `en`/`in`, si no `parse_for`. El self-hosted (`parser.nv`) recibe el helper `_st_es_foreach` (lookahead por posición sobre `tokens`) + branch de clásico sin paréntesis (desugar idéntico al clásico con `(`) → `tui_test_min16/17/18` ahora **byte-idénticos en ambas VMs**
 - **FIXPOINT v4 CONFIRMADO**: SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` self==self2 (compiler_v4.nv 135,465 B → .nvc 150,684 B, ~5s)
-- **Verificado**: cargo test 0 FAILED · batería `test_vm.ps1` 39/40 · **fuego.ps1: 117/117 compilan · 113 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 3 TIMEOUT (debug_parser3 loop, graficos_completo/gui_ventana GUI) · 0 fallos**
+- **Verificado**: cargo test 0 FAILED · batería `test_vm.ps1` 39/40 · **fuego.ps1: 117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 4 TIMEOUT (debug_parser3 loop, graficos_completo/gui_ventana GUI, sprint1_http red) · 0 fallos**
 - ⚠️ `test_vm.ps1` debe ejecutarse desde la RAÍZ del repo (las rutas de `entrada_vm.txt` son relativas — desde `stdlib/compiler` da FALLAS masivas falsas)
+
+### Bootstrapping Doble (Hito Final)
+- **Fixpoint del compilador**: SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` — 150,684 bytes **byte-idénticos** en self/self2 (~5s)
+- **VM LÚMEN autogenerada**: `vm_self.nvc` (111,318 B) compilada por `compiler_v4_self.nvc` y ejecutando `demo_completo.nvc` correctamente (89/89 líneas, 0 diffs)
+- **0 dependencias de Rust**: LÚMEN compila LÚMEN, VM LÚMEN ejecuta bytecode LÚMEN, todo autocontenido
 
 ---
 
