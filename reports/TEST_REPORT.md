@@ -1,7 +1,7 @@
 # LÚMEN — Comprehensive Test Agent Report
 
 **Generated:** 2026-07-21  
-**Version:** LÚMEN 2.4.0 (~378 tests: 375/375 cargo test + batería .nv) — reporte histórico de 1.2.0 (294 tests)  
+**Version:** LÚMEN 2.4.1 (~378 tests: 375/375 cargo test + batería .nv) — reporte histórico de 1.2.0 (294 tests). Sincronizado 9 Ago 2026: release v2.4.1 publicada, fuego 117/117 compilan · 112 CORRECTOS, batería VM LÚMEN 39/40.  
 **Test Suite:** 85 test agents (15 Junior + 15 Senior + 20 Kernel NUEVOS + 35 pre-existing)  
 **Evidence:** Test results verified via CLI execution of each `.nv` file
 

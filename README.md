@@ -149,7 +149,7 @@ docker compose up  # Incluye lumen + lumen-repl
 
 ---
 
-## 📊 Estado del Proyecto (v2.4.0)
+## 📊 Estado del Proyecto (v2.4.1)
 
 ```
 Lenguaje Core         ████████████████████ 100% (0-60)
@@ -160,14 +160,15 @@ Runtime & Sistema     ███████████████████�
 Concurrencia & Async  ████████████████████ 100% (131-150)
 GUI, TUI & Juegos     ████████████████████ 100% (151-170)
 Portabilidad          ████████████████████ 100% (171-185)
-Self-hosting          ████████████████████ 100% (compilador LÚMEN en LÚMEN, fixpoint)
+Self-hosting          ████████████████████ 100% (compilador+VM LÚMEN en LÚMEN, bootstrapping doble)
 AI/ML & Cloud         ░░░░░░░░░░░░░░░░░░░░   0% (186-220)
 ```
 
-- ✅ **~378 tests** pasando, ~0 warnings (375/375 cargo test)
-- ✅ **116 ejemplos** `.nv` — 108/108 CORRECTOS en la cadena 100% LÚMEN (fuego.ps1)
+- ✅ **~378 tests** pasando, 0 fallos (cargo test 375/375 + batería VM LÚMEN 39/40)
+- ✅ **117 ejemplos** `.nv` — 112 CORRECTOS en la cadena 100% LÚMEN (fuego.ps1)
 - ✅ **15 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg, wasm
-- ✅ **Self-hosting total**: compiler_v4.nv se compila a sí mismo (fixpoint byte-idéntico, 5s) + VM en LÚMEN (vm.nv)
+- ✅ **Self-hosting total**: compiler_v4.nv se compila a sí mismo (fixpoint byte-idéntico SHA-256 3DA624D6…) + VM en LÚMEN (vm.nv) + **bootstrapping doble certificado**
+- ✅ **Release v2.4.1**: binarios multi-OS (Windows/Linux/macOS Intel+ARM) publicados en GitHub Releases
 - ✅ **Docker** multi-stage + docker-compose
 - ✅ **WASM** playground con JS interop integrado
 - ✅ **Sintaxis dual ES/EN** en todo el stdlib

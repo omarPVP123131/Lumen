@@ -1,7 +1,7 @@
 # LÚMEN Language — Comprehensive Test Agent Report
 
 **Generated**: 2026-07-20  
-**Version**: LÚMEN 2.4.0 (~378 tests passing, 0 warnings) — reporte histórico de 1.1.0 (294 tests)  
+**Version**: LÚMEN 2.4.1 (~378 tests passing, 0 warnings) — reporte histórico de 1.1.0 (294 tests). Sincronizado 9 Ago 2026: v2.4.1 release publicada (4 binarios multi-OS), bootstrapping doble certificado (SHA-256 3DA624D6…).  
 **Test Suite**: 30 test agents (15 Junior + 15 Senior)  
 **Location**: `test_agents/J01_*.nv` — `test_agents/S15_*.nv`
 

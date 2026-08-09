@@ -1,6 +1,6 @@
 # LÚMEN — Herramientas y Desarrollo
 
-**v2.4.0 — Guía del Desarrollador**
+**v2.4.1 — Guía del Desarrollador**
 
 Guía completa de herramientas, comandos, CI/CD y flujo de trabajo.
 
@@ -301,14 +301,18 @@ crates/
 | lumen-codegen | 13 | unit |
 | lumen-codegen | 5 | proptest |
 | lumen-vm | 45 | unit |
-| lumen-vm | 113 | e2e |
+| lumen-vm | 166 | e2e |
 | lumen-fmt | 2 | unit |
 | lumen-repl | 2 | unit |
 | lumen-project | 1 | unit |
 | lumen-aot | 1 | unit |
 | lumen-doc | 1 | unit |
 | lumen-pkg | 1 | unit |
-| **Total** | **~317** | |
+| lumen-plugin | 1 | unit |
+| lumen-api | 5 | unit |
+| **Total** | **~378** | |
+
+> Además: batería VM LÚMEN `test_vm.ps1` **39/40** (solo `stress_fecha` flaky timing) y `fuego.ps1` **117/117 compilan · 112 CORRECTOS** en la cadena 100% LÚMEN.
 
 ### Escribir Tests E2E
 
@@ -659,4 +663,4 @@ cargo publish -p lumen-cli
 
 ---
 
-*LÚMEN v2.4.0 — Agosto 2026*
+*LÚMEN v2.4.1 — Agosto 2026*
