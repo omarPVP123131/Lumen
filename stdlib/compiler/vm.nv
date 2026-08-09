@@ -900,7 +900,7 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         retornar box_str(__hash_sha512(s));
     }
     si nm == "__unicode_normalizar" || nm == "__unicode_normalize" {
-        numero v = estado_pila(st, sp);
+        numero v = estado_pila(st, sp - (argc - 1));
         retornar box_str(__unicode_normalizar(str_at(stl, stl_din, a_entero(v - 1000000000))));
     }
     si nm == "__str_padding_inicio" || nm == "__str_pad_start" {
@@ -1090,7 +1090,154 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         }
         retornar box_str(__json_texto(v));
     }
+    si nm == "__aes_encriptar" || nm == "__aes_encrypt" {
+        texto clave = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto datos = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __aes_encriptar(clave, datos);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        retornar box_str(a_texto(x));
+    }
+    si nm == "__aes_desencriptar" || nm == "__aes_decrypt" {
+        texto clave = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto cif = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __aes_desencriptar(clave, cif);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        retornar box_str(a_texto(x));
+    }
+    si nm == "__jwt_codificar" || nm == "__jwt_encode" {
+        texto payload = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto secreto = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar box_str(a_texto(__jwt_codificar(payload, secreto)));
+    }
+    si nm == "__jwt_decodificar" || nm == "__jwt_decode" {
+        texto token = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto secreto = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __jwt_decodificar(token, secreto);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        retornar box_str(a_texto(x));
+    }
+    si nm == "__regex_capturar" || nm == "__regex_captures" {
+        texto pat = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto txt = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __regex_capturar(pat, txt);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        lista<numero> bb = [];
+        entero k = 0;
+        while k < largo(x) {
+            bb.agregar(box_str(a_texto(x[k])));
+            k = k + 1;
+        }
+        arrs.agregar(bb);
+        retornar 0.0 - 1000000000.0 - largo(arrs);
+    }
+    si nm == "__regex_reemplazar" || nm == "__regex_replace" {
+        texto pat = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 2) - 1000000000));
+        texto txt = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto rep = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __regex_reemplazar(pat, txt, rep);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        retornar box_str(a_texto(x));
+    }
+    si nm == "__tcp_conectar" || nm == "__tcp_connect" {
+        texto addr = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __tcp_conectar(addr);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        si a_texto(x) == "true" { retornar 9000000001.0; }
+        retornar 9000000000.0;
+    }
+    si nm == "__tcp_escuchar" || nm == "__tcp_listen" {
+        texto addr = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __tcp_escuchar(addr);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        si a_texto(x) == "true" { retornar 9000000001.0; }
+        retornar 9000000000.0;
+    }
+    si nm == "__http_obtener" || nm == "__http_get" {
+        texto url = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __http_obtener(url);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        retornar box_str(a_texto(x));
+    }
+    si nm == "__http_enviar" || nm == "__http_post" {
+        texto url = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto cuerpo = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __http_enviar(url, cuerpo);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        retornar box_str(a_texto(x));
+    }
+    si nm == "__dormir" || nm == "__sleep" {
+        numero ms = estado_pila(st, sp);
+        __dormir(a_entero(ms));
+        retornar 0.0;
+    }
+    si nm == "__temporizador_esperar" || nm == "__timer_delay" {
+        numero ms = estado_pila(st, sp);
+        retornar box_str(a_texto(__temporizador_esperar(a_entero(ms))));
+    }
+    si nm == "__duracion_nueva" || nm == "__duration_new" {
+        numero secs = estado_pila(st, sp - 1);
+        numero nanos = estado_pila(st, sp);
+        retornar 0.0 + __duracion_nueva(a_entero(secs), a_entero(nanos));
+    }
+    si nm == "__duracion_segundos" || nm == "__duration_secs" {
+        numero v = estado_pila(st, sp);
+        retornar 0.0 + __duracion_segundos(a_entero(v));
+    }
+    si nm == "__zona_info" || nm == "__timezone_info" {
+        texto tz = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar 0.0 + __zona_info(tz);
+    }
+    si nm == "__tamano_archivo" || nm == "__file_size" {
+        texto p = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __tamano_archivo(p);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        retornar 0.0 + x;
+    }
+    si nm == "__agregar_archivo" || nm == "__file_append" {
+        texto p = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto c = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        numero x = __agregar_archivo(p, c);
+        si __tipo_de(x) == "error" {
+            retornar box_resultado_error(x);
+        }
+        retornar 9000000001.0;
+    }
+    si nm == "__serial_abrir" || nm == "__serial_open" {
+        retornar 9000000001.0;
+    }
     retornar 0.0;
+}
+
+funcion numero box_resultado_error(numero x) {
+    texto em = a_texto(x);
+    si __str_empieza_con(em, "error(") {
+        em = __str_subcadena(em, 6, largo(em) - 1);
+    }
+    numero r = __map_nuevo();
+    r = __map_poner(r, "ok", 0.0);
+    r = __map_poner(r, "v", box_str(em));
+    resl.agregar(r);
+    retornar 4000000000.0 + largo(resl) - 1;
 }
 
 funcion entero main() {

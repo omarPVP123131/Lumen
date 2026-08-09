@@ -2259,7 +2259,7 @@ impl SemanticAnalyzer {
                                     }
                                     if let Some(got) = arg_types.first() {
                                         match got {
-                                            TypeInfo::Lista(_) | TypeInfo::Texto => {}
+                                            TypeInfo::Lista(_) | TypeInfo::Texto | TypeInfo::Numero => {}
                                             _ => {
                                                 self.errors.push(SemError {
                                                     code: "E041".to_string(),
@@ -2581,6 +2581,7 @@ impl SemanticAnalyzer {
                                 } else if callee == "__fs_listar" || callee == "__fs_listdir"
                                     || callee == "__env_listar" || callee == "__env_list"
                                     || callee == "__lector_buffer" || callee == "__buf_reader"
+                                    || callee == "__regex_capturar" || callee == "__regex_captures"
                                 {
                                     TypeInfo::Lista(Box::new(TypeInfo::Texto))
                                 } else if callee == "__tarea_esperar" || callee == "__task_await" {

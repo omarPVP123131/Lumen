@@ -1,2 +1,2 @@
-examples/math.nv
-C:\Users\Omar\Documents\Documentos WEb\LumenRust\stdlib\compiler\bat_math.nvc
+examples/utils.nv
+C:\Users\Omar\Documents\Documentos WEb\LumenRust\stdlib\compiler\fuego_out.nvc
