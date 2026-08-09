@@ -1,7 +1,39 @@
 use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::sync::Arc;
 use im::HashMap;
+
+#[derive(Debug, Clone)]
+pub struct FixHasher {
+    hash: u64,
+}
+
+impl Default for FixHasher {
+    fn default() -> Self {
+        Self {
+            hash: 0xcbf29ce484222325,
+        }
+    }
+}
+
+impl Hasher for FixHasher {
+    fn finish(&self) -> u64 {
+        self.hash
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.hash ^= b as u64;
+            self.hash = self.hash.wrapping_mul(0x100000001b3);
+        }
+    }
+}
+
+impl BuildHasher for FixHasher {
+    type Hasher = FixHasher;
+    fn build_hasher(&self) -> Self::Hasher {
+        FixHasher::default()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -24,7 +56,7 @@ pub enum Value {
     Error(Box<Value>),
     Opcion(Option<Box<Value>>),
     Tuple(Vec<Value>),
-    Map(HashMap<Value, Value>),
+    Map(HashMap<Value, Value, FixHasher>),
     Void,
 }
 

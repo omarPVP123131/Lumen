@@ -1,5 +1,6 @@
 use crate::value::Value;
 use im::HashMap;
+use crate::value::FixHasher;
 
 pub fn parse_json(s: &str) -> Result<Value, String> {
     let mut p = Parser { s, i: 0 };
@@ -16,7 +17,7 @@ fn json_to_lumen(j: JValue) -> Value {
         JValue::Str(s) => Value::Str(s),
         JValue::Array(arr) => Value::arr(arr.into_iter().map(json_to_lumen).collect()),
         JValue::Object(map) => {
-            let mut m = HashMap::new();
+            let mut m = HashMap::with_hasher(FixHasher::default());
             for (k, v) in map {
                 m.insert(Value::Str(k), json_to_lumen(v));
             }

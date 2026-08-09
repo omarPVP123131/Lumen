@@ -270,6 +270,12 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 
 ## Bugs Conocidos y Fixes Recientes
 
+### Fixes 8 Agosto 2026 — TLS de Winsock borrado por `RandomState` (FFI socket)
+| Bug | Archivo | Fix |
+|-----|---------|-----|
+| **`WSAGetLastError` devolvía 0 en la VM LÚMEN** (y en la VM Rust directa si había una llamada a función guest entre dos FFI calls): `RandomState::new()` (std `HashMap::new()` en el prólogo de llamada a función + `im::HashMap::new()` en `__map_nuevo`/defaults de handlers) obtiene entropía del OS **y limpia el last-error TLS del hilo en Windows** → `probe_wsa2.nv`/`test_connect_direct`/`test_quick_connect`/`test_socket_debug` divergían (0 vs 10093) | `crates/lumen-vm/src/vm.rs` (prologo `scope` ×3 + `locals` + 37× `ImMap::new`), `value.rs` (`FixHasher` + tipo `Value::Map`), `coro_ffi.rs`, `min_json.rs` | Nuevo `FixHasher` (FNV determinista, sin entropía) para TODOS los mapas internos del VM: `HashMap<String, Value, FixHasher>` en locals/scope y `ImMap<Value, Value, FixHasher>` en `Value::Map` (`ImMap::with_hasher(FixHasher::default())`). Diagnóstico por instrumentación temporal (probes `GLE-CHANGE`/`PROLOGUE`/`OP` revertidas; ffi_log en `%TEMP%\opencode\ffi_log.txt`) |
+| **Verificado**: `probe_wsa2.nv` + `test_connect_direct` + `test_quick_connect` + `test_socket_debug` **byte-IDÉNTICOS en ambas VMs (10093/10093)** · batería `test_vm.ps1` 39/40 (solo `stress_fecha` flaky timing pre-existente) · cargo test 375/375 · diff final solo +fix (sin instrumentación) | — | — |
+
 ### Fixes 30 Julio 2026 — Sprint 4 (HashMap)
 | Bug | Archivo | Fix |
 |-----|---------|-----|

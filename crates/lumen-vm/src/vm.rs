@@ -1,4 +1,4 @@
-use crate::value::Value;
+use crate::value::{FixHasher, Value};
 use im::HashMap as ImMap;
 use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
 use std::collections::HashMap;
@@ -69,7 +69,7 @@ impl VmError {
 
 pub struct VM {
     stack: Vec<Value>,
-    locals: Vec<HashMap<String, Value>>,
+    locals: Vec<HashMap<String, Value, FixHasher>>,
     ip: usize,
     bytecode: Bytecode,
     output: Vec<String>,
@@ -90,12 +90,12 @@ pub struct VM {
     current_coro: Option<String>,
     #[cfg(feature = "full")]
     #[allow(clippy::type_complexity)]
-    main_saved: Option<(Vec<Value>, Vec<HashMap<String, Value>>, usize)>,
+    main_saved: Option<(Vec<Value>, Vec<HashMap<String, Value, FixHasher>>, usize)>,
     tcp_listener: Option<std::net::TcpListener>,
     #[cfg(feature = "full")]
     cluster_streams: HashMap<String, std::net::TcpStream>,
     #[cfg(feature = "full")]
-    scope_handles: Vec<HashMap<String, Value>>,
+    scope_handles: Vec<HashMap<String, Value, FixHasher>>,
     #[cfg(feature = "full")]
     thread_handles: HashMap<String, std::thread::JoinHandle<Value>>,
     #[cfg(feature = "full")]
@@ -144,7 +144,7 @@ impl VM {
         };
         Self {
             stack: Vec::new(),
-            locals: vec![HashMap::new()],
+            locals: vec![HashMap::with_hasher(FixHasher::default())],
             ip,
             bytecode,
             output: Vec::new(),
@@ -609,13 +609,13 @@ impl VM {
         }
 
         if name == "__map_new" || name == "__map_nuevo" {
-            self.push(Value::Map(ImMap::new()));
+            self.push(Value::Map(ImMap::with_hasher(FixHasher::default())));
             return Some(Ok(()));
         }
 
         if name == "__map_set" || name == "__map_poner" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let k = it.next().unwrap_or(Value::Void);
             let v = it.next().unwrap_or(Value::Void);
             match m {
@@ -630,7 +630,7 @@ impl VM {
 
         if name == "__map_get" || name == "__map_obtener" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let k = it.next().unwrap_or(Value::Void);
             match m {
                 Value::Map(m) => {
@@ -646,7 +646,7 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Map(ImMap::new()));
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match m {
                 Value::Map(m) => self.push(Value::Int(m.len() as i64)),
                 _ => return builtin_err(VmError::TypeError("__map_len espera diccionario".into())),
@@ -659,7 +659,7 @@ impl VM {
                 .clone()
                 .into_iter()
                 .next()
-                .unwrap_or(Value::Map(ImMap::new()));
+                .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match m {
                 Value::Map(m) => {
                     let keys: Vec<Value> = m.into_iter().map(|(k, _)| k).collect();
@@ -674,7 +674,7 @@ impl VM {
 
         if name == "__map_contains" || name == "__map_contiene" {
             let mut it = args.clone().into_iter();
-            let m = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let k = it.next().unwrap_or(Value::Void);
             match m {
                 Value::Map(m) => self.push(Value::Bool(m.contains_key(&k))),
@@ -688,13 +688,13 @@ impl VM {
         }
 
         if name == "__set_new" || name == "__conjunto_nuevo" {
-            self.push(Value::Map(ImMap::new()));
+            self.push(Value::Map(ImMap::with_hasher(FixHasher::default())));
             return Some(Ok(()));
         }
 
         if name == "__set_add" || name == "__conjunto_agregar" {
             let mut it = args.clone().into_iter();
-            let s = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let s = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let item = it.next().unwrap_or(Value::Void);
             match s {
                 Value::Map(mut m) => {
@@ -708,7 +708,7 @@ impl VM {
 
         if name == "__set_has" || name == "__conjunto_tiene" {
             let mut it = args.clone().into_iter();
-            let s = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let s = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             let item = it.next().unwrap_or(Value::Void);
             match s {
                 Value::Map(m) => self.push(Value::Bool(m.contains_key(&item))),
@@ -719,8 +719,8 @@ impl VM {
 
         if name == "__set_union" || name == "__conjunto_unir" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(ImMap::new()));
-            let b = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match (a, b) {
                 (Value::Map(mut m1), Value::Map(m2)) => {
                     for (k, v) in m2 {
@@ -735,11 +735,11 @@ impl VM {
 
         if name == "__set_inter" || name == "__conjunto_interseccion" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(ImMap::new()));
-            let b = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match (a, b) {
                 (Value::Map(m1), Value::Map(m2)) => {
-                    let r: ImMap<Value, Value> = m1
+                    let r: ImMap<Value, Value, FixHasher> = m1
                         .into_iter()
                         .filter(|(k, _)| m2.contains_key(k))
                         .collect();
@@ -752,11 +752,11 @@ impl VM {
 
         if name == "__set_diff" || name == "__conjunto_diferencia" {
             let mut it = args.clone().into_iter();
-            let a = it.next().unwrap_or(Value::Map(ImMap::new()));
-            let b = it.next().unwrap_or(Value::Map(ImMap::new()));
+            let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+            let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match (a, b) {
                 (Value::Map(m1), Value::Map(m2)) => {
-                    let r: ImMap<Value, Value> = m1
+                    let r: ImMap<Value, Value, FixHasher> = m1
                         .into_iter()
                         .filter(|(k, _)| !m2.contains_key(k))
                         .collect();
@@ -2404,7 +2404,7 @@ impl VM {
     pub fn stack_top(&self) -> Option<&Value> {
         self.stack.last()
     }
-    pub fn current_locals(&self) -> Option<&HashMap<String, Value>> {
+    pub fn current_locals(&self) -> Option<&HashMap<String, Value, FixHasher>> {
         self.locals.last()
     }
 
@@ -2422,7 +2422,7 @@ impl VM {
         if let Some(func) = self.find_func(name) {
             let func_start = func.start;
             let func_params = func.params.clone();
-            let mut scope = HashMap::new();
+            let mut scope = HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
             for (i, param_name) in func_params.iter().enumerate() {
                 if let Some(arg) = args.get(i) {
                     scope.insert(param_name.clone(), arg.clone());
@@ -3179,7 +3179,7 @@ impl VM {
                         func_name: name.clone(),
                         return_ip: self.ip,
                     });
-                    let mut scope = HashMap::new();
+                    let mut scope = HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
                     for (i, param_name) in func_params.iter().enumerate() {
                         if let Some(arg) = args.get(i) {
                             scope.insert(param_name.clone(), arg.clone());
@@ -3324,10 +3324,10 @@ impl VM {
                     }
                     self.push(Value::str(out));
                 } else if name == "__map_new" || name == "__map_nuevo" {
-                    self.push(Value::Map(ImMap::new()));
+                    self.push(Value::Map(ImMap::with_hasher(FixHasher::default())));
                 } else if name == "__map_set" || name == "__map_poner" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let k = it.next().unwrap_or(Value::Void);
                     let v = it.next().unwrap_or(Value::Void);
                     match m {
@@ -3339,7 +3339,7 @@ impl VM {
                     }
                 } else if name == "__map_get" || name == "__map_obtener" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let k = it.next().unwrap_or(Value::Void);
                     match m {
                         Value::Map(m) => {
@@ -3348,13 +3348,13 @@ impl VM {
                         _ => return Err(VmError::TypeError("__map_get espera diccionario".into())),
                     }
                 } else if name == "__map_len" || name == "__map_longitud" {
-                    let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::new()));
+                    let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match m {
                         Value::Map(m) => self.push(Value::Int(m.len() as i64)),
                         _ => return Err(VmError::TypeError("__map_len espera diccionario".into())),
                     }
                 } else if name == "__map_keys" || name == "__map_claves" {
-                    let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::new()));
+                    let m = args.into_iter().next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match m {
                         Value::Map(m) => {
                             self.push(Value::arr(m.into_iter().map(|(k, _)| k).collect()));
@@ -3365,7 +3365,7 @@ impl VM {
                     }
                 } else if name == "__map_contains" || name == "__map_contiene" {
                     let mut it = args.into_iter();
-                    let m = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let m = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let k = it.next().unwrap_or(Value::Void);
                     match m {
                         Value::Map(m) => self.push(Value::Bool(m.contains_key(&k))),
@@ -3376,10 +3376,10 @@ impl VM {
                         }
                     }
                 } else if name == "__set_new" || name == "__conjunto_nuevo" {
-                    self.push(Value::Map(ImMap::new()));
+                    self.push(Value::Map(ImMap::with_hasher(FixHasher::default())));
                 } else if name == "__set_add" || name == "__conjunto_agregar" {
                     let mut it = args.into_iter();
-                    let s = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let s = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let item = it.next().unwrap_or(Value::Void);
                     match s {
                         Value::Map(mut m) => {
@@ -3390,7 +3390,7 @@ impl VM {
                     }
                 } else if name == "__set_has" || name == "__conjunto_tiene" {
                     let mut it = args.into_iter();
-                    let s = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let s = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     let item = it.next().unwrap_or(Value::Void);
                     match s {
                         Value::Map(m) => self.push(Value::Bool(m.contains_key(&item))),
@@ -3398,8 +3398,8 @@ impl VM {
                     }
                 } else if name == "__set_union" || name == "__conjunto_unir" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(ImMap::new()));
-                    let b = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match (a, b) {
                         (Value::Map(mut m1), Value::Map(m2)) => {
                             for (k, v) in m2 {
@@ -3411,11 +3411,11 @@ impl VM {
                     }
                 } else if name == "__set_inter" || name == "__conjunto_interseccion" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(ImMap::new()));
-                    let b = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match (a, b) {
                         (Value::Map(m1), Value::Map(m2)) => {
-                            let r: ImMap<Value, Value> = m1
+                            let r: ImMap<Value, Value, FixHasher> = m1
                                 .into_iter()
                                 .filter(|(k, _)| m2.contains_key(k))
                                 .collect();
@@ -3425,11 +3425,11 @@ impl VM {
                     }
                 } else if name == "__set_diff" || name == "__conjunto_diferencia" {
                     let mut it = args.into_iter();
-                    let a = it.next().unwrap_or(Value::Map(ImMap::new()));
-                    let b = it.next().unwrap_or(Value::Map(ImMap::new()));
+                    let a = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
+                    let b = it.next().unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match (a, b) {
                         (Value::Map(m1), Value::Map(m2)) => {
-                            let r: ImMap<Value, Value> = m1
+                            let r: ImMap<Value, Value, FixHasher> = m1
                                 .into_iter()
                                 .filter(|(k, _)| !m2.contains_key(k))
                                 .collect();
@@ -3800,7 +3800,7 @@ impl VM {
                         func_name: name.clone(),
                         return_ip: self.ip,
                     });
-                    let mut scope = HashMap::new();
+                    let mut scope = HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
                     for (i, param_name) in func_params.iter().enumerate() {
                         if let Some(arg) = args.get(i) {
                             scope.insert(param_name.clone(), arg.clone());
@@ -3968,11 +3968,11 @@ impl VM {
             _ => return Err(VmError::TypeError("codegen must be a map".into())),
         };
 
-        let map_get = |map: &ImMap<Value, Value>, key: &str| -> Option<Value> {
+        let map_get = |map: &ImMap<Value, Value, FixHasher>, key: &str| -> Option<Value> {
             map.get(&Value::str(key.to_string())).cloned()
         };
 
-        let map_get_i64 = |map: &ImMap<Value, Value>, key: &str| -> Option<i64> {
+        let map_get_i64 = |map: &ImMap<Value, Value, FixHasher>, key: &str| -> Option<i64> {
             match map_get(map, key)? {
                 Value::Int(n) => Some(n),
                 _ => None,
@@ -3985,15 +3985,15 @@ impl VM {
 
         let strs_map = match map_get(&cg_map, "strings") {
             Some(Value::Map(m)) => m,
-            _ => ImMap::new(),
+            _ => ImMap::with_hasher(FixHasher::default()),
         };
         let ints_map = match map_get(&cg_map, "ints") {
             Some(Value::Map(m)) => m,
-            _ => ImMap::new(),
+            _ => ImMap::with_hasher(FixHasher::default()),
         };
         let instrs_map = match map_get(&cg_map, "instrs") {
             Some(Value::Map(m)) => m,
-            _ => ImMap::new(),
+            _ => ImMap::with_hasher(FixHasher::default()),
         };
 
         let get_str = |idx: usize| -> String {
@@ -4269,14 +4269,14 @@ impl VM {
         let func_cnt = map_get_i64(&cg_map, "func_cnt").unwrap_or(0) as usize;
         let funcs_map = match map_get(&cg_map, "funcs") {
             Some(Value::Map(m)) => m,
-            _ => ImMap::new(),
+            _ => ImMap::with_hasher(FixHasher::default()),
         };
         let mut func_bytes: Vec<u8> = Vec::new();
         func_bytes.extend_from_slice(&(func_cnt as u32).to_le_bytes());
         for fi in 0..func_cnt {
             let f = match funcs_map.get(&Value::str(fi.to_string())) {
                 Some(Value::Map(m)) => m.clone(),
-                _ => ImMap::new(),
+                _ => ImMap::with_hasher(FixHasher::default()),
             };
             let fname = match f.get(&Value::str("nombre")) {
                 Some(Value::Str(s)) => s.to_string(),
@@ -4286,7 +4286,7 @@ impl VM {
             func_bytes.extend_from_slice(fname.as_bytes());
             let fparams = match f.get(&Value::str("params")) {
                 Some(Value::Map(m)) => m.clone(),
-                _ => ImMap::new(),
+                _ => ImMap::with_hasher(FixHasher::default()),
             };
             let pcount = match fparams.get(&Value::str("cnt")) {
                 Some(Value::Int(n)) => *n as usize,
@@ -4338,7 +4338,7 @@ fn json_value_to_lumen(v: serde_json::Value) -> Value {
             Value::arr(arr.into_iter().map(json_value_to_lumen).collect())
         }
         serde_json::Value::Object(map) => {
-            let mut m = ImMap::new();
+            let mut m = ImMap::with_hasher(FixHasher::default());
             for (k, v) in map {
                 m.insert(Value::str(k), json_value_to_lumen(v));
             }
