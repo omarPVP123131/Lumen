@@ -352,6 +352,64 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         stl_din.agregar(a_texto_v(v));
         retornar 1000000000.0 + largo(stl) + largo(stl_din) - 1;
     }
+    si nm == "__ffi_cargar" || nm == "__ffi_load" {
+        texto p = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar box_str(__ffi_cargar(p));
+    }
+    si nm == "__ffi_llamar" || nm == "__ffi_call" {
+        texto lib = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 4) - 1000000000));
+        texto fn = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 3) - 1000000000));
+        texto t = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 2) - 1000000000));
+        numero arrv = estado_pila(st, sp - 1);
+        numero a1 = 0.0;
+        si arrv < -999999999 { a1 = 0.0; } sino { a1 = arrv; }
+        texto r = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar 0.0 + __ffi_llamar(lib, fn, t, a1, r);
+    }
+    si nm == "__ffi_asignar" || nm == "__ffi_alloc" {
+        numero size = estado_pila(st, sp);
+        numero align = 8.0;
+        si argc >= 2 {
+            size = estado_pila(st, sp - 1);
+            align = estado_pila(st, sp);
+        }
+        retornar 0.0 + __ffi_asignar(a_entero(size), a_entero(align));
+    }
+    si nm == "__ffi_liberar" || nm == "__ffi_free" {
+        numero pv = estado_pila(st, sp - 1);
+        numero sv = estado_pila(st, sp);
+        __ffi_liberar(a_entero(pv), a_entero(sv));
+        retornar 0.0;
+    }
+    si nm == "__ffi_escribir" || nm == "__ffi_write" {
+        numero pv = estado_pila(st, sp - 2);
+        numero ov = estado_pila(st, sp - 1);
+        numero dv = estado_pila(st, sp);
+        texto dt = "";
+        si dv >= 1000000000 && dv < 2000000000 {
+            dt = str_at(stl, stl_din, a_entero(dv - 1000000000));
+        }
+        __ffi_escribir(a_entero(pv), a_entero(ov), dt);
+        retornar 0.0;
+    }
+    si nm == "__ffi_leer" || nm == "__ffi_read" {
+        numero pv = estado_pila(st, sp - 2);
+        numero ov = estado_pila(st, sp - 1);
+        numero lv = estado_pila(st, sp);
+        retornar box_str(__ffi_leer(a_entero(pv), a_entero(ov), a_entero(lv)));
+    }
+    si nm == "__ffi_peek" {
+        numero pv = estado_pila(st, sp - 1);
+        numero ov = estado_pila(st, sp);
+        retornar 0.0 + __ffi_peek(a_entero(pv), a_entero(ov));
+    }
+    si nm == "__ffi_poke" {
+        numero pv = estado_pila(st, sp - 2);
+        numero ov = estado_pila(st, sp - 1);
+        numero vv = estado_pila(st, sp);
+        __ffi_poke(a_entero(pv), a_entero(ov), a_entero(vv));
+        retornar 0.0;
+    }
     si nm == "leer" || nm == "read" {
         stl_din.agregar("");
         retornar 1000000000.0 + largo(stl) + largo(stl_din) - 1;
