@@ -8,6 +8,7 @@ pub struct Parser {
     errors: Vec<ParseError>,
     no_struct_init: bool,
     type_params_stack: Vec<Vec<String>>,
+    pending_greater: bool,
 }
 
 impl Parser {
@@ -18,6 +19,7 @@ impl Parser {
             errors: Vec::new(),
             no_struct_init: false,
             type_params_stack: Vec::new(),
+            pending_greater: false,
         }
     }
 
@@ -2385,7 +2387,7 @@ impl Parser {
             },
             None => return (names, bounds),
         }
-        if !self.check(&[TokenKind::Greater]) {
+        if !self.eat_type_greater() {
             self.error(
                 "E021",
                 "Se esperaba '>' para cerrar los parámetros de tipo",
@@ -2394,7 +2396,6 @@ impl Parser {
             );
             return (names, bounds);
         }
-        self.advance();
         (names, bounds)
     }
 
@@ -2482,7 +2483,7 @@ impl Parser {
             self.advance();
             args.push(self.parse_type()?);
         }
-        if !self.check(&[TokenKind::Greater]) {
+        if !self.eat_type_greater() {
             self.error(
                 "E021",
                 "Se esperaba '>' para cerrar los argumentos de tipo",
@@ -2491,7 +2492,6 @@ impl Parser {
             );
             return None;
         }
-        self.advance();
         Some(args)
     }
 
@@ -2537,6 +2537,23 @@ impl Parser {
         self.is_type_at(self.pos + 1)
     }
 
+    fn eat_type_greater(&mut self) -> bool {
+        if self.pending_greater {
+            self.pending_greater = false;
+            return true;
+        }
+        if self.check(&[TokenKind::Greater]) {
+            self.advance();
+            return true;
+        }
+        if self.check(&[TokenKind::ShiftRight]) {
+            self.advance();
+            self.pending_greater = true;
+            return true;
+        }
+        false
+    }
+
     fn parse_type(&mut self) -> Option<Type> {
         let token = self.advance()?;
         match token.kind {
@@ -2550,7 +2567,7 @@ impl Parser {
                 if self.check(&[TokenKind::Less]) {
                     self.advance();
                     let inner = self.parse_type()?;
-                    if !self.check(&[TokenKind::Greater]) {
+                    if !self.eat_type_greater() {
                         self.error(
                             "E021",
                             "Se esperaba '>' para cerrar el tipo lista",
@@ -2559,7 +2576,6 @@ impl Parser {
                         );
                         return None;
                     }
-                    self.advance();
                     Some(Type::Lista(Box::new(inner)))
                 } else {
                     Some(Type::Lista(Box::new(Type::Entero)))
@@ -2570,7 +2586,7 @@ impl Parser {
                     if self.check(&[TokenKind::Less]) {
                         self.advance();
                         let inner = self.parse_type()?;
-                        if !self.check(&[TokenKind::Greater]) {
+                        if !self.eat_type_greater() {
                             self.error(
                                 "E021",
                                 "Se esperaba '>' para cerrar el tipo lista",
@@ -2579,7 +2595,6 @@ impl Parser {
                             );
                             return None;
                         }
-                        self.advance();
                         Some(Type::Lista(Box::new(inner)))
                     } else {
                         Some(Type::Lista(Box::new(Type::Entero)))
@@ -2618,7 +2633,7 @@ impl Parser {
                 }
                 self.advance();
                 let err = self.parse_type()?;
-                if !self.check(&[TokenKind::Greater]) {
+                if !self.eat_type_greater() {
                     self.error(
                         "E021",
                         "Se esperaba '>' para cerrar el tipo resultado",
@@ -2627,7 +2642,6 @@ impl Parser {
                     );
                     return None;
                 }
-                self.advance();
                 Some(Type::Resultado {
                     ok: Box::new(ok),
                     err: Box::new(err),
@@ -2674,7 +2688,7 @@ impl Parser {
                 }
                 self.advance();
                 let inner = self.parse_type()?;
-                if !self.check(&[TokenKind::Greater]) {
+                if !self.eat_type_greater() {
                     self.error(
                         "E021",
                         "Se esperaba '>' para cerrar el tipo opcional",
@@ -2683,7 +2697,6 @@ impl Parser {
                     );
                     return None;
                 }
-                self.advance();
                 Some(Type::Opcion(Box::new(inner)))
             }
             TokenKind::Impl => {
