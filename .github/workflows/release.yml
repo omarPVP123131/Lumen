@@ -1,13 +1,18 @@
 name: Release
 
+# Se dispara SOLO cuando existe un tag v* — creado automáticamente por el
+# job `autotag` de ci.yml después de que todos los checks pasen, o de forma
+# manual (workflow_dispatch). Los binarios se construyen desde el tag
+# (commit exacto que pasó CI), no desde el estado del branch.
+
 on:
   push:
-    branches: [master, main]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      force_tag:
-        description: "Forzar tag (ej: v2.0.0)"
-        required: false
+      tag:
+        description: "Tag a releasear (ej: v2.4.1)"
+        required: true
         type: string
 
 env:
@@ -15,44 +20,24 @@ env:
 
 jobs:
   version:
-    name: Detect version
+    name: Resolve tag + version
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     outputs:
-      version: ${{ steps.get_version.outputs.version }}
-      tag: ${{ steps.get_version.outputs.tag }}
-      exists: ${{ steps.check_tag.outputs.exists }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Get version from Cargo.toml
-        id: get_version
+      - id: resolve
+        name: Resolve from tag or input
         run: |
-          if [ -n "${{ inputs.force_tag }}" ]; then
-            TAG="${{ inputs.force_tag }}"
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+            echo "version=${{ inputs.tag }}" | sed 's/^v//' >> $GITHUB_OUTPUT
           else
-            VER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-            TAG="v$VER"
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF_NAME}" | sed 's/^v//' >> $GITHUB_OUTPUT
           fi
-          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-      - name: Check if tag exists
-        id: check_tag
-        run: |
-          if git rev-parse "${{ steps.get_version.outputs.tag }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Create tag
-        if: steps.check_tag.outputs.exists == 'false'
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git tag -a "${{ steps.get_version.outputs.tag }}" -m "Release ${{ steps.get_version.outputs.tag }}"
-          git push origin "${{ steps.get_version.outputs.tag }}"
 
   build:
     name: Build ${{ matrix.target }}
@@ -76,6 +61,8 @@ jobs:
             ext: ".exe"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -90,6 +77,7 @@ jobs:
           cp ../../../README.md lumen-${{ matrix.target }}/
           cp ../../../CHANGELOG.md lumen-${{ matrix.target }}/
           cp ../../../LICENSE* lumen-${{ matrix.target }}/ 2>/dev/null || true
+          cp ../../../VERSION lumen-${{ matrix.target }}/ 2>/dev/null || true
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             7z a -tzip ../../../lumen-${{ matrix.target }}.zip lumen-${{ matrix.target }}/
           else
@@ -100,10 +88,10 @@ jobs:
         with:
           name: lumen-${{ matrix.target }}
           path: lumen-${{ matrix.target }}.*
-          retention-days: 7
+          retention-days: 30
 
   release:
-    name: Create Release
+    name: Create GitHub Release
     needs: [version, build]
     if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
@@ -111,16 +99,24 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
-      - name: Extract changelog section
+      - name: Extract changelog section for ${{ needs.version.outputs.version }}
         run: |
-          TAG="${{ needs.version.outputs.tag }}"
           VER="${{ needs.version.outputs.version }}"
-          awk -v ver="$VER" '/^## / { if (found) exit; if ($0 ~ ver || $0 ~ "v" ver) found=1; next } found' CHANGELOG.md > release_notes.md
+          echo "Generando notas para v$VER ..."
+          awk -v ver="$VER" '/^## / { if (found) exit; if ($0 ~ "v" ver || $0 ~ ver) found=1; next } found' CHANGELOG.md > release_notes.md
+          # Fallback: si no hay sección exacta, notas genéricas
+          if [ ! -s release_notes.md ]; then
+            echo "Release LÚMEN v$VER — autotag tras CI verde (fmt, clippy -D warnings, tests 3 OS, wasm)." > release_notes.md
+            echo "" >> release_notes.md
+            echo "Assets multi-plataforma (linux/macos/windows x64, macos arm64) incluidos." >> release_notes.md
+          fi
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:

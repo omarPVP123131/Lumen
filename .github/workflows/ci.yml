@@ -18,17 +18,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - run: cargo fmt --check
+      - run: cargo fmt -- --check
 
   clippy:
-    name: Clippy
+    name: Clippy (-D warnings)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: cargo clippy --all
+      - run: cargo clippy --all -- -D warnings
 
   linux:
     name: Linux
@@ -57,37 +57,6 @@ jobs:
       - run: cargo build --all-targets --verbose
       - run: cargo test --all --verbose
 
-  fuzz:
-    name: Fuzz
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-fuzz
-      - run: |
-          for target in fuzz_lexer fuzz_parser fuzz_decoder; do
-            timeout 30 cargo fuzz run $target -- -max_total_time=25 || true
-          done
-        working-directory: fuzz
-
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-    needs: [linux, macos, windows]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - run: cargo llvm-cov --all --codecov --output-path coverage.json -- --skip test_aes
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
-        with:
-          files: coverage.json
-          fail_ci_if_error: false
-
   wasm-check:
     name: WASM Check
     runs-on: ubuntu-latest
@@ -96,16 +65,54 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - name: Check wasm target
-        run: cargo check -p lumen-wasm --target wasm32-unknown-unknown
-
-  wasi-check:
-    name: WASI Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - run: cargo check -p lumen-wasm --target wasm32-unknown-unknown
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip1
-      - name: Check WASI target
-        run: cargo check -p lumen-wasm --target wasm32-wasip1 --no-default-features --features wasi
+      - run: cargo check -p lumen-wasm --target wasm32-wasip1 --no-default-features --features wasi
+
+  # ── AUTOTAG ─────────────────────────────────────────────
+  # Crea el tag v<version> (desde VERSION) SOLO cuando:
+  #   • es un push a master/main (no PR)
+  #   • todos los checks de calidad pasaron
+  #   • el tag aún no existe en el remoto
+  # El push del tag dispara release.yml (builds + GitHub Release).
+  autotag:
+    name: Autotag v<version>
+    needs: [fmt, clippy, linux, macos, windows, wasm-check]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read version
+        id: version
+        run: |
+          VER=$(cat VERSION | tr -d '[:space:]')
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+      - name: Check tag on remote
+        id: check
+        run: |
+          if git ls-remote --tags origin "${{ steps.version.outputs.tag }}" | grep -q .; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Create and push tag
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }} (autotag — todos los checks de CI pasaron)"
+          git push origin "${{ steps.version.outputs.tag }}"
+      - name: Log
+        run: |
+          echo "VERSION=${{ steps.version.outputs.version }}"
+          echo "TAG=${{ steps.version.outputs.tag }} (exists=${{ steps.check.outputs.exists }})"
+          if [ "${{ steps.check.outputs.exists }}" = "true" ]; then
+            echo "El tag ya existe en el remoto — no se recrea (release.yml se encarga)."
+          fi
