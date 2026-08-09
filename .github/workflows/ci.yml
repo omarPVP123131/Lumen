@@ -76,14 +76,19 @@ jobs:
   #   • es un push a master/main (no PR)
   #   • todos los checks de calidad pasaron
   #   • el tag aún no existe en el remoto
-  # El push del tag dispara release.yml (builds + GitHub Release).
+  # build/release dependen de este job (needs), así que el
+  # pipeline completo corre en el MISMO workflow (evita la
+  # limitación de que GITHUB_TOKEN no dispara nuevos runs).
   autotag:
     name: Autotag v<version>
     needs: [fmt, clippy, linux, macos, windows, wasm-check]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      created: ${{ steps.push.outputs.created }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,16 +108,110 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
       - name: Create and push tag
+        id: push
         if: steps.check.outputs.exists == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }} (autotag — todos los checks de CI pasaron)"
           git push origin "${{ steps.version.outputs.tag }}"
+          echo "created=true" >> $GITHUB_OUTPUT
       - name: Log
+        if: always()
         run: |
-          echo "VERSION=${{ steps.version.outputs.version }}"
           echo "TAG=${{ steps.version.outputs.tag }} (exists=${{ steps.check.outputs.exists }})"
           if [ "${{ steps.check.outputs.exists }}" = "true" ]; then
-            echo "El tag ya existe en el remoto — no se recrea (release.yml se encarga)."
+            echo "El tag ya existe — se reutiliza para build/release."
           fi
+
+  # ── BUILD (4 targets) ───────────────────────────────────
+  build:
+    name: Build ${{ matrix.target }}
+    needs: autotag
+    if: needs.autotag.result == 'success'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            ext: ""
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            ext: ""
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            ext: ""
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            ext: ".exe"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Prepare asset
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          mkdir -p lumen-${{ matrix.target }}
+          cp lumen${{ matrix.ext }} lumen-${{ matrix.target }}/
+          cp ../../../README.md lumen-${{ matrix.target }}/
+          cp ../../../CHANGELOG.md lumen-${{ matrix.target }}/
+          cp ../../../LICENSE* lumen-${{ matrix.target }}/ 2>/dev/null || true
+          cp ../../../VERSION lumen-${{ matrix.target }}/ 2>/dev/null || true
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            7z a -tzip ../../../lumen-${{ matrix.target }}.zip lumen-${{ matrix.target }}/
+          else
+            tar czf ../../../lumen-${{ matrix.target }}.tar.gz lumen-${{ matrix.target }}/
+          fi
+      - name: Upload asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumen-${{ matrix.target }}
+          path: lumen-${{ matrix.target }}.*
+          retention-days: 30
+
+  # ── RELEASE ─────────────────────────────────────────────
+  # Crea/actualiza la GitHub Release asociada al tag que
+  # autotag garantizó. Corre solo tras build exitoso.
+  release:
+    name: Create GitHub Release
+    needs: [autotag, build]
+    if: always() && needs.autotag.result == 'success' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Extract changelog section
+        run: |
+          TAG="${{ needs.autotag.outputs.tag }}"
+          VER="${TAG#v}"
+          echo "Notas para v$VER..."
+          awk -v ver="$VER" '/^## / { if (found) exit; if ($0 ~ "v" ver || $0 ~ ver) found=1; next } found' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "Release LÚMEN v$VER — autotag tras CI verde (fmt, clippy -D warnings, tests 3 OS, wasm)." > release_notes.md
+            echo "" >> release_notes.md
+            echo "Assets multi-plataforma (linux/macos/windows x64, macos arm64) incluidos." >> release_notes.md
+          fi
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.autotag.outputs.tag }}
+          name: LÚMEN ${{ needs.autotag.outputs.tag }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: artifacts/**/*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
