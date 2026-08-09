@@ -1213,6 +1213,68 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         }
         retornar 0.0 + x;
     }
+    si nm == "__stream_desde" || nm == "__stream_from" {
+        retornar estado_pila(st, sp);
+    }
+    si nm == "__stream_colectar" || nm == "__stream_collect" {
+        retornar estado_pila(st, sp);
+    }
+    si nm == "__stream_mapear" || nm == "__stream_map" {
+        numero src = estado_pila(st, sp - 1);
+        texto fn = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar __stream_mapear(src, fn);
+    }
+    si nm == "__stream_filtrar" || nm == "__stream_filter" {
+        numero src = estado_pila(st, sp - 1);
+        texto fn = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar __stream_filtrar(src, fn);
+    }
+    si nm == "__par_mapear" || nm == "__par_map" {
+        numero src = estado_pila(st, sp - 1);
+        texto fn = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar __par_mapear(src, fn);
+    }
+    si nm == "__par_unir" || nm == "__par_join" {
+        texto fn1 = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 3) - 1000000000));
+        numero a1 = estado_pila(st, sp - 2);
+        texto fn2 = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        numero a2 = estado_pila(st, sp);
+        retornar __par_unir(fn1, a1, fn2, a2);
+    }
+    si nm == "__actor_nuevo" || nm == "__actor_new" {
+        retornar box_str(__actor_nuevo());
+    }
+    si nm == "__actor_enviar" || nm == "__actor_send" {
+        texto aid = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        numero msg = estado_pila(st, sp);
+        si __actor_enviar(aid, msg) { retornar 9000000001.0; }
+        retornar 9000000000.0;
+    }
+    si nm == "__actor_recibir" || nm == "__actor_recv" {
+        texto aid = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar __actor_recibir(aid);
+    }
+    si nm == "__generador_nuevo" || nm == "__generator_new" {
+        texto fn = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar box_str(__generador_nuevo(fn));
+    }
+    si nm == "__generador_siguiente" || nm == "__generator_next" {
+        texto gid = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        numero val = estado_pila(st, sp);
+        retornar __generador_siguiente(gid, val);
+    }
+    si nm == "__seleccionar" || nm == "__select" {
+        retornar box_str("select_stub");
+    }
+    si nm == "__leer_archivo_async" || nm == "__file_read_async" {
+        texto path = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar box_str(__leer_archivo_async(path));
+    }
+    si nm == "__escribir_archivo_async" || nm == "__file_write_async" {
+        texto path = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
+        texto content = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
+        retornar box_str(__escribir_archivo_async(path, content));
+    }
     si nm == "__agregar_archivo" || nm == "__file_append" {
         texto p = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 1) - 1000000000));
         texto c = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
