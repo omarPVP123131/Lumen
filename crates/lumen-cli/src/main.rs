@@ -1,7 +1,10 @@
 use std::env;
 use std::fs;
+use std::io::Write;
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process;
+use std::thread;
 
 use lumen_codegen::{disassemble, Bytecode, Codegen};
 use lumen_ir::IRBuilder;
@@ -16,6 +19,7 @@ struct Config {
     file: String,
     lib_dirs: Vec<PathBuf>,
     native: bool,
+    port: u16,
 }
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -94,7 +98,7 @@ fn print_help() {
     println!("   .opencode/agents/ — Skills de desarrollo");
     println!();
     println!("  🌐 PLAYGROUND WEB:");
-    println!("   cd crates/lumen-wasm && python serve.py");
+    println!("   lumen serve --port 8080   # servidor del playground (WASM)");
     println!("   http://localhost:8080/web/index.html");
     println!();
     println!("  🐳 DOCKER:");
@@ -265,12 +269,12 @@ fn print_tutor(topic: &str) {
             println!("  importar \"gui.nv\";");
             println!();
             println!("📌 WebAssembly:");
-            println!("  cd crates/lumen-wasm && python serve.py");
+            println!("  lumen serve");
             println!();
             println!("📌 AOT nativo:");
             println!("  lumen build --native programa.nv");
             println!();
-            println!("▶  Prueba: python crates/lumen-wasm/serve.py");
+            println!("▶  Prueba: lumen serve");
             println!("▶  Prueba: docker compose up");
         }
         _ => {
@@ -327,7 +331,7 @@ fn print_learn() {
     println!("  NIVEL 5 — PROFESIONAL / PROFESSIONAL:");
     println!("  24. lumen tutor pro");
     println!("  25. lumen build --native programa.nv");
-    println!("  26. python crates/lumen-wasm/serve.py");
+    println!("  26. lumen serve");
     println!("  27. docker compose up");
     println!();
     println!("  NIVEL 6 — INGENIERO / ENGINEER:");
@@ -345,7 +349,7 @@ fn print_learn() {
     println!();
     println!("  💡 TIP: Usa 'lumen tutor <tema>' para cada lección.");
     println!("  🎯 META: Escribir programas funcionales en LÚMEN.");
-    println!("  🌐 Web: cd crates/lumen-wasm && python serve.py");
+    println!("  🌐 Web: lumen serve");
 }
 
 fn parse_args(args: &[String]) -> Config {
@@ -354,6 +358,7 @@ fn parse_args(args: &[String]) -> Config {
     let mut file = String::new();
     let mut lib_dirs = Vec::new();
     let mut native = false;
+    let mut port: u16 = 8080;
 
     while i < args.len() {
         match args[i].as_str() {
@@ -368,6 +373,21 @@ fn parse_args(args: &[String]) -> Config {
             }
             "--native" => {
                 native = true;
+            }
+            "--port" => {
+                i += 1;
+                if i < args.len() {
+                    match args[i].parse::<u16>() {
+                        Ok(p) => port = p,
+                        Err(_) => {
+                            eprintln!("Error: puerto inválido '{}'", args[i]);
+                            process::exit(1);
+                        }
+                    }
+                } else {
+                    eprintln!("Error: falta el puerto después de '--port'");
+                    process::exit(1);
+                }
             }
             s if command.is_empty() => {
                 command = s.to_string();
@@ -397,6 +417,7 @@ fn parse_args(args: &[String]) -> Config {
         file,
         lib_dirs,
         native,
+        port,
     }
 }
 
@@ -530,8 +551,7 @@ fn main() {
             );
         }
         "serve" | "playground" => {
-            println!("🚀 Playground web: cd crates/lumen-wasm && python serve.py");
-            println!("   http://localhost:8080/web/index.html");
+            serve_playground(config.port);
         }
         "learn" => {
             print_learn();
@@ -995,4 +1015,152 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
             _ => eprintln!("Comandos: s(tep) c(ontinue) b<ip> q(uit)"),
         }
     }
+}
+
+// ── Playground web (servidor HTTP estático) ─────────────────────────
+
+fn mime_type(path: &str) -> &'static str {
+    if path.ends_with(".html") {
+        "text/html; charset=utf-8"
+    } else if path.ends_with(".js") {
+        "application/javascript; charset=utf-8"
+    } else if path.ends_with(".wasm") {
+        "application/wasm"
+    } else if path.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else if path.ends_with(".json") {
+        "application/json; charset=utf-8"
+    } else if path.ends_with(".d.ts") || path.ends_with(".ts") {
+        "text/plain; charset=utf-8"
+    } else if path.ends_with(".svg") {
+        "image/svg+xml"
+    } else if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".ico") {
+        "image/x-icon"
+    } else {
+        "application/octet-stream"
+    }
+}
+
+fn find_wasm_web_root() -> Option<PathBuf> {
+    let candidates = [
+        PathBuf::from("crates/lumen-wasm"),
+        PathBuf::from("../crates/lumen-wasm"),
+        PathBuf::from("../../crates/lumen-wasm"),
+        PathBuf::from("../../../crates/lumen-wasm"),
+    ];
+    for c in &candidates {
+        if c.join("web/index.html").is_file() {
+            return Some(c.clone());
+        }
+    }
+    None
+}
+
+fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
+    use std::io::BufRead;
+
+    let mut reader = std::io::BufReader::new(&mut *stream);
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).is_err() {
+        return;
+    }
+    let mut buf = String::new();
+    loop {
+        buf.clear();
+        if reader.read_line(&mut buf).is_err() {
+            return;
+        }
+        if buf.is_empty() {
+            return;
+        }
+        if buf == "\r\n" || buf == "\n" {
+            break;
+        }
+    }
+
+    let parts: Vec<&str> = request_line.split_whitespace().collect();
+    if parts.len() < 2 || parts[0] != "GET" {
+        return;
+    }
+    let raw_path = parts[1];
+    let rel = if raw_path == "/" {
+        "web/index.html".to_string()
+    } else {
+        raw_path.trim_start_matches('/').to_string()
+    };
+
+    let status_line = "HTTP/1.1 200 OK\r\n";
+    let not_found = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 9\r\n\r\nNot Found";
+
+    // Path traversal guard
+    if rel.contains("..") {
+        let _ = stream.write_all(not_found.as_bytes());
+        return;
+    }
+
+    let file_path = root.join(&rel);
+    match fs::read(&file_path) {
+        Ok(data) => {
+            let header = format!(
+                "{}Content-Type: {}\r\nContent-Length: {}\r\nCross-Origin-Opener-Policy: same-origin\r\nCross-Origin-Embedder-Policy: require-corp\r\nCache-Control: public, max-age=0, must-revalidate\r\nConnection: close\r\n\r\n",
+                status_line,
+                mime_type(&rel),
+                data.len()
+            );
+            let _ = stream.write_all(header.as_bytes());
+            let _ = stream.write_all(&data);
+        }
+        Err(_) => {
+            let _ = stream.write_all(not_found.as_bytes());
+        }
+    }
+}
+
+fn serve_playground(port: u16) -> ! {
+    let root = match find_wasm_web_root() {
+        Some(r) => r,
+        None => {
+            eprintln!("Error: no se encontró el directorio crates/lumen-wasm (playground web).");
+            eprintln!("Ejecuta este comando desde la raíz del repositorio LÚMEN.");
+            process::exit(1);
+        }
+    };
+
+    // Warm check: advertir si falta el wasm compilado
+    if !root.join("pkg/lumen_wasm_bg.wasm").is_file() {
+        eprintln!(
+            "Aviso: no se encontró pkg/lumen_wasm_bg.wasm. Compílalo con:\n  wasm-pack build crates/lumen-wasm --target web"
+        );
+    }
+
+    let listener = match TcpListener::bind(("127.0.0.1", port)) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Error al iniciar el servidor en el puerto {}: {}", port, e);
+            process::exit(1);
+        }
+    };
+
+    println!("╔══════════════════════════════════════════╗");
+    println!("║   LÚMEN Playground — WASM Runtime        ║");
+    println!("║                                          ║");
+    println!("║   ▶ http://localhost:{}/web/index.html   ║", port);
+    println!("║                                          ║");
+    println!("║   Ctrl+C para detener                    ║");
+    println!("╚══════════════════════════════════════════╝");
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(mut stream) => {
+                let root = root.clone();
+                thread::spawn(move || {
+                    handle_http_request(&mut stream, &root);
+                });
+            }
+            Err(_) => continue,
+        }
+    }
+    process::exit(0);
 }
