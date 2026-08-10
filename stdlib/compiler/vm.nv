@@ -361,10 +361,58 @@ funcion numero bin(numero st, entero sp, entero argc, texto nm) {
         texto fn = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 3) - 1000000000));
         texto t = str_at(stl, stl_din, a_entero(estado_pila(st, sp - 2) - 1000000000));
         numero arrv = estado_pila(st, sp - 1);
-        numero a1 = 0.0;
-        si arrv < -999999999 { a1 = 0.0; } sino { a1 = arrv; }
         texto r = str_at(stl, stl_din, a_entero(estado_pila(st, sp) - 1000000000));
-        retornar 0.0 + __ffi_llamar(lib, fn, t, a1, r);
+        lista<numero> tipos = [];
+        lista<texto> sparts = __str_split(t, ",");
+        entero sp2 = 0;
+        while sp2 < largo(sparts) {
+            stl_din.agregar(sparts[sp2]);
+            tipos.agregar(1000000000.0 + largo(stl) + largo(stl_din) - 1);
+            sp2 = sp2 + 1;
+        }
+        entero n = largo(tipos);
+        entero bloc = a_entero(__ffi_asignar(n * 8, 8));
+        entero i = 0;
+        while i < n {
+            texto tt = str_at(stl, stl_din, a_entero(tipos[i] - 1000000000));
+            numero e = 0.0;
+            si arrv < -999999999 {
+                lista<numero> orig = arrs[a_entero(0.0 - arrv - 1000000000.0) - 1];
+                si i < largo(orig) { e = orig[i]; }
+            } sino {
+                si i == 0 { e = arrv; }
+            }
+            si tt == "texto" {
+                si e >= 1000000000 && e < 2000000000 {
+                    texto s = str_at(stl, stl_din, a_entero(e - 1000000000));
+                    entero pbuf = a_entero(__ffi_asignar(largo(__str_a_caracteres(s)) + 1, 1));
+                    __ffi_escribir(pbuf, 0, s);
+                    e = 0.0 + pbuf;
+                }
+                __ffi_poke(bloc, i * 8, a_entero(e) % 4294967296);
+                __ffi_poke(bloc, i * 8 + 4, a_entero(e) / 4294967296);
+            } sino {
+                si tt == "decimal" {
+                    lista<numero> bs = __num_a_f64_bytes(e);
+                    entero lo = a_entero(bs[0]) + a_entero(bs[1]) * 256 + a_entero(bs[2]) * 65536 + a_entero(bs[3]) * 16777216;
+                    entero hi = a_entero(bs[4]) + a_entero(bs[5]) * 256 + a_entero(bs[6]) * 65536 + a_entero(bs[7]) * 16777216;
+                    __ffi_poke(bloc, i * 8, lo);
+                    __ffi_poke(bloc, i * 8 + 4, hi);
+                } sino {
+                    __ffi_poke(bloc, i * 8, a_entero(e) % 4294967296);
+                    __ffi_poke(bloc, i * 8 + 4, a_entero(e) / 4294967296);
+                }
+            }
+            i = i + 1;
+        }
+        si r == "texto" {
+            retornar box_str(__ffi_llamar_nv(lib, fn, t, r, 0.0 + bloc));
+        }
+        si r == "void" || r == "vacio" {
+            __ffi_llamar_nv(lib, fn, t, r, 0.0 + bloc);
+            retornar 0.0;
+        }
+        retornar 0.0 + __ffi_llamar_nv(lib, fn, t, r, 0.0 + bloc);
     }
     si nm == "__ffi_asignar" || nm == "__ffi_alloc" {
         numero size = estado_pila(st, sp);

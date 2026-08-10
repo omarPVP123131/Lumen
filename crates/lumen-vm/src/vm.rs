@@ -15,6 +15,311 @@ use crate::crypto_ffi::Bcrypt;
 #[cfg(feature = "full")]
 use crate::gui_ffi::GuiWindow;
 
+#[cfg(feature = "full")]
+macro_rules! ffi_rt_ty {
+    (I) => { i64 };
+    (F) => { f64 };
+    (S) => { *const std::ffi::c_char };
+    (V) => { () };
+}
+
+#[cfg(feature = "full")]
+macro_rules! ffi_rt_conv {
+    (I, $e:expr) => { Value::Int($e) };
+    (F, $e:expr) => { Value::Float($e) };
+    (S, $e:expr) => { ffi_ret_str($e) };
+    (V, $e:expr) => {{ $e; Value::Void }};
+}
+
+#[cfg(feature = "full")]
+macro_rules! ffi_int_call {
+    (0, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<unsafe extern "C" fn() -> ffi_rt_ty!($rtk)> = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        Ok(ffi_rt_conv!($rtk, unsafe { sym() }))
+    }};
+    (1, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<unsafe extern "C" fn(i64) -> ffi_rt_ty!($rtk)> = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0]) }))
+    }};
+    (2, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<unsafe extern "C" fn(i64, i64) -> ffi_rt_ty!($rtk)> = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1]) }))
+    }};
+    (3, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<unsafe extern "C" fn(i64, i64, i64) -> ffi_rt_ty!($rtk)> =
+            unsafe { $lib.get($name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2]) }))
+    }};
+    (4, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<unsafe extern "C" fn(i64, i64, i64, i64) -> ffi_rt_ty!($rtk)> =
+            unsafe { $lib.get($name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2], v[3]) }))
+    }};
+    (5, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<unsafe extern "C" fn(i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk)> =
+            unsafe { $lib.get($name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2], v[3], v[4]) }))
+    }};
+    (6, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<
+            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+        > = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2], v[3], v[4], v[5]) }))
+    }};
+    (7, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<
+            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+        > = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2], v[3], v[4], v[5], v[6]) }))
+    }};
+    (8, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<
+            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+        > = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe {
+            sym(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7])
+        }))
+    }};
+    (9, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<
+            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+        > = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe {
+            sym(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8])
+        }))
+    }};
+    (10, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<
+            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+        > = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe {
+            sym(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9])
+        }))
+    }};
+    (11, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<
+            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+        > = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe {
+            sym(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10])
+        }))
+    }};
+    (12, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
+        let sym: libloading::Symbol<
+            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+        > = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let v = ffi_ints($args);
+        Ok(ffi_rt_conv!($rtk, unsafe {
+            sym(
+                v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11],
+            )
+        }))
+    }};
+}
+
+#[cfg(feature = "full")]
+macro_rules! ffi_int_arms {
+    ($args:expr, $lib:expr, $name:expr, $n:tt, $ret:expr,
+     $(($nlit:tt, $rtk:tt, $variant:ident)),* $(,)?) => {
+        $(
+            if $n == $nlit && $ret == FfiRet::$variant {
+                return ffi_int_call!($nlit, $lib, $name, $rtk, $args);
+            }
+        )*
+    };
+}
+
+#[cfg(feature = "full")]
+#[derive(Clone, Copy, PartialEq)]
+enum FfiTy {
+    Int,
+    Float,
+    Str,
+}
+
+#[cfg(feature = "full")]
+#[derive(Clone, Copy, PartialEq)]
+enum FfiRet {
+    Int,
+    Float,
+    Str,
+    Void,
+}
+
+#[cfg(feature = "full")]
+fn ffi_ints(args: &[Value]) -> Vec<i64> {
+    args.iter().map(|v| v.as_num().unwrap_or(0.0) as i64).collect()
+}
+
+#[cfg(feature = "full")]
+fn parse_ffi_types(s: &str) -> Vec<FfiTy> {
+    if s.trim().is_empty() {
+        return Vec::new();
+    }
+    s.split(',')
+        .map(|t| {
+            match t.trim() {
+                "decimal" | "float" | "f" | "double" => FfiTy::Float,
+                "texto" | "string" | "s" | "str" => FfiTy::Str,
+                _ => FfiTy::Int,
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "full")]
+fn parse_ffi_ret(s: &str) -> FfiRet {
+    match s.trim() {
+        "decimal" | "float" | "f" | "double" => FfiRet::Float,
+        "texto" | "string" | "s" | "str" => FfiRet::Str,
+        "void" | "vacio" | "" => FfiRet::Void,
+        _ => FfiRet::Int,
+    }
+}
+
+#[cfg(feature = "full")]
+fn ffi_text_arg(v: &Value) -> Result<(*const std::ffi::c_char, Option<std::ffi::CString>), String> {
+    match v {
+        Value::Str(s) => {
+            let cs = std::ffi::CString::new(s.as_bytes().to_vec())
+                .map_err(|_| "Argumento texto FFI con NUL embebido".to_string())?;
+            Ok((cs.as_ptr(), Some(cs)))
+        }
+        other => match other.as_num() {
+            Some(f) => Ok((f as i64 as *const std::ffi::c_char, None)),
+            None => Err(format!("Argumento FFI inválido para 'texto': {}", other)),
+        },
+    }
+}
+
+#[cfg(feature = "full")]
+fn ffi_ret_str(ptr: *const std::ffi::c_char) -> Value {
+    if ptr.is_null() {
+        return Value::str(String::new());
+    }
+    let s = unsafe { std::ffi::CStr::from_ptr(ptr) };
+    Value::str(s.to_string_lossy().to_string())
+}
+
+#[cfg(feature = "full")]
+fn ffi_call_typed(
+    lib: &libloading::Library,
+    name: &str,
+    tipos: &str,
+    ret: &str,
+    args: &[Value],
+) -> Result<Value, String> {
+    let tys = parse_ffi_types(tipos);
+    let shape: String = tys
+        .iter()
+        .map(|t| match t {
+            FfiTy::Int => 'E',
+            FfiTy::Float => 'F',
+            FfiTy::Str => 'S',
+        })
+        .collect();
+    let n = shape.len();
+    let r = parse_ffi_ret(ret);
+    if shape == "E".repeat(n) {
+        ffi_int_arms!(args, lib, name, n, r,
+            (0, I, Int), (1, I, Int), (2, I, Int), (3, I, Int),
+            (4, I, Int), (5, I, Int), (6, I, Int), (7, I, Int),
+            (8, I, Int), (9, I, Int), (10, I, Int), (11, I, Int),
+            (12, I, Int),
+            (0, F, Float), (1, F, Float), (2, F, Float), (3, F, Float),
+            (4, F, Float), (5, F, Float), (6, F, Float), (7, F, Float),
+            (8, F, Float), (9, F, Float), (10, F, Float), (11, F, Float),
+            (12, F, Float),
+            (0, S, Str), (1, S, Str), (2, S, Str), (3, S, Str),
+            (4, S, Str), (5, S, Str), (6, S, Str), (7, S, Str),
+            (8, S, Str), (9, S, Str), (10, S, Str), (11, S, Str),
+            (12, S, Str),
+            (0, V, Void), (1, V, Void), (2, V, Void), (3, V, Void),
+            (4, V, Void), (5, V, Void), (6, V, Void), (7, V, Void),
+            (8, V, Void), (9, V, Void), (10, V, Void), (11, V, Void),
+            (12, V, Void),
+        );
+    }
+    match (shape.as_str(), r) {
+        ("S", FfiRet::Int) => {
+            let (p0, _k0) = ffi_text_arg(&args[0])?;
+            let sym: libloading::Symbol<unsafe extern "C" fn(*const std::ffi::c_char) -> i64> =
+                unsafe { lib.get(name.as_bytes()) }
+                    .map_err(|e| format!("Símbolo '{}' no encontrado: {}", name, e))?;
+            Ok(Value::Int(unsafe { sym(p0) }))
+        }
+        ("S", FfiRet::Str) => {
+            let (p0, _k0) = ffi_text_arg(&args[0])?;
+            let sym: libloading::Symbol<
+                unsafe extern "C" fn(*const std::ffi::c_char) -> *const std::ffi::c_char,
+            > = unsafe { lib.get(name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", name, e))?;
+            Ok(ffi_ret_str(unsafe { sym(p0) }))
+        }
+        ("SS", FfiRet::Int) => {
+            let (p0, _k0) = ffi_text_arg(&args[0])?;
+            let (p1, _k1) = ffi_text_arg(&args[1])?;
+            let sym: libloading::Symbol<
+                unsafe extern "C" fn(*const std::ffi::c_char, *const std::ffi::c_char) -> i64,
+            > = unsafe { lib.get(name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", name, e))?;
+            Ok(Value::Int(unsafe { sym(p0, p1) }))
+        }
+        ("ESE", FfiRet::Int) => {
+            let a0 = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+            let (p1, _k1) = ffi_text_arg(args.get(1).ok_or("Faltan argumentos FFI")?)?;
+            let a2 = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
+            let sym: libloading::Symbol<
+                unsafe extern "C" fn(i64, *const std::ffi::c_char, i64) -> i64,
+            > = unsafe { lib.get(name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", name, e))?;
+            Ok(Value::Int(unsafe { sym(a0, p1, a2) }))
+        }
+        ("F", FfiRet::Float) => {
+            let f0 = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            let sym: libloading::Symbol<unsafe extern "C" fn(f64) -> f64> =
+                unsafe { lib.get(name.as_bytes()) }
+                    .map_err(|e| format!("Símbolo '{}' no encontrado: {}", name, e))?;
+            Ok(Value::Float(unsafe { sym(f0) }))
+        }
+        ("F", FfiRet::Int) => {
+            let f0 = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            let sym: libloading::Symbol<unsafe extern "C" fn(f64) -> i64> =
+                unsafe { lib.get(name.as_bytes()) }
+                    .map_err(|e| format!("Símbolo '{}' no encontrado: {}", name, e))?;
+            Ok(Value::Int(unsafe { sym(f0) }))
+        }
+        _ => Err(format!(
+            "Firma FFI no soportada: args '{}' con retorno '{}'",
+            shape, ret
+        )),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CallFrame {
     pub func_name: String,
@@ -1431,7 +1736,12 @@ impl VM {
         if name == "__ffi_llamar" || name == "__ffi_call" {
             let lib_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-            let call_args: Vec<Value> = args.iter().skip(2).cloned().collect();
+            let tipos = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
+            let ret = args.get(4).map(|v| format!("{}", v)).unwrap_or_default();
+            let elems: Vec<Value> = match args.get(3) {
+                Some(Value::Array(a)) => a.to_vec(),
+                _ => Vec::new(),
+            };
             let lib_ptr = match self.ffi_libraries.get(&lib_id) {
                 Some(&p) => p,
                 None => {
@@ -1443,26 +1753,45 @@ impl VM {
                 }
             };
             let lib = unsafe { &*(lib_ptr as *const libloading::Library) };
-            let result = unsafe {
-                let sym: libloading::Symbol<
-                    unsafe extern "C" fn(i64, i64, i64, i64, i64, i64) -> i64,
-                > = match lib.get(fn_name.as_bytes()) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        self.push(Value::Error(Box::new(Value::str(format!(
-                            "Símbolo '{}' no encontrado: {}",
-                            fn_name, e
-                        )))));
-                        return Some(Ok(()));
-                    }
-                };
-                let mut a = [0i64; 6];
-                for (i, arg) in call_args.iter().enumerate().take(6) {
-                    a[i] = arg.as_num().unwrap_or(0.0) as i64;
+            match ffi_call_typed(lib, &fn_name, &tipos, &ret, &elems) {
+                Ok(v) => self.push(v),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "__ffi_llamar_nv" {
+            let lib_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+            let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            let tipos = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
+            let ret = args.get(3).map(|v| format!("{}", v)).unwrap_or_default();
+            let base = args.get(4).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+            let tys = parse_ffi_types(&tipos);
+            let mut elems = Vec::with_capacity(tys.len());
+            for (i, ty) in tys.iter().enumerate() {
+                let off = base + i * 8;
+                let lo = unsafe { *(off as *const u32) } as u64;
+                let hi = unsafe { *((off + 4) as *const u32) } as u64;
+                match ty {
+                    FfiTy::Float => elems.push(Value::Float(f64::from_bits(lo | (hi << 32)))),
+                    _ => elems.push(Value::Int((lo | (hi << 32)) as i64)),
                 }
-                Value::Int(sym(a[0], a[1], a[2], a[3], a[4], a[5]))
+            }
+            let lib_ptr = match self.ffi_libraries.get(&lib_id) {
+                Some(&p) => p,
+                None => {
+                    self.push(Value::Error(Box::new(Value::str(format!(
+                        "Biblioteca '{}' no encontrada",
+                        lib_id
+                    )))));
+                    return Some(Ok(()));
+                }
             };
-            self.push(result);
+            let lib = unsafe { &*(lib_ptr as *const libloading::Library) };
+            match ffi_call_typed(lib, &fn_name, &tipos, &ret, &elems) {
+                Ok(v) => self.push(v),
+                Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
+            }
             return Some(Ok(()));
         }
 
@@ -1508,11 +1837,17 @@ impl VM {
 
         if name == "__ffi_escribir" || name == "__ffi_write" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
-            let data = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
+            let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+            let data = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
             let bytes = data.as_bytes();
             if ptr_val != 0 {
                 unsafe {
-                    std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr_val as *mut u8, bytes.len());
+                    std::ptr::copy_nonoverlapping(
+                        bytes.as_ptr(),
+                        (ptr_val + offset) as *mut u8,
+                        bytes.len(),
+                    );
+                    *((ptr_val + offset + bytes.len()) as *mut u8) = 0;
                 }
             }
             self.push(Value::Void);
@@ -1521,11 +1856,16 @@ impl VM {
 
         if name == "__ffi_leer" || name == "__ffi_read" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
-            let len = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+            let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+            let len = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 && len > 0 {
                 let mut buf = vec![0u8; len];
                 unsafe {
-                    std::ptr::copy_nonoverlapping(ptr_val as *const u8, buf.as_mut_ptr(), len);
+                    std::ptr::copy_nonoverlapping(
+                        (ptr_val + offset) as *const u8,
+                        buf.as_mut_ptr(),
+                        len,
+                    );
                 }
                 self.push(Value::str(String::from_utf8_lossy(&buf).to_string()));
             } else {
@@ -1536,9 +1876,14 @@ impl VM {
 
         if name == "__ffi_peek" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+            let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
                 unsafe {
-                    let val = *(ptr_val as *const u32);
+                    let b0 = *((ptr_val + offset) as *const u8) as u32;
+                    let b1 = *((ptr_val + offset + 1) as *const u8) as u32;
+                    let b2 = *((ptr_val + offset + 2) as *const u8) as u32;
+                    let b3 = *((ptr_val + offset + 3) as *const u8) as u32;
+                    let val = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
                     self.push(Value::Int(val as i64));
                 }
             } else {
@@ -1549,10 +1894,14 @@ impl VM {
 
         if name == "__ffi_poke" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
-            let val = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as u32;
+            let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
+            let val = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as u32;
             if ptr_val != 0 {
                 unsafe {
-                    *(ptr_val as *mut u32) = val;
+                    *((ptr_val + offset) as *mut u8) = val as u8;
+                    *((ptr_val + offset + 1) as *mut u8) = (val >> 8) as u8;
+                    *((ptr_val + offset + 2) as *mut u8) = (val >> 16) as u8;
+                    *((ptr_val + offset + 3) as *mut u8) = (val >> 24) as u8;
                 }
             }
             self.push(Value::Void);

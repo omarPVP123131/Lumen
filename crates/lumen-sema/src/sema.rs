@@ -2368,6 +2368,7 @@ impl SemanticAnalyzer {
                                     TypeInfo::Texto
                                 } else if callee == "__ffi_llamar"
                                     || callee == "__ffi_call"
+                                    || callee == "__ffi_llamar_nv"
                                     || callee == "__ffi_asignar"
                                     || callee == "__ffi_alloc"
                                     || callee == "__ffi_liberar"

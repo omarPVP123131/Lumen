@@ -988,6 +988,7 @@ fn is_builtin(name: &str) -> bool {
             | "__ffi_leer"
             | "__ffi_liberar"
             | "__ffi_llamar"
+            | "__ffi_llamar_nv"
             | "__ffi_load"
             | "__ffi_peek"
             | "__ffi_poke"

@@ -274,6 +274,15 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - ⚠️ **Trampa harness**: `test_vm.ps1` debe correrse desde la RAÍZ del repo — `entrada_vm.txt` contiene rutas relativas `examples/x.nvc`; desde `stdlib/compiler` la VM LÚMEN no encuentra el archivo → FALLAS masivas falsas (OK=1 FALLAS=30).
 - **Pendientes**: release v2.4.0 (tag + docs) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
 
+**Progreso (10 Ago — sesión AI · FFI completado en la VM LÚMEN — batería 42/43):**
+- **Macros FFI reescritas en vm.rs** (eliminado el enfoque de macros anidadas que rompía la compilación): `ffi_int_call!` con **13 arms explícitos (0-12)** — cada uno con firma completa `unsafe extern "C" fn(i64, ...) -> ffi_rt_ty!($rtk)`, `let v = ffi_ints($args);` y `sym(v[0], ...)` directo (higiene resuelta, eliminados `ints!`/`int_vals!`); `ffi_int_arms!` con `$n:tt` despacha a `ffi_int_call!($nlit, ...)`. `ffi_rt_ty!`: I→i64, F→f64, S→*const c_char, V→(); `ffi_rt_conv!` con arm V = `{{ $e; Value::Void }}` (antes `$e` se ignoraba → las funciones void NUNCA se invocaban). Todos los `lib.get(...)` envueltos en `unsafe {}` (libloading 0.9 lo exige). `cargo build -p lumen-vm`/`lumen-cli` limpio.
+- **`__ffi_peek`/`__ffi_poke` byte-a-byte LE** (vm.rs ~1870): los accesos `*mut u32` con offset 1-3 paniqueaban "misaligned pointer dereference" → ahora 4×u8 LE.
+- **CAUSA RAÍZ `Error de tipo: Sub requires numbers` en bin()**: `__str_split(t, ",")` dentro del handler `__ffi_llamar` de vm.nv era ejecutado por la VM **host** como builtin nativo → devolvía `Array` real de strings reales SIN boxear → `tipos[i] - 1000000000` con `Str` real → crash (diagnosticado con DBG temporales: a0-a4 llegaban bien, n=1, bloc=pointer OK — el fallo era `tipos[0]`). **Fix**: boxeo manual de las partes (stl_din.agregar + `tipos.agregar(1e9+largo(stl)+largo(stl_din)-1)`) en el handler.
+- **CAUSA RAÍZ `stricmp=120` vs `0`**: `__ffi_escribir` (vm.rs:1838) copiaba `bytes.len()` SIN null terminator → `_stricmp("Hola", "hola")` leía basura tras el string (el camino directo usaba `CString` con \0; la VM LÚMEN reservaba largo+1 pero escribía solo largo). **Fix**: escribir `*((ptr+offset+len) as *mut u8) = 0` tras la copia.
+- **Resultados**: `test_ffi_min` (pid>0 true), `test_ffi_avanzado` (strlen=10, stricmp=0, sqrt=10) y `test_connect_direct` (socket, inet_addr=584628317, bytes AF_INET/puerto 80, connect=-1, **WSAGetLastError=10060 real**) **byte-IDÉNTICOS en ambas VMs** · batería `test_vm.ps1` ampliada +3 tests FFI → **OK=42 FALLAS=1** (solo stress_fecha flaky timing) · `vm.nvc` (113,971 B) y `vm_self.nvc` (113,971 B) regenerados con `compiler_v4_self.nvc` · cargo test --release 0 FAILED (166 e2e + unit).
+- ⚠️ **Trampa harness**: `test_vm.ps1` usa `target\release\lumen.exe` — tras editar vm.rs hay que `cargo build --release -p lumen-cli` o los natives FFI no existen (RUNTIME-ERROR `__ffi_llamar_nv` no definida).
+- **Pendientes**: commit → Playground Web (`lumen serve` real + UI) → Etapa 3 (lumen-aot → C transpiler + `lumen_rt.h`) → AI/ML (Fases 186-200).
+
 
 ---
 
