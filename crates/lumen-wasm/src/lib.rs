@@ -11,6 +11,16 @@ use std::sync::Mutex;
 #[cfg(feature = "wasm")]
 static REGISTERED_JS_FUNCTIONS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
+/// Panic hook temporal de diagnóstico: vuelca el mensaje a la consola JS
+/// (js_sys ya es dependencia del crate — sin librerías nuevas).
+#[cfg(feature = "wasm")]
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let msg = info.to_string().replace('\\', "\\\\").replace('"', "\\\"");
+        let _ = js_sys::eval(&format!("console.error('LUMEN-PANIC: {}')", msg));
+    }));
+}
+
 // ── JS eval bridge (WASM target) ──────────────────────────────────────────
 /// Enhanced JS eval that handles the `__lumen_call` protocol.
 /// When the VM emits `__lumen_call('fnName', [args...])`, this eval runs it
@@ -78,6 +88,7 @@ impl LumenRuntime {
     /// funcionen desde LÚMEN.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
+        install_panic_hook();
         let _ = lumen_vm::vm::JS_EVAL.set(js_eval);
 
         // Initialize the registered functions map
@@ -171,6 +182,13 @@ impl LumenRuntime {
         check_lumen(source)
     }
 
+    /// Compila el código fuente y devuelve el bytecode `.nvc` como bytes
+    /// (descargable desde JS como Blob). Incluye imports de la stdlib embebida.
+    /// Devuelve `Err(String)` con el error del compilador si falla.
+    pub fn compile_to_bytes(&self, source: &str) -> Result<Vec<u8>, String> {
+        compile_to_bytes(source)
+    }
+
     /// Devuelve la lista de tokens producidos por el lexer (depuración).
     pub fn tokenize(&self, source: &str) -> String {
         let lexer = lumen_lexer::Lexer::new(source);
@@ -230,27 +248,29 @@ impl LumenRuntime {
 
 // ── Lógica común de compilación/ejecución ─────────────────────────────────
 
-/// Compila y ejecuta código fuente LÚMEN. Devuelve la salida o un mensaje de error.
-pub fn run_lumen(source: &str) -> String {
-    // Lexer
-    let lexer = lumen_lexer::Lexer::new(source);
-    let (tokens, lex_errors) = lexer.tokenize();
-    if !lex_errors.is_empty() {
-        return format!(
-            "Error léxico [{}:{}]: {}",
-            lex_errors[0].pos.line, lex_errors[0].pos.col, lex_errors[0].message
-        );
-    }
+/// Stdlib embebida generada por build.rs (`stdlib/*.nv` del repo).
+/// Clave = nombre base del archivo, valor = contenido.
+include!(concat!(env!("OUT_DIR"), "/embedded_stdlib.rs"));
 
-    // Parser
-    let parser = lumen_parser::Parser::new(tokens);
-    let (mut program, parse_errors) = parser.parse();
-    if !parse_errors.is_empty() {
-        return format!(
-            "Error sintáctico [{}]: {}",
-            parse_errors[0].span.start.line, parse_errors[0].message
-        );
-    }
+#[cfg(not(feature = "wasm"))]
+use std::collections::HashMap;
+
+fn memory_stdlib() -> HashMap<String, String> {
+    STDLIB_FILES
+        .iter()
+        .map(|(name, content)| (name.to_string(), content.to_string()))
+        .collect()
+}
+
+/// Compila (con imports resueltos desde la stdlib embebida) y ejecuta.
+pub fn run_lumen(source: &str) -> String {
+    // Resolver imports con loader virtual (stdlib embebida en memoria)
+    let mut loader = lumen_sema::ModuleLoader::with_memory_files(memory_stdlib());
+    let mut program = match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv"))
+    {
+        Ok(p) => p,
+        Err(e) => return format!("Error de imports: {}", module_error_str(&e)),
+    };
 
     // Semantic analysis
     let sema = lumen_sema::SemanticAnalyzer::new();
@@ -273,26 +293,46 @@ pub fn run_lumen(source: &str) -> String {
     }
 }
 
+fn module_error_str(e: &lumen_sema::ModuleError) -> String {
+    use lumen_sema::ModuleError;
+    match e {
+        ModuleError::Io { path, message } => format!("{}: {}", path.display(), message),
+        ModuleError::Lex { details, .. } => details.join("\n"),
+        ModuleError::Parse { details, .. } => details.join("\n"),
+        ModuleError::Circular { path, span } => format!(
+            "Import circular en {}:{}:{}",
+            path.display(),
+            span.start.line,
+            span.start.col
+        ),
+    }
+}
+
+/// Compila (con imports) y devuelve el bytecode .nvc como bytes.
+pub fn compile_to_bytes(source: &str) -> Result<Vec<u8>, String> {
+    let mut loader = lumen_sema::ModuleLoader::with_memory_files(memory_stdlib());
+    let mut program = loader
+        .resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv"))
+        .map_err(|e| module_error_str(&e))?;
+    let sema = lumen_sema::SemanticAnalyzer::new();
+    let sem_errors = sema.analyze(&mut program);
+    if !sem_errors.is_empty() {
+        return Err(format!("Error semántico: {}", sem_errors[0].message));
+    }
+    let ir_program = lumen_ir::IRBuilder::new().build(&program);
+    let (bc, _warnings) = lumen_codegen::Codegen::new().generate(&ir_program);
+    Ok(bc.encode())
+}
+
 /// Analiza el código sin ejecutarlo. Devuelve `Some(error)` si hay errores,
 /// `None` si todo está bien.
 pub fn check_lumen(source: &str) -> Option<String> {
-    let lexer = lumen_lexer::Lexer::new(source);
-    let (tokens, lex_errors) = lexer.tokenize();
-    if !lex_errors.is_empty() {
-        return Some(format!(
-            "Error léxico [{}:{}]: {}",
-            lex_errors[0].pos.line, lex_errors[0].pos.col, lex_errors[0].message
-        ));
-    }
-
-    let parser = lumen_parser::Parser::new(tokens);
-    let (mut program, parse_errors) = parser.parse();
-    if !parse_errors.is_empty() {
-        return Some(format!(
-            "Error sintáctico [{}]: {}",
-            parse_errors[0].span.start.line, parse_errors[0].message
-        ));
-    }
+    let mut loader = lumen_sema::ModuleLoader::with_memory_files(memory_stdlib());
+    let mut program = match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv"))
+    {
+        Ok(p) => p,
+        Err(e) => return Some(format!("Error de imports: {}", module_error_str(&e))),
+    };
 
     let sema = lumen_sema::SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
@@ -301,4 +341,22 @@ pub fn check_lumen(source: &str) -> Option<String> {
     }
 
     None
+}
+
+
+// ── Introspección del pkg embebido (diagnóstico) ─────────────────────
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn stdlib_file_count() -> usize {
+    STDLIB_FILES.len()
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn stdlib_file_size(name: &str) -> usize {
+    STDLIB_FILES
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, c)| c.len())
+        .unwrap_or(0)
 }

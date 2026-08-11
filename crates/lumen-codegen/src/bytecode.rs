@@ -196,7 +196,7 @@ impl Bytecode {
                 buf.extend_from_slice(&(p.len() as u32).to_le_bytes());
                 buf.extend_from_slice(p.as_bytes());
             }
-            buf.extend_from_slice(&func.start.to_le_bytes() as &[u8]);
+            buf.extend_from_slice(&(func.start as u64).to_le_bytes());
         }
         buf.extend_from_slice(&(self.instructions.len() as u32).to_le_bytes());
         for instr in &self.instructions {

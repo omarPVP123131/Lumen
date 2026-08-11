@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -6,6 +6,21 @@ use lumen_lexer::token::Span;
 use lumen_lexer::Lexer;
 use lumen_parser::ast::*;
 use lumen_parser::Parser;
+
+/// Prefijo virtual para módulos resueltos desde memoria (playground WASM).
+/// Los paths con este prefijo NO existen en disco; `read_module_source`
+/// los resuelve desde `ModuleLoader::memory_files`.
+pub const VIRTUAL_MEM_PREFIX: &str = "__lumen_mem__";
+
+/// True si el path pertenece al filesystem virtual (playground WASM).
+/// Las rutas virtuales NO deben tocar disco: en wasm el fs paniquea.
+fn is_virtual(path: &Path) -> bool {
+    path.components()
+        .next()
+        .and_then(|c| c.as_os_str().to_str())
+        .map(|s| s == VIRTUAL_MEM_PREFIX)
+        .unwrap_or(false)
+}
 
 #[derive(Debug)]
 pub enum ModuleError {
@@ -20,6 +35,7 @@ pub struct ModuleLoader {
     visited: HashSet<PathBuf>,
     emitted: HashSet<PathBuf>,
     known_prefixes: HashSet<String>,
+    memory_files: HashMap<String, String>,
 }
 
 impl ModuleLoader {
@@ -29,11 +45,64 @@ impl ModuleLoader {
             visited: HashSet::new(),
             emitted: HashSet::new(),
             known_prefixes: HashSet::new(),
+            memory_files: HashMap::new(),
         }
     }
 
     pub fn with_default_search_paths() -> Self {
         Self::new(Vec::new())
+    }
+
+    /// Crea un loader con un filesystem virtual en memoria (clave = nombre
+    /// base del archivo, p. ej. `"texto.nv"`). Los imports se resuelven desde
+    /// memoria ANTES de tocar disco; el comportamiento de disco queda intacto
+    /// si la clave no existe. Usado por el runtime WASM (playground).
+    pub fn with_memory_files(memory_files: HashMap<String, String>) -> Self {
+        let mut loader = Self::with_default_search_paths();
+        loader.memory_files = memory_files;
+        loader
+    }
+
+    /// Resuelve un import desde el filesystem virtual en memoria por nombre
+    /// base (p. ej. `texto.nv` → `__lumen_mem__/texto.nv`).
+    fn resolve_from_memory(&self, name: &str) -> Option<PathBuf> {
+        if name.starts_with(VIRTUAL_MEM_PREFIX) {
+            return Some(PathBuf::from(name));
+        }
+        let base = Path::new(name).file_name()?.to_str()?;
+        let extensions = [".nv", ".lumen"];
+        let mut candidates = vec![base.to_string()];
+        for ext in &extensions {
+            if !base.ends_with(ext) {
+                candidates.push(format!("{}{}", base, ext));
+            }
+        }
+        for c in candidates {
+            if self.memory_files.contains_key(&c) {
+                return Some(PathBuf::from(format!("{}/{}", VIRTUAL_MEM_PREFIX, c)));
+            }
+        }
+        None
+    }
+
+    /// Lee el contenido de un módulo: desde memoria si el path es virtual,
+    /// desde disco en caso contrario.
+    fn read_module_source(&self, path: &Path) -> Result<String, ModuleError> {
+        if path.starts_with(VIRTUAL_MEM_PREFIX) {
+            if let Some(name) = path.file_name().and_then(|f| f.to_str()) {
+                if let Some(src) = self.memory_files.get(name) {
+                    return Ok(src.clone());
+                }
+            }
+            return Err(ModuleError::Io {
+                path: path.to_path_buf(),
+                message: format!("Módulo virtual no encontrado: '{}'", path.display()),
+            });
+        }
+        fs::read_to_string(path).map_err(|e| ModuleError::Io {
+            path: path.to_path_buf(),
+            message: format!("No se pudo leer '{}': {}", path.display(), e),
+        })
     }
 
     pub fn resolve_imports(
@@ -51,8 +120,12 @@ impl ModuleLoader {
     fn flatten(&mut self, program: Program, current_path: &Path) -> Result<Program, ModuleError> {
         // Canonicalizar para comparar rutas de forma robusta (Windows: fs::canonicalize
         // añade el prefijo \\?\ — comparar crudo vs canonical nunca da igualdad).
-        let current_norm =
-            fs::canonicalize(current_path).unwrap_or_else(|_| current_path.to_path_buf());
+        let current_norm = if is_virtual(current_path) {
+            // En wasm el fs paniquea: las rutas virtuales se usan tal cual.
+            current_path.to_path_buf()
+        } else {
+            fs::canonicalize(current_path).unwrap_or_else(|_| current_path.to_path_buf())
+        };
         let mut result = Vec::new();
         for node in program {
             match node {
@@ -60,7 +133,9 @@ impl ModuleLoader {
                     if path == "ingles" || path == "english" {
                         continue;
                     }
-                    let current_dir = if current_norm.is_dir() {
+                    let current_dir = if is_virtual(&current_norm) {
+                        current_norm.clone()
+                    } else if current_norm.is_dir() {
                         current_norm.clone()
                     } else {
                         current_norm
@@ -87,10 +162,7 @@ impl ModuleLoader {
                             span,
                         });
                     }
-                    let source = fs::read_to_string(&resolved).map_err(|e| ModuleError::Io {
-                        path: resolved.clone(),
-                        message: format!("No se pudo leer '{}': {}", resolved.display(), e),
-                    })?;
+                    let source = self.read_module_source(&resolved)?;
                     let imported_program = parse_source(&source, &resolved)?;
                     let _parent = resolved.parent().unwrap_or(Path::new("."));
                     let flat = self.flatten(imported_program, &resolved)?;
@@ -120,10 +192,25 @@ impl ModuleLoader {
         current_path: &Path,
     ) -> Result<PathBuf, ModuleError> {
         let extensions = [".nv", ".lumen"];
+        // Playground WASM: si el importador vive en el filesystem virtual,
+        // todo lo que puede resolver está en memoria — nunca tocar disco
+        // (en wasm fs::exists/canonicalize paniquean).
+        if is_virtual(current_dir) {
+            if let Some(mem) = self.resolve_from_memory(path) {
+                return Ok(mem);
+            }
+            return Err(ModuleError::Io {
+                path: current_dir.join(path),
+                message: format!("Módulo no encontrado en la stdlib embebida: '{}'", path),
+            });
+        }
         // Skip de auto-importación: si la ruta as-is cae sobre el archivo que se
         // está aplanando (p. ej. `examples/graficos_avanzado.nv` importando
         // "graficos_avanzado.nv"), continuar hacia los search_paths (stdlib).
         let is_self = |p: &Path| -> bool {
+            if is_virtual(p) {
+                return false;
+            }
             fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()) == current_path
         };
         if path.contains('.') || path.contains('/') || path.contains('\\') {
@@ -153,6 +240,9 @@ impl ModuleLoader {
                     }
                 }
             }
+            if let Some(mem) = self.resolve_from_memory(path) {
+                return Ok(mem);
+            }
             Err(ModuleError::Io {
                 path: current_dir.join(path),
                 message: format!("Archivo no encontrado: '{}'", path),
@@ -171,6 +261,9 @@ impl ModuleLoader {
                         return Ok(fs::canonicalize(&p).unwrap_or(p));
                     }
                 }
+            }
+            if let Some(mem) = self.resolve_from_memory(path) {
+                return Ok(mem);
             }
             Err(ModuleError::Io {
                 path: current_dir.join(format!("{}.nv", path)),
@@ -1088,4 +1181,48 @@ fn is_builtin(name: &str) -> bool {
             | "__tcp_connect_async"
             | "__tcp_conectar_async"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_loader_resolves_imports_from_memory() {
+        let mut mem = HashMap::new();
+        mem.insert(
+            "util_mem.nv".to_string(),
+            "funcion entero duplicar(entero x) {\n    retornar x * 2;\n}\n".to_string(),
+        );
+        let mut loader = ModuleLoader::with_memory_files(mem);
+        let source = "importar \"util_mem.nv\";\nfuncion entero main() {\n    retornar util_mem__duplicar(21);\n}\n";
+        let program = loader
+            .resolve_imports(source, Path::new("__lumen_mem__/main.nv"))
+            .expect("debe resolver imports desde memoria");
+        let text = format!("{:?}", program);
+        assert!(
+            text.contains("util_mem__duplicar"),
+            "la función importada debe estar prefijada: {}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_memory_loader_fallback_to_disk_still_works() {
+        let mut loader = ModuleLoader::with_default_search_paths();
+        let program = loader
+            .resolve_imports("funcion entero main() { retornar 42; }", Path::new("__lumen_mem__/main.nv"))
+            .expect("código sin imports debe resolver");
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_memory_loader_missing_module_reports_error() {
+        let mut loader = ModuleLoader::with_memory_files(HashMap::new());
+        let result = loader.resolve_imports(
+            "importar \"no_existe.nv\";",
+            Path::new("__lumen_mem__/main.nv"),
+        );
+        assert!(matches!(result, Err(ModuleError::Io { .. })));
+    }
 }

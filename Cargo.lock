@@ -1335,8 +1335,11 @@ dependencies = [
 name = "lumen-sema"
 version = "1.6.0"
 dependencies = [
+ "lumen-codegen",
+ "lumen-ir",
  "lumen-lexer",
  "lumen-parser",
+ "lumen-vm",
  "serde",
  "thiserror",
 ]

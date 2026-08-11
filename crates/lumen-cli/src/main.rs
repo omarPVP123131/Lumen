@@ -1058,6 +1058,141 @@ fn find_wasm_web_root() -> Option<PathBuf> {
     None
 }
 
+fn example_category(name: &str) -> &'static str {
+    if name.starts_with("tui_") {
+        "tui"
+    } else if name.starts_with("graficos_") {
+        "graficos"
+    } else if name.starts_with("gui_") {
+        "gui"
+    } else if name.starts_with("test_") {
+        "tests"
+    } else if name.starts_with("sprint") {
+        "sprint"
+    } else if name.contains("ffi") || name.contains("conect") {
+        "ffi"
+    } else if name.contains("http") || name.contains("red") || name.contains("sistema") {
+        "sistema"
+    } else if name.contains("json") || name.contains("csv") || name.contains("sqlite") {
+        "datos"
+    } else if name.contains("audio") || name.contains("charts") {
+        "media"
+    } else {
+        "core"
+    }
+}
+
+fn first_comment_line(content: &str) -> String {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let c = trimmed.trim_start_matches(['/', '*', '#', ' ']);
+        if !c.is_empty() && (trimmed.starts_with("//") || trimmed.starts_with('#') || trimmed.starts_with("/*")) {
+            return c.trim().to_string();
+        }
+    }
+    String::new()
+}
+
+fn build_examples_index(examples_dir: &Path) -> String {
+    let mut entries = Vec::new();
+    if let Ok(read) = fs::read_dir(examples_dir) {
+        let mut files: Vec<_> = read
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |x| x == "nv"))
+            .collect();
+        files.sort_by_key(|e| e.file_name());
+        for entry in files {
+            let path = entry.path();
+            let file = entry.file_name().to_string_lossy().to_string();
+            let name = path
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let description = fs::read_to_string(&path)
+                .ok()
+                .map(|c| first_comment_line(&c))
+                .unwrap_or_default();
+            entries.push(format!(
+                "{{\"name\":\"{}\",\"file\":\"{}\",\"category\":\"{}\",\"description\":\"{}\"}}",
+                escape_json(&name),
+                escape_json(&file),
+                example_category(&name),
+                escape_json(&description)
+            ));
+        }
+    }
+    format!("[{}]", entries.join(","))
+}
+
+fn escape_json(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', " ")
+        .replace('\r', " ")
+}
+
+fn handle_api_request(stream: &mut std::net::TcpStream, path: &str, root: &Path) -> bool {
+    let examples_dir = root
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.join("examples"))
+        .unwrap_or_default();
+    let json_ok = |stream: &mut std::net::TcpStream, body: &str| {
+        let header = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = stream.write_all(header.as_bytes());
+        let _ = stream.write_all(body.as_bytes());
+    };
+    match path {
+        "/api/health" => {
+            json_ok(
+                stream,
+                &format!(
+                    "{{\"status\":\"ok\",\"version\":\"{}\",\"wasm\":{}}}",
+                    VERSION,
+                    if root.join("pkg/lumen_wasm_bg.wasm").is_file() {
+                        "true"
+                    } else {
+                        "false"
+                    }
+                ),
+            );
+            true
+        }
+        "/api/examples" => {
+            let index = build_examples_index(&examples_dir);
+            json_ok(stream, &index);
+            true
+        }
+        p if p.starts_with("/api/examples/") => {
+            let file = p.trim_start_matches("/api/examples/");
+            if file.contains("..") || file.contains('\\') {
+                let _ = stream.write_all("HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found".as_bytes());
+                return true;
+            }
+            let safe = examples_dir.join(file);
+            match fs::read_to_string(&safe) {
+                Ok(content) => {
+                    let body = format!(
+                        "{{\"name\":\"{}\",\"file\":\"{}\",\"content\":\"{}\"}}",
+                        escape_json(file.trim_end_matches(".nv")),
+                        escape_json(file),
+                        escape_json(&content)
+                    );
+                    json_ok(stream, &body);
+                }
+                Err(_) => {
+                    let _ = stream.write_all("HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found".as_bytes());
+                }
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
 fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
     use std::io::BufRead;
 
@@ -1085,10 +1220,16 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
         return;
     }
     let raw_path = parts[1];
-    let rel = if raw_path == "/" {
+    let path_no_query = raw_path.split('?').next().unwrap_or(raw_path);
+    if path_no_query.starts_with("/api/") {
+        if handle_api_request(stream, path_no_query, root) {
+            return;
+        }
+    }
+    let rel = if path_no_query == "/" {
         "web/index.html".to_string()
     } else {
-        raw_path.trim_start_matches('/').to_string()
+        path_no_query.trim_start_matches('/').to_string()
     };
 
     let status_line = "HTTP/1.1 200 OK\r\n";

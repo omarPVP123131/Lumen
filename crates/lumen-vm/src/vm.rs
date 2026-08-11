@@ -2759,6 +2759,9 @@ impl VM {
             .is_empty();
         let mut prof: std::collections::HashMap<String, (u64, f64)> =
             std::collections::HashMap::new();
+        // Instant::now() NO existe en wasm32-unknown-unknown (paniquea);
+        // en wasm `profile` es siempre false (env::var falla) — se evita.
+        #[cfg(not(target_arch = "wasm32"))]
         let prof_start = std::time::Instant::now();
         loop {
             if self.ip >= self.bytecode.instructions.len() {
@@ -2787,6 +2790,7 @@ impl VM {
                 }
             }
             if profile {
+                #[cfg(not(target_arch = "wasm32"))]
                 let t0 = std::time::Instant::now();
                 let opname = match &instr {
                     Instruction::WithIdx(_op @ Opcode::Call, nidx) => {
@@ -2802,7 +2806,10 @@ impl VM {
                     Instruction::WithIdx(op, _) => format!("{:?}", op),
                 };
                 let res = self.execute(&instr);
+                #[cfg(not(target_arch = "wasm32"))]
                 let e = t0.elapsed().as_secs_f64();
+                #[cfg(target_arch = "wasm32")]
+                let e = 0.0;
                 let ent = prof.entry(opname).or_insert((0, 0.0));
                 ent.0 += 1;
                 ent.1 += e;
@@ -2812,7 +2819,10 @@ impl VM {
             }
         }
         if profile {
+            #[cfg(not(target_arch = "wasm32"))]
             let total = prof_start.elapsed().as_secs_f64();
+            #[cfg(target_arch = "wasm32")]
+            let total = 0.0;
             let mut v: Vec<(String, u64, f64)> =
                 prof.into_iter().map(|(k, (c, t))| (k, c, t)).collect();
             v.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
@@ -3243,20 +3253,24 @@ impl VM {
             Opcode::Ret => {
                 let ret_val = self.pop().unwrap_or(Value::Void);
                 #[cfg(feature = "full")]
-                if let Some(coro_id) = self.current_coro.clone() {
-                    if let Some(coro) = self.coroutines.get_mut(&coro_id) {
-                        coro.is_done = true;
+                {
+                    if let Some(coro_id) = self.current_coro.clone() {
+                        if let Some(coro) = self.coroutines.get_mut(&coro_id) {
+                            coro.is_done = true;
+                        }
+                        self.current_coro = None;
+                        if let Some((saved_stack, saved_locals, saved_ip)) = self.main_saved.take() {
+                            self.stack = saved_stack;
+                            self.locals = saved_locals;
+                            self.ip = saved_ip;
+                        } else {
+                            self.ip = usize::MAX;
+                        }
+                        self.push(ret_val);
+                        return Ok(());
                     }
-                    self.current_coro = None;
-                    if let Some((saved_stack, saved_locals, saved_ip)) = self.main_saved.take() {
-                        self.stack = saved_stack;
-                        self.locals = saved_locals;
-                        self.ip = saved_ip;
-                    } else {
-                        self.ip = usize::MAX;
-                    }
-                    self.push(ret_val);
-                } else if let Some(frame) = self.call_stack.pop() {
+                }
+                if let Some(frame) = self.call_stack.pop() {
                     self.locals.pop();
                     self.ip = frame.return_ip;
                     self.push(ret_val);

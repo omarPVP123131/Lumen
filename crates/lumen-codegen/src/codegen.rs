@@ -8,7 +8,7 @@ pub struct Codegen {
     func_starts: HashMap<String, usize>,
     string_cache: HashMap<String, usize>,
     int_cache: HashMap<i64, usize>,
-    num_cache: HashMap<usize, usize>,
+    num_cache: HashMap<u64, usize>,
     name_cache: HashMap<String, usize>,
 }
 
@@ -54,7 +54,7 @@ impl Codegen {
     }
 
     fn intern_num(&mut self, n: f64) -> usize {
-        let key = n.to_bits() as usize;
+        let key = n.to_bits();
         if let Some(&idx) = self.num_cache.get(&key) {
             idx
         } else {

@@ -2857,9 +2857,10 @@ impl Parser {
     // --- Helpers ---
 
     fn advance(&mut self) -> Option<Token> {
-        if !self.is_at_end() {
-            self.pos += 1;
+        if self.is_at_end() {
+            return self.tokens.get(self.pos).cloned();
         }
+        self.pos += 1;
         self.previous_token()
     }
 
