@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use unicode_normalization::UnicodeNormalization;
 
 pub static JS_EVAL: OnceLock<fn(&str) -> String> = OnceLock::new();
-#[cfg(feature = "full")]
+#[cfg(any(feature = "extra", feature = "full"))]
 use crate::coro_ffi::Coroutine;
 #[cfg(feature = "full")]
 use crate::crypto_ffi::Bcrypt;
@@ -371,7 +371,7 @@ impl VmError {
     }
 }
 
-#[cfg(feature = "full")]
+#[cfg(any(feature = "extra", feature = "full"))]
 type ChannelCell = (
     Option<std::sync::mpsc::Sender<Value>>,
     Option<std::sync::mpsc::Receiver<Value>>,
@@ -394,13 +394,14 @@ pub struct VM {
     bcrypt: Option<Arc<Bcrypt>>,
     #[cfg(feature = "full")]
     gui_windows: HashMap<String, GuiWindow>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     coroutines: HashMap<String, Coroutine>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     current_coro: Option<String>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     #[allow(clippy::type_complexity)]
     main_saved: Option<(Vec<Value>, Vec<HashMap<String, Value, FixHasher>>, usize)>,
+    #[cfg(any(feature = "extra", feature = "full"))]
     tcp_listener: Option<std::net::TcpListener>,
     #[cfg(feature = "full")]
     #[allow(dead_code)]
@@ -408,23 +409,26 @@ pub struct VM {
     #[cfg(feature = "full")]
     #[allow(dead_code)]
     scope_handles: Vec<HashMap<String, Value, FixHasher>>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     thread_handles: HashMap<String, std::thread::JoinHandle<Value>>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     #[allow(clippy::type_complexity)]
     channels: HashMap<String, ChannelCell>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     mutexes: HashMap<String, std::sync::Mutex<Value>>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     #[allow(clippy::type_complexity)]
     actors: HashMap<String, ChannelCell>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     generators: HashMap<String, String>,
     #[cfg(feature = "full")]
     ffi_libraries: HashMap<String, usize>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
     task_results: HashMap<String, std::sync::mpsc::Receiver<Value>>,
-    #[cfg(feature = "full")]
+    #[cfg(any(feature = "extra", feature = "full"))]
+    #[allow(dead_code)]
+    task_results_sync: HashMap<String, Value, FixHasher>,
+    #[cfg(any(feature = "extra", feature = "full"))]
     task_counter: usize,
 }
 
@@ -473,32 +477,35 @@ impl VM {
             bcrypt,
             #[cfg(feature = "full")]
             gui_windows: HashMap::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             coroutines: HashMap::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             current_coro: None,
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             main_saved: None,
+            #[cfg(any(feature = "extra", feature = "full"))]
             tcp_listener: None,
             #[cfg(feature = "full")]
             cluster_streams: HashMap::new(),
             #[cfg(feature = "full")]
             scope_handles: Vec::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             thread_handles: HashMap::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             channels: HashMap::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             mutexes: HashMap::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             actors: HashMap::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             generators: HashMap::new(),
             #[cfg(feature = "full")]
             ffi_libraries: HashMap::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
             task_results: HashMap::new(),
-            #[cfg(feature = "full")]
+            #[cfg(any(feature = "extra", feature = "full"))]
+            task_results_sync: HashMap::with_hasher(FixHasher::default()),
+            #[cfg(any(feature = "extra", feature = "full"))]
             task_counter: 0,
         }
     }
@@ -528,6 +535,29 @@ impl VM {
         if name == "a_texto" || name == "to_texto" || name == "__str_from" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             self.push(Value::str(s));
+            return Some(Ok(()));
+        }
+
+        // ██ Utility builtins (core — disponibles también en wasm sin feature "full") ██
+        if name == "__tipo_de" || name == "__typeof" {
+            let val = args.first().cloned().unwrap_or(Value::Void);
+            let type_name = match &val {
+                Value::Int(_) => "entero",
+                Value::Float(_) => "decimal",
+                Value::Bool(_) => "booleano",
+                Value::Str(_) => "texto",
+                Value::Array(_) => "lista",
+                Value::Map(_) => "diccionario",
+                Value::Void => "nulo",
+                Value::Func(_) => "funcion",
+                Value::Struct { .. } => "estructura",
+                Value::Enum { .. } => "enumeracion",
+                Value::Tuple(_) => "tupla",
+                Value::Exito(_) => "exito",
+                Value::Error(_) => "error",
+                Value::Opcion(_) => "opcion",
+            };
+            self.push(Value::str(type_name.to_string()));
             return Some(Ok(()));
         }
 
@@ -921,11 +951,26 @@ impl VM {
         }
 
         if name == "__time_now" || name == "__tiempo_ahora" {
-            use std::time::{SystemTime, UNIX_EPOCH};
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default();
-            self.push(Value::Int(now.as_secs() as i64));
+            #[cfg(not(target_arch = "wasm32"))]
+            let secs: i64 = {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default();
+                now.as_secs() as i64
+            };
+            #[cfg(target_arch = "wasm32")]
+            let secs: i64 = {
+                if let Some(eval) = JS_EVAL.get() {
+                    eval("String(Math.floor(Date.now()/1000))")
+                        .trim()
+                        .parse()
+                        .unwrap_or(0)
+                } else {
+                    0
+                }
+            };
+            self.push(Value::Int(secs));
             return Some(Ok(()));
         }
 
@@ -1646,9 +1691,10 @@ impl VM {
         None
     }
 
-    #[cfg(feature = "full")]
-    fn call_full_builtin(&mut self, name: &str, args: &[Value]) -> Option<Result<(), VmError>> {
+    #[cfg(any(feature = "extra", feature = "full"))]
+    fn call_extra_builtin(&mut self, name: &str, args: &[Value]) -> Option<Result<(), VmError>> {
         let args = args.to_vec();
+        #[cfg(feature = "full")]
         if name == "__tcp_connect" || name == "__tcp_conectar" {
             let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::net::TcpStream::connect(&addr) {
@@ -1658,6 +1704,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__tcp_listen" || name == "__tcp_escuchar" {
             let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::net::TcpListener::bind(&addr) {
@@ -1670,6 +1717,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__tcp_accept" || name == "__tcp_aceptar" {
             match &self.tcp_listener {
                 Some(l) => match l.accept() {
@@ -1719,6 +1767,7 @@ impl VM {
         }
 
         // ██ FFI builtins ██
+#[cfg(feature = "full")]
         if name == "__ffi_cargar" || name == "__ffi_load" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match unsafe { libloading::Library::new(&path) } {
@@ -1733,6 +1782,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__ffi_llamar" || name == "__ffi_call" {
             let lib_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
@@ -1760,6 +1810,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__ffi_llamar_nv" {
             let lib_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
@@ -1795,6 +1846,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__ffi_asignar" || name == "__ffi_alloc" {
             let size = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let align = args.get(1).and_then(|v| v.as_num()).unwrap_or(8.0) as usize;
@@ -1813,6 +1865,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__ffi_liberar" || name == "__ffi_free" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let size = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1835,6 +1888,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__ffi_escribir" || name == "__ffi_write" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1854,6 +1908,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__ffi_leer" || name == "__ffi_read" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1874,6 +1929,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__ffi_peek" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1892,6 +1948,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__ffi_poke" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1911,34 +1968,53 @@ impl VM {
         // ██ Crypto builtins ██
         if name == "__hash_sha256" {
             let data = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            match self.bcrypt.as_ref() {
-                Some(bc) => match bc.sha256(data.as_bytes()) {
-                    Ok(hash) => {
-                        let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
-                        self.push(Value::str(hex));
-                    }
-                    Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
-                },
-                None => self.push(Value::Error(Box::new(Value::str("Bcrypt no disponible")))),
-            }
+            #[cfg(feature = "full")]
+            let hash: Vec<u8> = match self.bcrypt.as_ref() {
+                Some(bc) => bc.sha256(data.as_bytes()).unwrap_or_default(),
+                None => {
+                    use sha2::{Digest, Sha256};
+                    let mut h = Sha256::new();
+                    h.update(data.as_bytes());
+                    h.finalize().to_vec()
+                }
+            };
+            #[cfg(not(feature = "full"))]
+            let hash: Vec<u8> = {
+                use sha2::{Digest, Sha256};
+                let mut h = Sha256::new();
+                h.update(data.as_bytes());
+                h.finalize().to_vec()
+            };
+            let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
+            self.push(Value::str(hex));
             return Some(Ok(()));
         }
 
         if name == "__hash_sha512" {
             let data = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            match self.bcrypt.as_ref() {
-                Some(bc) => match bc.sha512(data.as_bytes()) {
-                    Ok(hash) => {
-                        let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
-                        self.push(Value::str(hex));
-                    }
-                    Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
-                },
-                None => self.push(Value::Error(Box::new(Value::str("Bcrypt no disponible")))),
-            }
+            #[cfg(feature = "full")]
+            let hash: Vec<u8> = match self.bcrypt.as_ref() {
+                Some(bc) => bc.sha512(data.as_bytes()).unwrap_or_default(),
+                None => {
+                    use sha2::{Digest, Sha512};
+                    let mut h = Sha512::new();
+                    h.update(data.as_bytes());
+                    h.finalize().to_vec()
+                }
+            };
+            #[cfg(not(feature = "full"))]
+            let hash: Vec<u8> = {
+                use sha2::{Digest, Sha512};
+                let mut h = Sha512::new();
+                h.update(data.as_bytes());
+                h.finalize().to_vec()
+            };
+            let hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
+            self.push(Value::str(hex));
             return Some(Ok(()));
         }
 
+        #[cfg(feature = "full")]
         if name == "__aes_encriptar" || name == "__aes_encrypt" {
             if self.bcrypt.is_none() {
                 match Bcrypt::load() {
@@ -1964,6 +2040,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+        #[cfg(feature = "full")]
         if name == "__aes_desencriptar" || name == "__aes_decrypt" {
             if self.bcrypt.is_none() {
                 match Bcrypt::load() {
@@ -2032,28 +2109,6 @@ impl VM {
         }
 
         // ██ Utility builtins ██
-        if name == "__tipo_de" || name == "__typeof" {
-            let val = args.first().cloned().unwrap_or(Value::Void);
-            let type_name = match &val {
-                Value::Int(_) => "entero",
-                Value::Float(_) => "decimal",
-                Value::Bool(_) => "booleano",
-                Value::Str(_) => "texto",
-                Value::Array(_) => "lista",
-                Value::Map(_) => "diccionario",
-                Value::Void => "nulo",
-                Value::Func(_) => "funcion",
-                Value::Struct { .. } => "estructura",
-                Value::Enum { .. } => "enumeracion",
-                Value::Tuple(_) => "tupla",
-                Value::Exito(_) => "exito",
-                Value::Error(_) => "error",
-                Value::Opcion(_) => "opcion",
-            };
-            self.push(Value::str(type_name.to_string()));
-            return Some(Ok(()));
-        }
-
         if name == "__fs_listar" || name == "__fs_listdir" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::read_dir(&path) {
@@ -2070,9 +2125,12 @@ impl VM {
         }
 
         if name == "__env_listar" || name == "__env_list" {
+            #[cfg(not(target_arch = "wasm32"))]
             let vars: Vec<Value> = std::env::vars()
                 .map(|(k, v)| Value::str(format!("{}={}", k, v)))
                 .collect();
+            #[cfg(target_arch = "wasm32")]
+            let vars: Vec<Value> = Vec::new();
             self.push(Value::arr(vars));
             return Some(Ok(()));
         }
@@ -2160,6 +2218,7 @@ impl VM {
         }
 
         // ██ GUI builtins ██
+#[cfg(feature = "full")]
         if name == "__gui_ventana" || name == "__gui_window" {
             let title = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let width = args.get(1).and_then(|v| v.as_num()).unwrap_or(800.0) as i32;
@@ -2175,6 +2234,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__gui_mostrar" || name == "__gui_show" {
             let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(w) = self.gui_windows.get(&id) {
@@ -2189,6 +2249,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__gui_cerrar" || name == "__gui_close" {
             let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if self.gui_windows.remove(&id).is_some() {
@@ -2199,6 +2260,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__gui_id" || name == "__gui_hwnd" {
             let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(w) = self.gui_windows.get(&id) {
@@ -2212,6 +2274,7 @@ impl VM {
             return Some(Ok(()));
         }
 
+#[cfg(feature = "full")]
         if name == "__gui_esperar" || name == "__gui_poll" {
             let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(w) = self.gui_windows.get_mut(&id) {
@@ -2229,30 +2292,50 @@ impl VM {
         if name == "__tarea_lanzar" || name == "__task_spawn" {
             let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let fn_args: Vec<Value> = args.into_iter().skip(1).collect();
-            let bc = self.bytecode.clone();
-            let (tx, rx) = std::sync::mpsc::channel();
             let id = self.task_counter;
             self.task_counter += 1;
-            std::thread::spawn(move || {
+            let task_id = format!("task_{}", id);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let bc = self.bytecode.clone();
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let mut vm = VM::new(bc);
+                    let result = vm.run_function(&fn_name, fn_args);
+                    let _ = tx.send(result.unwrap_or(Value::Void));
+                });
+                self.task_results.insert(task_id.clone(), rx);
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                let bc = self.bytecode.clone();
                 let mut vm = VM::new(bc);
                 let result = vm.run_function(&fn_name, fn_args);
-                let _ = tx.send(result.unwrap_or(Value::Void));
-            });
-            let task_id = format!("task_{}", id);
-            self.task_results.insert(task_id.clone(), rx);
+                self.task_results_sync
+                    .insert(task_id.clone(), result.unwrap_or(Value::Void));
+            }
             self.push(Value::str(task_id));
             return Some(Ok(()));
         }
 
         if name == "__tarea_esperar" || name == "__task_await" {
             let task_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            if let Some(rx) = self.task_results.remove(&task_id) {
-                match rx.recv() {
-                    Ok(val) => self.push(val),
-                    Err(_) => self.push(Value::Error(Box::new(Value::str("Task failed")))),
+            #[cfg(not(target_arch = "wasm32"))]
+            let found = {
+                if let Some(rx) = self.task_results.remove(&task_id) {
+                    match rx.recv() {
+                        Ok(val) => Some(val),
+                        Err(_) => Some(Value::Error(Box::new(Value::str("Task failed")))),
+                    }
+                } else {
+                    None
                 }
-            } else {
-                self.push(Value::Error(Box::new(Value::str("Task not found"))));
+            };
+            #[cfg(target_arch = "wasm32")]
+            let found = self.task_results_sync.remove(&task_id);
+            match found {
+                Some(val) => self.push(val),
+                None => self.push(Value::Error(Box::new(Value::str("Task not found")))),
             }
             return Some(Ok(()));
         }
@@ -2321,18 +2404,30 @@ impl VM {
         // ██ Async File I/O builtins ██
         if name == "__leer_archivo_async" || name == "__file_read_async" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            let (tx, rx) = std::sync::mpsc::channel();
             let id = self.task_counter;
             self.task_counter += 1;
-            std::thread::spawn(move || {
+            let task_id = format!("file_{}", id);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let content = std::fs::read_to_string(&path);
+                    let _ = tx.send(match content {
+                        Ok(s) => Value::str(s),
+                        Err(e) => Value::Error(Box::new(Value::str(e.to_string()))),
+                    });
+                });
+                self.task_results.insert(task_id.clone(), rx);
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
                 let content = std::fs::read_to_string(&path);
-                let _ = tx.send(match content {
+                let val = match content {
                     Ok(s) => Value::str(s),
                     Err(e) => Value::Error(Box::new(Value::str(e.to_string()))),
-                });
-            });
-            let task_id = format!("file_{}", id);
-            self.task_results.insert(task_id.clone(), rx);
+                };
+                self.task_results_sync.insert(task_id.clone(), val);
+            }
             self.push(Value::str(task_id));
             return Some(Ok(()));
         }
@@ -2340,18 +2435,30 @@ impl VM {
         if name == "__escribir_archivo_async" || name == "__file_write_async" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let content = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-            let (tx, rx) = std::sync::mpsc::channel();
             let id = self.task_counter;
             self.task_counter += 1;
-            std::thread::spawn(move || {
+            let task_id = format!("file_{}", id);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let result = std::fs::write(&path, &content);
+                    let _ = tx.send(match result {
+                        Ok(()) => Value::Bool(true),
+                        Err(e) => Value::Error(Box::new(Value::str(e.to_string()))),
+                    });
+                });
+                self.task_results.insert(task_id.clone(), rx);
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
                 let result = std::fs::write(&path, &content);
-                let _ = tx.send(match result {
+                let val = match result {
                     Ok(()) => Value::Bool(true),
                     Err(e) => Value::Error(Box::new(Value::str(e.to_string()))),
-                });
-            });
-            let task_id = format!("file_{}", id);
-            self.task_results.insert(task_id.clone(), rx);
+                };
+                self.task_results_sync.insert(task_id.clone(), val);
+            }
             self.push(Value::str(task_id));
             return Some(Ok(()));
         }
@@ -2359,15 +2466,22 @@ impl VM {
         // ██ Async Timer builtins ██
         if name == "__timer_delay" || name == "__temporizador_esperar" {
             let ms = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as u64;
-            let (tx, rx) = std::sync::mpsc::channel();
             let id = self.task_counter;
             self.task_counter += 1;
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(ms));
-                let _ = tx.send(Value::Bool(true));
-            });
             let task_id = format!("timer_{}", id);
-            self.task_results.insert(task_id.clone(), rx);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(ms));
+                    let _ = tx.send(Value::Bool(true));
+                });
+                self.task_results.insert(task_id.clone(), rx);
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                self.task_results_sync.insert(task_id.clone(), Value::Bool(true));
+            }
             self.push(Value::str(task_id));
             return Some(Ok(()));
         }
@@ -2375,19 +2489,29 @@ impl VM {
         // ██ Async TCP connect builtins ██
         if name == "__tcp_connect_async" || name == "__tcp_conectar_async" {
             let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            let (tx, rx) = std::sync::mpsc::channel();
             let id = self.task_counter;
             self.task_counter += 1;
-            std::thread::spawn(move || match std::net::TcpStream::connect(&addr) {
-                Ok(_) => {
-                    let _ = tx.send(Value::Bool(true));
-                }
-                Err(e) => {
-                    let _ = tx.send(Value::Error(Box::new(Value::str(e.to_string()))));
-                }
-            });
             let task_id = format!("tcp_{}", id);
-            self.task_results.insert(task_id.clone(), rx);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || match std::net::TcpStream::connect(&addr) {
+                    Ok(_) => {
+                        let _ = tx.send(Value::Bool(true));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Value::Error(Box::new(Value::str(e.to_string()))));
+                    }
+                });
+                self.task_results.insert(task_id.clone(), rx);
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                self.task_results_sync.insert(
+                    task_id.clone(),
+                    Value::Error(Box::new(Value::str("TCP no soportado en wasm"))),
+                );
+            }
             self.push(Value::str(task_id));
             return Some(Ok(()));
         }
@@ -2395,7 +2519,14 @@ impl VM {
         // ██ Concurrency builtins ██
         if name == "__dormir" || name == "__sleep" {
             let ms = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as u64;
-            std::thread::sleep(std::time::Duration::from_millis(ms));
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                let _ = ms;
+            }
             self.push(Value::Void);
             return Some(Ok(()));
         }
@@ -2403,26 +2534,54 @@ impl VM {
         if name == "__hilo_lanzar" || name == "__thread_spawn" {
             let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let fn_args: Vec<Value> = args.into_iter().skip(1).collect();
-            let bc = self.bytecode.clone();
-            let handle = std::thread::spawn(move || {
-                let mut vm = VM::new(bc);
-                vm.run_function(&fn_name, fn_args).unwrap_or(Value::Void)
-            });
+            #[cfg(not(target_arch = "wasm32"))]
             let hid = format!("thread_{}", self.thread_handles.len());
-            self.thread_handles.insert(hid.clone(), handle);
+            #[cfg(target_arch = "wasm32")]
+            let hid = {
+                let id = self.task_counter;
+                self.task_counter += 1;
+                format!("thread_{}", id)
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let bc = self.bytecode.clone();
+                let handle = std::thread::spawn(move || {
+                    let mut vm = VM::new(bc);
+                    vm.run_function(&fn_name, fn_args).unwrap_or(Value::Void)
+                });
+                self.thread_handles.insert(hid.clone(), handle);
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                let bc = self.bytecode.clone();
+                let mut vm = VM::new(bc);
+                let result = vm.run_function(&fn_name, fn_args).unwrap_or(Value::Void);
+                self.task_results_sync.insert(hid.clone(), result);
+            }
             self.push(Value::str(hid));
             return Some(Ok(()));
         }
 
         if name == "__hilo_esperar" || name == "__thread_join" {
             let hid = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            if let Some((_, handle)) = self.thread_handles.remove_entry(&hid) {
-                match handle.join() {
-                    Ok(val) => self.push(val),
-                    Err(_) => self.push(Value::Error(Box::new(Value::str("Thread panicked")))),
+            #[cfg(not(target_arch = "wasm32"))]
+            let found = {
+                if let Some((_, handle)) = self.thread_handles.remove_entry(&hid) {
+                    match handle.join() {
+                        Ok(val) => Some(val),
+                        Err(_) => Some(Value::Error(Box::new(Value::str(
+                            "Thread panicked",
+                        )))),
+                    }
+                } else {
+                    None
                 }
-            } else {
-                self.push(Value::Error(Box::new(Value::str("Thread not found"))));
+            };
+            #[cfg(target_arch = "wasm32")]
+            let found = self.task_results_sync.remove(&hid);
+            match found {
+                Some(val) => self.push(val),
+                None => self.push(Value::Error(Box::new(Value::str("Thread not found")))),
             }
             return Some(Ok(()));
         }
@@ -2566,22 +2725,37 @@ impl VM {
             let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             match source {
                 Value::Array(items) => {
-                    let bc = self.bytecode.clone();
-                    let mut handles = Vec::new();
-                    for item in items.iter() {
-                        let bc_clone = bc.clone();
-                        let fn_clone = fn_name.clone();
-                        let item_clone = (*item).clone();
-                        handles.push(std::thread::spawn(move || {
-                            let mut vm = VM::new(bc_clone);
-                            vm.run_function(&fn_clone, vec![item_clone])
-                                .unwrap_or(Value::Void)
-                        }));
-                    }
-                    let results: Vec<Value> = handles
-                        .into_iter()
-                        .map(|h| h.join().unwrap_or(Value::Void))
-                        .collect();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let results: Vec<Value> = {
+                        let bc = self.bytecode.clone();
+                        let mut handles = Vec::new();
+                        for item in items.iter() {
+                            let bc_clone = bc.clone();
+                            let fn_clone = fn_name.clone();
+                            let item_clone = (*item).clone();
+                            handles.push(std::thread::spawn(move || {
+                                let mut vm = VM::new(bc_clone);
+                                vm.run_function(&fn_clone, vec![item_clone])
+                                    .unwrap_or(Value::Void)
+                            }));
+                        }
+                        handles
+                            .into_iter()
+                            .map(|h| h.join().unwrap_or(Value::Void))
+                            .collect()
+                    };
+                    #[cfg(target_arch = "wasm32")]
+                    let results: Vec<Value> = {
+                        let bc = self.bytecode.clone();
+                        items
+                            .iter()
+                            .map(|item| {
+                                let mut vm = VM::new(bc.clone());
+                                vm.run_function(&fn_name, vec![item.clone()])
+                                    .unwrap_or(Value::Void)
+                            })
+                            .collect()
+                    };
                     self.push(Value::arr(results));
                 }
                 _ => self.push(Value::Error(Box::new(Value::str(
@@ -2596,26 +2770,45 @@ impl VM {
             let a1 = args.get(1).cloned().unwrap_or(Value::Void);
             let fn2 = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
             let a2 = args.get(3).cloned().unwrap_or(Value::Void);
-            let bc = self.bytecode.clone();
-            let bc2 = bc.clone();
-            let h1 = std::thread::spawn(move || {
-                let mut vm = VM::new(bc);
-                if fn1.is_empty() {
+            #[cfg(not(target_arch = "wasm32"))]
+            let (r1, r2) = {
+                let bc = self.bytecode.clone();
+                let bc2 = bc.clone();
+                let h1 = std::thread::spawn(move || {
+                    let mut vm = VM::new(bc);
+                    if fn1.is_empty() {
+                        Value::Void
+                    } else {
+                        vm.run_function(&fn1, vec![a1]).unwrap_or(Value::Void)
+                    }
+                });
+                let h2 = std::thread::spawn(move || {
+                    let mut vm = VM::new(bc2);
+                    if fn2.is_empty() {
+                        Value::Void
+                    } else {
+                        vm.run_function(&fn2, vec![a2]).unwrap_or(Value::Void)
+                    }
+                });
+                (h1.join().unwrap_or(Value::Void), h2.join().unwrap_or(Value::Void))
+            };
+            #[cfg(target_arch = "wasm32")]
+            let (r1, r2) = {
+                let bc = self.bytecode.clone();
+                let mut vm1 = VM::new(bc.clone());
+                let mut vm2 = VM::new(bc);
+                let v1 = if fn1.is_empty() {
                     Value::Void
                 } else {
-                    vm.run_function(&fn1, vec![a1]).unwrap_or(Value::Void)
-                }
-            });
-            let h2 = std::thread::spawn(move || {
-                let mut vm = VM::new(bc2);
-                if fn2.is_empty() {
+                    vm1.run_function(&fn1, vec![a1]).unwrap_or(Value::Void)
+                };
+                let v2 = if fn2.is_empty() {
                     Value::Void
                 } else {
-                    vm.run_function(&fn2, vec![a2]).unwrap_or(Value::Void)
-                }
-            });
-            let r1 = h1.join().unwrap_or(Value::Void);
-            let r2 = h2.join().unwrap_or(Value::Void);
+                    vm2.run_function(&fn2, vec![a2]).unwrap_or(Value::Void)
+                };
+                (v1, v2)
+            };
             self.push(Value::arr(vec![r1, r2]));
             return Some(Ok(()));
         }
@@ -3252,7 +3445,7 @@ impl VM {
             }
             Opcode::Ret => {
                 let ret_val = self.pop().unwrap_or(Value::Void);
-                #[cfg(feature = "full")]
+                #[cfg(any(feature = "extra", feature = "full"))]
                 {
                     if let Some(coro_id) = self.current_coro.clone() {
                         if let Some(coro) = self.coroutines.get_mut(&coro_id) {
@@ -3662,8 +3855,8 @@ impl VM {
                 if let Some(result) = self.call_core_builtin(&name, &args) {
                     return result;
                 }
-                #[cfg(feature = "full")]
-                if let Some(result) = self.call_full_builtin(&name, &args) {
+                #[cfg(any(feature = "extra", feature = "full"))]
+                if let Some(result) = self.call_extra_builtin(&name, &args) {
                     return result;
                 }
                 if let Some(func) = self.find_func(&name) {
@@ -4973,13 +5166,13 @@ fn ffi_call_dynamic(
 }
 
 // ── JWT helpers ─────────────────────────────────────────────────────────
-#[cfg(feature = "full")]
+#[cfg(any(feature = "extra", feature = "full"))]
 fn base64url_encode(data: &[u8]) -> String {
     use base64::Engine;
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
 }
 
-#[cfg(feature = "full")]
+#[cfg(any(feature = "extra", feature = "full"))]
 fn base64url_decode(data: &str) -> Vec<u8> {
     use base64::Engine;
     base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -4987,7 +5180,7 @@ fn base64url_decode(data: &str) -> Vec<u8> {
         .unwrap_or_default()
 }
 
-#[cfg(feature = "full")]
+#[cfg(any(feature = "extra", feature = "full"))]
 fn base64url_decode_to_string(data: &str) -> Result<String, String> {
     use base64::Engine;
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -4996,7 +5189,7 @@ fn base64url_decode_to_string(data: &str) -> Result<String, String> {
     String::from_utf8(bytes).map_err(|e| format!("UTF-8 error: {}", e))
 }
 
-#[cfg(feature = "full")]
+#[cfg(any(feature = "extra", feature = "full"))]
 fn hmac_sha256(data: &[u8], key: &[u8]) -> Vec<u8> {
     use hmac::{Hmac, Mac};
     type HmacSha256 = Hmac<sha2::Sha256>;

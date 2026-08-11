@@ -1,4 +1,4 @@
-#[cfg(feature = "full")]
+#[cfg(any(feature = "extra", feature = "full"))]
 pub mod coro_ffi;
 #[cfg(feature = "full")]
 pub mod crypto_ffi;

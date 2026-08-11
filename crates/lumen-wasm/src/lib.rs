@@ -106,6 +106,18 @@ impl LumenRuntime {
         run_lumen(source)
     }
 
+    /// Ejecuta código fuente con archivos de proyecto adicionales (multi-archivo).
+    /// `names`/`contents` van en paralelo (misma longitud); los archivos del
+    /// proyecto tienen prioridad sobre la stdlib embebida por nombre base.
+    pub fn run_with_files(&mut self, source: &str, names: Vec<String>, contents: Vec<String>) -> String {
+        self.output.clear();
+        let mut files = HashMap::new();
+        for (n, c) in names.into_iter().zip(contents.into_iter()) {
+            files.insert(n, c);
+        }
+        run_lumen_with_files(source, files)
+    }
+
     /// Registra una función JS para ser llamada desde LÚMEN.
     /// `name` es el identificador de la función (ej. "console_log").
     /// `js_func_string` es el código JS que implementa la función.
@@ -260,6 +272,39 @@ fn memory_stdlib() -> HashMap<String, String> {
         .iter()
         .map(|(name, content)| (name.to_string(), content.to_string()))
         .collect()
+}
+
+/// Compila (con imports resueltos desde la stdlib embebida + archivos extra)
+/// y ejecuta. `project_files` tiene prioridad sobre la stdlib por nombre base.
+fn run_lumen_with_files(source: &str, project_files: HashMap<String, String>) -> String {
+    let mut files = memory_stdlib();
+    files.extend(project_files);
+    let mut loader = lumen_sema::ModuleLoader::with_memory_files(files);
+    let mut program = match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv"))
+    {
+        Ok(p) => p,
+        Err(e) => return format!("Error de imports: {}", module_error_str(&e)),
+    };
+
+    // Semantic analysis
+    let sema = lumen_sema::SemanticAnalyzer::new();
+    let sem_errors = sema.analyze(&mut program);
+    if !sem_errors.is_empty() {
+        return format!("Error semántico: {}", sem_errors[0].message);
+    }
+
+    // IR generation
+    let ir_program = lumen_ir::IRBuilder::new().build(&program);
+
+    // Bytecode generation
+    let (bc, _warnings) = lumen_codegen::Codegen::new().generate(&ir_program);
+
+    // VM execution
+    let mut vm = lumen_vm::vm::VM::new(bc);
+    match vm.run() {
+        Ok(()) => vm.output().join("\n"),
+        Err(e) => format!("Error runtime: {}", e),
+    }
 }
 
 /// Compila (con imports resueltos desde la stdlib embebida) y ejecuta.

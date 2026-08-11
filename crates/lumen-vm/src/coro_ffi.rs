@@ -1,4 +1,4 @@
-#![cfg(feature = "full")]
+#![cfg(any(feature = "extra", feature = "full"))]
 // Coroutine system — lightweight cooperative multitasking
 // No ASM needed — VM-level context switching (save/restore stack + locals)
 
