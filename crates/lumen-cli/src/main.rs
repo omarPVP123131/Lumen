@@ -947,6 +947,7 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
             "-o",
             exe_name.to_str().unwrap(),
             "-lm",
+            "-lregex",
         ])
         .status();
     match s {

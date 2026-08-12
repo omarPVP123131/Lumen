@@ -45,6 +45,13 @@ foreach ($ej in $lista) {
         $res = "WASM-FALLO"
     } elseif ($outRust -eq "[[TIMEOUT]]") {
         $res = "RUST-TIMEOUT"
+    } elseif ($outWasm -match "no definida" ) {
+        # Builtin dependiente de SO (FFI/GUI/red/hilo/nativo) — no portable
+        # por diseño en wasm32 (requiere librerías del SO como libloading).
+        $res = "UNSUPPORTED"
+    } elseif ($outWasm -match "operation not supported" -and $outWasm -like "*error*") {
+        # FS/red del sistema — el navegador no expone disco ni sockets.
+        $res = "UNSUPPORTED"
     } else {
         $res = if ($outWasm -eq $outRust) { "CORRECTO" } else { "DIFF" }
     }
@@ -63,8 +70,9 @@ Write-Output "=== RESUMEN WASM ($($resultados.Count) ejemplos) ==="
 $ok = ($resultados | Where-Object { $_.Resultado -eq "CORRECTO" }).Count
 $diff = ($resultados | Where-Object { $_.Resultado -eq "DIFF" }).Count
 $fallo = ($resultados | Where-Object { $_.Resultado -eq "WASM-FALLO" }).Count
+$unsup = ($resultados | Where-Object { $_.Resultado -eq "UNSUPPORTED" }).Count
 $to = ($resultados | Where-Object { $_.Resultado -like "*TIMEOUT*" }).Count
-Write-Output "Correctos: $ok | DIFF: $diff | WASM-FALLO: $fallo | Timeouts: $to"
+Write-Output "Correctos: $ok | DIFF: $diff | UNSUPPORTED (no-portable por diseño): $unsup | WASM-FALLO: $fallo | Timeouts: $to"
 Write-Output ""
 Write-Output "--- Detalle ---"
 $resultados | Where-Object { $_.Resultado -ne "CORRECTO" } | Format-Table -AutoSize | Out-String -Width 400
