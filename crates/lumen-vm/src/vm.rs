@@ -401,7 +401,6 @@ pub struct VM {
     #[cfg(any(feature = "extra", feature = "full"))]
     #[allow(clippy::type_complexity)]
     main_saved: Option<(Vec<Value>, Vec<HashMap<String, Value, FixHasher>>, usize)>,
-    #[cfg(any(feature = "extra", feature = "full"))]
     tcp_listener: Option<std::net::TcpListener>,
     #[cfg(feature = "full")]
     #[allow(dead_code)]
@@ -483,7 +482,6 @@ impl VM {
             current_coro: None,
             #[cfg(any(feature = "extra", feature = "full"))]
             main_saved: None,
-            #[cfg(any(feature = "extra", feature = "full"))]
             tcp_listener: None,
             #[cfg(feature = "full")]
             cluster_streams: HashMap::new(),

@@ -94,10 +94,10 @@ Producción & Cloud  [░░░░░░░░░░░░░░░░░░░�
 
 | # | Feature | Sintaxis | Estado |
 |---|---------|----------|--------|
-| 61 | **OR Patterns** | `caso Rojo \| Verde:` | ✅ |
+| 61 | **OR Patterns** | `caso Rojo \| Verde:` | ✅ (12 Ago: fix real — antes el `\|` era consumido como `BitOr` E035; ahora flags `match_arm_pipe` + `NotEqual; JmpIf(body)`; `examples/fase61_or_patterns.nv`) |
 | 62 | **If-let / While-let** | `si sea Algun(x) = opt { }` | ✅ |
-| 63 | **Range Patterns** | `caso 0..10:` — comparación de rango | ✅ |
-| 64 | **String Patterns** | `caso "hola":` — igualdad de string | ✅ |
+| 63 | **Range Patterns** | `caso 0..10:` — comparación de rango | ✅ (12 Ago: feature NUEVA end-to-end — tokens `DotDot`/`DotDotEqual`, `Expr::Range`, desugar IR a `>=`+`<`/`<=`; expresión-lista `0..5`; `examples/fase63_range_patterns.nv`) |
+| 64 | **String Patterns** | `caso "hola":` — igualdad de string | ✅ (12 Ago: verificado con OR de strings; `examples/fase64_string_patterns.nv`) |
 | 65 | **Guard Let** | `sea x = expr sino { romper }` | ✅ |
 | 66 | **Operator Overloading** | `impl Suma para MiTipo` | ✅ |
 | 67 | **Extension Methods** | `impl MiRasgo para TipoExterno` | ✅ |

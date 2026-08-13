@@ -137,6 +137,23 @@ elegir valor {
 }
 ```
 
+**OR patterns**: `caso A | B | C:` — el `|` dentro de un arm separa alternativas
+(no es `BitOr`); si el sujeto coincide con cualquiera, se ejecuta el cuerpo.
+Sirve con enums, enteros y strings.
+
+**Range patterns**: `caso inicio..fin:` (exclusivo, `inicio <= x < fin`) y
+`caso inicio..=fin:` (inclusivo, `inicio <= x <= fin`). Los límites deben ser
+numéricos y el sujeto del `elegir` numérico también (E044/E056 si no).
+
+**Rangos como expresión**: `inicio..fin` produce una lista de enteros
+(`inicio..fin` excluye `fin`; `inicio..=fin` lo incluye). Útil para construir
+series: `lista<entero> serie = 0..5;` → `[0, 1, 2, 3, 4]`. En el backend C y
+la VM se desugara en un bucle con `ArrayNew`/`ArrayPush`; el backend Cranelift
+no emite el cuerpo por límite de diseño (sin colecciones).
+
+Guardias: `caso X si condicion:` — la guardia debe ser booleana (E034) y se
+evalúa solo si el patrón coincide.
+
 ### Loop Labels (etiquetas)
 
 ```lumen

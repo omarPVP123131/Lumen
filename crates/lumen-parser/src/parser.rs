@@ -9,6 +9,8 @@ pub struct Parser {
     no_struct_init: bool,
     type_params_stack: Vec<Vec<String>>,
     pending_greater: bool,
+    // Dentro de un arm de `elegir`, `|` separa patrones (OR) — nunca BinOp::BitOr.
+    match_arm_pipe: bool,
 }
 
 impl Parser {
@@ -20,6 +22,7 @@ impl Parser {
             no_struct_init: false,
             type_params_stack: Vec::new(),
             pending_greater: false,
+            match_arm_pipe: false,
         }
     }
 
@@ -1341,14 +1344,21 @@ impl Parser {
                 let arm_start = self.peek().span;
                 self.advance();
 
-                let value = self.parse_expression()?;
+                // En patrones, `|` separa alternativas (OR) — nunca BitOr.
+                let saved_pipe = self.match_arm_pipe;
+                self.match_arm_pipe = true;
+                let value = self.parse_expression();
 
                 // OR patterns: A | B | C
                 let mut alt_values = Vec::new();
                 while self.check(&[TokenKind::Pipe]) {
                     self.advance();
-                    alt_values.push(self.parse_expression()?);
+                    if let Some(alt) = self.parse_expression() {
+                        alt_values.push(alt);
+                    }
                 }
+                self.match_arm_pipe = saved_pipe;
+                let value = value?;
 
                 let guard = if self.check(&[TokenKind::Si, TokenKind::If]) {
                     self.advance();
@@ -1624,7 +1634,21 @@ impl Parser {
     }
 
     fn parse_comparison(&mut self) -> Option<Expr> {
+        // Range: `a..b` (exclusivo) / `a..=b` (inclusivo) — precedencia alta,
+        // se evalua como un solo operando en las comparaciones de `elegir`.
         let mut left = self.parse_addition()?;
+        if self.check(&[TokenKind::DotDot, TokenKind::DotDotEqual]) {
+            let inclusive = self.check(&[TokenKind::DotDotEqual]);
+            self.advance();
+            let right = self.parse_addition()?;
+            let span = Span::merge(&left.span(), &right.span());
+            return Some(Expr::Range {
+                start: Box::new(left),
+                end: Box::new(right),
+                inclusive,
+                span,
+            });
+        }
         while self.check(&[
             TokenKind::EqualEqual,
             TokenKind::BangEqual,
@@ -1660,12 +1684,9 @@ impl Parser {
 
     fn parse_addition(&mut self) -> Option<Expr> {
         let mut left = self.parse_shift()?;
-        while self.check(&[
-            TokenKind::Plus,
-            TokenKind::PlusPlus,
-            TokenKind::Minus,
-            TokenKind::Pipe,
-        ]) {
+        while self.check(&[TokenKind::Plus, TokenKind::PlusPlus, TokenKind::Minus])
+            || (self.check(&[TokenKind::Pipe]) && !self.match_arm_pipe)
+        {
             let op = match self.peek().kind {
                 TokenKind::Plus => BinOp::Add,
                 TokenKind::PlusPlus => BinOp::Concat,
@@ -3367,6 +3388,7 @@ impl Spannable for Expr {
             | Expr::Grouping { span, .. }
             | Expr::Cast { span, .. }
             | Expr::List { span, .. }
+            | Expr::Range { span, .. }
             | Expr::Index { span, .. }
             | Expr::MethodCall { span, .. }
             | Expr::Lambda { span, .. }
@@ -3825,6 +3847,46 @@ para a en nums {
             panic!("Parse errors: {:?}", errors);
         }
         assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_range_pattern() {
+        let source = "elegir (n) { caso 0..5: imprimir(\"bajo\"); caso 5..=10: imprimir(\"medio\"); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
+            assert_eq!(arms.len(), 2);
+            assert!(matches!(&arms[0].value, Expr::Range { inclusive: false, .. }));
+            assert!(matches!(&arms[1].value, Expr::Range { inclusive: true, .. }));
+        } else {
+            panic!("Expected Match statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_or_patterns() {
+        let source = "elegir (c) { caso Color::Rojo | Color::Verde: imprimir(\"calido\"); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
+            assert_eq!(arms.len(), 1);
+            assert_eq!(arms[0].alt_values.len(), 1);
+            assert!(matches!(&arms[0].alt_values[0], Expr::EnumCtor { .. }));
+        } else {
+            panic!("Expected Match statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_range_expr() {
+        let source = "lista<entero> r = 0..10;";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+            assert!(matches!(init.as_ref(), Expr::Range { .. }));
+        } else {
+            panic!("Expected Variable declaration with init");
+        }
     }
 
     #[test]

@@ -503,34 +503,29 @@ impl IRBuilder {
                 ..
             } => {
                 let end_label = self.new_label();
-                let mut next_label = self.new_label();
+                let mut fail_label = self.new_label();
                 for arm in arms {
-                    self.emit(Instr::Label(next_label));
-                    self.gen_expr(expr);
-                    self.gen_expr(&arm.value);
-                    self.emit(Instr::Binary(Op::Equal));
-                    next_label = self.new_label();
-                    self.emit(Instr::JmpIf(next_label));
-                    // Check OR pattern alternatives
+                    self.emit(Instr::Label(fail_label));
+                    fail_label = self.new_label();
+                    let body_label = self.new_label();
+                    // Patterns: cada uno salta al body si matchea; si ninguno
+                    // matchea, el fallthrough llega al Jmp(fail) del final.
+                    self.emit_match_pattern(expr, &arm.value, fail_label, body_label);
                     for alt in &arm.alt_values {
-                        self.gen_expr(expr);
-                        self.gen_expr(alt);
-                        self.emit(Instr::Binary(Op::Equal));
-                        let match_label = self.new_label();
-                        self.emit(Instr::JmpIf(match_label));
-                        self.emit(Instr::Jmp(next_label));
-                        self.emit(Instr::Label(match_label));
+                        self.emit_match_pattern(expr, alt, fail_label, body_label);
                     }
+                    self.emit(Instr::Jmp(fail_label));
+                    self.emit(Instr::Label(body_label));
                     if let Some(ref guard_expr) = arm.guard {
                         self.gen_expr(guard_expr);
-                        self.emit(Instr::JmpIf(next_label));
+                        self.emit(Instr::JmpIf(fail_label));
                     }
                     for node in &arm.body {
                         self.gen_decl_or_stmt(node);
                     }
                     self.emit(Instr::Jmp(end_label));
                 }
-                self.emit(Instr::Label(next_label));
+                self.emit(Instr::Label(fail_label));
                 if let Some(default_body) = default {
                     for node in default_body {
                         self.gen_decl_or_stmt(node);
@@ -1115,6 +1110,32 @@ impl IRBuilder {
                 }
                 self.emit(Instr::ArrayNew(items.len()));
             }
+            Expr::Range { start, end, inclusive, .. } => {
+                let start_label = self.new_label();
+                let end_label = self.new_label();
+                let i_temp = format!("__rng_i_{}", self.temp_counter);
+                self.temp_counter += 1;
+                let cmp_temp = format!("__rng_c_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.emit(Instr::ArrayNew(0));
+                self.gen_expr(start);
+                self.emit(Instr::Store(i_temp.clone()));
+                self.emit(Instr::Label(start_label));
+                self.emit(Instr::Load(i_temp.clone()));
+                self.emit(Instr::Store(cmp_temp.clone()));
+                self.emit(Instr::Load(cmp_temp.clone()));
+                self.gen_expr(end);
+                self.emit(Instr::Binary(if *inclusive { Op::LessEqual } else { Op::Less }));
+                self.emit(Instr::JmpIf(end_label));
+                self.emit(Instr::Load(cmp_temp.clone()));
+                self.emit(Instr::ArrayPush);
+                self.emit(Instr::Load(cmp_temp.clone()));
+                self.emit(Instr::ConstInt(1));
+                self.emit(Instr::Binary(Op::Add));
+                self.emit(Instr::Store(i_temp.clone()));
+                self.emit(Instr::Jmp(start_label));
+                self.emit(Instr::Label(end_label));
+            }
             Expr::Index { expr, index, .. } => {
                 self.gen_expr(expr);
                 self.gen_expr(index);
@@ -1449,6 +1470,48 @@ impl IRBuilder {
         let label = self.label_counter;
         self.label_counter += 1;
         label
+    }
+
+    // Genera la comprobación de un patrón contra `expr` en un `elegir`.
+    // JmpIf salta cuando el tope es FALSY (vm.rs), por lo que:
+    // - Patrón concreto: `x != pat` → si NO matchea no salta (caen los checks
+    //   siguientes); si matchea, NotEqual es falso → salta al body.
+    // - Rango (`0..5`): fuera de rango → salta a fail; dentro → Jmp al body.
+    fn emit_match_pattern(
+        &mut self,
+        expr: &Expr,
+        pattern: &Expr,
+        fail_label: usize,
+        body_label: usize,
+    ) {
+        match pattern {
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                self.gen_expr(expr);
+                self.gen_expr(start);
+                self.emit(Instr::Binary(Op::GreaterEqual));
+                self.emit(Instr::JmpIf(fail_label));
+                self.gen_expr(expr);
+                self.gen_expr(end);
+                self.emit(Instr::Binary(if *inclusive {
+                    Op::LessEqual
+                } else {
+                    Op::Less
+                }));
+                self.emit(Instr::JmpIf(fail_label));
+                self.emit(Instr::Jmp(body_label));
+            }
+            _ => {
+                self.gen_expr(expr);
+                self.gen_expr(pattern);
+                self.emit(Instr::Binary(Op::NotEqual));
+                self.emit(Instr::JmpIf(body_label));
+            }
+        }
     }
 
     fn finalize_func(&mut self) {

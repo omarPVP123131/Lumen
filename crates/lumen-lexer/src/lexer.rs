@@ -127,7 +127,19 @@ impl Lexer {
                 Some('}') => tokens.push(self.single_token(TokenKind::RightBrace)),
                 Some('[') => tokens.push(self.single_token(TokenKind::LeftBracket)),
                 Some(']') => tokens.push(self.single_token(TokenKind::RightBracket)),
-                Some('.') => tokens.push(self.single_token(TokenKind::Dot)),
+                Some('.') => {
+                    if self.peek() == Some('.') {
+                        self.advance();
+                        if self.peek() == Some('=') {
+                            self.advance();
+                            tokens.push(self.double_token(TokenKind::DotDotEqual));
+                        } else {
+                            tokens.push(self.double_token(TokenKind::DotDot));
+                        }
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Dot));
+                    }
+                }
                 Some(':') => {
                     if self.peek() == Some(':') {
                         self.advance();
@@ -200,6 +212,10 @@ impl Lexer {
                         if next.is_ascii_digit() {
                             num.push(self.advance().unwrap());
                         } else if next == '.' && !is_float {
+                            // No consumir el punto si es inicio de rango: `1..5` / `1..=5`
+                            if self.peek_n(1) == Some('.') {
+                                break;
+                            }
                             is_float = true;
                             num.push(self.advance().unwrap());
                         } else {
@@ -282,6 +298,10 @@ impl Lexer {
 
     fn peek(&self) -> Option<char> {
         self.chars.get(self.pos).copied()
+    }
+
+    fn peek_n(&self, n: usize) -> Option<char> {
+        self.chars.get(self.pos + n).copied()
     }
 
     fn is_eof(&self) -> bool {
@@ -421,6 +441,42 @@ mod tests {
                 TokenKind::NumLiteral("3.14".to_string()),
                 TokenKind::NumLiteral("0".to_string()),
                 TokenKind::NumLiteral("100.0".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_range_literals() {
+        let kinds = tokenize("1..5 1..=5 0..10");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDotEqual,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::NumLiteral("0".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("10".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_float_not_confused_with_range() {
+        let kinds = tokenize("3.14 2. 1.0..=3.0");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("3.14".to_string()),
+                TokenKind::NumLiteral("2.".to_string()),
+                TokenKind::NumLiteral("1.0".to_string()),
+                TokenKind::DotDotEqual,
+                TokenKind::NumLiteral("3.0".to_string()),
                 TokenKind::Eof,
             ]
         );

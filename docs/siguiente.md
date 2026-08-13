@@ -61,6 +61,7 @@
 - **Sprint 8 — Dogfooding** ✅ — stdlib completo compila; **fuego.ps1: 117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos**; benchmarks: compile x5.4, run x231 (mediana x2-6)
 - **Paridad VM LÚMEN-Rust (8 Ago 2026)** ✅ — `__map_obtener` con boxeo por tipo real + lookup dual (keys boxed guest vs strings JSON host); handlers `__existe_archivo`/`__leer_archivo`/`__escribir_archivo` → **test_json_avanzado, test_sistema_directo, test_sistema_avanzado byte-IDÉNTICOS** · batería 39/40 (solo `stress_fecha` flaky timing) · `vm_self.nvc` regenerado (111,318 B) · **Stream/Async/Par/Actor/Generator 100% delegados** · `sprint1_concurrencia` 100% paridad
 - **Bootstrapping doble CONFIRMADO** ✅ — SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` (150,684 B byte-idénticos en self/self2)
+- **Fases 61-63 reales en el pipeline Rust (12 Ago)** ✅ — OR patterns (`|` en arms ya no es `BitOr`), **rangos `..`/`..=` end-to-end** (lexer tokens + `Expr::Range` + desugar IR + sema E044) como patrones de `elegir` y como expresión-lista; fix del self-loop de JmpIf en el match con `NotEqual; JmpIf(body)`; fix `tcp_listener` cfg para builds sin features; **3 ejemplos nuevos** (`examples/fase61_or_patterns.nv`, `fase63_range_patterns.nv`, `fase64_string_patterns.nv`) byte-idénticos en VM y backend C; lexer 27 / parser 45 / sema 56 tests · cargo test 0 FAILED
 
 ### Después: **AI/ML (Fases 186-200) + Docs**
 - AI/ML + Data Science — feature más solicitada para un lenguaje moderno

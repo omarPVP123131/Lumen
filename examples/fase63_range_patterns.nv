@@ -1,0 +1,23 @@
+importar ingles;
+
+funcion texto grado(entero nota) {
+    elegir (nota) {
+        caso 0..60: retornar "reprobado";
+        caso 60..80: retornar "suficiente";
+        caso 80..=100: retornar "excelente";
+        defecto: retornar "nota invalida";
+    }
+}
+
+funcion entero principal() {
+    imprimir(grado(45));
+    imprimir(grado(70));
+    imprimir(grado(100));
+    imprimir(grado(105));
+
+    lista<entero> serie = 0..5;
+    imprimir(serie.largo());
+    imprimir(serie[0]);
+    imprimir(serie[4]);
+    retornar 0;
+}

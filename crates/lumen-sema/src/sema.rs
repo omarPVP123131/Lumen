@@ -471,6 +471,10 @@ impl SemanticAnalyzer {
                 self.resolve_op_expr_var(expr, var_types);
                 self.resolve_op_expr_var(index, var_types);
             }
+            Expr::Range { start, end, .. } => {
+                self.resolve_op_expr_var(start, var_types);
+                self.resolve_op_expr_var(end, var_types);
+            }
             Expr::StructInit { fields, .. } => {
                 for (_, val) in fields.iter_mut() {
                     self.resolve_op_expr_var(val, var_types);
@@ -480,6 +484,10 @@ impl SemanticAnalyzer {
                 for item in items.iter_mut() {
                     self.resolve_op_expr_var(item, var_types);
                 }
+            }
+            Expr::Range { start, end, .. } => {
+                self.resolve_op_expr_var(start, var_types);
+                self.resolve_op_expr_var(end, var_types);
             }
             Expr::Ternary {
                 condition,
@@ -1274,7 +1282,9 @@ impl SemanticAnalyzer {
 
                 for arm in arms {
                     let arm_val_type = self.analyze_expr(&arm.value);
-                    if arm_val_type != expr_type
+                    let is_range_arm = matches!(&arm.value, Expr::Range { .. });
+                    if !is_range_arm
+                        && arm_val_type != expr_type
                         && !(can_assign(&expr_type, &arm_val_type)
                             || (expr_type == TypeInfo::Decimal && arm_val_type == TypeInfo::Entero))
                     {
@@ -2822,6 +2832,25 @@ impl SemanticAnalyzer {
                     TypeInfo::Lista(Box::new(item_type))
                 }
             }
+            Expr::Range { start, end, span, .. } => {
+                let start_type = self.analyze_expr(start);
+                let end_type = self.analyze_expr(end);
+                for t in [&start_type, &end_type] {
+                    if !matches!(t, TypeInfo::Entero | TypeInfo::Decimal) {
+                        self.errors.push(SemError {
+                            code: "E044".to_string(),
+                            message: format!(
+                                "Los límites de un rango deben ser numéricos, no '{:?}'",
+                                t
+                            ),
+                            span: *span,
+                            suggestion: "Usa números enteros o decimales como límites del rango"
+                                .to_string(),
+                        });
+                    }
+                }
+                TypeInfo::Lista(Box::new(TypeInfo::Entero))
+            }
             Expr::Index { expr, index, span } => {
                 let expr_type = self.analyze_expr(expr);
                 let index_type = self.analyze_expr(index);
@@ -4114,6 +4143,53 @@ Forma f = Forma::Circulo(5.0);
 elegir (f) {
     caso Forma::Circulo(5.0): imprimir(\"circulo\");
     caso Forma::Cuadrado: imprimir(\"cuadrado\");
+}";
+        let errors = analyze(src);
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E080");
+    }
+
+    #[test]
+    fn test_match_range_pattern_numero() {
+        let src = "entero x = 5;
+elegir (x) {
+    caso 0..10: imprimir(\"bajo\");
+    caso 10..20: imprimir(\"medio\");
+    defecto: imprimir(\"alto\");
+}";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_match_range_pattern_inclusive() {
+        let src = "entero x = 5;
+elegir (x) {
+    caso 0..=5: imprimir(\"bajo\");
+    defecto: imprimir(\"alto\");
+}";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_match_or_patterns_ok() {
+        let src = "enum Color { Rojo, Verde, Azul }
+Color c = Color::Rojo;
+elegir (c) {
+    caso Color::Rojo | Color::Verde: imprimir(\"calido\");
+    caso Color::Azul: imprimir(\"frio\");
+}";
+        let errors = analyze(src);
+        assert!(errors.is_empty(), "Errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_match_or_patterns_exhaustive_count() {
+        let src = "enum Color { Rojo, Verde, Azul }
+Color c = Color::Rojo;
+elegir (c) {
+    caso Color::Rojo | Color::Verde: imprimir(\"calido\");
 }";
         let errors = analyze(src);
         assert!(!errors.is_empty());

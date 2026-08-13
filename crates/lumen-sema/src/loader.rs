@@ -703,10 +703,14 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &
                 }
             }
         }
-        Expr::List { items, .. } => {
+Expr::List { items, .. } => {
             for item in items.iter_mut() {
                 prefix_expr(item, prefix, locals, known);
             }
+        }
+        Expr::Range { start, end, .. } => {
+            prefix_expr(start, prefix, locals, known);
+            prefix_expr(end, prefix, locals, known);
         }
         Expr::Index {
             expr: target,

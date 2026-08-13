@@ -271,6 +271,12 @@ pub enum Expr {
         items: Vec<Expr>,
         span: Span,
     },
+    Range {
+        start: Box<Expr>,
+        end: Box<Expr>,
+        inclusive: bool,
+        span: Span,
+    },
     Index {
         expr: Box<Expr>,
         index: Box<Expr>,
@@ -413,6 +419,7 @@ impl Expr {
             | Expr::Grouping { span, .. }
             | Expr::Cast { span, .. }
             | Expr::List { span, .. }
+            | Expr::Range { span, .. }
             | Expr::Index { span, .. }
             | Expr::MethodCall { span, .. }
             | Expr::Lambda { span, .. }

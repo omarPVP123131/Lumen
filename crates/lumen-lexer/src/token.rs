@@ -156,6 +156,10 @@ pub enum TokenKind {
     ShiftRight,   // >>
     Question,     // ?
 
+    // Range operators
+    DotDot,       // ..
+    DotDotEqual,  // ..=
+
     // Delimiters
     LeftParen,    // (
     RightParen,   // )
