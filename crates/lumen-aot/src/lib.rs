@@ -1,6 +1,6 @@
 use cranelift::prelude::settings;
 use cranelift::prelude::*;
-use cranelift::codegen::ir::{StackSlot, StackSlotData, StackSlotKind};
+use cranelift::codegen::ir::StackSlot;
 use cranelift_module::{DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule, ObjectProduct};
 use lumen_ir::ir::{Func as LumenFunc, Instr, Op, Program};
@@ -161,25 +161,24 @@ impl AotCompiler {
         let mut builder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
         let i64 = types::I64;
 
-        // ── Variables: slots por nombre (SSA vía memoria, sin phis) ──
-        let mut slots: HashMap<String, StackSlot> = HashMap::new();
-        let mut slot_of = |builder: &mut FunctionBuilder, n: &str| -> StackSlot {
-            if let Some(&s) = slots.get(n) {
-                return s;
+        // ── Variables: SSA real del frontend (registros, no memoria) ──
+        // def_var en el entry con 0 garantiza dominancia de toda variable
+        // (los VarDecl sin inicializador emiten ConstInt 0 + Store).
+        use cranelift::frontend::Variable;
+        let mut vars: HashMap<String, Variable> = HashMap::new();
+        fn var_of(builder: &mut FunctionBuilder, vars: &mut HashMap<String, Variable>, n: &str) -> Variable {
+            if let Some(&v) = vars.get(n) {
+                return v;
             }
-            let s = builder.create_sized_stack_slot(StackSlotData::new(
-                StackSlotKind::ExplicitSlot,
-                8,
-                3,
-            ));
-            slots.insert(n.to_string(), s);
-            s
+            let v = builder.declare_var(types::I64);
+            vars.insert(n.to_string(), v);
+            v
         };
 
         // ── Bloques: uno por Label (branches con referencia adelantada) ──
         let instrs = &func.instrs;
 
-        // ── Entrada: bloque 0 con params de la firma → slots ──
+        // ── Entrada: bloque 0 con params de la firma → variables ──
         let entry_block = builder.create_block();
 
         let mut label_block: HashMap<usize, Block> = HashMap::new();
@@ -208,10 +207,23 @@ impl AotCompiler {
         }
         builder.ensure_inserted_block();
         let entry_params: Vec<Value> = builder.block_params(entry_block).to_vec();
+        // En registro: todas las variables usadas en la función se definen con 0.
+        // Los params de la firma se sobre-escriben con su valor real.
+        let mut used_names: Vec<String> = Vec::new();
+        for ins in instrs {
+            if let Instr::Load(n) | Instr::Store(n) = ins {
+                if !used_names.iter().any(|x| x == n) {
+                    used_names.push(n.clone());
+                }
+            }
+        }
+        let zero = builder.ins().iconst(i64, 0);
+        for n in &used_names {
+            let v = var_of(&mut builder, &mut vars, n); builder.def_var(v, zero);
+        }
         for (pi, pname) in func.params.iter().enumerate() {
-            let slot = slot_of(&mut builder, pname);
-            let val = entry_params.get(pi).copied().unwrap_or_else(|| builder.ins().iconst(i64, 0));
-            builder.ins().stack_store(val, slot, 0);
+            let val = entry_params.get(pi).copied().unwrap_or(zero);
+            let v = var_of(&mut builder, &mut vars, pname); builder.def_var(v, val);
         }
 
         // ── Emisión lineal ──
@@ -259,16 +271,14 @@ impl AotCompiler {
                     kinds.push(true);
                 }
                 Instr::Load(n) => {
-                    let slot = slot_of(&mut builder, n);
-                    stack.push(builder.ins().stack_load(i64, slot, 0));
+                    let v = var_of(&mut builder, &mut vars, n); stack.push(builder.use_var(v));
                     kinds.push(*var_kinds.get(n).unwrap_or(&false));
                 }
                 Instr::Store(n) => {
                     if let Some(v) = stack.pop() {
                         let k = kinds.pop().unwrap_or(false);
                         var_kinds.insert(n.to_string(), k);
-                        let slot = slot_of(&mut builder, n);
-                        builder.ins().stack_store(v, slot, 0);
+                        let vv = var_of(&mut builder, &mut vars, n); builder.def_var(vv, v);
                     }
                 }
                 Instr::Binary(op) => {
@@ -713,8 +723,21 @@ pub fn compile_to_c(program: &Program) -> String {
     out.push_str("static Val _call_by_name(const char* nm);\n");
     out.push('\n');
 
+    // Índice constante de cada registro (mismo orden que _init/_reg): evita
+    // strcmp lineal en cada Load/Store del camino caliente.
+    let mut name_idx: HashMap<String, usize> = HashMap::new();
+    for (i, n) in names.iter().enumerate() {
+        name_idx.insert(n.clone(), i);
+    }
+    let gv_of = |n: &str| -> String {
+        match name_idx.get(n) {
+            Some(i) => format!("gv[{}]", i),
+            None => format!("gv[_fv(\"{}\")]", esc(n)),
+        }
+    };
+
     for (name, func) in &program.funcs {
-        out.push_str(&emit_func(name, func, program, &name_sets));
+        out.push_str(&emit_func(name, func, program, &name_sets, &gv_of));
     }
     for n in &unknown {
         out.push_str(&format!("static Val _f_{}(void) {{ return _v_void(); }}\n\n", mangle(n)));
@@ -784,7 +807,7 @@ fn op_code(op: &Op) -> i64 {
     }
 }
 
-fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeMap<String, Vec<String>>) -> String {
+fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeMap<String, Vec<String>>, gv_of: &dyn Fn(&str) -> String) -> String {
     let mut s = String::new();
     s.push_str(&format!("static Val _f_{}(void) {{\n", mangle(name)));
 
@@ -816,10 +839,10 @@ fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeM
                 ));
             }
             Instr::Load(n) => {
-                s.push_str(&format!("  PUSH(gv[_fv(\"{}\")]);\n", esc(n)));
+                s.push_str(&format!("  PUSH({});\n", gv_of(n)));
             }
             Instr::Store(n) => {
-                s.push_str(&format!("  gv[_fv(\"{}\")] = _dcp(POP());\n", esc(n)));
+                s.push_str(&format!("  {} = _dcp(POP());\n", gv_of(n)));
             }
             Instr::Binary(op) => {
                 let code = op_code(op);
@@ -1037,19 +1060,19 @@ fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeM
                         pre.push_str(&caller_names.len().to_string());
                         pre.push_str("];\n");
                         for (i, cn) in caller_names.iter().enumerate() {
-                            pre.push_str(&format!("    _sv[{}] = gv[_fv(\"{}\")];\n", i, esc(cn)));
+                            pre.push_str(&format!("    _sv[{}] = {};\n", i, gv_of(cn)));
                         }
                         post.push_str("    ");
                         for (i, cn) in caller_names.iter().enumerate() {
-                            post.push_str(&format!("gv[_fv(\"{}\")] = _sv[{}]; ", esc(cn), i));
+                            post.push_str(&format!("{} = _sv[{}]; ", gv_of(cn), i));
                         }
                         post.push_str("}\n");
                     }
                     s.push_str(&pre);
                     for i in (0..plen).rev() {
                         s.push_str(&format!(
-                            "  gv[_fv(\"{}\")] = _dcp(POP());\n",
-                            esc(&callee.params[i])
+                            "  {} = _dcp(POP());\n",
+                            gv_of(&callee.params[i])
                         ));
                     }
                     for _ in plen..*argc {
