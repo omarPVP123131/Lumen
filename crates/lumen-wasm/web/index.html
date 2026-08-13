@@ -131,6 +131,10 @@
   button.small { padding: 3px 8px; font-size: 11px; }
   .separator { width: 1px; height: 16px; background: var(--surface0); }
 
+  .backend-toggle { display: flex; border: 1px solid var(--surface0); border-radius: 6px; overflow: hidden; }
+  .backend-toggle button { border-radius: 0; padding: 5px 9px; font-size: 11px; background: var(--crust); }
+  .backend-toggle button.active { background: var(--blue); color: var(--crust); font-weight: 700; }
+
   /* ── JS Interop Bar ─────────────────────────────────────── */
   .interop-bar {
     display: flex; align-items: center; gap: 6px; padding: 4px 12px;
@@ -288,6 +292,11 @@
       <button id="tokensBtn">🔤 Tokens</button>
       <button id="downloadBtn">⬇ .nvc</button>
       <div class="separator"></div>
+      <div id="backendToggle" class="backend-toggle" title="Motor de ejecución">
+        <button data-backend="wasm" class="active">Navegador (WASM)</button>
+        <button data-backend="server">Servidor (VM Rust)</button>
+      </div>
+      <div class="separator"></div>
       <span style="font-size:11px;color:var(--overlay0);">
         <kbd style="background:var(--surface0);padding:1px 5px;border-radius:3px;font-size:10px;">Ctrl+Enter</kbd>
       </span>
@@ -348,6 +357,7 @@ import init, { LumenRuntime } from '../pkg/lumen_wasm.js';
 // ── State ──────────────────────────────────────────────────
 let runtime = null;
 let consoleLogs = [];
+let execBackend = 'wasm'; // 'wasm' (navegador) | 'server' (VM Rust del servidor)
 
 // ── DOM refs ───────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -505,13 +515,52 @@ $('viewToggle').addEventListener('click', (e) => {
 
 // ── Run ────────────────────────────────────────────────────
 async function runCode() {
-  if (!runtime) { showToast('VM no cargada aún. Espera un momento...', 'error'); return; }
   const code = codeEl.value.trim();
   if (!code) { showToast('No hay código para ejecutar.', 'error'); return; }
+  if (execBackend === 'server' && !location.protocol.startsWith('http')) {
+    showToast('El modo Servidor requiere el playground vía lumen serve (http://localhost:PORT).', 'error');
+    return;
+  }
+  if (execBackend === 'wasm' && !runtime) {
+    showToast('VM no cargada aún. Espera un momento...', 'error'); return;
+  }
   setStatus('busy', 'Ejecutando...');
   runStatus.textContent = '⚡ ejecutando';
   outputPane.innerHTML = 'Ejecutando...';
   const start = performance.now();
+  if (execBackend === 'server') {
+    try {
+      const res = await fetch('/api/run', { method: 'POST', body: code });
+      const json = await res.json();
+      const elapsed = (performance.now() - start).toFixed(1);
+      execTime.textContent = elapsed + 'ms (servidor)';
+      outputPane.innerHTML = '';
+      if (json.ok) {
+        outputPane.textContent = json.output || '(sin salida)';
+        setStatus('ready', 'Completado');
+        runStatus.textContent = '✓ completado';
+        showToast('Ejecución completada (servidor)', 'success');
+      } else {
+        const div = document.createElement('div');
+        div.className = 'error-highlight';
+        div.textContent = markErrorLine(json.error || 'Error desconocido');
+        outputPane.appendChild(div);
+        setStatus('error', 'Error');
+        runStatus.textContent = '✗ error';
+        showToast('Error de ejecución', 'error');
+      }
+    } catch(e) {
+      execTime.textContent = (performance.now() - start).toFixed(1) + 'ms';
+      const div = document.createElement('div');
+      div.className = 'error-highlight';
+      div.textContent = 'Error de red: ' + e.message;
+      outputPane.appendChild(div);
+      setStatus('error', 'Error');
+      runStatus.textContent = '✗ error';
+      showToast('No se pudo contactar al servidor', 'error');
+    }
+    return;
+  }
   await new Promise(r => setTimeout(r, 30));
   try {
     const result = runtime.run(code);
@@ -1119,6 +1168,15 @@ imprimir("Título se restaurará en 3 segundos.");`);
 
 // ── Event Listeners ───────────────────────────────────────
 $('runBtn').addEventListener('click', runCode);
+$('backendToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-backend]');
+  if (!btn) return;
+  document.querySelectorAll('#backendToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  execBackend = btn.dataset.backend;
+  vmStatus.textContent = execBackend === 'server' ? 'servidor (VM Rust)' : '—';
+  showToast(execBackend === 'server' ? 'Ejecutando en el servidor (VM Rust nativa)' : 'Ejecutando en el navegador (WASM)', 'success');
+});
 $('clearBtn').addEventListener('click', () => {
   clearOutput();
   consolePane.innerHTML = '';

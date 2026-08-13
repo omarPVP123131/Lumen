@@ -1270,7 +1270,13 @@ fn escape_json(s: &str) -> String {
         .replace('\r', " ")
 }
 
-fn handle_api_request(stream: &mut std::net::TcpStream, path: &str, root: &Path) -> bool {
+fn handle_api_request(
+    stream: &mut std::net::TcpStream,
+    path: &str,
+    root: &Path,
+    method: &str,
+    body: &str,
+) -> bool {
     let examples_dir = root
         .parent()
         .and_then(|p| p.parent())
@@ -1284,6 +1290,26 @@ fn handle_api_request(stream: &mut std::net::TcpStream, path: &str, root: &Path)
         let _ = stream.write_all(header.as_bytes());
         let _ = stream.write_all(body.as_bytes());
     };
+    if path == "/api/run" && method == "POST" && !body.is_empty() {
+        let tmp = root.join("target/playground_tmp.nv");
+        let _ = fs::write(&tmp, body);
+        let lib_dirs = vec![PathBuf::from("stdlib")];
+        let (out, err) = run_source_capture(body, &lib_dirs, &tmp);
+        let resp = if err.is_empty() {
+            format!(
+                "{{\"ok\":true,\"output\":\"{}\"}}",
+                escape_json_ml(&out)
+            )
+        } else {
+            format!(
+                "{{\"ok\":false,\"error\":\"{}\"}}",
+                escape_json_ml(&err)
+            )
+        };
+        let _ = fs::remove_file(&tmp);
+        json_ok(stream, &resp);
+        return true;
+    }
     match path {
         "/api/health" => {
             json_ok(
@@ -1332,6 +1358,47 @@ fn handle_api_request(stream: &mut std::net::TcpStream, path: &str, root: &Path)
     }
 }
 
+/// Compila y ejecuta código LÚMEN desde un string (endpoint /api/run del
+/// playground). Devuelve (salida, error) — uno de los dos está vacío.
+fn run_source_capture(source: &str, lib_dirs: &[PathBuf], base_path: &Path) -> (String, String) {
+    let mut loader = ModuleLoader::new(lib_dirs.to_vec());
+    let mut program = match loader.resolve_imports(source, base_path) {
+        Ok(p) => p,
+        Err(e) => return (String::new(), format!("Error de import/parse: {:?}", e)),
+    };
+    let sema = SemanticAnalyzer::new();
+    let sem_errors = sema.analyze(&mut program);
+    if !sem_errors.is_empty() {
+        let msgs: Vec<String> = sem_errors
+            .iter()
+            .map(|e| {
+                format!(
+                    "{:?} — {} ({})",
+                    (e.span.start.line, e.span.start.col), e.message, e.code
+                )
+            })
+            .collect();
+        return (String::new(), msgs.join("\n"));
+    }
+    let ir = IRBuilder::new().build(&program);
+    let (bytecode, _) = Codegen::new().generate(&ir);
+    let mut vm = VM::new(bytecode);
+    match vm.run() {
+        Ok(()) => (vm.output().join("\n"), String::new()),
+        Err(e) => (vm.output().join("\n"), e.with_stack(vm.call_stack())),
+    }
+}
+
+/// Escape JSON con saltos de línea literales (`\n` → `\\n`) — necesario para
+/// el output multilínea de `/api/run`.
+fn escape_json_ml(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\r', "\\r")
+        .replace('\n', "\\n")
+        .replace('\t', "\\t")
+}
+
 fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
     use std::io::BufRead;
 
@@ -1340,6 +1407,15 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
     if reader.read_line(&mut request_line).is_err() {
         return;
     }
+    let parts: Vec<&str> = request_line.split_whitespace().collect();
+    if parts.len() < 2 {
+        return;
+    }
+    let method = parts[0];
+    if method != "GET" && method != "POST" {
+        return;
+    }
+    let mut content_length: usize = 0;
     let mut buf = String::new();
     loop {
         buf.clear();
@@ -1352,16 +1428,25 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
         if buf == "\r\n" || buf == "\n" {
             break;
         }
-    }
-
-    let parts: Vec<&str> = request_line.split_whitespace().collect();
-    if parts.len() < 2 || parts[0] != "GET" {
-        return;
+        if let Some(rest) = buf
+            .split_once(':')
+            .and_then(|(k, v)| k.eq_ignore_ascii_case("Content-Length").then_some(v))
+        {
+            content_length = rest.trim().parse().unwrap_or(0);
+        }
     }
     let raw_path = parts[1];
     let path_no_query = raw_path.split('?').next().unwrap_or(raw_path);
+    let mut body = String::new();
+    if method == "POST" && content_length > 0 {
+        use std::io::Read;
+        let mut v = vec![0u8; content_length];
+        if reader.read_exact(&mut v).is_ok() {
+            body = String::from_utf8_lossy(&v).to_string();
+        }
+    }
     if path_no_query.starts_with("/api/") {
-        if handle_api_request(stream, path_no_query, root) {
+        if handle_api_request(stream, path_no_query, root, method, &body) {
             return;
         }
     }
