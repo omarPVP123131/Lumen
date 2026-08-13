@@ -497,3 +497,19 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 - **Commits**: `7d3cdc8` (bootstrapping doble + fixpoint SHA-256 3DA624D6... verificado).
 
 **Estado actual: LÚMEN v2.4.1 — Autocompilación total, VM en LÚMEN funcional, dogfooding 112/117, bootstrapping doble certificado. Ready for release tag.**
+
+---
+
+## Progreso (11-12 Ago 2026 — sesión AI · AOT dual: backend Cranelift (rust) con paridad C — batería 38/38 + 12/38):
+
+- **Backend Cranelift implementado en `crates/lumen-aot/src/lib.rs`** (`--backend rust`): paridad funcional con el transpilador C en `imprimir` (int/string vía pila paralela `kinds`), concat de strings (`_rt_concat_ss/si/is`), igualdad de strings (`_rt_str_eq`), si/sino, mientras, recursión (fib), JmpIf/Jmp/Label con bloques y fallthrough.
+- **Detalles de emisión clave**: variables = `StackSlot` (`stack_store/stack_load`); `block_at[i]` = bloque del Label más reciente (entry_block jamás targetable); arm Label emite `jump(target)` solo si `target != cur && !terminated`; JmpIf = `brif(is_zero, target, [], fb, [])` con `fb` = label siguiente si `!= cur`, si no bloque fresco; Return/Halt/Jmp crean bloque muerto con jump al siguiente label (filtrado `!= entry_block`); `terminated=true` tras terminator → siguiente arm hace pre-switch a bloque fresco; concat = `Op::Add|Concat if ka||kb` despachando por (ka,kb); Equal/NotEqual solo con `ka&&kb` → `_rt_str_eq`; resultado concat hereda kind string.
+- **Bug clave del CLI**: el IR usa `Call("imprimir", 1)` para print, NO `Instr::Print` — el arm Call map emite builtins (`imprimir/print`→`_rt_print_*`, resto→placeholder 0). Los shims `_rt_concat_*`/`_rt_str_eq` usan firma con retorno `rsig` (i64,i64→i64) — usar `inst_results(call)[0]` con psig paniquea.
+- **Debug**: `LUMEN_AOT_DEBUG=1` (dump de instrs + clif IR en compile_body), `LUMEN_KEEP_OBJ=1` (conserva .obj tras link). Fallo de define_function imprime nombre de función + panic.
+- **El else del lenguaje es `sino`, NO `no`** (parser: E052/E020).
+- **Benchmark** (`bench_fib.nv`, fib(26) + loop 100): **VM 0.856s / C 0.406s / Cranelift 0.1155s** → Cranelift 7.4x VM, 3.5x C.
+- **Batería dual `aot_bateria_dual.ps1`** (38 ejemplos, ambos backends, watchdog 25s, normalización para jr_fecha/demo_completo: `(?m)^\d{10}\r?$`→`<TS>` (solo 10 dígitos anclados — el sin anclar se comía floats), `\d{2}:\d{2}:\d{2}`→`<TIME>` (sin anclar: cubre `T00:00:00Z` y datetimes `YYYY-MM-DD HH:MM:SS`), `(?m)^\d+\.\d+\r?$`→`<FLT>`): **C OK=38 DIFF=0 (paridad total) · RUST OK=12 DIFF=26 (límite de diseño: sin strings/structs/colecciones — placeholder 0) · FAIL=0 SKIP=1 (math) · HANG=0**.
+- **Limpieza**: el backend C genera `$base.c/.exe` en el dir del fuente — la batería los mueve/borra y el harness corre el exe con `Start-Process` redirigiendo `o.txt/e.txt` + watchdog (25s).
+- **loader.rs**: caché de imports a nivel de proceso keyed por path canónico + mtime — evita re-lexear/re-parsear módulos en serve/LSP/tests (solo archivos reales; los virtuales del playground se parsean siempre).
+- **Verificado**: `cargo test --release -p lumen-aot` 4/4 OK; E2E manual hello/42/loop/fib IDÉNTICOS en las 3 vías (VM, C, Cranelift); pre-commit build+test completo OK en `5c7c4d8`.
+- **Pendientes**: Playground Web real (`lumen serve` + UI con toggle backend) → Etapa 3 (lumen-aot → C transpiler + `lumen_rt.h`) → AI/ML (Fases 186-200).
