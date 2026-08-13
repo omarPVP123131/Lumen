@@ -19,6 +19,7 @@ struct Config {
     file: String,
     lib_dirs: Vec<PathBuf>,
     native: bool,
+    backend: String,
     port: u16,
 }
 
@@ -358,6 +359,7 @@ fn parse_args(args: &[String]) -> Config {
     let mut file = String::new();
     let mut lib_dirs = Vec::new();
     let mut native = false;
+    let mut backend = String::from("c");
     let mut port: u16 = 8080;
 
     while i < args.len() {
@@ -373,6 +375,15 @@ fn parse_args(args: &[String]) -> Config {
             }
             "--native" => {
                 native = true;
+            }
+            "--backend" => {
+                i += 1;
+                if i < args.len() {
+                    backend = args[i].clone();
+                } else {
+                    eprintln!("Error: falta el backend después de '--backend' (c | rust)");
+                    process::exit(1);
+                }
             }
             "--port" => {
                 i += 1;
@@ -417,6 +428,7 @@ fn parse_args(args: &[String]) -> Config {
         file,
         lib_dirs,
         native,
+        backend,
         port,
     }
 }
@@ -452,7 +464,7 @@ fn main() {
                 process::exit(1);
             }
             if config.native {
-                build_native(&config.file, &config.lib_dirs);
+                build_native(&config.file, &config.lib_dirs, &config.backend);
             } else {
                 build_bytecode(&config.file, &config.lib_dirs);
             }
@@ -577,6 +589,25 @@ fn main() {
 
 // ── Funciones auxiliares (sin cambios) ────────────────────────────
 
+/// Perfilado por fase: activado con la variable de entorno LUMEN_PROFILE.
+fn prof_on() -> bool {
+    std::env::var("LUMEN_PROFILE").is_ok()
+}
+
+fn prof_start() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
+fn prof_time(label: &str, start: &std::time::Instant) {
+    if prof_on() {
+        eprintln!(
+            "[perf] {:<16} {:>10.2} ms",
+            label,
+            start.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+}
+
 fn resolve_or_exit(mut loader: ModuleLoader, source: &str, base_path: &Path) -> Vec<DeclOrStmt> {
     match loader.resolve_imports(source, base_path) {
         Ok(p) => p,
@@ -689,6 +720,8 @@ fn show_sema_errors(errors: &[lumen_sema::SemError], source: &str, path: &str) -
 }
 
 fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
+    let t_total = prof_start();
+    let t = prof_start();
     let source = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -696,24 +729,35 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
             process::exit(1);
         }
     };
+    prof_time("lectura", &t);
+    let t = prof_start();
     let base_path = Path::new(path);
     let loader = ModuleLoader::new(lib_dirs.to_vec());
     let mut program = resolve_or_exit(loader, &source, base_path);
+    prof_time("imports+parse", &t);
+    let t = prof_start();
     let sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         show_sema_errors(&sem_errors, &source, path);
         process::exit(1);
     }
+    prof_time("sema", &t);
+    let t = prof_start();
     let builder = IRBuilder::new();
     let ir_program = builder.build(&program);
+    prof_time("ir", &t);
+    let t = prof_start();
     let codegen = Codegen::new();
     let (bytecode, _) = codegen.generate(&ir_program);
+    prof_time("codegen", &t);
+    prof_time("compile_total", &t_total);
     bytecode
 }
 
 fn run_source(path: &str, lib_dirs: &[PathBuf]) {
     let bytecode = compile_source(path, lib_dirs);
+    let t = prof_start();
     let mut vm = VM::new(bytecode);
     match vm.run() {
         Ok(()) => {
@@ -726,9 +770,11 @@ fn run_source(path: &str, lib_dirs: &[PathBuf]) {
             process::exit(1);
         }
     }
+    prof_time("vm.run", &t);
 }
 
 fn run_bytecode(path: &str) {
+    let t = prof_start();
     let data = match fs::read(path) {
         Ok(d) => d,
         Err(e) => {
@@ -736,11 +782,15 @@ fn run_bytecode(path: &str) {
             process::exit(1);
         }
     };
+    prof_time("lectura.nvc", &t);
+    let t = prof_start();
     match Bytecode::decode(&data) {
         Ok((bc, warnings)) => {
             for (offset, msg) in &warnings {
                 eprintln!("Advertencia en offset {}: {}", offset, msg);
             }
+            prof_time("decode", &t);
+            let t = prof_start();
             let mut vm = VM::new(bc);
             match vm.run() {
                 Ok(()) => {
@@ -756,6 +806,7 @@ fn run_bytecode(path: &str) {
                     process::exit(1);
                 }
             }
+            prof_time("vm.run", &t);
         }
         Err(e) => {
             eprintln!("Error al decodificar bytecode: {}", e);
@@ -901,7 +952,8 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
     }
 }
 
-fn build_native(path: &str, lib_dirs: &[PathBuf]) {
+fn build_native(path: &str, lib_dirs: &[PathBuf], backend: &str) {
+    let t = prof_start();
     let source = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -926,13 +978,9 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
         process::exit(1);
     }
     let ir = IRBuilder::new().build(&prog);
-    let c_code = lumen_aot::compile_to_c(&ir);
+    prof_time("compilar_a_ir", &t);
+
     let out_name = Path::new(path).with_extension("");
-    let c_path = out_name.with_extension("c");
-    fs::write(&c_path, &c_code).unwrap_or_else(|e| {
-        eprintln!("Error: {}", e);
-        process::exit(1);
-    });
     let exe_ext = if cfg!(windows) { "exe" } else { "" };
     let exe_name = if exe_ext.is_empty() {
         out_name.clone()
@@ -940,27 +988,117 @@ fn build_native(path: &str, lib_dirs: &[PathBuf]) {
         out_name.with_extension(exe_ext)
     };
     let cc = if cfg!(windows) { "gcc" } else { "cc" };
-    let s = std::process::Command::new(cc)
-        .args([
-            c_path.to_str().unwrap(),
-            "-O3",
-            "-o",
-            exe_name.to_str().unwrap(),
-            "-lm",
-            "-lregex",
-        ])
-        .status();
-    match s {
-        Ok(st) if st.success() => {
-            let _ = fs::remove_file(&c_path);
-            println!("✓ Binario nativo (C -O3): {}", exe_name.display());
+
+    match backend {
+        "c" => {
+            let t = prof_start();
+            let c_code = lumen_aot::compile_to_c(&ir);
+            let c_path = out_name.with_extension("c");
+            fs::write(&c_path, &c_code).unwrap_or_else(|e| {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            });
+            prof_time("codegen_c", &t);
+            let t = prof_start();
+            let s = std::process::Command::new(cc)
+                .args([
+                    c_path.to_str().unwrap(),
+                    "-O3",
+                    "-o",
+                    exe_name.to_str().unwrap(),
+                    "-lm",
+                    "-lregex",
+                ])
+                .status();
+            match s {
+                Ok(st) if st.success() => {
+                    prof_time("gcc", &t);
+                    let _ = fs::remove_file(&c_path);
+                    println!("✓ Binario nativo (C -O3): {}", exe_name.display());
+                }
+                Ok(st) => {
+                    eprintln!("Error compilacion C (exit {})", st);
+                    process::exit(1);
+                }
+                Err(_) => {
+                    eprintln!("gcc/clang no encontrado. Instala GCC.");
+                    process::exit(1);
+                }
+            }
         }
-        Ok(st) => {
-            eprintln!("Error compilacion C (exit {})", st);
-            process::exit(1);
+        "rust" => {
+            let t = prof_start();
+            let obj_path = out_name.with_extension("obj");
+            if let Err(e) = lumen_aot::compile_to_object(&ir, obj_path.to_str().unwrap()) {
+                eprintln!("Error backend Rust (Cranelift): {}", e);
+                process::exit(1);
+            }
+            prof_time("codegen_cranelift", &t);
+            let t = prof_start();
+            let shim_path = out_name.with_extension("rt.c");
+            fs::write(
+                &shim_path,
+                concat!(
+                    "#include <stdio.h>\n",
+                    "#include <stdlib.h>\n",
+                    "#include <string.h>\n",
+                    "void _rt_print_i64(long long v) { printf(\"%lld\\n\", v); }\n",
+                    "void _rt_print_str(const char* s) { printf(\"%s\\n\", s); }\n",
+                    "char* _rt_concat_ss(const char* a, const char* b) {\n",
+                    "  size_t n = strlen(a) + strlen(b) + 1; char* o = malloc(n);\n",
+                    "  strcpy(o, a); strcat(o, b); return o;\n",
+                    "}\n",
+                    "char* _rt_concat_si(const char* a, long long b) {\n",
+                    "  char buf[64]; snprintf(buf, 64, \"%lld\", b);\n",
+                    "  size_t n = strlen(a) + strlen(buf) + 1; char* o = malloc(n);\n",
+                    "  strcpy(o, a); strcat(o, buf); return o;\n",
+                    "}\n",
+                    "char* _rt_concat_is(long long a, const char* b) {\n",
+                    "  char buf[64]; snprintf(buf, 64, \"%lld\", a);\n",
+                    "  size_t n = strlen(buf) + strlen(b) + 1; char* o = malloc(n);\n",
+                    "  strcpy(o, buf); strcat(o, b); return o;\n",
+                    "}\n",
+                    "long long _rt_str_eq(const char* a, const char* b) { return strcmp(a, b) == 0; }\n",
+                ),
+            )
+            .unwrap_or_else(|e| {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            });
+            let s = std::process::Command::new(cc)
+                .args([
+                    obj_path.to_str().unwrap(),
+                    shim_path.to_str().unwrap(),
+                    "-O2",
+                    "-o",
+                    exe_name.to_str().unwrap(),
+                    "-lm",
+                ])
+                .status();
+            match s {
+                Ok(st) if st.success() => {
+                    prof_time("gcc_link", &t);
+                    if std::env::var_os("LUMEN_KEEP_OBJ").is_none() {
+                        let _ = fs::remove_file(&obj_path);
+                    }
+                    let _ = fs::remove_file(&shim_path);
+                    println!("✓ Binario nativo (Cranelift -O2): {}", exe_name.display());
+                }
+                Ok(st) => {
+                    eprintln!("Error link (exit {})", st);
+                    process::exit(1);
+                }
+                Err(_) => {
+                    eprintln!("gcc/clang no encontrado. Instala GCC.");
+                    process::exit(1);
+                }
+            }
         }
-        Err(_) => {
-            eprintln!("gcc/clang no encontrado. Instala GCC.");
+        other => {
+            eprintln!(
+                "Backend desconocido: '{}'. Usa '--backend c' (gcc) o '--backend rust' (Cranelift).",
+                other
+            );
             process::exit(1);
         }
     }

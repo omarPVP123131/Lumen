@@ -1,5 +1,6 @@
 use cranelift::prelude::settings;
 use cranelift::prelude::*;
+use cranelift::codegen::ir::{StackSlot, StackSlotData, StackSlotKind};
 use cranelift_module::{DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule, ObjectProduct};
 use lumen_ir::ir::{Func as LumenFunc, Instr, Op, Program};
@@ -22,7 +23,12 @@ pub struct AotCompiler {
     module: ObjectModule,
     funcs: HashMap<String, FuncInfo>,
     string_data: HashMap<String, DataId>,
-    printf_id: FuncId,
+    print_i64_id: FuncId,
+    print_str_id: FuncId,
+    concat_ss_id: FuncId,
+    concat_si_id: FuncId,
+    concat_is_id: FuncId,
+    str_eq_id: FuncId,
 }
 
 impl Default for AotCompiler {
@@ -51,16 +57,40 @@ impl AotCompiler {
 
         let mut psig = module.make_signature();
         psig.params.push(AbiParam::new(types::I64));
-        psig.returns.push(AbiParam::new(types::I64));
         let pid = module
-            .declare_function("printf", Linkage::Import, &psig)
+            .declare_function("_rt_print_i64", Linkage::Import, &psig)
+            .unwrap();
+        let pstr_id = module
+            .declare_function("_rt_print_str", Linkage::Import, &psig)
+            .unwrap();
+        // firma con retorno i64 para concat/eq
+        let mut rsig = module.make_signature();
+        rsig.params.push(AbiParam::new(types::I64));
+        rsig.params.push(AbiParam::new(types::I64));
+        rsig.returns.push(AbiParam::new(types::I64));
+        let css_id = module
+            .declare_function("_rt_concat_ss", Linkage::Import, &rsig)
+            .unwrap();
+        let csi_id = module
+            .declare_function("_rt_concat_si", Linkage::Import, &rsig)
+            .unwrap();
+        let cis_id = module
+            .declare_function("_rt_concat_is", Linkage::Import, &rsig)
+            .unwrap();
+        let seq_id = module
+            .declare_function("_rt_str_eq", Linkage::Import, &rsig)
             .unwrap();
 
         Self {
             module,
             funcs: HashMap::new(),
             string_data: HashMap::new(),
-            printf_id: pid,
+            print_i64_id: pid,
+            print_str_id: pstr_id,
+            concat_ss_id: css_id,
+            concat_si_id: csi_id,
+            concat_is_id: cis_id,
+            str_eq_id: seq_id,
         }
     }
 
@@ -96,8 +126,11 @@ impl AotCompiler {
         self.module.finish()
     }
 
-    fn declare(&mut self, name: &str, _func: &LumenFunc) {
+    fn declare(&mut self, name: &str, func: &LumenFunc) {
         let mut sig = self.module.make_signature();
+        for _ in &func.params {
+            sig.params.push(AbiParam::new(types::I64));
+        }
         sig.returns.push(AbiParam::new(types::I64));
         let id = self
             .module
@@ -107,6 +140,16 @@ impl AotCompiler {
     }
 
     fn compile_body(&mut self, name: &str, func: &LumenFunc) {
+        if std::env::var_os("LUMEN_AOT_DEBUG").is_some() {
+            eprintln!(
+                "[aot] compile_body({}) instrs={}",
+                name,
+                func.instrs.len()
+            );
+            for ins in &func.instrs {
+                eprintln!("[aot]   {:?}", ins);
+            }
+        }
         let info = self.funcs.get(name).cloned().unwrap();
         let mut ctx = self.module.make_context();
         ctx.func = cranelift::codegen::ir::Function::with_name_signature(
@@ -116,146 +159,442 @@ impl AotCompiler {
 
         let mut func_ctx = FunctionBuilderContext::new();
         let mut builder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
-        let block = builder.create_block();
-        builder.switch_to_block(block);
-        builder.ensure_inserted_block();
-
-        let mut stack: Vec<Value> = Vec::new();
         let i64 = types::I64;
 
-        for instr in &func.instrs {
-            match instr {
+        // ── Variables: slots por nombre (SSA vía memoria, sin phis) ──
+        let mut slots: HashMap<String, StackSlot> = HashMap::new();
+        let mut slot_of = |builder: &mut FunctionBuilder, n: &str| -> StackSlot {
+            if let Some(&s) = slots.get(n) {
+                return s;
+            }
+            let s = builder.create_sized_stack_slot(StackSlotData::new(
+                StackSlotKind::ExplicitSlot,
+                8,
+                3,
+            ));
+            slots.insert(n.to_string(), s);
+            s
+        };
+
+        // ── Bloques: uno por Label (branches con referencia adelantada) ──
+        let instrs = &func.instrs;
+
+        // ── Entrada: bloque 0 con params de la firma → slots ──
+        let entry_block = builder.create_block();
+
+        let mut label_block: HashMap<usize, Block> = HashMap::new();
+        for ins in instrs {
+            if let Instr::Label(n) = ins {
+                let b = builder.create_block();
+                label_block.insert(*n, b);
+            }
+        }
+        // block_of(i): bloque del label más reciente <= i (fallthrough)
+        let mut block_at: Vec<Block> = Vec::with_capacity(instrs.len());
+        let mut cur_fall = entry_block;
+        for (i, ins) in instrs.iter().enumerate() {
+            if let Instr::Label(n) = ins {
+                if let Some(&b) = label_block.get(n) {
+                    cur_fall = b;
+                }
+            }
+            block_at.push(cur_fall);
+            let _ = i;
+        }
+
+        builder.switch_to_block(entry_block);
+        for _ in &func.params {
+            builder.append_block_param(entry_block, i64);
+        }
+        builder.ensure_inserted_block();
+        let entry_params: Vec<Value> = builder.block_params(entry_block).to_vec();
+        for (pi, pname) in func.params.iter().enumerate() {
+            let slot = slot_of(&mut builder, pname);
+            let val = entry_params.get(pi).copied().unwrap_or_else(|| builder.ins().iconst(i64, 0));
+            builder.ins().stack_store(val, slot, 0);
+        }
+
+        // ── Emisión lineal ──
+        let mut cur = entry_block;
+        let mut stack: Vec<Value> = Vec::new();
+        // pila paralela: true = string (puntero), false = i64
+        let mut kinds: Vec<bool> = Vec::new();
+        let mut var_kinds: HashMap<String, bool> = HashMap::new();
+        let mut terminated = false;
+        let mut prev_ins: Option<&Instr> = None;
+        for (i, ins) in instrs.iter().enumerate() {
+            if let Instr::Label(n) = ins {
+                let target = label_block[n];
+                if target != cur {
+                    if !terminated {
+                        // el bloque actual termina saltando al label
+                        builder.ins().jump(target, &[]);
+                    }
+                    cur = target;
+                    builder.switch_to_block(cur);
+                    builder.ensure_inserted_block();
+                }
+                terminated = false;
+                prev_ins = Some(ins);
+                continue;
+            }
+            match ins {
                 Instr::ConstInt(n) => {
                     stack.push(builder.ins().iconst(i64, *n));
+                    kinds.push(false);
                 }
                 Instr::ConstFloat(_) => {
                     stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
                 }
                 Instr::ConstBool(b) => {
                     stack.push(builder.ins().iconst(i64, if *b { 1 } else { 0 }));
+                    kinds.push(false);
                 }
                 Instr::ConstStr(s) => {
                     let data_id = self.get_string_ptr(s);
                     let gv = self.module.declare_data_in_func(data_id, builder.func);
                     let ptr = builder.ins().global_value(i64, gv);
                     stack.push(ptr);
+                    kinds.push(true);
                 }
-                Instr::Load(name) => {
-                    stack.push(builder.ins().iconst(i64, 0));
-                    let _ = name;
+                Instr::Load(n) => {
+                    let slot = slot_of(&mut builder, n);
+                    stack.push(builder.ins().stack_load(i64, slot, 0));
+                    kinds.push(*var_kinds.get(n).unwrap_or(&false));
                 }
-                Instr::Store(_name) => {
-                    let _ = stack.pop();
+                Instr::Store(n) => {
+                    if let Some(v) = stack.pop() {
+                        let k = kinds.pop().unwrap_or(false);
+                        var_kinds.insert(n.to_string(), k);
+                        let slot = slot_of(&mut builder, n);
+                        builder.ins().stack_store(v, slot, 0);
+                    }
                 }
                 Instr::Binary(op) => {
                     let b = stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0));
                     let a = stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0));
+                    let kb = kinds.pop().unwrap_or(false);
+                    let ka = kinds.pop().unwrap_or(false);
                     let r = match op {
+                        Op::Add | Op::Concat if ka || kb => {
+                            let (fid, aa, bb) = match (ka, kb) {
+                                (true, true) => (self.concat_ss_id, a, b),
+                                (true, false) => (self.concat_si_id, a, b),
+                                _ => (self.concat_is_id, a, b),
+                            };
+                            let fref = self.module.declare_func_in_func(fid, builder.func);
+                            let call = builder.ins().call(fref, &[aa, bb]);
+                            builder.inst_results(call)[0]
+                        }
                         Op::Add => builder.ins().iadd(a, b),
                         Op::Sub => builder.ins().isub(a, b),
                         Op::Mul => builder.ins().imul(a, b),
-                        Op::Div => builder.ins().sdiv(a, b),
-                        Op::Mod => builder.ins().srem(a, b),
+                        Op::Div => {
+                            let z = builder.ins().iconst(i64, 0);
+                            let nonzero = builder.ins().icmp(IntCC::NotEqual, b, z);
+                            let one = builder.ins().iconst(i64, 1);
+                            let safe = builder.ins().select(nonzero, b, one);
+                            builder.ins().sdiv(a, safe)
+                        }
+                        Op::Mod => {
+                            let z = builder.ins().iconst(i64, 0);
+                            let nonzero = builder.ins().icmp(IntCC::NotEqual, b, z);
+                            let one = builder.ins().iconst(i64, 1);
+                            let safe = builder.ins().select(nonzero, b, one);
+                            builder.ins().srem(a, safe)
+                        }
                         Op::BitOr => builder.ins().bor(a, b),
+                        Op::BitAnd => builder.ins().band(a, b),
+                        Op::ShiftLeft => builder.ins().ishl(a, b),
+                        Op::ShiftRight => builder.ins().ushr(a, b),
                         Op::Equal
                         | Op::NotEqual
                         | Op::Less
                         | Op::LessEqual
                         | Op::Greater
                         | Op::GreaterEqual => {
-                            let cc = match op {
-                                Op::Equal => IntCC::Equal,
-                                Op::NotEqual => IntCC::NotEqual,
-                                Op::Less => IntCC::SignedLessThan,
-                                Op::LessEqual => IntCC::SignedLessThanOrEqual,
-                                Op::Greater => IntCC::SignedGreaterThan,
-                                Op::GreaterEqual => IntCC::SignedGreaterThanOrEqual,
-                                _ => unreachable!(),
-                            };
-                            let c = builder.ins().icmp(cc, a, b);
-                            let one = builder.ins().iconst(i64, 1);
-                            let zero = builder.ins().iconst(i64, 0);
-                            builder.ins().select(c, one, zero)
+                            if matches!(op, Op::Equal | Op::NotEqual) && ka && kb {
+                                // comparación de strings: strcmp vía shim
+                                let fref = self.module.declare_func_in_func(self.str_eq_id, builder.func);
+                                let call = builder.ins().call(fref, &[a, b]);
+                                let eq = builder.inst_results(call)[0];
+                                let z = builder.ins().iconst(i64, 0);
+                                let one = builder.ins().iconst(i64, 1);
+                                if matches!(op, Op::Equal) { eq } else {
+                                    let is_zero = builder.ins().icmp(IntCC::Equal, eq, z);
+                                    builder.ins().select(is_zero, one, z)
+                                }
+                            } else {
+                                let cc = match op {
+                                    Op::Equal => IntCC::Equal,
+                                    Op::NotEqual => IntCC::NotEqual,
+                                    Op::Less => IntCC::SignedLessThan,
+                                    Op::LessEqual => IntCC::SignedLessThanOrEqual,
+                                    Op::Greater => IntCC::SignedGreaterThan,
+                                    Op::GreaterEqual => IntCC::SignedGreaterThanOrEqual,
+                                    _ => unreachable!(),
+                                };
+                                let c = builder.ins().icmp(cc, a, b);
+                                let one = builder.ins().iconst(i64, 1);
+                                let zero = builder.ins().iconst(i64, 0);
+                                builder.ins().select(c, one, zero)
+                            }
                         }
-                        _ => builder.ins().iconst(i64, 0),
+                        Op::Concat => a,
+                        Op::And | Op::Or => {
+                            let z = builder.ins().iconst(i64, 0);
+                            let za = builder.ins().icmp(IntCC::NotEqual, a, z);
+                            let zb = builder.ins().icmp(IntCC::NotEqual, b, z);
+                            let r = if *op == Op::And { builder.ins().band(za, zb) } else { builder.ins().bor(za, zb) };
+                            let one = builder.ins().iconst(i64, 1);
+                            builder.ins().select(r, one, z)
+                        }
+                        Op::Negate | Op::Not => a,
                     };
                     stack.push(r);
+                    kinds.push(matches!(op, Op::Add | Op::Concat) && (ka || kb));
                 }
-                Instr::Print => {
+                Instr::Unary(Op::Not) => {
                     if let Some(v) = stack.pop() {
-                        let printf_ref = self
-                            .module
-                            .declare_func_in_func(self.printf_id, builder.func);
-                        builder.ins().call(printf_ref, &[v]);
+                        let _ = kinds.pop();
+                        let z = builder.ins().iconst(i64, 0);
+                        let is_zero = builder.ins().icmp(IntCC::Equal, v, z);
+                        let one = builder.ins().iconst(i64, 1);
+                        stack.push(builder.ins().select(is_zero, one, z));
+                        kinds.push(false);
                     }
                 }
-                Instr::Call(name, _argc) => {
-                    if let Some(info) = self.funcs.get(name).cloned() {
-                        let func_ref = self.module.declare_func_in_func(info.id, builder.func);
-                        let call = builder.ins().call(func_ref, &[]);
-                        if !builder.inst_results(call).is_empty() {
-                            stack.push(builder.inst_results(call)[0]);
-                        } else {
+                Instr::Unary(Op::Negate) => {
+                    if let Some(v) = stack.pop() {
+                        let _ = kinds.pop();
+                        stack.push(builder.ins().ineg(v));
+                        kinds.push(false);
+                    }
+                }
+                Instr::Print => {
+                    let v = stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0));
+                    let k = kinds.pop().unwrap_or(false);
+                    let fid = if k { self.print_str_id } else { self.print_i64_id };
+                    let fref = self.module.declare_func_in_func(fid, builder.func);
+                    builder.ins().call(fref, &[v]);
+                }
+                Instr::Call(name, argc) => {
+                    let mut args: Vec<Value> = Vec::with_capacity(*argc);
+                    let mut arg_kinds: Vec<bool> = Vec::with_capacity(*argc);
+                    for _ in 0..*argc {
+                        args.push(stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0)));
+                        arg_kinds.push(kinds.pop().unwrap_or(false));
+                    }
+                    args.reverse();
+                    arg_kinds.reverse();
+                    match name.as_str() {
+                        "imprimir" | "print" => {
+                            for (av, ak) in args.iter().zip(arg_kinds.iter()) {
+                                let fid = if *ak { self.print_str_id } else { self.print_i64_id };
+                                let fref = self.module.declare_func_in_func(fid, builder.func);
+                                builder.ins().call(fref, &[*av]);
+                            }
                             stack.push(builder.ins().iconst(i64, 0));
+                            kinds.push(false);
                         }
-                    } else {
-                        stack.push(builder.ins().iconst(i64, 0));
+                        "leer" | "read" | "__str_len" | "__str_longitud" | "largo" | "len"
+                        | "agregar" | "push" | "a_texto" | "to_texto" | "__str_from"
+                        | "__map_nuevo" | "__map_poner" | "__map_obtener" | "__map_contiene" => {
+                            // builtins de colecciones/strings sin runtime nativo en
+                            // el backend Cranelift: resultado placeholder
+                            stack.push(builder.ins().iconst(i64, 0));
+                            kinds.push(false);
+                        }
+                        _ => {
+                            if let Some(info) = self.funcs.get(name).cloned() {
+                                let func_ref = self.module.declare_func_in_func(info.id, builder.func);
+                                let call = builder.ins().call(func_ref, &args);
+                                let res = builder.inst_results(call)[0];
+                                stack.push(res);
+                                kinds.push(false);
+                            } else {
+                                stack.push(builder.ins().iconst(i64, 0));
+                                kinds.push(false);
+                            }
+                        }
                     }
                 }
                 Instr::Return => {
+                    if terminated {
+                        // dead code tras un terminator previo: bloque fresco
+                        cur = builder.create_block();
+                        builder.switch_to_block(cur);
+                        builder.ensure_inserted_block();
+                        terminated = false;
+                    }
                     let val = stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0));
+                    let _ = kinds.pop();
                     builder.ins().return_(&[val]);
+                    // bloque muerto tras el retorno (puede quedar vacío si
+                    // el siguiente Label se lleva el control)
+                    let fb0 = block_at.get(i + 1).copied();
+                    cur = builder.create_block();
+                    builder.switch_to_block(cur);
+                    builder.ensure_inserted_block();
+                    let fb = fb0.filter(|&b| b != entry_block).unwrap_or(cur);
+                    builder.ins().jump(fb, &[]);
+                    terminated = true;
+                    stack.clear();
                 }
                 Instr::Halt => {
+                    if terminated {
+                        cur = builder.create_block();
+                        builder.switch_to_block(cur);
+                        builder.ensure_inserted_block();
+                        terminated = false;
+                    }
                     let zero = builder.ins().iconst(i64, 0);
                     builder.ins().return_(&[zero]);
+                    let fb0 = block_at.get(i + 1).copied();
+                    cur = builder.create_block();
+                    builder.switch_to_block(cur);
+                    builder.ensure_inserted_block();
+                    let fb = fb0.filter(|&b| b != entry_block).unwrap_or(cur);
+                    builder.ins().jump(fb, &[]);
+                    terminated = true;
+                    stack.clear();
+                }
+                Instr::Jmp(target) => {
+                    if terminated {
+                        cur = builder.create_block();
+                        builder.switch_to_block(cur);
+                        builder.ensure_inserted_block();
+                        terminated = false;
+                    }
+                    if let Some(&b) = label_block.get(target) {
+                        builder.ins().jump(b, &[]);
+                    }
+                    // dead code tras el salto
+                    let fb0 = block_at.get(i + 1).copied();
+                    cur = builder.create_block();
+                    builder.switch_to_block(cur);
+                    builder.ensure_inserted_block();
+                    let fb = fb0.filter(|&b| b != entry_block).unwrap_or(cur);
+                    builder.ins().jump(fb, &[]);
+                    terminated = true;
+                }
+                Instr::JmpIf(target) => {
+                    if terminated {
+                        cur = builder.create_block();
+                        builder.switch_to_block(cur);
+                        builder.ensure_inserted_block();
+                        terminated = false;
+                    }
+                    if let Some(v) = stack.pop() {
+                        if let Some(&b) = label_block.get(target) {
+                            let z = builder.ins().iconst(i64, 0);
+                            let is_zero = builder.ins().icmp(IntCC::Equal, v, z);
+                            // la continuación tras el brif: si el siguiente
+                            // Label no es el bloque actual, ir a él; si no
+                            // (si/mientras), crear un bloque NUEVO para el
+                            // cuerpo que sigue (nunca fallthrough self-loop)
+                            let next = block_at.get(i + 1).copied().filter(|&nb| nb != entry_block);
+                            let fb = match next {
+                                Some(nb) if nb != cur => nb,
+                                _ => builder.create_block(),
+                            };
+                            builder.ins().brif(is_zero, b, &[], fb, &[]);
+                            terminated = true;
+                            if fb != cur {
+                                cur = fb;
+                                builder.switch_to_block(cur);
+                                builder.ensure_inserted_block();
+                                terminated = false;
+                            }
+                        }
+                    }
                 }
                 Instr::ArrayNew(_) => {
-                    stack.push(builder.ins().iconst(i64, 1));
+                    stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
                 }
                 Instr::ArrayPush | Instr::ArraySet => {
                     let _ = stack.pop();
                     let _ = stack.pop();
+                    let _ = kinds.pop();
+                    let _ = kinds.pop();
                 }
                 Instr::ArrayGet => {
                     let _ = stack.pop();
+                    let _ = stack.pop();
+                    let _ = kinds.pop();
+                    let _ = kinds.pop();
                     stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
                 }
                 Instr::ArrayLen => {
                     let _ = stack.pop();
+                    let _ = kinds.pop();
                     stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
                 }
                 Instr::StructNew(_, _) => {
-                    stack.push(builder.ins().iconst(i64, 1));
+                    stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
                 }
                 Instr::StructGet => {
                     let _ = stack.pop();
+                    let _ = kinds.pop();
                     stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
                 }
                 Instr::StructSet => {
                     let _ = stack.pop();
                     let _ = stack.pop();
                     let _ = stack.pop();
+                    let _ = kinds.pop();
+                    let _ = kinds.pop();
+                    let _ = kinds.pop();
                 }
                 Instr::EnumCtor { .. } => {
                     stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
                 }
-                Instr::Jmp(_) | Instr::JmpIf(_) | Instr::Label(_) | Instr::Nop => {}
+                Instr::ResultOk | Instr::OptionSome | Instr::OptionNone | Instr::ResultErr => {
+                    let _ = stack.pop();
+                    let _ = kinds.pop();
+                    stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
+                }
+                Instr::TryUnwrap | Instr::TupleAccess(_) | Instr::Read => {
+                    let _ = stack.pop();
+                    let _ = kinds.pop();
+                    stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
+                }
+                Instr::TupleNew(_) => {
+                    stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
+                }
+                Instr::FuncRef(_) => {
+                    stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
+                }
+                Instr::CallValue(_) => {
+                    stack.push(builder.ins().iconst(i64, 0));
+                    kinds.push(false);
+                }
+                Instr::Phi(_, _) | Instr::Nop => {}
                 _ => {}
             }
+            prev_ins = Some(ins);
         }
 
-        if !func
-            .instrs
-            .iter()
-            .any(|i| matches!(i, Instr::Return | Instr::Halt))
-        {
-            let zero = builder.ins().iconst(i64, 0);
-            builder.ins().return_(&[zero]);
-        }
-        builder.seal_block(block);
+        builder.seal_all_blocks();
         builder.finalize();
-        self.module.define_function(info.id, &mut ctx).unwrap();
+        if std::env::var_os("LUMEN_AOT_DEBUG").is_some() {
+            eprintln!("[aot] --- clif {} ---\n{}", name, ctx.func.display());
+        }
+        if let Err(e) = self.module.define_function(info.id, &mut ctx) {
+            eprintln!("[aot] define_function({}) fallo: {:?}", name, e);
+            panic!("aot define_function fallo");
+        }
         self.module.clear_context(&mut ctx);
     }
 
@@ -933,6 +1272,12 @@ mod tests {
         {
             return;
         }
+        if std::env::var_os("MSYSTEM").is_some() {
+            // git-bash antepone sus propios mingw64/usr bin al PATH: los DLLs
+            // del msys2 gcc (libgcc_s_seh, libwinpthread, ...) se resuelven
+            // contra los de Git for Windows → 0xC0000139 al cargar cc1.
+            return;
+        }
         let program = sample_program("main");
         let c = compile_to_c(&program);
         let dir = std::env::temp_dir().join(format!("lumen_aot_test_{}", std::process::id()));
@@ -943,8 +1288,14 @@ mod tests {
         let status = std::process::Command::new("gcc")
             .arg(c_path.to_str().unwrap())
             .args(["-O2", "-o", exe_path.to_str().unwrap(), "-lm"])
-            .status();
-        assert!(status.is_ok(), "gcc fallo al compilar");
+            .output();
+        let status = status.unwrap_or_else(|e| panic!("gcc fallo al invocar: {:?}", e));
+        if !status.status.success() {
+            panic!(
+                "gcc fallo al compilar:\n{}",
+                String::from_utf8_lossy(&status.stderr)
+            );
+        }
         let out = std::process::Command::new(&exe_path).output().unwrap();
         let test_out = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n");
         assert_eq!(test_out, "42\n");

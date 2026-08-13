@@ -274,6 +274,24 @@ impl ModuleLoader {
 }
 
 fn parse_source(source: &str, path: &Path) -> Result<Program, ModuleError> {
+    // Caché de imports a nivel de proceso: clave = path canónico + mtime.
+    // Evita re-lexear/re-parsear los mismos módulos entre invocaciones
+    // (lumen serve, LSP, tests). Solo se cachean archivos reales (mtime
+    // presente); los virtuales del playground se parsean siempre.
+    use std::sync::{Mutex, OnceLock};
+    use std::time::SystemTime;
+    static SOURCE_CACHE: OnceLock<Mutex<HashMap<PathBuf, (SystemTime, Program)>>> =
+        OnceLock::new();
+    let cache = SOURCE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
+    if let Some(mt) = mtime {
+        let cache = cache.lock().unwrap();
+        if let Some((cm, p)) = cache.get(path) {
+            if *cm == mt {
+                return Ok(p.clone());
+            }
+        }
+    }
     let lexer = Lexer::new(source);
     let (tokens, lex_errors) = lexer.tokenize();
     if !lex_errors.is_empty() {
@@ -305,6 +323,12 @@ fn parse_source(source: &str, path: &Path) -> Result<Program, ModuleError> {
                 })
                 .collect(),
         });
+    }
+    if let Some(mt) = mtime {
+        cache
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), (mt, program.clone()));
     }
     Ok(program)
 }
