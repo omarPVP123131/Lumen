@@ -658,6 +658,105 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
         retornar cg;
     }
     
+    si a_texto(tp) == "IfLet" {
+        numero patron = __map_obtener(stmt, "patron");
+        numero valor = __map_obtener(stmt, "valor");
+        numero cuerpo = __map_obtener(stmt, "cuerpo");
+        numero rama_else = __map_obtener(stmt, "sino");
+        numero temp = "__mt_" + a_texto(dt_cnt);
+        dt_cnt = dt_cnt + 1;
+        cg = _gen_expr(cg, valor);
+        cg = _cg_add_str(cg, temp);
+        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        numero p_tipo = __map_obtener(patron, "tipo");
+        numero p_kind = -1;
+        numero bind_nombre = 0;
+        si a_texto(p_tipo) == "Call" {
+            numero callee_p = __map_obtener(patron, "callee");
+            numero args_p = __map_obtener(patron, "args");
+            numero argc_p = __map_obtener(args_p, "cnt");
+            si a_texto(callee_p) == "algun" && argc_p == 1 {
+                p_kind = 0;
+                numero arg0 = __map_obtener(args_p, "0");
+                si a_texto(__map_obtener(arg0, "tipo")) == "Ident" {
+                    bind_nombre = __map_obtener(arg0, "nombre");
+                }
+            }
+            si a_texto(callee_p) == "exito" && argc_p == 1 {
+                p_kind = 1;
+                numero arg1 = __map_obtener(args_p, "0");
+                si a_texto(__map_obtener(arg1, "tipo")) == "Ident" {
+                    bind_nombre = __map_obtener(arg1, "nombre");
+                }
+            }
+            si a_texto(callee_p) == "error" && argc_p == 1 {
+                p_kind = 2;
+                numero arg2 = __map_obtener(args_p, "0");
+                si a_texto(__map_obtener(arg2, "tipo")) == "Ident" {
+                    bind_nombre = __map_obtener(arg2, "nombre");
+                }
+            }
+        }
+        si a_texto(p_tipo) == "Ident" {
+            bind_nombre = __map_obtener(patron, "nombre");
+        }
+        si a_texto(p_tipo) == "Ninguno" { p_kind = -2; }
+        numero jmp_if_p = 0;
+        numero tiene_test = 0;
+        si p_kind >= 0 || p_kind == -2 {
+            tiene_test = 1;
+            si p_kind >= 0 {
+                // Test de tipo: Load temp; MatchType(kind); JmpIf(else)
+                cg = _cg_add_str(cg, temp);
+                cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+                cg = _cg_add_int(cg, p_kind);
+                cg = _cg_emit(cg, _instr(53, __map_obtener(cg, "int_tmp")));
+            } sino {
+                // Ninguno: MatchType(0); Not → salta al else solo si es Some
+                cg = _cg_add_str(cg, temp);
+                cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+                cg = _cg_add_int(cg, 0);
+                cg = _cg_emit(cg, _instr(53, __map_obtener(cg, "int_tmp")));
+                cg = _cg_emit(cg, _instr(OP_NOT, 0));
+            }
+            jmp_if_p = __map_obtener(cg, "pos");
+            cg = _cg_emit(cg, _instr(OP_JMP_IF, 0));
+            si p_kind >= 0 {
+                // Extract: Load temp; MatchPayload; Store var
+                cg = _cg_add_str(cg, temp);
+                cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+                cg = _cg_emit(cg, _instr(54, 0));
+                cg = _cg_add_str(cg, bind_nombre);
+                cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+            }
+        } sino {
+            // Ident puro: Store directo sin test
+            cg = _cg_add_str(cg, temp);
+            cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+            cg = _cg_add_str(cg, bind_nombre);
+            cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        }
+        cg = _gen_stmt(cg, cuerpo);
+        numero e_tp = __map_obtener(rama_else, "tipo");
+        numero hay_else = 0;
+        si e_tp != 0 && a_texto(e_tp) != "Vacio" { hay_else = 1; }
+        si hay_else == 1 {
+            numero jmp_end_p = __map_obtener(cg, "pos");
+            cg = _cg_emit(cg, _instr(OP_JMP, 0));
+            numero else_start = __map_obtener(cg, "pos");
+            si tiene_test == 1 { cg = _cg_patch(cg, jmp_if_p, else_start); }
+            cg = _gen_stmt(cg, rama_else);
+            numero end_pos = __map_obtener(cg, "pos");
+            cg = _cg_patch(cg, jmp_end_p, end_pos);
+        } sino {
+            si tiene_test == 1 {
+                numero patch_pos = __map_obtener(cg, "pos");
+                cg = _cg_patch(cg, jmp_if_p, patch_pos);
+            }
+        }
+        retornar cg;
+    }
+
     si a_texto(tp) == "If" {
         numero cond = __map_obtener(stmt, "cond");
         numero cuerpo = __map_obtener(stmt, "cuerpo");

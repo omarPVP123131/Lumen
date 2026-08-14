@@ -4909,6 +4909,14 @@ impl VM {
                     instr_bytes.push(vm_op);
                     instr_bytes.extend_from_slice(&num_cnt.to_le_bytes());
                     num_cnt += 1;
+                } else if op == 53 {
+                    // MatchType: arg = kind (ints idx) → VM expects WithIdx(52, nums idx)
+                    let kind = get_int(arg as usize) as f64;
+                    nums_bytes.extend_from_slice(&kind.to_le_bytes());
+                    instr_bytes.push(4);
+                    instr_bytes.push(52);
+                    instr_bytes.extend_from_slice(&num_cnt.to_le_bytes());
+                    num_cnt += 1;
                 } else if op == 4 {
                     // PushBool: value is ints[arg]
                     let val = get_int(arg as usize);

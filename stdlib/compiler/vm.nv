@@ -2118,6 +2118,40 @@ funcion entero main() {
             st = estado_pila_poner(st, sp + 1, tl[a_entero(ix5)]);
             sp = sp + 1;
         }
+        si op == 52 {
+            entero kind52 = a_entero(nums[a]);
+            numero tv52 = estado_pila(st, sp);
+            sp = sp - 1;
+            entero bool52 = 0;
+            si kind52 == 0 {
+                si tv52 >= 5000000000 && tv52 < 6000000000 && a_entero(tv52 - 5000000000) < largo(opts) &&
+                   __map_obtener(opts[a_entero(tv52 - 5000000000)], "some") == 1 { bool52 = 1; }
+            }
+            si kind52 == 1 {
+                si tv52 >= 4000000000 && tv52 < 5000000000 && a_entero(tv52 - 4000000000) < largo(resl) &&
+                   __map_obtener(resl[a_entero(tv52 - 4000000000)], "ok") == 1 { bool52 = 1; }
+            }
+            si kind52 == 2 {
+                si tv52 >= 4000000000 && tv52 < 5000000000 && a_entero(tv52 - 4000000000) < largo(resl) &&
+                   __map_obtener(resl[a_entero(tv52 - 4000000000)], "ok") == 0 { bool52 = 1; }
+            }
+            si bool52 == 1 { st = estado_pila_poner(st, sp + 1, 9000000001.0); } sino { st = estado_pila_poner(st, sp + 1, 9000000000.0); }
+            sp = sp + 1;
+        }
+        si op == 53 {
+            numero tv53 = estado_pila(st, sp);
+            sp = sp - 1;
+            numero pay53 = tv53;
+            si tv53 >= 5000000000 && tv53 < 6000000000 && a_entero(tv53 - 5000000000) < largo(opts) &&
+               __map_obtener(opts[a_entero(tv53 - 5000000000)], "some") == 1 {
+                pay53 = __map_obtener(opts[a_entero(tv53 - 5000000000)], "v");
+            }
+            si tv53 >= 4000000000 && tv53 < 5000000000 && a_entero(tv53 - 4000000000) < largo(resl) {
+                pay53 = __map_obtener(resl[a_entero(tv53 - 4000000000)], "v");
+            }
+            st = estado_pila_poner(st, sp + 1, pay53);
+            sp = sp + 1;
+        }
         si op == 46 {
             numero y = estado_pila(st, sp);
             sp = sp - 1;

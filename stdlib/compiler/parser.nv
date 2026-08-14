@@ -1157,6 +1157,41 @@ funcion numero _parse_stmt(numero st) {
 
     si (tt == 6 && (tvs == "si" || tvs == "if")) {
         st = _st_adv(st);
+        // If-let: si sea Patron = Expr { ... }
+        si (_st_kw(st, "sea") || _st_kw(st, "let")) {
+            st = _st_adv(st);
+            numero rp = _parse_expr(st);
+            numero patron = __map_obtener(rp, "node");
+            st = __map_obtener(rp, "st");
+            si (_st_ch(st, 4, "=")) { st = _st_adv(st); }
+            numero rv2 = _parse_expr(st);
+            numero valor = __map_obtener(rv2, "node");
+            st = __map_obtener(rv2, "st");
+            numero rb = _parse_blk(st);
+            numero cuerpo = __map_obtener(rb, "node");
+            st = __map_obtener(rb, "st");
+            numero _els = __map_nuevo();
+            _els = __map_poner(_els, "tipo", "Vacio");
+            si (_st_kw(st, "sino") || _st_kw(st, "else")) {
+                st = _st_adv(st);
+                si (_st_kw(st, "si") || _st_kw(st, "if")) {
+                    numero rs = _parse_stmt(st);
+                    _els = __map_obtener(rs, "node");
+                    st = __map_obtener(rs, "st");
+                } sino {
+                    numero rb2 = _parse_blk(st);
+                    _els = __map_obtener(rb2, "node");
+                    st = __map_obtener(rb2, "st");
+                }
+            }
+            numero n = __map_nuevo();
+            n = __map_poner(n, "tipo", "IfLet");
+            n = __map_poner(n, "patron", patron);
+            n = __map_poner(n, "valor", valor);
+            n = __map_poner(n, "cuerpo", cuerpo);
+            n = __map_poner(n, "sino", _els);
+            retornar _res(st, n);
+        }
         numero rc = _parse_expr(st);
         numero cond = __map_obtener(rc, "node");
         st = __map_obtener(rc, "st");
