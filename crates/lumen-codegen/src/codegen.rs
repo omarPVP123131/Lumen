@@ -322,6 +322,17 @@ impl Codegen {
                     .instructions
                     .push(Instruction::Simple(Opcode::OptionNone));
             }
+            Instr::MatchType(kind) => {
+                let idx = self.intern_num(*kind as f64);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::MatchType, idx));
+            }
+            Instr::MatchPayload => {
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::MatchPayload));
+            }
             Instr::TupleNew(count) => {
                 let idx = self.intern_num(*count as f64);
                 self.bytecode

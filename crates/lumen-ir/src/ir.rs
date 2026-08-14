@@ -63,6 +63,8 @@ pub enum Instr {
     TryUnwrap,
     OptionSome,
     OptionNone,
+    MatchType(u8),
+    MatchPayload,
     TupleNew(usize),
     TupleAccess(usize),
     EnumCtor {

@@ -95,15 +95,15 @@ Producción & Cloud  [░░░░░░░░░░░░░░░░░░░�
 | # | Feature | Sintaxis | Estado |
 |---|---------|----------|--------|
 | 61 | **OR Patterns** | `caso Rojo \| Verde:` | ✅ (12 Ago: fix real — antes el `\|` era consumido como `BitOr` E035; ahora flags `match_arm_pipe` + `NotEqual; JmpIf(body)`; `examples/fase61_or_patterns.nv`) |
-| 62 | **If-let / While-let** | `si sea Algun(x) = opt { }` | ✅ |
+| 62 | **If-let / While-let** | `si sea Algun(x) = opt { }` | ✅ (13 Ago: REAL end-to-end — bindings de payload bindeados en sema (`bind_pattern_vars`), opcodes nuevos `MatchType` 52/`MatchPayload` 53 en IR/bytecode/VM/backend C, `elegir` con payloads `caso algun(x)`; `examples/fase62_if_let.nv` y `fase62_if_let2.nv`) |
 | 63 | **Range Patterns** | `caso 0..10:` — comparación de rango | ✅ (12 Ago: feature NUEVA end-to-end — tokens `DotDot`/`DotDotEqual`, `Expr::Range`, desugar IR a `>=`+`<`/`<=`; expresión-lista `0..5`; `examples/fase63_range_patterns.nv`) |
 | 64 | **String Patterns** | `caso "hola":` — igualdad de string | ✅ (12 Ago: verificado con OR de strings; `examples/fase64_string_patterns.nv`) |
 | 65 | **Guard Let** | `sea x = expr sino { romper }` | ✅ |
-| 66 | **Operator Overloading** | `impl Suma para MiTipo` | ✅ |
+| 66 | **Operator Overloading** | `impl Suma para MiTipo` | ✅ vía `rasgo`+`impl` sobre primitivos (entero/texto); structs custom → E020 (gap documentado); `examples/fase66_operator_overloading.nv` y `fase66_operator_overloading2.nv` |
 | 67 | **Extension Methods** | `impl MiRasgo para TipoExterno` | ✅ |
-| 68 | **Associated Types** | `tipo Item;` en traits | ✅ |
+| 68 | **Associated Types** | `tipo Item;` en traits | ✅ (`rasgo Coleccion { tipo Item; }` — parse+sema+resolución en impl; `examples/fase68_associated_types.nv` y `fase68_associated_types2.nv`) |
 | 69 | **Where Clauses** | `<T> donde T: Comparable` | ⏭️ Saltado |
-| 70 | **Impl Trait return** | `-> impl Mostrable` | ✅ |
+| 70 | **Impl Trait return** | `-> impl Mostrable` | ✅ rasgo como tipo de retorno (`funcion Mostrable fabricar()`) + `impl Trait para Tipo`; `examples/fase70_impl_trait.nv` y `fase70_impl_trait2.nv` |
 
 ---
 
@@ -249,7 +249,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 | 171 | **WASM backend** | Compilar a WebAssembly para ejecución en navegadores | ✅ v1.7.0 — VM refactorizada, crate lumen-wasm |
 | 172 | **WASM: WASI** | Ejecutar en servidores/serverless vía WASI | ✅ build + CI + test |
 | 173 | **WASM: JS interop** | Llamar funciones JS desde LÚMEN y viceversa | ✅ 17 bridge functions |
-| 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | ✅ Pipeline LÚMEN→.nvc→ejecuta; **Sprint 5-8 (31 Jul-8 Ago): fixpoint puro confirmado** — `compiler_v4_self.nvc` byte-IDÉNTICO (SHA-256 3DA624D6…), 5s; **VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x COW Arc)**; **Stream/Async/Par/Actor/Generator delegados a natives**; **fuego: 112/117 ejemplos CORRECTOS**; **Bootstrapping doble (compilador + VM) CONFIRMADO** — SHA-256 `3DA624D6...` (150,684 B byte-idénticos) |
+| 174 | **Self-hosting** | El compilador de LÚMEN escrito en LÚMEN | ✅ Pipeline LÚMEN→.nvc→ejecuta; **Sprint 5-8 (31 Jul-8 Ago): fixpoint puro confirmado** — `compiler_v4_self.nvc` byte-IDÉNTICO (SHA-256 3DA624D6…), 5s; **VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x COW Arc)**; **Stream/Async/Par/Actor/Generator delegados a natives**; **fuego: 112/117 ejemplos CORRECTOS**; **Bootstrapping doble (compilador + VM) CONFIRMADO** — SHA-256 `3DA624D6...` (150,684 B byte-idénticos); **13 Ago: rangos `..`/`..=` en el self-hosted — fixpoint NUEVO SHA-256 `5D153BC6…` (139,732 B)** |
 | 175 | **Docker Image** | `lumen:latest`, multi-stage, slim | ✅ Dockerfile |
 | 176 | **Docker Compose** | Servicios lumen + lumen-repl | ✅ docker-compose.yml |
 | 177 | **GitHub Action** | CI build/test/clippy/fmt/coverage | ✅ .github/workflows/ |

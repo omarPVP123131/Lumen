@@ -485,10 +485,6 @@ impl SemanticAnalyzer {
                     self.resolve_op_expr_var(item, var_types);
                 }
             }
-            Expr::Range { start, end, .. } => {
-                self.resolve_op_expr_var(start, var_types);
-                self.resolve_op_expr_var(end, var_types);
-            }
             Expr::Ternary {
                 condition,
                 true_branch,
@@ -1090,13 +1086,15 @@ impl SemanticAnalyzer {
                 value_type
             }
             Stmt::IfLet {
+                pattern,
                 value,
                 then_body,
                 else_body,
-                ..
+                span,
             } => {
                 self.analyze_expr(value);
                 self.scopes.push(Scope::new());
+                self.bind_pattern_vars(pattern, *span);
                 for n in then_body {
                     self.analyze_decl_or_stmt(n);
                 }
@@ -1111,10 +1109,14 @@ impl SemanticAnalyzer {
                 TypeInfo::Void
             }
             Stmt::GuardLet {
-                value, else_body, ..
+                pattern,
+                value,
+                else_body,
+                span,
             } => {
                 self.analyze_expr(value);
                 self.scopes.push(Scope::new());
+                self.bind_pattern_vars(pattern, *span);
                 for n in else_body {
                     self.analyze_decl_or_stmt(n);
                 }
@@ -1281,9 +1283,13 @@ impl SemanticAnalyzer {
                 }
 
                 for arm in arms {
+                    self.scopes.push(Scope::new());
+                    self.bind_pattern_vars(&arm.value, arm.span);
                     let arm_val_type = self.analyze_expr(&arm.value);
                     let is_range_arm = matches!(&arm.value, Expr::Range { .. });
+                    let is_pattern_arm = matches!(&arm.value, Expr::Algun { .. } | Expr::Exito { .. } | Expr::Error { .. });
                     if !is_range_arm
+                        && !is_pattern_arm
                         && arm_val_type != expr_type
                         && !(can_assign(&expr_type, &arm_val_type)
                             || (expr_type == TypeInfo::Decimal && arm_val_type == TypeInfo::Entero))
@@ -1316,7 +1322,6 @@ impl SemanticAnalyzer {
                             });
                         }
                     }
-                    self.scopes.push(Scope::new());
                     for node in &arm.body {
                         self.analyze_decl_or_stmt(node);
                     }
@@ -3457,6 +3462,37 @@ impl SemanticAnalyzer {
 
     fn current_scope(&mut self) -> &mut Scope {
         self.scopes.last_mut().unwrap()
+    }
+
+    // Vincula las variables capturadas por un patrón de if-let / arm de match
+    // en el scope actual (tipo dinámico `Numero` — acepta cualquier valor).
+    fn bind_pattern_vars(&mut self, pattern: &Expr, span: Span) {
+        match pattern {
+            Expr::Ident { name, .. } => {
+                let _ = self.current_scope().define(name, TypeInfo::Numero, span);
+            }
+            Expr::Call { args, .. } => {
+                for a in args.iter() {
+                    self.bind_pattern_vars(a, span);
+                }
+            }
+            Expr::Algun { expr, .. } => {
+                self.bind_pattern_vars(expr, span);
+            }
+            Expr::Exito { expr, .. } => {
+                self.bind_pattern_vars(expr, span);
+            }
+            Expr::Error { expr, .. } => {
+                self.bind_pattern_vars(expr, span);
+            }
+            Expr::Ninguno { .. } | Expr::EnumCtor { .. } => {}
+            Expr::List { items, .. } => {
+                for it in items.iter() {
+                    self.bind_pattern_vars(it, span);
+                }
+            }
+            _ => {}
+        }
     }
 }
 

@@ -55,6 +55,8 @@ pub enum Opcode {
     ShiftLeft = 49,
     ShiftRight = 50,
     Concat = 51,
+    MatchType = 52,
+    MatchPayload = 53,
 }
 
 impl Opcode {
@@ -112,6 +114,8 @@ impl Opcode {
             49 => Some(Opcode::ShiftLeft),
             50 => Some(Opcode::ShiftRight),
             51 => Some(Opcode::Concat),
+            52 => Some(Opcode::MatchType),
+            53 => Some(Opcode::MatchPayload),
             _ => None,
         }
     }

@@ -260,8 +260,8 @@ impl LumenRuntime {
 
 // ── Lógica común de compilación/ejecución ─────────────────────────────────
 
-/// Stdlib embebida generada por build.rs (`stdlib/*.nv` del repo).
-/// Clave = nombre base del archivo, valor = contenido.
+// Stdlib embebida generada por build.rs (`stdlib/*.nv` del repo).
+// Clave = nombre base del archivo, valor = contenido.
 include!(concat!(env!("OUT_DIR"), "/embedded_stdlib.rs"));
 
 #[cfg(not(feature = "wasm"))]

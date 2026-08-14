@@ -587,12 +587,13 @@ impl IRBuilder {
                 else_body,
                 ..
             } => {
+                let temp = format!("__mt_{}", self.temp_counter);
+                self.temp_counter += 1;
                 self.gen_expr(value);
-                self.gen_expr(pattern);
-                self.emit(Instr::Binary(Op::Equal));
+                self.emit(Instr::Store(temp.clone()));
                 let el = self.new_label();
                 let end_l = self.new_label();
-                self.emit(Instr::JmpIf(el));
+                self.emit_if_let_pattern(&temp, pattern, el);
                 for n in then_body {
                     self.gen_decl_or_stmt(n);
                 }
@@ -1477,6 +1478,67 @@ impl IRBuilder {
     // - Patrón concreto: `x != pat` → si NO matchea no salta (caen los checks
     //   siguientes); si matchea, NotEqual es falso → salta al body.
     // - Rango (`0..5`): fuera de rango → salta a fail; dentro → Jmp al body.
+    fn emit_if_let_pattern(&mut self, temp: &str, pattern: &Expr, else_label: usize) {
+        // Carga el valor capturado en `temp` y emite el test de tipo + bindings.
+        self.emit(Instr::Load(temp.to_string()));
+        match pattern {
+            Expr::Algun { expr, .. } => {
+                self.emit(Instr::MatchType(0));
+                self.emit(Instr::JmpIf(else_label));
+                self.bind_payload(temp, expr);
+            }
+            Expr::Exito { expr, .. } => {
+                self.emit(Instr::MatchType(1));
+                self.emit(Instr::JmpIf(else_label));
+                self.bind_payload(temp, expr);
+            }
+            Expr::Error { expr, .. } => {
+                self.emit(Instr::MatchType(2));
+                self.emit(Instr::JmpIf(else_label));
+                self.bind_payload(temp, expr);
+            }
+            Expr::Ninguno { .. } => {
+                self.emit(Instr::MatchType(0));
+                self.emit(Instr::Unary(Op::Not));
+                self.emit(Instr::JmpIf(else_label));
+            }
+            Expr::Ident { name, .. } => {
+                self.emit(Instr::Load(temp.to_string()));
+                self.emit(Instr::Store(name.clone()));
+            }
+            _ => {
+                // Fallback: comparación por igualdad (pattern como valor).
+                self.emit(Instr::Load(temp.to_string()));
+                self.gen_expr(pattern);
+                self.emit(Instr::Binary(Op::Equal));
+                self.emit(Instr::JmpIf(else_label));
+            }
+        }
+    }
+
+    fn bind_payload(&mut self, temp: &str, pattern: &Expr) {
+        self.emit(Instr::Load(temp.to_string()));
+        self.emit(Instr::MatchPayload);
+        match pattern {
+            Expr::Ident { name, .. } => {
+                self.emit(Instr::Store(name.clone()));
+            }
+            Expr::List { items, .. } => {
+                let t2 = format!("__mt_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.emit(Instr::Store(t2.clone()));
+                for (i, it) in items.iter().enumerate() {
+                    if let Expr::Ident { name, .. } = it {
+                        self.emit(Instr::Load(t2.clone()));
+                        self.emit(Instr::TupleAccess(i));
+                        self.emit(Instr::Store(name.clone()));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn emit_match_pattern(
         &mut self,
         expr: &Expr,
@@ -1503,6 +1565,14 @@ impl IRBuilder {
                     Op::Less
                 }));
                 self.emit(Instr::JmpIf(fail_label));
+                self.emit(Instr::Jmp(body_label));
+            }
+            Expr::Algun { .. } | Expr::Exito { .. } | Expr::Error { .. } => {
+                let temp = format!("__mt_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.gen_expr(expr);
+                self.emit(Instr::Store(temp.clone()));
+                self.emit_if_let_pattern(&temp, pattern, fail_label);
                 self.emit(Instr::Jmp(body_label));
             }
             _ => {

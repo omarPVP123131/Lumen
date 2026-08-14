@@ -1,6 +1,5 @@
 use cranelift::prelude::settings;
 use cranelift::prelude::*;
-use cranelift::codegen::ir::StackSlot;
 use cranelift_module::{DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule, ObjectProduct};
 use lumen_ir::ir::{Func as LumenFunc, Instr, Op, Program};
@@ -173,7 +172,7 @@ impl AotCompiler {
             let v = builder.declare_var(types::I64);
             vars.insert(n.to_string(), v);
             v
-        };
+        }
 
         // ── Bloques: uno por Label (branches con referencia adelantada) ──
         let instrs = &func.instrs;
@@ -233,7 +232,6 @@ impl AotCompiler {
         let mut kinds: Vec<bool> = Vec::new();
         let mut var_kinds: HashMap<String, bool> = HashMap::new();
         let mut terminated = false;
-        let mut prev_ins: Option<&Instr> = None;
         for (i, ins) in instrs.iter().enumerate() {
             if let Instr::Label(n) = ins {
                 let target = label_block[n];
@@ -247,7 +245,6 @@ impl AotCompiler {
                     builder.ensure_inserted_block();
                 }
                 terminated = false;
-                prev_ins = Some(ins);
                 continue;
             }
             match ins {
@@ -436,7 +433,6 @@ impl AotCompiler {
                         cur = builder.create_block();
                         builder.switch_to_block(cur);
                         builder.ensure_inserted_block();
-                        terminated = false;
                     }
                     let val = stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0));
                     let _ = kinds.pop();
@@ -457,7 +453,6 @@ impl AotCompiler {
                         cur = builder.create_block();
                         builder.switch_to_block(cur);
                         builder.ensure_inserted_block();
-                        terminated = false;
                     }
                     let zero = builder.ins().iconst(i64, 0);
                     builder.ins().return_(&[zero]);
@@ -475,7 +470,6 @@ impl AotCompiler {
                         cur = builder.create_block();
                         builder.switch_to_block(cur);
                         builder.ensure_inserted_block();
-                        terminated = false;
                     }
                     if let Some(&b) = label_block.get(target) {
                         builder.ins().jump(b, &[]);
@@ -593,7 +587,6 @@ impl AotCompiler {
                 Instr::Phi(_, _) | Instr::Nop => {}
                 _ => {}
             }
-            prev_ins = Some(ins);
         }
 
         builder.seal_all_blocks();
@@ -1167,6 +1160,21 @@ fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeM
             ),
             Instr::OptionSome => s.push_str("  PUSH(_some(POP()));\n"),
             Instr::OptionNone => s.push_str("  PUSH(_none());\n"),
+            Instr::MatchType(k) => {
+                let test = match *k {
+                    0 => "_u.t == T_SOME",
+                    1 => "_u.t == T_OK",
+                    2 => "_u.t == T_ERR",
+                    _ => "0",
+                };
+                s.push_str(&format!(
+                    "  {{ Val _u = POP(); PUSH(_v_bool({})); }}\n",
+                    test
+                ));
+            }
+            Instr::MatchPayload => {
+                s.push_str("  { Val _u = POP(); if (_u.t == T_SOME || _u.t == T_OK || _u.t == T_ERR) { PUSH(_u.items[0]); } else { PUSH(_u); } }\n");
+            }
             Instr::TupleNew(n) => {
                 s.push_str(&format!(
                     "  {{ Val _t[{}]; for (int _k = {} - 1; _k >= 0; _k--) _t[_k] = POP(); PUSH(_tupn(_t, {})); }}\n",

@@ -3750,6 +3750,15 @@ impl VM {
             Opcode::OptionNone => {
                 self.push(Value::Opcion(None));
             }
+            Opcode::MatchPayload => {
+                let val = self.pop()?;
+                match val {
+                    Value::Opcion(Some(inner)) => self.push(*inner),
+                    Value::Exito(inner) => self.push(*inner),
+                    Value::Error(inner) => self.push(*inner),
+                    other => self.push(other),
+                }
+            }
             Opcode::TupleNew => {
                 // handled in execute_with_idx
             }
@@ -4673,6 +4682,17 @@ impl VM {
                     fields,
                 });
             }
+            Opcode::MatchType => {
+                let val = self.pop()?;
+                let kind = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as u8;
+                let matched = match kind {
+                    0 => matches!(val, Value::Opcion(Some(_))),
+                    1 => matches!(val, Value::Exito(_)),
+                    2 => matches!(val, Value::Error(_)),
+                    _ => false,
+                };
+                self.push(Value::Bool(matched));
+            }
             _ => {}
         }
         Ok(())
@@ -4842,6 +4862,8 @@ impl VM {
                 50 => 49, // ShiftLeft
                 51 => 50, // ShiftRight
                 52 => 51, // Concat
+                53 => 52, // MatchType
+                54 => 53, // MatchPayload
                 _ => 0,   // Nop
             }
         };
