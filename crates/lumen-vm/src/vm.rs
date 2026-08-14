@@ -4829,6 +4829,7 @@ impl VM {
                 29 => 29, // ArrayGet
                 30 => 30, // ArraySet
                 31 => 31, // ArrayLen
+                32 => 32, // ArrayPush
                 38 => 38, // ResultOk
                 39 => 39, // ResultErr
                 40 => 40, // TryUnwrap

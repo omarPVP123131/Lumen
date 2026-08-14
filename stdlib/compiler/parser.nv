@@ -117,7 +117,7 @@ funcion booleano _st_is_op(numero st) {
     texto v = a_texto(_st_tv(st));
     retornar v == "+" || v == "-" || v == "*" || v == "/" || v == "%" ||
            v == "==" || v == "!=" || v == "<" || v == ">" || v == "<=" || v == ">=" ||
-           v == "&&" || v == "||" || v == "=";
+           v == "&&" || v == "||" || v == "=" || v == ".." || v == "..=";
 }
 
 funcion numero _res(numero st, numero nodo) {
@@ -608,6 +608,25 @@ funcion numero _parse_bin(numero st, entero mp) {
     numero re = _parse_pr(st);
     numero izq = __map_obtener(re, "node");
     st = __map_obtener(re, "st");
+
+    // Range a..b / a..=b — precedencia de primary
+    si (_st_is_op(st)) {
+        texto rv = a_texto(_st_tv(st));
+        si (rv == ".." || rv == "..=") {
+            st = _st_adv(st);
+            numero rr2 = _parse_pr(st);
+            numero der2 = __map_obtener(rr2, "node");
+            st = __map_obtener(rr2, "st");
+            numero rn = __map_nuevo();
+            rn = __map_poner(rn, "tipo", "Range");
+            rn = __map_poner(rn, "lo", izq);
+            rn = __map_poner(rn, "hi", der2);
+            numero incl = 0;
+            si rv == "..=" { incl = 1; }
+            rn = __map_poner(rn, "incl", incl);
+            izq = rn;
+        }
+    }
 
     mientras (_st_is_op(st)) {
         texto op = a_texto(_st_tv(st));

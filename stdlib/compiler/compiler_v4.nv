@@ -110,6 +110,21 @@ funcion numero lexer_tokenizar(texto s) {
             cl = cl + adv; continuar;
         }
         
+        // Range operator .. or ..= (before punct: two dots)
+        si c == "." && i + 1 < n && chars[i + 1] == "." {
+            texto rng = "..";
+            i = i + 2; cl = cl + 2;
+            si i < n && chars[i] == "=" {
+                rng = rng + "=";
+                i = i + 1; cl = cl + 1;
+            }
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", 4); t = __map_poner(t, "v", rng);
+            t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+            tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+            continuar;
+        }
+        
         si _lx_es_punct(c) {
             numero t = __map_nuevo();
             t = __map_poner(t, "t", 5); t = __map_poner(t, "v", c);
@@ -357,7 +372,7 @@ funcion booleano _st_is_op(numero st) {
     texto v = a_texto(_st_tv(st));
     retornar v == "+" || v == "-" || v == "*" || v == "/" || v == "%" ||
            v == "==" || v == "!=" || v == "<" || v == ">" || v == "<=" || v == ">=" ||
-           v == "&&" || v == "||" || v == "=";
+           v == "&&" || v == "||" || v == "=" || v == ".." || v == "..=";
 }
 
 funcion numero _res(numero st, numero nodo) {
@@ -848,6 +863,25 @@ funcion numero _parse_bin(numero st, entero mp) {
     numero re = _parse_pr(st);
     numero izq = __map_obtener(re, "node");
     st = __map_obtener(re, "st");
+
+    // Range a..b / a..=b — precedencia de primary
+    si (_st_is_op(st)) {
+        texto rv = a_texto(_st_tv(st));
+        si (rv == ".." || rv == "..=") {
+            st = _st_adv(st);
+            numero rr2 = _parse_pr(st);
+            numero der2 = __map_obtener(rr2, "node");
+            st = __map_obtener(rr2, "st");
+            numero rn = __map_nuevo();
+            rn = __map_poner(rn, "tipo", "Range");
+            rn = __map_poner(rn, "lo", izq);
+            rn = __map_poner(rn, "hi", der2);
+            numero incl = 0;
+            si rv == "..=" { incl = 1; }
+            rn = __map_poner(rn, "incl", incl);
+            izq = rn;
+        }
+    }
 
     mientras (_st_is_op(st)) {
         texto op = a_texto(_st_tv(st));
@@ -2341,6 +2375,7 @@ numero OP_HALT = 27;
 numero OP_ARRAY_NEW = 28;
 numero OP_ARRAY_GET = 29;
 numero OP_ARRAY_SET = 30;
+numero OP_ARRAY_PUSH = 32;
 numero OP_BIT_OR = 46;
 numero OP_BIT_AND = 49;
 numero OP_SHIFT_LEFT = 50;
@@ -2665,12 +2700,74 @@ funcion numero _gen_expr(numero cg, numero node) {
         retornar cg;
     }
     
+    si a_texto(tp) == "Range" {
+        // Desugar a lista: [lo, lo+1, ..., hi) — ArrayNew + loop (el array vive en el stack)
+        numero lo = __map_obtener(node, "lo");
+        numero hi = __map_obtener(node, "hi");
+        numero incl = __map_obtener(node, "incl");
+        texto vi = "__rng_i_" + a_texto(dt_cnt);
+        texto vc = "__rng_c_" + a_texto(dt_cnt);
+        dt_cnt = dt_cnt + 1;
+        cg = _cg_emit(cg, _instr(OP_ARRAY_NEW, 0));
+        cg = _gen_expr(cg, lo);
+        cg = _cg_add_str(cg, vi);
+        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        numero rloop = __map_obtener(cg, "pos");
+        cg = _cg_add_str(cg, vi);
+        cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+        cg = _cg_add_str(cg, vc);
+        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        cg = _cg_add_str(cg, vc);
+        cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+        cg = _gen_expr(cg, hi);
+        si incl == 1 {
+            cg = _cg_emit(cg, _instr(OP_LE, 0));
+        } sino {
+            cg = _cg_emit(cg, _instr(OP_LT, 0));
+        }
+        numero rjmp_if = __map_obtener(cg, "pos");
+        cg = _cg_emit(cg, _instr(OP_JMP_IF, 0));
+        cg = _cg_add_str(cg, vc);
+        cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+        cg = _cg_emit(cg, _instr(OP_ARRAY_PUSH, 0));
+        cg = _cg_add_str(cg, vc);
+        cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
+        cg = _cg_add_int(cg, 1);
+        cg = _cg_emit(cg, _instr(OP_PUSH_INT, __map_obtener(cg, "int_tmp")));
+        cg = _cg_emit(cg, _instr(OP_ADD, 0));
+        cg = _cg_add_str(cg, vi);
+        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        cg = _cg_emit_jmp(cg, rloop);
+        numero rend = __map_obtener(cg, "pos");
+        cg = _cg_patch(cg, rjmp_if, rend);
+        retornar cg;
+    }
+    
     si a_texto(tp) == "Binary" {
         numero op = __map_obtener(node, "op");
         numero izq = __map_obtener(node, "izq");
         numero der = __map_obtener(node, "der");
         si a_texto(op) == "&&" { retornar _cg_and_or(cg, izq, der, 1); }
         si a_texto(op) == "||" { retornar _cg_and_or(cg, izq, der, 0); }
+        // Range como patrón de caso: sel == 0..5  →  (sel >= lo) && (sel < hi)
+        si a_texto(op) == "==" && a_texto(__map_obtener(der, "tipo")) == "Range" {
+            numero lo = __map_obtener(der, "lo");
+            numero hi = __map_obtener(der, "hi");
+            numero incl = __map_obtener(der, "incl");
+            numero c1 = __map_nuevo();
+            c1 = __map_poner(c1, "tipo", "Binary");
+            c1 = __map_poner(c1, "op", ">=");
+            c1 = __map_poner(c1, "izq", izq);
+            c1 = __map_poner(c1, "der", lo);
+            numero c2 = __map_nuevo();
+            c2 = __map_poner(c2, "tipo", "Binary");
+            texto op2 = "<";
+            si incl == 1 { op2 = "<="; }
+            c2 = __map_poner(c2, "op", op2);
+            c2 = __map_poner(c2, "izq", izq);
+            c2 = __map_poner(c2, "der", hi);
+            retornar _cg_and_or(cg, c1, c2, 1);
+        }
         cg = _gen_expr(cg, izq);
         cg = _gen_expr(cg, der);
         

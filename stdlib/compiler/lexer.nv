@@ -107,6 +107,21 @@ funcion numero lexer_tokenizar(texto s) {
             cl = cl + adv; continuar;
         }
         
+        // Range operator .. or ..= (before punct: two dots)
+        si c == "." && i + 1 < n && chars[i + 1] == "." {
+            texto rng = "..";
+            i = i + 2; cl = cl + 2;
+            si i < n && chars[i] == "=" {
+                rng = rng + "=";
+                i = i + 1; cl = cl + 1;
+            }
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", 4); t = __map_poner(t, "v", rng);
+            t = __map_poner(t, "linea", ln); t = __map_poner(t, "col", cl);
+            tk = __map_poner(tk, a_texto(cnt), t); cnt = cnt + 1;
+            continuar;
+        }
+        
         si _lx_es_punct(c) {
             numero t = __map_nuevo();
             t = __map_poner(t, "t", 5); t = __map_poner(t, "v", c);
