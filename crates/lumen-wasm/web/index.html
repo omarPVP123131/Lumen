@@ -292,6 +292,7 @@
       <div class="panel-actions">
         <select id="exampleSelect" class="example-select"><option value="">— Cargar ejemplo —</option></select>
         <button id="saveBtn" class="small" title="Guardar en el navegador">💾 Guardar</button>
+        <button id="historyBtn" class="small" title="Historial de ejecuciones recientes">🕘 Historial</button>
       </div>
     </div>
     <div class="editor-wrapper">
@@ -392,7 +393,9 @@ const errorLineField = StateField.define({
 // ── State ──────────────────────────────────────────────────
 let runtime = null;
 let consoleLogs = [];
-let execBackend = 'wasm'; // 'wasm' (navegador) | 'server' (VM Rust del servidor)
+let execBackend = localStorage.getItem('lumen_playground_backend') === 'server' ? 'server' : 'wasm'; // 'wasm' (navegador) | 'server' (VM Rust del servidor)
+const HISTORY_KEY = 'lumen_playground_history';
+const HISTORY_MAX = 10;
 
 // ── DOM refs ───────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -592,6 +595,7 @@ async function runCode() {
         setStatus('ready', 'Completado');
         runStatus.textContent = '✓ completado';
         showToast('Ejecución completada (servidor)', 'success');
+        pushHistory(code, json.output || '', true, 'server', elapsed);
       } else {
         const div = document.createElement('div');
         div.className = 'error-highlight';
@@ -600,6 +604,7 @@ async function runCode() {
         setStatus('error', 'Error');
         runStatus.textContent = '✗ error';
         showToast('Error de ejecución', 'error');
+        pushHistory(code, json.error || '', false, 'server', elapsed);
       }
     } catch(e) {
       execTime.textContent = (performance.now() - start).toFixed(1) + 'ms';
@@ -610,6 +615,7 @@ async function runCode() {
       setStatus('error', 'Error');
       runStatus.textContent = '✗ error';
       showToast('No se pudo contactar al servidor', 'error');
+      pushHistory(code, 'Error de red: ' + e.message, false, 'server', '—');
     }
     return;
   }
@@ -627,11 +633,13 @@ async function runCode() {
       setStatus('error', 'Error');
       runStatus.textContent = '✗ error';
       showToast('Error de ejecución', 'error');
+      pushHistory(code, result, false, 'wasm', elapsed);
     } else {
       outputPane.textContent = result || '(sin salida)';
       setStatus('ready', 'Completado');
       runStatus.textContent = '✓ completado';
       showToast('Ejecución completada', 'success');
+      pushHistory(code, result || '', true, 'wasm', elapsed);
     }
   } catch(e) {
     execTime.textContent = (performance.now() - start).toFixed(1) + 'ms';
@@ -642,6 +650,7 @@ async function runCode() {
     setStatus('error', 'Error');
     runStatus.textContent = '✗ error';
     showToast('Error: ' + e.message, 'error');
+    pushHistory(code, 'Error: ' + e.message, false, 'wasm', '—');
   }
 }
 
@@ -1248,12 +1257,76 @@ $('runBtn').addEventListener('click', runCode);
 $('backendToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-backend]');
   if (!btn) return;
-  document.querySelectorAll('#backendToggle button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  execBackend = btn.dataset.backend;
-  vmStatus.textContent = execBackend === 'server' ? 'servidor (VM Rust)' : '—';
-  showToast(execBackend === 'server' ? 'Ejecutando en el servidor (VM Rust nativa)' : 'Ejecutando en el navegador (WASM)', 'success');
+  setBackend(btn.dataset.backend);
 });
+
+function setBackend(backend) {
+  execBackend = backend;
+  localStorage.setItem('lumen_playground_backend', backend);
+  document.querySelectorAll('#backendToggle button').forEach(b => b.classList.toggle('active', b.dataset.backend === backend));
+  vmStatus.textContent = backend === 'server' ? 'servidor (VM Rust)' : '—';
+  showToast(backend === 'server' ? 'Ejecutando en el servidor (VM Rust nativa)' : 'Ejecutando en el navegador (WASM)', 'success');
+}
+
+// ── Historial de ejecuciones ────────────────────────────────
+$('historyBtn').addEventListener('click', toggleHistoryPanel);
+
+function toggleHistoryPanel() {
+  let panel = $('historyPanel');
+  if (panel) {
+    panel.remove();
+    return;
+  }
+  const list = getHistory();
+  if (list.length === 0) {
+    showToast('Aún no hay ejecuciones.', 'error');
+    return;
+  }
+  panel = document.createElement('div');
+  panel.id = 'historyPanel';
+  panel.setAttribute('role', 'dialog');
+  panel.style.cssText = 'position:fixed;top:70px;right:16px;width:340px;max-height:60vh;overflow:auto;background:var(--crust);border:1px solid var(--surface1);border-radius:8px;padding:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);';
+  panel.innerHTML = '<div style="font-size:12px;color:var(--overlay1);padding:4px 6px;border-bottom:1px solid var(--surface0);margin-bottom:6px;">🕘 Ejecuciones recientes <span style="color:var(--overlay0);font-weight:400;">(hasta ' + HISTORY_MAX + ')</span></div>';
+  list.forEach((h, i) => {
+    const row = document.createElement('button');
+    row.className = 'small';
+    row.style.cssText = 'display:block;width:100%;text-align:left;border:1px solid var(--surface0);background:var(--mantle);border-radius:6px;padding:6px 8px;margin-bottom:6px;cursor:pointer;';
+    const ok = h.ok ? '✓' : '✗';
+    const preview = (h.code || '').split('\n').find(l => l.trim()) || '(vacío)';
+    row.innerHTML = '<div style="font-size:11px;color:var(--overlay0);">' + ok + ' ' + h.time + ' · ' + h.backend + ' · ' + h.ms + 'ms</div>' +
+      '<div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;color:var(--text);">' + escapeHtml(preview) + '</div>' +
+      '<div style="font-size:10px;color:var(--overlay0);max-height:40px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(h.output || '') + '</div>';
+    row.addEventListener('click', () => { setCode(h.code); showToast('Código cargado desde el historial', 'success'); });
+    panel.appendChild(row);
+  });
+  document.body.appendChild(panel);
+  setTimeout(() => {
+    const handler = (ev) => {
+      if (panel && ev.target !== panel && !panel.contains(ev.target)) {
+        panel.remove();
+        document.removeEventListener('click', handler);
+      }
+    };
+    document.addEventListener('click', handler);
+  }, 0);
+}
+
+function pushHistory(code, output, ok, backend, ms) {
+  try {
+    let list = getHistory();
+    list.unshift({ code, output, ok, backend, ms, time: new Date().toLocaleTimeString() });
+    list = list.slice(0, HISTORY_MAX);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch (_) { /* localStorage lleno o deshabilitado — ignorar */ }
+}
+
+function getHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (_) { return []; }
+}
 $('clearBtn').addEventListener('click', () => {
   clearOutput();
   consolePane.innerHTML = '';
@@ -1351,6 +1424,8 @@ BUILTIN_EXAMPLES.forEach((ex, i) => {
   exampleSel.appendChild(opt);
 });
 initEditor();
+const savedBackend = localStorage.getItem('lumen_playground_backend');
+if (savedBackend === 'wasm' || savedBackend === 'server') setBackend(savedBackend);
 const saved = localStorage.getItem('lumen_playground_code');
 if (saved) setCode(saved);
 buildPalette();
