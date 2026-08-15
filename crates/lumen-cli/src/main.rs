@@ -81,7 +81,6 @@ fn print_help() {
     println!("   doc <file>       Generar documentación / Generate HTML docs");
     println!("   lsp              Servidor LSP / LSP server (VS Code)");
     println!("   install <pkg>    Instalar paquete / Install package");
-    println!("   pack <dir>       Crear distribución completa / Create full distribution");
     println!("   serve            Playground web / Web playground");
     println!("   learn            Tutorial interactivo / Interactive tutorial");
     println!("   tutor <tema>     Mostrar lección / Show lesson");
@@ -431,6 +430,14 @@ fn parse_args(args: &[String]) -> Config {
         i += 1;
     }
 
+    // stdlib: relativo a la raíz del repo/paquete (LUMEN_ROOT → exe → CWD)
+    if let Some(root) = find_repo_root() {
+        let stdlib_path = root.join("stdlib");
+        if stdlib_path.is_dir() && !lib_dirs.iter().any(|p| p == &stdlib_path) {
+            lib_dirs.push(stdlib_path);
+        }
+    }
+    // Fallback: CWD (compatibilidad con layouts antiguos)
     let stdlib_path = PathBuf::from("stdlib");
     if stdlib_path.is_dir() && !lib_dirs.iter().any(|p| p == &stdlib_path) {
         lib_dirs.push(stdlib_path);
@@ -470,6 +477,18 @@ fn main() {
     }
 
     let config = parse_args(&args);
+    // Resolución tolerante de rutas: `lumen run examples/hello.nv` funciona
+    // desde cualquier CWD (se busca relativo al repo/paquete si no existe local).
+    let config = Config {
+        file: if !config.file.is_empty() {
+            resolve_file_path(&config.file)
+                .to_string_lossy()
+                .to_string()
+        } else {
+            config.file
+        },
+        ..config
+    };
     match config.command.as_str() {
         "run" => {
             if config.file.is_empty() {
@@ -588,15 +607,6 @@ fn main() {
         }
         "serve" | "playground" => {
             serve_playground(config.port);
-        }
-        "pack" | "dist" => {
-            if config.file.is_empty() {
-                eprintln!("Error: falta el directorio de salida");
-                eprintln!("Uso: lumen pack <directorio_salida> [--all]");
-                process::exit(1);
-            }
-            let include_all = args.iter().any(|a| a == "--all");
-            build_dist(&config.file, include_all);
         }
         "learn" => {
             print_learn();
@@ -759,6 +769,7 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Error al leer '{}': {}", path, e);
+            suggest_examples(path);
             process::exit(1);
         }
     };
@@ -1217,19 +1228,141 @@ fn mime_type(path: &str) -> &'static str {
     }
 }
 
-fn find_wasm_web_root() -> Option<PathBuf> {
-    let candidates = [
-        PathBuf::from("crates/lumen-wasm"),
-        PathBuf::from("../crates/lumen-wasm"),
-        PathBuf::from("../../crates/lumen-wasm"),
-        PathBuf::from("../../../crates/lumen-wasm"),
-    ];
-    for c in &candidates {
-        if c.join("web/index.html").is_file() {
-            return Some(c.clone());
+// ── Resolución de rutas (relativas al exe / LUMEN_ROOT / CWD) ──────
+// Evita depender del directorio actual: el binario funciona desde
+// cualquier CWD (dev: target/release; instalado: paquete con stdlib/).
+
+/// Encuentra la raíz del repo/paquete LÚMEN. Orden de búsqueda:
+/// 1. Env var `LUMEN_ROOT` (override explícito)
+/// 2. Relativo al ejecutable (dev: `target/release/lumen` → raíz; release: `paquete/lumen` → paquete)
+/// 3. Subiendo desde el CWD (busca `stdlib/`)
+fn find_repo_root() -> Option<PathBuf> {
+    // 1. Override explícito
+    if let Ok(root) = env::var("LUMEN_ROOT") {
+        let p = PathBuf::from(root);
+        if p.join("stdlib").is_dir() || p.join("crates/lumen-wasm/web").is_dir() {
+            return Some(p);
         }
     }
+
+    // 2. Relativo al ejecutable (sube hasta 4 niveles)
+    if let Ok(exe) = env::current_exe() {
+        let mut dir = exe.parent().map(|p| p.to_path_buf())?;
+        for _ in 0..4 {
+            if dir.join("stdlib").is_dir() {
+                return Some(dir);
+            }
+            dir = match dir.parent() {
+                Some(p) => p.to_path_buf(),
+                None => break,
+            };
+        }
+    }
+
+    // 3. Subiendo desde el CWD (busca `stdlib/` hasta 5 niveles)
+    if let Ok(cwd) = env::current_dir() {
+        let mut dir = cwd.clone();
+        for _ in 0..5 {
+            if dir.join("stdlib").is_dir() {
+                return Some(dir);
+            }
+            dir = match dir.parent() {
+                Some(p) => p.to_path_buf(),
+                None => break,
+            };
+        }
+    }
+
     None
+}
+
+/// Raíz del playground web: `crates/lumen-wasm` (dev) o `web/` (paquete release).
+fn find_wasm_web_root() -> Option<PathBuf> {
+    let root = find_repo_root()?;
+    let dev = root.join("crates/lumen-wasm");
+    if dev.join("web/index.html").is_file() {
+        return Some(dev);
+    }
+    if root.join("web/index.html").is_file() {
+        return Some(root);
+    }
+    None
+}
+
+/// Resuelve una ruta de archivo de forma tolerante:
+/// 1. Si el archivo existe tal cual (relativo al CWD) → se usa.
+/// 2. Si no, se intenta relativo a la raíz del repo/paquete
+///    (ej: `lumen run examples/hello.nv` desde cualquier CWD).
+/// 3. Si no, se devuelve la ruta original (para el mensaje de error).
+fn resolve_file_path(file: &str) -> PathBuf {
+    let p = PathBuf::from(file);
+    if p.is_file() {
+        return p;
+    }
+    if let Some(root) = find_repo_root() {
+        let alt = root.join(file);
+        if alt.is_file() {
+            return alt;
+        }
+    }
+    p
+}
+
+/// Sugiere ejemplos cercanos cuando un archivo no existe (mejora la DX
+/// del CLI: en vez de fallar en seco, muestra candidatos por coincidencia).
+fn suggest_examples(path: &str) {
+    let Some(root) = find_repo_root() else { return };
+    let examples = root.join("examples");
+    if !examples.is_dir() {
+        return;
+    }
+    let want = Path::new(path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if want.is_empty() {
+        return;
+    }
+    let mut scored: Vec<(usize, String)> = Vec::new();
+    if let Ok(read) = fs::read_dir(&examples) {
+        for entry in read.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.ends_with(".nv") {
+                continue;
+            }
+            let stem = name.trim_end_matches(".nv").to_lowercase();
+            let score = similarity(&want, &stem);
+            if score > 0 {
+                scored.push((score, name));
+            }
+        }
+    }
+    if scored.is_empty() {
+        return;
+    }
+    scored.sort_by_key(|s| std::cmp::Reverse(s.0));
+    println!();
+    println!("  ¿Buscabas alguno de estos ejemplos?");
+    for (score, name) in scored.iter().take(5) {
+        let bar = "#".repeat((*score).min(20));
+        println!("    lumen run examples/{}  [{}]", name, bar);
+    }
+}
+
+/// Coincidencia simple de subcadena (0-20). Suficiente para sugerencias.
+fn similarity(want: &str, stem: &str) -> usize {
+    if stem.contains(want) {
+        return 20;
+    }
+    let mut score = 0;
+    let wc: Vec<char> = want.chars().collect();
+    let sc: Vec<char> = stem.chars().collect();
+    for (i, c) in wc.iter().enumerate() {
+        if sc.get(i) == Some(c) {
+            score += 1;
+        }
+    }
+    score
 }
 
 fn example_category(name: &str) -> &'static str {
@@ -1313,11 +1446,13 @@ fn handle_api_request(
     method: &str,
     body: &str,
 ) -> bool {
-    let examples_dir = root
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.join("examples"))
-        .unwrap_or_default();
+    // examples_dir: raíz del repo/paquete (no depende del CWD ni del layout del web root)
+    let repo_root = find_repo_root().unwrap_or_default();
+    let examples_dir = if repo_root.join("examples").is_dir() {
+        repo_root.join("examples")
+    } else {
+        root.join("examples")
+    };
     let json_ok = |stream: &mut std::net::TcpStream, body: &str| {
         let header = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
@@ -1329,7 +1464,7 @@ fn handle_api_request(
     if path == "/api/run" && method == "POST" && !body.is_empty() {
         let tmp = root.join("target/playground_tmp.nv");
         let _ = fs::write(&tmp, body);
-        let lib_dirs = vec![PathBuf::from("stdlib")];
+        let lib_dirs = vec![repo_root.join("stdlib")];
         let (out, err) = run_source_capture(body, &lib_dirs, &tmp);
         let resp = if err.is_empty() {
             format!("{{\"ok\":true,\"output\":\"{}\"}}", escape_json_ml(&out))
@@ -1557,134 +1692,6 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
             let _ = stream.write_all(not_found.as_bytes());
         }
     }
-}
-
-fn build_dist(out_dir: &str, _include_all: bool) {
-    use std::fs;
-
-    println!("📦 Creando distribución completa de LÚMEN...");
-
-    let out_path = Path::new(out_dir);
-    if out_path.exists() {
-        println!(
-            "⚠️  El directorio '{}' ya existe. Sobrescribiendo...",
-            out_dir
-        );
-        fs::remove_dir_all(out_path).unwrap_or_else(|e| {
-            eprintln!("Error eliminando directorio existente: {}", e);
-            process::exit(1);
-        });
-    }
-
-    fs::create_dir_all(out_path).unwrap_or_else(|e| {
-        eprintln!("Error creando directorio: {}", e);
-        process::exit(1);
-    });
-
-    // Binario
-    let exe_name = if cfg!(windows) { "lumen.exe" } else { "lumen" };
-    let src_exe = Path::new("target/release").join(exe_name);
-    if src_exe.exists() {
-        if let Err(e) = fs::copy(&src_exe, out_path.join(exe_name)) {
-            eprintln!("⚠️  No se pudo copiar binario: {}", e);
-        } else {
-            println!("✓ Binario: {}", exe_name);
-        }
-    } else {
-        eprintln!("⚠️  Binario no encontrado en target/release/. Ejecuta 'cargo build --release' primero.");
-    }
-
-    // Archivos base
-    let base_files = ["README.md", "CHANGELOG.md", "VERSION"];
-    for f in &base_files {
-        if Path::new(f).exists() {
-            fs::copy(f, out_path.join(f)).ok();
-            println!("✓ {}", f);
-        }
-    }
-    if Path::new("LICENSE").exists() {
-        fs::copy("LICENSE", out_path.join("LICENSE")).ok();
-        println!("✓ LICENSE");
-    } else if Path::new("LICENSE.md").exists() {
-        fs::copy("LICENSE.md", out_path.join("LICENSE.md")).ok();
-        println!("✓ LICENSE.md");
-    }
-
-    // Stdlib completa
-    if Path::new("stdlib").exists() {
-        copy_dir_all("stdlib", out_path.join("stdlib")).unwrap_or_else(|e| {
-            eprintln!("⚠️  Error copiando stdlib: {}", e);
-        });
-        println!("✓ stdlib/ (completa)");
-    }
-
-    // Ejemplos
-    if Path::new("examples").exists() {
-        copy_dir_all("examples", out_path.join("examples")).unwrap_or_else(|e| {
-            eprintln!("⚠️  Error copiando examples: {}", e);
-        });
-        println!("✓ examples/ (completa)");
-    }
-
-    // Web playground (WASM)
-    if Path::new("crates/lumen-wasm/web").exists() {
-        copy_dir_all("crates/lumen-wasm/web", out_path.join("web")).unwrap_or_else(|e| {
-            eprintln!("⚠️  Error copiando web playground: {}", e);
-        });
-        println!("✓ web/ (playground)");
-    }
-    if Path::new("crates/lumen-wasm/pkg").exists() {
-        copy_dir_all("crates/lumen-wasm/pkg", out_path.join("pkg")).unwrap_or_else(|e| {
-            eprintln!("⚠️  Error copiando pkg WASM: {}", e);
-        });
-        println!("✓ pkg/ (WASM runtime)");
-    }
-
-    // Archivos de configuración del proyecto
-    if Path::new("Cargo.toml").exists() {
-        fs::copy("Cargo.toml", out_path.join("Cargo.toml")).ok();
-        println!("✓ Cargo.toml");
-    }
-
-    // LICENSE
-    if Path::new("LICENSE").exists() {
-        fs::copy("LICENSE", out_path.join("LICENSE")).ok();
-    } else if Path::new("LICENSE.md").exists() {
-        fs::copy("LICENSE.md", out_path.join("LICENSE.md")).ok();
-    }
-
-    // Crear archivo de versión
-    let version = env!("CARGO_PKG_VERSION");
-    fs::write(out_path.join("VERSION"), version).ok();
-
-    println!("\n✅ Distribución completa creada en: {}", out_dir);
-    println!(
-        "   Ejecuta: ./{} --help",
-        if cfg!(windows) { "lumen.exe" } else { "lumen" }
-    );
-}
-
-/// Copia recursiva de directorios
-fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
-    use std::fs;
-
-    let src = src.as_ref();
-    let dst = dst.as_ref();
-
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if ty.is_dir() {
-            copy_dir_all(&src_path, &dst_path)?;
-        } else {
-            let _ = fs::copy(&src_path, &dst_path)?;
-        }
-    }
-    Ok(())
 }
 
 fn serve_playground(port: u16) -> ! {

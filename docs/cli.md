@@ -6,7 +6,34 @@
 lumen <comando> [opciones] <archivo>
 ```
 
-## Filosofía: De 0 a Ingeniero
+## Resolución de rutas (independiente del directorio actual)
+
+El CLI **no depende del CWD**: encuentra `stdlib/`, `examples/` y el playground
+web desde cualquier directorio. Orden de búsqueda de la raíz LÚMEN:
+
+1. **`LUMEN_ROOT=<dir>`** — override explícito (variable de entorno).
+2. **Relativo al ejecutable** — `target/release/lumen` (dev) o `paquete/lumen`
+   (release): sube buscando `stdlib/`.
+3. **Subiendo desde el CWD** — busca `stdlib/` hasta 5 niveles.
+
+Además:
+- `lumen run examples/hello.nv` funciona desde **cualquier** CWD (se busca
+  relativo al repo/paquete si el archivo no existe localmente).
+- Si el archivo no existe, el CLI **sugiere ejemplos cercanos** por
+  coincidencia de nombre.
+- El paquete release incluye `stdlib/`, `examples/` y `web/` — el binario es
+  autónomo y portable.
+
+```bash
+# Funciona desde cualquier directorio:
+lumen run examples/hello.nv
+lumen serve                 # playground web (encuentra web/ solo)
+LUMEN_ROOT=/opt/lumen lumen run mi_programa.nv
+```
+
+---
+
+## Comandos
 
 LÚMEN está diseñado como una **ruta de aprendizaje progresiva**:
 

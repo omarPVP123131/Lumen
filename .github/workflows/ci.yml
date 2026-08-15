@@ -163,12 +163,20 @@ jobs:
           cp ../../../CHANGELOG.md lumen-${{ matrix.target }}/
           cp ../../../LICENSE* lumen-${{ matrix.target }}/ 2>/dev/null || true
           cp ../../../VERSION lumen-${{ matrix.target }}/ 2>/dev/null || true
-          # Include stdlib, examples, and web playground for complete development environment
-          cp -r ../../../stdlib lumen-${{ matrix.target }}/
-          cp -r ../../../examples lumen-${{ matrix.target }}/
-          cp -r ../../../crates/lumen-wasm/web lumen-${{ matrix.target }}/
-          # Copy WASM pkg for web playground
-          cp -r ../../../crates/lumen-wasm/pkg lumen-${{ matrix.target }}/ 2>/dev/null || true
+          # stdlib completa (importar "modulo" funciona fuera del repo)
+          mkdir -p lumen-${{ matrix.target }}/stdlib
+          cp ../../../stdlib/*.nv lumen-${{ matrix.target }}/stdlib/ 2>/dev/null || true
+          # ejemplos para aprender (lumen run examples/... desde el paquete)
+          mkdir -p lumen-${{ matrix.target }}/examples
+          cp ../../../examples/*.nv lumen-${{ matrix.target }}/examples/ 2>/dev/null || true
+          # playground web completo (lumen serve funciona desde el paquete)
+          mkdir -p lumen-${{ matrix.target }}/web
+          cp -r ../../../crates/lumen-wasm/web/index.html lumen-${{ matrix.target }}/web/ 2>/dev/null || true
+          cp -r ../../../crates/lumen-wasm/web/vendor lumen-${{ matrix.target }}/web/ 2>/dev/null || true
+          cp -r ../../../crates/lumen-wasm/web/embedded_examples.js lumen-${{ matrix.target }}/web/ 2>/dev/null || true
+          # helpers del paquete: script de prueba rápido
+          printf '#!/bin/sh\necho "LUMEN v$(cat VERSION 2>/dev/null) — paquete listo"\n./lumen run examples/hello.nv\n' > lumen-${{ matrix.target }}/run_test.sh
+          chmod +x lumen-${{ matrix.target }}/run_test.sh
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             7z a -tzip ../../../lumen-${{ matrix.target }}.zip lumen-${{ matrix.target }}/
           else
@@ -180,6 +188,40 @@ jobs:
           name: lumen-${{ matrix.target }}
           path: lumen-${{ matrix.target }}.*
           retention-days: 30
+
+  # ── WASM PKG (opcional) ─────────────────────────────────
+  # Compila el runtime WASM del playground con wasm-pack y lo sube
+  # como artefacto separado (el release lo adjunta como extra).
+  wasm-pkg:
+    name: WASM Package
+    needs: autotag
+    if: needs.autotag.result == 'success'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked || echo "wasm-pack install falló (opcional)"
+      - name: Build wasm pkg
+        run: |
+          if command -v wasm-pack >/dev/null 2>&1; then
+            wasm-pack build crates/lumen-wasm --target web --out-dir ../../crates/lumen-wasm/pkg 2>/dev/null || true
+            tar czf lumen-wasm-pkg.tar.gz -C crates/lumen-wasm pkg 2>/dev/null || true
+            echo "wasm pkg listo"
+          else
+            echo "wasm-pack no disponible — skip"
+          fi
+      - name: Upload wasm pkg
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumen-wasm-pkg
+          path: lumen-wasm-pkg.tar.gz
+          retention-days: 30
+          if-no-files-found: ignore
 
   # ── RELEASE ─────────────────────────────────────────────
   # Crea/actualiza la GitHub Release asociada al tag que
@@ -209,6 +251,16 @@ jobs:
             echo "" >> release_notes.md
             echo "Assets multi-plataforma (linux/macos/windows x64, macos arm64) incluidos." >> release_notes.md
           fi
+          echo "" >> release_notes.md
+          echo "### Contenido del paquete" >> release_notes.md
+          echo "- **lumen** — binario del CLI (run/build/check/serve/repl/lsp...)" >> release_notes.md
+          echo "- **stdlib/** — librería estándar completa (importar \"coleccion\" etc. funciona fuera del repo)" >> release_notes.md
+          echo "- **examples/** — 120+ ejemplos listos para aprender" >> release_notes.md
+          echo "- **web/** — playground web completo (lumen serve + CodeMirror + autocompletado)" >> release_notes.md
+          echo "- **lumen-wasm-pkg.tar.gz** — runtime WASM del playground (extra, opcional)" >> release_notes.md
+          echo "- README.md, CHANGELOG.md, LICENSE, VERSION" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "Uso: descomprime y ejecuta \`./lumen run examples/hello.nv\` o \`./lumen serve\` desde cualquier directorio." >> release_notes.md
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
