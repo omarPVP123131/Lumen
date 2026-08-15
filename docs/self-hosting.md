@@ -267,7 +267,7 @@ si (_st_ch(st, 4, "<")) {
 | Compilar stdlib completo con compiler_v5 | ✅ | matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos — stdlib completo compila con el pipeline puro (fuego 116/116 compilan) |
 | Ejecutar 115 ejemplos con cadena 100% LÚMEN | ✅ | **fuego.ps1: 117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos** (restantes: SDL/negativos por diseño/no-deterministas/GUI/FFI) |
 | Benchmarks vs Rust | ✅ | `scripts/benchmark_vs_rust.ps1`: compile x5.4, run x231 (intérprete-en-intérprete; mediana x2-6) |
-| Docs + AGENTS v2.4.1 + release | 🟡 | Docs sincronizadas (8 Ago 2026); falta tag/release oficial |
+| Docs + AGENTS + release | ✅ | Docs sincronizadas (8-14 Ago 2026); **release v2.4.2 con tag CI-autogenerado** (Fases 61-63 self-hosted, AOT optimized, Playground L1) |
 
 ---
 

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-2.4.1-orange)
+![Version](https://img.shields.io/badge/version-2.4.2-orange)
 ![Tests](https://img.shields.io/badge/tests-378%20passing-brightgreen)
 ![Fases](https://img.shields.io/badge/fases-0--185%20completadas%2Bblueviolet)
 
@@ -149,7 +149,7 @@ docker compose up  # Incluye lumen + lumen-repl
 
 ---
 
-## 📊 Estado del Proyecto (v2.4.1)
+## 📊 Estado del Proyecto (v2.4.2)
 
 ```
 Lenguaje Core         ████████████████████ 100% (0-60)
@@ -168,7 +168,7 @@ AI/ML & Cloud         ░░░░░░░░░░░░░░░░░░░�
 - ✅ **117 ejemplos** `.nv` — 112 CORRECTOS en la cadena 100% LÚMEN (fuego.ps1)
 - ✅ **15 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg, wasm
 - ✅ **Self-hosting total**: compiler_v4.nv se compila a sí mismo (fixpoint byte-idéntico SHA-256 3DA624D6…) + VM en LÚMEN (vm.nv) + **bootstrapping doble certificado**
-- ✅ **Release v2.4.1**: binarios multi-OS (Windows/Linux/macOS Intel+ARM) publicados en GitHub Releases
+- ✅ **Release v2.4.1/v2.4.2**: binarios multi-OS (Windows/Linux/macOS Intel+ARM) publicados en GitHub Releases
 - ✅ **Docker** multi-stage + docker-compose
 - ✅ **WASM** playground con JS interop integrado
 - ✅ **Sintaxis dual ES/EN** en todo el stdlib

@@ -1,7 +1,8 @@
-# Plan del Playground Web — LÚMEN v2.4.1+
+# Plan del Playground Web — LÚMEN v2.4.2+
 
-> Estado: PLAN v2 (Alt C: niveles de madurez) · 10 Ago 2026
+> Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026
 > Estructura: **9 features × 3 niveles (L1 funcional → L2 pulido → L3 avanzado) = 27 fases**, cada una con criterios de aceptación verificables.
+> ✅ **Ronda L1 COMPLETADA (14 Ago):** F1.1, F2.1, F3.1, F3.2, F4.1, F9.1 — ver "Estado actual".
 
 ---
 
@@ -9,11 +10,15 @@
 
 | Componente | Detalle |
 |---|---|
-| `lumen serve [--port N]` | Servidor HTTP estático en Rust puro (`crates/lumen-cli/src/main.rs:1067`), sin Python. MIME types, headers COOP/COEP, 404, anti path-traversal. Verificado (200/404). |
-| Runtime WASM | `crates/lumen-wasm/src/lib.rs`: `LumenRuntime` wasm-bindgen con `run`, `check`, `tokenize`, `version`, `register_js_function`. Pipeline completo: lexer→parser→sema→IR→codegen→VM en el browser. |
-| Build WASM | `wasm-pack build crates/lumen-wasm --target web` funciona (10s, limpio). `pkg/` en .gitignore (regenerable). |
-| UI | `crates/lumen-wasm/web/index.html` (1600 líneas, Catppuccin): textarea plano con números de línea, 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast. **18 ejemplos embebidos hardcodeados**, 17 bridges JS (`__js_call`/`__js_eval`). Versión v2.4.1. |
-| Tests | cargo test 0 fallos (~378). |
+| `lumen serve [--port N]` | Servidor HTTP estático en Rust puro (`crates/lumen-cli/src/main.rs`), sin Python. MIME types, headers COOP/COEP, 404, anti path-traversal, redirección `/` → `/web/index.html`. Endpoints: `GET /api/health`, `GET /api/examples`, `GET /api/examples/{file}`, `POST /api/run` (VM Rust nativa → `{ok,output}`/`{ok,error}`). Verificado (200/404/JSON). |
+| Runtime WASM | `crates/lumen-wasm/src/lib.rs`: `LumenRuntime` wasm-bindgen con `run`, `run_with_files`, `check`, `tokenize`, `compile_to_bytes`, `version`, `register_js_function`. Pipeline completo (lexer→parser→sema→IR→codegen→VM) en el browser. |
+| Stdlib embebida | `crates/lumen-wasm/build.rs` genera `embedded_stdlib.rs` (31 archivos incl) + `ModuleLoader::with_memory_files` resuelve imports desde memoria (F3.1). |
+| Editor CodeMirror 6 | `web/vendor/cm/` (11 módulos ESM planos, vendor local sin CDN) + modo LUMEN generado desde `token.rs` (74 keywords, `StreamLanguage` + Catppuccin). Autosave localStorage, error-line marking, `Ctrl+Enter`, gutter (F2.1). |
+| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), selector de 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v2.4.2. |
+| Descargar .nvc | `compile_to_bytes(source)` → `Uint8Array` → Blob descargable (F9.1). |
+| Build WASM | `wasm-pack build crates/lumen-wasm --target web` + `pkg/` en .gitignore (regenerable). |
+| Batería F4.1 | 128 ejemplos embebidos en `embedded_examples.js` (autogenerado por `gen-embedded-examples.ps1`). |
+| Tests | cargo test 0 fallos (lexer 27, parser 45, sema 56, ir 20, vm 45, e2e 166, aot 4, api 5, etc. ~380). |
 
 ## 2. Gaps que el plan resuelve
 

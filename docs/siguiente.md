@@ -1,6 +1,6 @@
 # Siguientes Pasos — Roadmap LÚMEN v2.4 → v3.0
 
-**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 117/117 compilan · 112 CORRECTOS** (8 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos/concurrencia/stream/async byte-idénticos** (8 Ago 2026, batería 39/40). **Bootstrapping doble (compilador + VM) CONFIRMADO con fixpoint SHA-256 `3DA624D6...` (150,684 B)**. Pendiente: release v2.4.1 (tag).
+**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 117/117 compilan · 112 CORRECTOS** (8 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos/concurrencia/stream/async byte-idénticos** (8 Ago 2026, batería 39/40). **Bootstrapping doble (compilador + VM) CONFIRMADO con fixpoint SHA-256 `3DA624D6...` (150,684 B)**. **Release v2.4.2 ✅ (14 Ago):** tag CI-autogenerado tras AOT optimizado (Cranelift 20x/C 18x), Fases 61-63 self-hosted (OR/if-let/rangos), Playground Ronda L1 completa.
 
 ---
 
@@ -16,7 +16,7 @@
 
 | Área | Complejidad | Impacto | Razón |
 |------|-------------|---------|-------|
-| **Bootstrapping doble + release v2.4.1** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv compilada por el compilador LÚMEN + fixpoint certificado. Solo falta tag/release. |
+| **Bootstrapping doble + release v2.4.2** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv compilada por el compilador LÚMEN + fixpoint certificado + tag/release v2.4.2 (CI autotag). |
 | **Fixes y pulido** | 🟢 Baja | 🔥 Alto | Estabilidad general, edge cases |
 
 ## 🔵 Prioridad Baja — Muy Complejo + Nicho

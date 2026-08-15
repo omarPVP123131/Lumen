@@ -4,6 +4,40 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
+## v2.4.2 — 14 Agosto 2026
+
+### Agregado (compilador self-hosted — Fases 61/62/63 reales)
+- **OR Patterns reales en el self-hosted** (`parser.nv` branch `elegir`): loop que consume el pipe `|` y construye árbol `Binary ||` encadenado `(sel==A) || (sel==B)` → despacha a `_cg_and_or` (short-circuit real con JmpIf). **`fase61_or_patterns` byte-IDÉNTICO en la cadena 100% LÚMEN**.
+- **IF-LET real en el self-hosted** (Fase 62): handlers op 52/53 (`MatchType`/`MatchPayload`) en `vm.nv` + caso `IfLet` en `codegen.nv` (auxiliar `tiene_test`) + branch if-let en `parser.nv` (patrón `algun`/`exito`/`error`/`ninguno`/Ident con bind). **`fase62_if_let`/`fase62_if_let2` byte-IDÉNTICOS** (también en VM Rust: opcodes 52/53 end-to-end con `bind_pattern_vars` en sema).
+- **Rangos `..`/`..=` en el self-hosted** (Fase 63): token en `lexer.nv`, nodo `Range` en `parser.nv`, desugar a lista + intercepto `==` con rango (short-circuit `_cg_and_or`) en `codegen.nv`, fix `OP_ARRAY_PUSH=32` y `32 => 32` en el encoder nativo. **`fase63_range_patterns` byte-IDÉNTICO**.
+- **8 ejemplos de fase nuevos** (2 por fase): `fase61_or_patterns.nv`, `fase62_if_let.nv`, `fase62_if_let2.nv`, `fase63_range_patterns.nv`, `fase64_string_patterns.nv`, `fase66_operator_overloading.nv`/`_2.nv`, `fase68_associated_types.nv`/`_2.nv`, `fase70_impl_trait.nv`/`_2.nv` — todos OK en VM y backend C.
+- **FIXPOINTs v4 consecutivos**: `DF7676DE7B…` tras OR patterns (150,463 B → 165,944 B, byte-idénticos self==self2, reemplaza a `A3CBAA0F…`). Batería self ampliada: **OK=42 FALLAS=0** (incl. demo_completo, match, enums, corutinas_demo, jr_concurrencia, 44_extension_methods, test_ffi_min, test_texto_std, fases 61-70).
+
+### Agregado (AOT — backend C / Cranelift optimizados)
+- **Cranelift: variables SSA reales del frontend** (nada de StackSlot): `Variable` de Cranelift con `declare_var`/`def_var`/`use_var` y phis vía dominancia — obsoleto el paso por memoria.
+- **Backend C: índices de registro constantes** (sin strcmp lineal en cada Load/Store): `gv[N]` directo vía `name_idx`, fallback `_fv` solo para nombres no registrados.
+- **Benchmark `bench_fib.nv`** (fib(26)+loop 100, runs calientes): **VM 856ms → C 22ms (antes 406ms, 18x) → Cranelift 5.6ms (antes 116ms, 20x)** — ambos backends en milisegundos.
+- **Fix C backend**: temp-capture en CALLS de usuario (`{ Val _r = _f_x(); PUSH(_r); }` en `_f_/{}`, `CallValue` y `_fref_call`) — gcc evalua LHS antes de la función callee → corrupción de pila compartida. `fase65_guard_let`/`_2` byte-idénticos en C y VM.
+- **Batería dual `aot_bateria_dual.ps1`**: **C OK=38 DIFF=0 (paridad total) · RUST OK=12 DIFF=26 (límite de diseño: sin strings/structs/colecciones) · FAIL=0 SKIP=1 HANG=0**.
+
+### Agregado (Playground Web — Ronda L1 del plan completada)
+- **`lumen serve` real** (servidor HTTP estático Rust puro, sin Python): `--port`, `LUMEN_PORT` env, MIME types, headers COOP/COEP, 404, anti path-traversal, redirección `/` → `/web/index.html`. Verificado (200/404).
+- **Backend `/api/run`**: `POST` → compila y ejecuta con la **VM Rust nativa** (`run_source_capture`) → JSON `{ok,output}`/`{ok,error}` con spans `(linea,col)`. `GET /api/health`, `/api/examples`, `/api/examples/{file}`.
+- **CodeMirror 6 vendorizado** (11 módulos ESM planos + import map, sin CDN) + **modo LUMEN generado** desde `token.rs` (74 keywords, `StreamLanguage` + syntax highlighting Catppuccin). Editor: error-line marking, `Ctrl+Enter`, gutter, autosave localStorage.
+- **Sigma L1**: stdlib embebida via build.rs (`embedded_stdlib.rs`, 31 archivos) + `ModuleLoader::with_memory_files`; `run_lumen`/`check_lumen`/`compile_to_bytes` con loader virtual; 128 ejemplos embebidos (`embedded_examples.js` autogenerado) con fallback offline; `.nvc` descargable desde el browser; toggle **WASM ↔ Servidor** (VM Rust vía `/api/run`).
+- **Historial de ejecuciones**: botón `🕘 Historial` (panel flotante, hasta 10 runs desde localStorage) + **toggle backend PERSISTENTE** (`lumen_playground_backend`). `pkg/lumen_wasm_bg.wasm` 2.37 MB regenado con fixes OR/rangos.
+
+### Arreglado
+- **`tcp_listener` cfg**: campo del struct VM sin cfg (std::net siempre disponible) — `cargo test -p lumen-sema` compilaba lumen-vm sin features y fallaba. 
+- **Clippy `-D warnings` limpio**: eq_op duplicado en `__codegen_a_nvc`, colapso de bloques idénticos en sema, Arc/Ret corutinas/ChannelCell gateados `cfg(full)`, allows documentados.
+- **Parlance FFI**: errores sin detalles + bandas `-1e9`/`[1e9,2e9)`/`6e9` con guards — sin colisiones en ints negativos/grandes.
+
+### Infraestructura
+- **CI autotag**: tag `v<version>` automático solo cuando CI completo pasa (fmt/clippy/tests 3 OS/wasm) — `VERSION` como fuente única de verdad (`scripts/autotag.ps1` para bumps semver), build multi-target + GitHub Release en el mismo workflow (`needs: autotag`).
+- cargo test 0 FAILED (lexer 27, parser 45, sema 56, ir 20, vm 45, e2e 166 + resto, ~380 totales).
+
+---
+
 ## v2.4.1 — 8 Agosto 2026
 
 ### Agregado (VM LÚMEN `vm.nv` — Stream/Async/Par/Actor/Generator completados)
