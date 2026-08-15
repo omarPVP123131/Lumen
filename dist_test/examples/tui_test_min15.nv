@@ -1,8 +1,0 @@
-funcion texto rep(texto a, entero b) {
-    entero i = 0;
-    si i < b {
-        i = i + 1;
-    }
-    retornar a;
-}
-imprimir(rep("x", 5));

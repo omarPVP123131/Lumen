@@ -1,8 +1,0 @@
-importar ingles;
-
-funcion entero factorial(entero n) {
-    si (n <= 1) { retornar 1; }
-    retornar n * factorial(n - 1);
-}
-
-imprimir("Factorial 5: " + factorial(5));

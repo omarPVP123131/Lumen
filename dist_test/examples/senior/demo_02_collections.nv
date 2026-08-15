@@ -1,6 +1,0 @@
-importar ingles;
-
-lista<entero> nums = [10, 20, 30, 40];
-imprimir(nums[0]);
-imprimir(nums[3]);
-imprimir("largo: " + largo(nums));

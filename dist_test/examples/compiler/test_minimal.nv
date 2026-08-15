@@ -1,9 +1,0 @@
-funcion numero tokenizar(texto src) {
-    lista<entero> codes = __str_ord(src);
-    entero n = largo(codes);
-    imprimir("n=", n);
-    imprimir("codes[0]=", codes[0]);
-    imprimir("codes[13]=", codes[13]);
-    retornar __map_nuevo();
-}
-tokenizar("entero x = 42;");

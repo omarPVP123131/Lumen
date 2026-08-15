@@ -1,7 +1,0 @@
-texto r = "";
-entero i = 0;
-mientras i < 5 {
-    r = r + "x";
-    i = i + 1;
-}
-imprimir(r);

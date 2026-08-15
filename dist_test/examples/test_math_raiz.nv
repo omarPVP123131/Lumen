@@ -1,3 +1,0 @@
-importar "matematicas.nv";
-imprimir("raiz(16) = ", matematicas_raiz(16));
-imprimir("--- OK ---");

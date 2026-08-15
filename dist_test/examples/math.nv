@@ -1,3 +1,0 @@
-funcion entero suma(entero a, entero b) { retornar a + b; }
-funcion entero resta(entero a, entero b) { retornar a - b; }
-funcion entero multiplica(entero a, entero b) { retornar a * b; }

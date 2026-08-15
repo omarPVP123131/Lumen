@@ -1,9 +1,0 @@
-importar ingles;
-
-const integer MAX = 100;
-const string NOMBRE = "Lumen";
-const float PI = 3.14159;
-
-print(MAX);
-print(NOMBRE);
-print(PI);

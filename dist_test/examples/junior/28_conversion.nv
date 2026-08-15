@@ -1,5 +1,0 @@
-importar ingles;
-
-print(a_texto(42));
-print(a_texto(3.14));
-print(a_texto(true));

@@ -1,3 +1,0 @@
-funcion numero doblar(numero x) {
-    retornar x * 2;
-}

@@ -1,1 +1,0 @@
-stdlib/compiler/self_fase70_impl_trait2.nvc

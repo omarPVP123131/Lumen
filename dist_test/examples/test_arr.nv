@@ -1,4 +1,0 @@
-lista<entero> numeros = [1, 2, 3, 4, 5];
-imprimir(largo(numeros));
-imprimir(numeros[0]);
-imprimir(numeros[4]);

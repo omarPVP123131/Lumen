@@ -1,9 +1,0 @@
-// Very minimal test: just parser_parse on var decl
-importar "../examples/compiler/test_parser_final.nv";
-
-imprimir("START");
-numero toks = tokenizar("entero x = 42;");
-imprimir("TK: ", __map_obtener(toks, "cnt"));
-numero ast = parser_parse(toks);
-imprimir("AST: ", __map_obtener(ast, "tipo"));
-imprimir("DONE");

@@ -1,9 +1,0 @@
-// Test de red.nv - escucha TCP
-importar "red.nv";
-
-imprimir("=== Red Test ===");
-
-booleano esc = red_tcp_escuchar("127.0.0.1:0");
-imprimir("escuchar: ", esc);
-
-imprimir("--- FIN ---");

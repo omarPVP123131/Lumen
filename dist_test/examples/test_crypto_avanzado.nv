@@ -1,9 +1,0 @@
-imprimir("=== Crypto Hash Test ===");
-
-sea h256 = __hash_sha256("Hola Lumen");
-imprimir("sha256: ", h256);
-
-sea h512 = __hash_sha512("Hola Lumen");
-imprimir("sha512: ", h512);
-
-imprimir("--- FIN ---");

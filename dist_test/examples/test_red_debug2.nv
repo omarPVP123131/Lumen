@@ -1,9 +1,0 @@
-// Test de red.nv - conexion TCP
-importar "red.nv";
-
-imprimir("=== Red Debug ===");
-
-booleano r = red_tcp_conectar("127.0.0.1:9");
-imprimir("conectar: ", r);
-
-imprimir("--- FIN ---");

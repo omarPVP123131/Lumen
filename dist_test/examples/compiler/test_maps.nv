@@ -1,9 +1,0 @@
-// Absolute minimal
-funcion numero test() {
-    numero st = __map_nuevo();
-    st = __map_poner(st, "pos", 0);
-    imprimir("pos=", __map_obtener(st, "pos"));
-    retornar st;
-}
-test();
-imprimir("OK");

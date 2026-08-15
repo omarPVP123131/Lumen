@@ -1,2 +1,0 @@
-importar "compiler/parser.nv";
-imprimir("parser imported OK");

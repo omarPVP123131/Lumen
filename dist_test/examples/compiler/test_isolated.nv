@@ -1,5 +1,0 @@
-importar "compiler/test_parser5.nv";
-
-// Run just one test
-numero toks = tokenizar("entero x = 42;");
-imprimir("Tokens: ", __map_obtener(toks, "cnt"));
