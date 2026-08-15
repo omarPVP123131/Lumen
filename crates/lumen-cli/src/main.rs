@@ -1514,7 +1514,10 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
                 .ok()
                 .and_then(|m| m.modified().ok())
                 .map(|t| {
-                    let secs = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+                    let secs = t
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
                     format!("\"{}-{}\"", secs, data.len())
                 })
                 .unwrap_or_else(|| format!("\"{}\"", data.len()));
@@ -1522,7 +1525,9 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
             // Check If-None-Match
             if let Some(ref inm) = if_none_match {
                 if inm == &etag {
-                    let not_modified = "HTTP/1.1 304 Not Modified\r\nETag: ".to_string() + &etag + "\r\nConnection: close\r\n\r\n";
+                    let not_modified = "HTTP/1.1 304 Not Modified\r\nETag: ".to_string()
+                        + &etag
+                        + "\r\nConnection: close\r\n\r\n";
                     let _ = stream.write_all(not_modified.as_bytes());
                     return;
                 }

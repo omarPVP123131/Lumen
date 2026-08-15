@@ -871,7 +871,7 @@ static char* _time_fmt(int64_t ts, const char* fmt) {
   return m;
 }
 static Val _env_list(void) {
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(__APPLE__)
   int n = 0;
   while (environ[n]) n++;
   Val* xs = (Val*)malloc(sizeof(Val) * (n > 0 ? n : 1));
@@ -885,7 +885,7 @@ static Val _env_list(void) {
 #endif
 }
 static Val _fs_list(const char* path) {
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(__APPLE__)
   DIR* d = opendir(path);
   if (!d) return _v_void();
   Val* xs = NULL;
@@ -900,7 +900,6 @@ static Val _fs_list(const char* path) {
   Val v = _arrn(xs, n);
   free(xs);
   return v;
-}
 #else
   (void)path;
   return _v_void();
@@ -1004,7 +1003,10 @@ static Val _ffi_call(Val h, const char* nm, Val args, const char* ret) {
   }
 #else
   if (!strcmp(nm, "_putenv")) {
-    if (args.argc > 0) return _v_int(putenv(args.items[0].s ? args.items[0].s : ""));
+    if (args.argc > 0) {
+      char* env_str = args.items[0].s ? args.items[0].s : "";
+      return _v_int(putenv(env_str));
+    }
     return _v_int(0);
   }
 #endif
