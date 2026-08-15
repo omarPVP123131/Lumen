@@ -1,0 +1,202 @@
+// test_lexer.nv — Tokenizador LUMEN auto-contenido
+// Usa solo tipos compatibles con el parser/sema actual
+
+funcion booleano _alpha(entero cp) {
+    retornar (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122) || cp == 95;
+}
+
+funcion booleano _dig(entero cp) {
+    retornar cp >= 48 && cp <= 57;
+}
+
+funcion booleano _alnum(entero cp) { retornar _alpha(cp) || _dig(cp); }
+
+funcion texto _chr(entero cp) { retornar a_texto(cp); }
+
+funcion numero lexer_tokenizar(texto source) {
+    // Keywords lookup
+    numero kw = __map_nuevo();
+    kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1);
+    kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1);
+    kw = __map_poner(kw, "mientras", 1); kw = __map_poner(kw, "while", 1);
+    kw = __map_poner(kw, "para", 1); kw = __map_poner(kw, "for", 1);
+    kw = __map_poner(kw, "funcion", 1); kw = __map_poner(kw, "function", 1);
+    kw = __map_poner(kw, "retornar", 1); kw = __map_poner(kw, "return", 1);
+    kw = __map_poner(kw, "entero", 1); kw = __map_poner(kw, "texto", 1);
+    kw = __map_poner(kw, "numero", 1); kw = __map_poner(kw, "booleano", 1);
+    kw = __map_poner(kw, "decimal", 1); kw = __map_poner(kw, "lista", 1);
+    kw = __map_poner(kw, "importar", 1); kw = __map_poner(kw, "romper", 1);
+    kw = __map_poner(kw, "imprimir", 1); kw = __map_poner(kw, "estructura", 1);
+    kw = __map_poner(kw, "enum", 1); kw = __map_poner(kw, "elegir", 1);
+    kw = __map_poner(kw, "caso", 1); kw = __map_poner(kw, "en", 1);
+    kw = __map_poner(kw, "es", 1); kw = __map_poner(kw, "const", 1);
+    
+    // Get code points
+    numero codes = __str_ord(source);
+    entero n = largo(codes);
+    entero idx = 0;
+    entero ln = 1;
+    entero cl = 1;
+    numero tokens = __map_nuevo();
+    entero cnt = 0;
+    
+    mientras idx < n {
+        entero cp = codes[idx];
+        entero sl = ln;
+        entero sc = cl;
+        
+        // Espacios
+        si cp == 32 || cp == 9 { cl = cl + 1; idx = idx + 1; continuar; }
+        si cp == 10 { ln = ln + 1; cl = 1; idx = idx + 1; continuar; }
+        si cp == 13 { idx = idx + 1; continuar; }
+        
+        // Comentario //
+        si cp == 47 && idx + 1 < n {
+            entero nxt = codes[idx + 1];
+            si nxt == 47 {
+                idx = idx + 2; cl = cl + 2;
+                mientras idx < n && codes[idx] != 10 { idx = idx + 1; cl = cl + 1; }
+                continuar;
+            }
+        }
+        
+        // Comentario /* */
+        si cp == 47 && idx + 1 < n {
+            entero nxt = codes[idx + 1];
+            si nxt == 42 {
+                idx = idx + 2; cl = cl + 2;
+                mientras idx + 1 < n {
+                    si codes[idx] == 42 && codes[idx + 1] == 47 {
+                        idx = idx + 2; cl = cl + 2; romper;
+                    }
+                    si codes[idx] == 10 { ln = ln + 1; cl = 1; }
+                    sino { cl = cl + 1; }
+                    idx = idx + 1;
+                }
+                continuar;
+            }
+        }
+        
+        // String
+        si cp == 34 {
+            texto s = ""; idx = idx + 1; cl = cl + 1;
+            mientras idx < n && codes[idx] != 34 {
+                s = s + _chr(codes[idx]); idx = idx + 1; cl = cl + 1;
+            }
+            si idx < n { idx = idx + 1; cl = cl + 1; }
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", 3); t = __map_poner(t, "v", s);
+            tokens = __map_poner(tokens, a_texto(cnt), t);
+            cnt = cnt + 1; continuar;
+        }
+        
+        // Numero
+        si _dig(cp) {
+            texto num = "";
+            mientras idx < n && _dig(codes[idx]) {
+                num = num + _chr(codes[idx]); idx = idx + 1; cl = cl + 1;
+            }
+            si idx < n && codes[idx] == 46 {
+                num = num + "."; idx = idx + 1; cl = cl + 1;
+                mientras idx < n && _dig(codes[idx]) {
+                    num = num + _chr(codes[idx]); idx = idx + 1; cl = cl + 1;
+                }
+            }
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num);
+            tokens = __map_poner(tokens, a_texto(cnt), t);
+            cnt = cnt + 1; continuar;
+        }
+        
+        // Identificador / Keyword
+        si _alpha(cp) {
+            texto id = "";
+            mientras idx < n && _alnum(codes[idx]) {
+                id = id + _chr(codes[idx]); idx = idx + 1; cl = cl + 1;
+            }
+            entero tp = 1;
+            numero kwv = __map_obtener(kw, id);
+            si kwv == 1 { tp = 6; }
+            numero t = __map_nuevo();
+            t = __map_poner(t, "t", tp); t = __map_poner(t, "v", id);
+            tokens = __map_poner(tokens, a_texto(cnt), t);
+            cnt = cnt + 1; continuar;
+        }
+        
+        // Operadores multi-caracter
+        texto op = _chr(cp);
+        si idx + 1 < n {
+            entero nxt = codes[idx + 1];
+            si cp == 38 && nxt == 38 { op = "&&"; idx = idx + 1; cl = cl + 1; }
+            si cp == 124 && nxt == 124 { op = "||"; idx = idx + 1; cl = cl + 1; }
+            si cp == 62 && nxt == 61 { op = ">="; idx = idx + 1; cl = cl + 1; }
+            si cp == 60 && nxt == 61 { op = "<="; idx = idx + 1; cl = cl + 1; }
+            si cp == 33 && nxt == 61 { op = "!="; idx = idx + 1; cl = cl + 1; }
+            si cp == 61 && nxt == 61 { op = "=="; idx = idx + 1; cl = cl + 1; }
+            si cp == 60 && nxt == 60 { op = "<<"; idx = idx + 1; cl = cl + 1; }
+            si cp == 62 && nxt == 62 { op = ">>"; idx = idx + 1; cl = cl + 1; }
+            si cp == 46 && nxt == 46 { op = ".."; idx = idx + 1; cl = cl + 1; }
+        }
+        numero t = __map_nuevo();
+        t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op);
+        tokens = __map_poner(tokens, a_texto(cnt), t);
+        cnt = cnt + 1; idx = idx + 1; cl = cl + 1;
+    }
+    
+    // Guardar solo la cuenta de tokens
+    numero t = __map_nuevo();
+    t = __map_poner(t, "t", 99); t = __map_poner(t, "v", "");
+    tokens = __map_poner(tokens, a_texto(cnt), t);
+    // Guardar count
+    tokens = __map_poner(tokens, "cnt", cnt);
+    retornar tokens;
+}
+
+funcion texto _t2s(numero t) {
+    entero tv = __map_obtener(t, "t");
+    texto ts = "?";
+    si tv == 1 { ts = "Ident"; }
+    si tv == 2 { ts = "Num"; }
+    si tv == 3 { ts = "Str"; }
+    si tv == 4 { ts = "Oper"; }
+    si tv == 6 { ts = "Kw"; }
+    si tv == 99 { ts = "EOF"; }
+    texto val = __map_obtener(t, "v");
+    retornar ts + "(" + val + ")";
+}
+
+// ── TESTS ───────────────────────────────────────────────────
+imprimir("=== LEXER LUMEN ===");
+numero tok = lexer_tokenizar("entero x = 42;");
+entero total = __map_obtener(tok, "cnt");
+entero i = 0;
+mientras i < total {
+    numero t = __map_obtener(tok, a_texto(i));
+    imprimir(i, ": ", _t2s(t));
+    i = i + 1;
+}
+
+imprimir("");
+imprimir("=== Test 2: Keywords ===");
+numero tok2 = lexer_tokenizar("si sino mientras para funcion retornar");
+entero total2 = __map_obtener(tok2, "cnt");
+i = 0;
+mientras i < total2 {
+    numero t = __map_obtener(tok2, a_texto(i));
+    imprimir(i, ": ", _t2s(t));
+    i = i + 1;
+}
+
+imprimir("");
+imprimir("=== Test 3: Strings + numeros ===");
+numero tok3 = lexer_tokenizar("texto h = \"hola\"; decimal pi = 3.14;");
+entero total3 = __map_obtener(tok3, "cnt");
+i = 0;
+mientras i < total3 {
+    numero t = __map_obtener(tok3, a_texto(i));
+    imprimir(i, ": ", _t2s(t));
+    i = i + 1;
+}
+
+imprimir("");
+imprimir("=== LEXER OK ===");

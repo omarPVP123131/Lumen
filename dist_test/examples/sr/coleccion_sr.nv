@@ -1,0 +1,81 @@
+// ==========================================
+// coleccion_sr.nv — Collections (senior)
+// Uso: lumen run -L stdlib/ examples/sr/coleccion_sr.nv
+// ==========================================
+importar "coleccion.nv";
+
+imprimir("=== Coleccion SR: Intermediate Collections ===");
+
+// ── Example 1: Deque (Double-Ended Queue) ──
+imprimir("--- Ej 1: Deque (Cola Doble) ---");
+sea dq = coleccion_deque_nuevo();
+dq = coleccion_deque_agregar_final(dq, 100);
+dq = coleccion_deque_agregar_final(dq, 200);
+dq = coleccion_deque_agregar_frente(dq, 50);
+dq = coleccion_deque_agregar_final(dq, 300);
+
+imprimir("longitud inicial: ", coleccion_deque_longitud(dq));
+imprimir("quitar frente:    ", coleccion_deque_quitar_frente(dq));
+imprimir("quitar final:     ", coleccion_deque_quitar_final(dq));
+imprimir("quitar frente:    ", coleccion_deque_quitar_frente(dq));
+imprimir("quitar final:     ", coleccion_deque_quitar_final(dq));
+
+// ── Example 2: Heap as Priority Queue ──
+imprimir("--- Ej 2: Montículo (Priority Queue) ---");
+sea hp = coleccion_monticulo_nuevo();
+hp = coleccion_monticulo_agregar(hp, 42);
+hp = coleccion_monticulo_agregar(hp, 17);
+hp = coleccion_monticulo_agregar(hp, 99);
+hp = coleccion_monticulo_agregar(hp, 3);
+hp = coleccion_monticulo_agregar(hp, 55);
+
+imprimir("elementos agregados: 5");
+imprimir("longitud: ", coleccion_monticulo_longitud(hp));
+imprimir("ver (máximo): ", coleccion_monticulo_ver(hp));
+imprimir("quitar (máximo): ", coleccion_monticulo_quitar(hp));
+
+// ── Example 3: Linked List ──
+imprimir("--- Ej 3: Lista Enlazada ---");
+sea ll = coleccion_enlazada_nuevo();
+ll = coleccion_enlazada_agregar_final(ll, "primero");
+ll = coleccion_enlazada_agregar_final(ll, "segundo");
+ll = coleccion_enlazada_agregar_final(ll, "tercero");
+ll = coleccion_enlazada_agregar_frente(ll, "cero");
+
+imprimir("longitud: ", coleccion_enlazada_longitud(ll));
+imprimir("quitar frente: ", coleccion_enlazada_quitar_frente(ll));
+imprimir("quitar final:  ", coleccion_enlazada_quitar_final(ll));
+imprimir("quitar frente: ", coleccion_enlazada_quitar_frente(ll));
+imprimir("quitar frente: ", coleccion_enlazada_quitar_frente(ll));
+
+// ── Example 4: Set Operations (Union, Intersection, Diff) ──
+imprimir("--- Ej 4: Operaciones de Conjuntos ---");
+sea a = coleccion_conjunto_nuevo();
+a = coleccion_conjunto_agregar(a, 1);
+a = coleccion_conjunto_agregar(a, 2);
+a = coleccion_conjunto_agregar(a, 3);
+a = coleccion_conjunto_agregar(a, 4);
+
+sea b = coleccion_conjunto_nuevo();
+b = coleccion_conjunto_agregar(b, 3);
+b = coleccion_conjunto_agregar(b, 4);
+b = coleccion_conjunto_agregar(b, 5);
+b = coleccion_conjunto_agregar(b, 6);
+
+// Union: all elements from both sets
+sea u = coleccion_conjunto_unir(a, b);
+imprimir("Unión tiene 1: ", coleccion_conjunto_tiene(u, 1));
+imprimir("Unión tiene 5: ", coleccion_conjunto_tiene(u, 5));
+
+// Intersection: elements in both sets
+sea i = coleccion_conjunto_interseccion(a, b);
+imprimir("Intersección tiene 1: ", coleccion_conjunto_tiene(i, 1));
+imprimir("Intersección tiene 3: ", coleccion_conjunto_tiene(i, 3));
+imprimir("Intersección tiene 5: ", coleccion_conjunto_tiene(i, 5));
+
+// Difference: elements in A but not B
+sea d = coleccion_conjunto_diferencia(a, b);
+imprimir("Diferencia tiene 1: ", coleccion_conjunto_tiene(d, 1));
+imprimir("Diferencia tiene 3: ", coleccion_conjunto_tiene(d, 3));
+
+imprimir("--- FIN COLECCION SR ---");

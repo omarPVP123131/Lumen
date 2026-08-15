@@ -1,0 +1,21 @@
+// Ejemplo de Tuplas en LÚMEN
+// Sintaxis: (tipo, tipo) y (expr, expr)
+
+// Tupla básica
+imprimir((42, "hola", 3.0));
+
+// Acceso por índice
+imprimir((10, 20, 30).0);
+imprimir((10, 20, 30).1);
+imprimir((10, 20, 30).2);
+
+// Tuplas anidadas
+(entero, (texto, entero)) t = (1, ("a", 2));
+imprimir(t.0);
+imprimir(t.1.0);
+imprimir(t.1.1);
+
+// Declaración con tipo explícito
+(entero, texto) par = (100, "mundo");
+imprimir(par.0);
+imprimir(par.1);

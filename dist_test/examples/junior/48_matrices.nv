@@ -1,0 +1,22 @@
+importar ingles;
+
+function array<array<integer>> crear_matriz(integer f, integer c) {
+    array<array<integer>> m = [];
+    integer i = 0;
+    while (i < f) {
+        array<integer> fila = [];
+        integer j = 0;
+        while (j < c) {
+            fila.agregar(i * c + j + 1);
+            j = j + 1;
+        }
+        m.agregar(fila);
+        i = i + 1;
+    }
+    return m;
+}
+
+array<array<integer>> mat = crear_matriz(2, 3);
+print(mat[0][0]);
+print(mat[0][2]);
+print(mat[1][1]);

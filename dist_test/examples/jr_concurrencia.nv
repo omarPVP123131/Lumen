@@ -1,0 +1,30 @@
+importar "fecha.nv";
+
+funcion texto saludar(texto nombre) {
+    retornar "Hola " + nombre + " desde hilo!";
+}
+
+imprimir("=== JR: Calendarios ===");
+sea ahora = __tiempo_ahora();
+sea hijri = fecha_calendario_hijri(ahora);
+imprimir("Hijri: ", hijri);
+sea persian = fecha_calendario_persa(ahora);
+imprimir("Persian: ", persian);
+
+imprimir("=== JR: Thread ===");
+sea t = __hilo_lanzar("saludar", "Ana");
+sea res = __hilo_esperar(t);
+imprimir("thread: ", res);
+
+imprimir("=== JR: Channel ===");
+sea c = __canal_nuevo();
+__canal_enviar(c, 42);
+sea val = __canal_recibir(c);
+imprimir("channel: ", val);
+
+imprimir("=== JR: Mutex ===");
+sea m = __mutex_nuevo();
+sea locked = __mutex_bloquear(m, "saludar", "Mutex");
+imprimir("mutex: ", locked);
+
+imprimir("--- FIN ---");

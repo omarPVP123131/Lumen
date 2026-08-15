@@ -1,0 +1,9 @@
+// Test HTTP via red.nv
+importar "red.nv";
+
+imprimir("=== HTTP Test via FFI ===");
+
+resultado<texto, texto> resp = red_http_obtener("http://example.com/");
+imprimir("respuesta: ", resp);
+
+imprimir("--- FIN ---");

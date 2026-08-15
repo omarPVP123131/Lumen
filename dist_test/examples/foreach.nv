@@ -1,0 +1,32 @@
+// Ejemplo de ciclo para-cada (for-each) en LÚMEN
+
+lista<entero> numeros = [1, 2, 3, 4, 5];
+
+// Recorrer lista con para-cada
+para n en numeros {
+    imprimir(n);
+}
+
+// Filtrar con condicional dentro del ciclo
+lista<entero> datos = [10, 20, 30, 40, 50];
+para valor en datos {
+    si (valor > 25) {
+        imprimir(valor);
+    }
+}
+
+// Concatenar strings con para-cada
+lista<texto> palabras = ["hola", " ", "mundo"];
+texto saludo = "";
+para p en palabras {
+    saludo = saludo + p;
+}
+imprimir(saludo);
+
+// Ciclo anidado
+lista<entero> nums = [1, 2];
+para a en nums {
+    para b en nums {
+        imprimir(a * b);
+    }
+}

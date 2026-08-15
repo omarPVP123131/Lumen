@@ -1,0 +1,23 @@
+importar ingles;
+
+function string calcular_imc(float peso, float altura) {
+    float imc = peso / (altura * altura);
+    string categoria = "normal";
+    if (imc < 18.5) {
+        categoria = "bajo peso";
+    } else {
+        if (imc < 25) {
+            categoria = "normal";
+        } else {
+            if (imc < 30) {
+                categoria = "sobrepeso";
+            } else {
+                categoria = "obesidad";
+            }
+        }
+    }
+    return categoria;
+}
+
+print(calcular_imc(70.0, 1.75));
+print(calcular_imc(90.0, 1.70));

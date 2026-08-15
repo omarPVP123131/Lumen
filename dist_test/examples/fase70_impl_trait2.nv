@@ -1,0 +1,13 @@
+// Fase 70 — Impl Trait return: rasgo numérico como tipo de retorno
+rasgo Numerico {
+    funcion entero valor(este);
+}
+
+funcion Numerico constante() {
+    retornar 99;
+}
+
+funcion entero principal() {
+    imprimir("retorno de rasgo numerico");
+    retornar 0;
+}

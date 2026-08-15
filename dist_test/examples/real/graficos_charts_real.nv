@@ -1,0 +1,128 @@
+// ==========================================
+// graficos_charts_real.nv — Charts (real-world)
+// Tests: auto-scale, data normalization, multi-series
+// Uso: lumen run -L stdlib/ examples/real/graficos_charts_real.nv
+// ==========================================
+
+imprimir("=== Graficos Charts REAL: Real-World Charts ===");
+
+// ── Ej 1: Auto-Scale Algorithm ──
+// Ej 1: Automatic Y-axis scaling for any data range
+imprimir("--- Ej 1: Algoritmo de Auto-Escala ---");
+funcion lista<numero> auto_escala(lista<numero> datos, entero num_ticks) {
+    // Find min and max
+    numero min = datos[0];
+    numero max = datos[0];
+    entero i = 1;
+    mientras i < largo(datos) {
+        si datos[i] < min { min = datos[i]; }
+        si datos[i] > max { max = datos[i]; }
+        i = i + 1;
+    }
+    numero rango = max - min;
+    si rango == 0.0 { rango = 1.0; }
+    // Nice round step
+    numero potencia = 1.0;
+    mientras potencia * 10.0 < rango { potencia = potencia * 10.0; }
+    mientras potencia > rango { si potencia > 1.0 { potencia = potencia / 10.0; } sino { romper; } }
+    si rango < 1.0 { potencia = 0.1; }
+    numero paso = potencia;
+    numero nice_min = ((min / paso) como entero) * paso;
+    numero nice_max = ((max / paso + 1.0) como entero) * paso;
+    // Generate ticks
+    lista<numero> ticks = [];
+    numero val = nice_min;
+    mientras val < nice_max + paso / 2.0 {
+        ticks.agregar(val);
+        val = val + paso;
+    }
+    retornar ticks;
+}
+lista<numero> datos1 = [3.2, 7.8, 12.4, 5.6, 9.1, 15.3];
+lista<numero> ticks1 = auto_escala(datos1, 5);
+imprimir("Datos: 3.2, 7.8, 12.4, 5.6, 9.1, 15.3");
+imprimir("Ticks auto-escalados:");
+entero i = 0;
+mientras i < largo(ticks1) {
+    imprimir("  ", ticks1[i]);
+    i = i + 1;
+}
+// Test with negative data
+lista<numero> datos2 = [-5.0, -2.0, 3.0, 8.0, -1.0];
+lista<numero> ticks2 = auto_escala(datos2, 5);
+imprimir("Datos con negativos: -5, -2, 3, 8, -1");
+imprimir("Ticks:");
+i = 0;
+mientras i < largo(ticks2) {
+    imprimir("  ", ticks2[i]);
+    i = i + 1;
+}
+
+// ── Ej 2: Data Normalization ──
+// Ej 2: Normalize data to 0-100% range
+imprimir("--- Ej 2: Normalizacion de Datos ---");
+funcion lista<numero> normalizar(lista<numero> datos) {
+    numero min = datos[0];
+    numero max = datos[0];
+    entero i = 0;
+    mientras i < largo(datos) {
+        si datos[i] < min { min = datos[i]; }
+        si datos[i] > max { max = datos[i]; }
+        i = i + 1;
+    }
+    numero rango = max - min;
+    si rango == 0.0 { rango = 1.0; }
+    lista<numero> norm = [];
+    i = 0;
+    mientras i < largo(datos) {
+        numero val = (datos[i] - min) / rango * 100.0;
+        norm.agregar(val);
+        i = i + 1;
+    }
+    retornar norm;
+}
+lista<numero> raw = [150.0, 300.0, 450.0, 200.0, 500.0];
+lista<numero> norm = normalizar(raw);
+imprimir("Datos originales: 150, 300, 450, 200, 500");
+imprimir("Normalizados (0-100%):");
+i = 0;
+mientras i < largo(norm) {
+    imprimir("  ", raw[i], " -> ", norm[i] como entero, "%");
+    i = i + 1;
+}
+
+// ── Ej 3: Multi-Series Overlay Calculator ──
+// Ej 3: Calculate overlaid positions for stacked/grouped charts
+imprimir("--- Ej 3: Calculadora Multi-Series ---");
+funcion lista<lista<entero>> posiciones_barras(entero num_cats, entero num_series, entero ancho_total) {
+    lista<lista<entero>> pos = [];
+    entero ancho_grupo = ancho_total / num_cats;
+    entero ancho_barra = ancho_grupo / num_series;
+    si ancho_barra < 2 { ancho_barra = 2; }
+    entero c = 0;
+    mientras c < num_cats {
+        entero cx = c * ancho_grupo;
+        entero s = 0;
+        mientras s < num_series {
+            entero bx = cx + s * ancho_barra + 1;
+            pos.agregar([bx, ancho_barra - 2)];
+            s = s + 1;
+        }
+        c = c + 1;
+    }
+    retornar pos;
+}
+lista<lista<entero>> posiciones = posiciones_barras(3, 2, 300);
+imprimir("Grafico de barras: 3 categorias x 2 series, ancho=300px");
+i = 0;
+mientras i < largo(posiciones) {
+    entero cat = i / 2;
+    entero ser = i % 2;
+    imprimir("  Cat", cat, " Serie", ser, ": x=", posiciones[i][0], " w=", posiciones[i][1]);
+    i = i + 1;
+}
+// Group spacing check
+imprimir("Separacion entre grupos: ", posiciones[2][0] - posiciones[0][0], "px");
+imprimir("Separacion entre series: ", posiciones[1][0] - posiciones[0][0], "px");
+
+imprimir("--- FIN GRAFICOS CHARTS REAL ---");

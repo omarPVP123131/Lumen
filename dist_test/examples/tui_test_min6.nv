@@ -1,0 +1,10 @@
+funcion texto test() {
+    texto r = "";
+    entero i = 0;
+    mientras i < 5 {
+        r = r + "x";
+        i = i + 1;
+    }
+    retornar r;
+}
+imprimir(test());

@@ -1,0 +1,55 @@
+// ==========================================
+// red_real.nv — Network operations (real-world)
+// Uso: lumen run -L stdlib/ examples/real/red_real.nv
+// ==========================================
+
+imprimir("=== Red REAL: REST Client, File Downloader & Microservice ===");
+
+// ── Example 1: REST API Client ──
+imprimir("--- Ej 1: REST Client ---");
+funcion texto api_get(texto endpoint) {
+    sea resp = __http_obtener("http://httpbin.org" + endpoint);
+    retornar "GET " + endpoint + " -> " + resp.largo() + " bytes";
+}
+
+imprimir(api_get("/get?param=valor"));
+imprimir(api_get("/status/200"));
+
+funcion texto api_post(texto endpoint, texto body) {
+    sea resp = __http_enviar("http://httpbin.org" + endpoint, body);
+    retornar "POST " + endpoint + " -> " + resp.largo() + " bytes";
+}
+imprimir(api_post("/post", "{\"data\":\"test\"}"));
+
+// ── Example 2: File Downloader ──
+imprimir("--- Ej 2: File Downloader ---");
+funcion texto descargar_pagina(texto url, texto archivo_salida) {
+    sea contenido = __http_obtener(url);
+    si contenido.largo() == 0 {
+        retornar "Download failed: " + url;
+    }
+    __escritor_buffer(archivo_salida, contenido);
+    retornar "Downloaded " + archivo_salida + " (" + contenido.largo() + " bytes)";
+}
+
+imprimir(descargar_pagina("http://httpbin.org/bytes/1024", "download_real_test.bin"));
+
+// ── Example 3: Microservice Stub ──
+imprimir("--- Ej 3: Microservice Stub ---");
+sea listen1 = __tcp_escuchar("127.0.0.1:9001");
+imprimir("api-gateway on 9001: ", listen1);
+
+sea listen2 = __tcp_escuchar("127.0.0.1:9002");
+imprimir("auth-service on 9002: ", listen2);
+
+sea server_info = __http_servidor("0.0.0.0:3000");
+imprimir("HTTP server: ", server_info);
+
+// External health checks
+sea gh = __tcp_conectar("github.com:443");
+imprimir("github.com:443 -> ", gh);
+
+sea google = __tcp_conectar("google.com:80");
+imprimir("google.com:80  -> ", google);
+
+imprimir("--- FIN RED REAL ---");

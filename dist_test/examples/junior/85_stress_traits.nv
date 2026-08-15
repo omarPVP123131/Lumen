@@ -1,0 +1,30 @@
+importar ingles;
+
+trait Identificable {
+    function integer id(yo);
+}
+
+struct Usuario {
+    uid: integer,
+    nombre: string
+}
+
+impl Identificable para Usuario {
+    function integer id(yo) {
+        return yo.uid;
+    }
+}
+
+trait Nombrable {
+    function string nombre_func(yo);
+}
+
+impl Nombrable para Usuario {
+    function string nombre_func(yo) {
+        return yo.nombre;
+    }
+}
+
+Usuario u = Usuario { uid: 1, nombre: "Ana" };
+print(u.id());
+print(u.nombre_func());

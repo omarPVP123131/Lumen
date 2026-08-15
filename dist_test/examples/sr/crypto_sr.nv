@@ -1,0 +1,49 @@
+// ==========================================
+// crypto_sr.nv — Crypto operations (senior)
+// Uso: lumen run -L stdlib/ examples/sr/crypto_sr.nv
+// ==========================================
+importar "crypto.nv";
+
+imprimir("=== Crypto SR: AES Encryption & JWT with Claims ===");
+
+// ── Example 1: AES Encrypt/Decrypt Roundtrip ──
+imprimir("--- Ej 1: AES Roundtrip ---");
+sea clave = "clave-secreta-32";
+sea mensaje = "datos confidenciales del usuario";
+
+sea cifrado = crypto_aes_encriptar(clave, mensaje);
+imprimir("Original:     ", mensaje);
+imprimir("Encriptado:   hex length ", cifrado.largo());
+
+sea descifrado = crypto_aes_desencriptar(clave, cifrado);
+imprimir("Desencriptado: ", descifrado);
+imprimir("Roundtrip OK:  ", descifrado == mensaje);
+
+// ── Example 2: JWT with Multiple Claims ──
+imprimir("--- Ej 2: JWT with Claims ---");
+sea claims = "{\"sub\":\"123\",\"nombre\":\"Ana\",\"rol\":\"admin\",\"exp\":9999999999}";
+sea secreto = "jwt-secreto-seguro";
+
+sea token = crypto_jwt_codificar(claims, secreto);
+imprimir("JWT token length: ", token.largo());
+
+sea claims_out = crypto_jwt_decodificar(token, secreto);
+imprimir("Verified claims: ", claims_out);
+
+// ── Example 3: Password Hash Validator ──
+imprimir("--- Ej 3: Password Hash Validator ---");
+funcion booleano validar_password(texto password, texto hash_esperado) {
+    sea hash = crypto_sha256(password);
+    retornar hash == hash_esperado;
+}
+
+sea stored_hash = crypto_sha256("MiP@ssw0rd!");
+imprimir("Hash almacenado: ", stored_hash);
+imprimir("Correct pass valid: ", validar_password("MiP@ssw0rd!", stored_hash));
+imprimir("Wrong pass valid:   ", validar_password("wrongpass", stored_hash));
+
+// SHA512 for stronger hashing
+sea strong_hash = crypto_sha512("admin123");
+imprimir("SHA512 hash length: ", strong_hash.largo());
+
+imprimir("--- FIN CRYPTO SR ---");

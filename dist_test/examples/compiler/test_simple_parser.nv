@@ -1,0 +1,143 @@
+// ── Full lexer + minimal parser test ───────────────────────────
+funcion booleano _al(entero cp) { retornar (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122) || cp == 95; }
+funcion booleano _dg(entero cp) { retornar cp >= 48 && cp <= 57; }
+funcion booleano _an(entero cp) { retornar _al(cp) || _dg(cp); }
+funcion texto _chr(entero cp) { retornar a_texto(cp); }
+
+funcion numero tokenizar(texto src) {
+    numero kw = __map_nuevo();
+    kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1);
+    kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1);
+    kw = __map_poner(kw, "mientras", 1); kw = __map_poner(kw, "while", 1);
+    kw = __map_poner(kw, "para", 1); kw = __map_poner(kw, "for", 1);
+    kw = __map_poner(kw, "funcion", 1); kw = __map_poner(kw, "function", 1);
+    kw = __map_poner(kw, "retornar", 1); kw = __map_poner(kw, "return", 1);
+    kw = __map_poner(kw, "entero", 1); kw = __map_poner(kw, "texto", 1);
+    kw = __map_poner(kw, "booleano", 1); kw = __map_poner(kw, "decimal", 1);
+    kw = __map_poner(kw, "numero", 1); kw = __map_poner(kw, "void", 1);
+    kw = __map_poner(kw, "verdadero", 1); kw = __map_poner(kw, "true", 1);
+    kw = __map_poner(kw, "falso", 1); kw = __map_poner(kw, "false", 1);
+    kw = __map_poner(kw, "imprimir", 1); kw = __map_poner(kw, "estructura", 1);
+    kw = __map_poner(kw, "importar", 1); kw = __map_poner(kw, "romper", 1);
+    kw = __map_poner(kw, "continuar", 1);
+
+    lista<entero> codes = __str_ord(src);
+    entero n = largo(codes);
+    entero i = 0;
+    numero toks = __map_nuevo(); entero c = 0;
+
+    mientras (i < n) {
+        entero cp = codes[i];
+        si (cp == 32 || cp == 9 || cp == 10 || cp == 13) { i = i + 1; continuar; }
+        si (cp == 47 && i + 1 < n) {
+            entero nxt = codes[i + 1];
+            si (nxt == 47) { i = i + 2; mientras (i < n && codes[i] != 10) { i = i + 1; } continuar; }
+        }
+        si (cp == 34) {
+            texto s = ""; i = i + 1;
+            mientras (i < n && codes[i] != 34) { s = s + _chr(codes[i]); i = i + 1; }
+            si (i < n) { i = i + 1; }
+            numero t = __map_nuevo(); t = __map_poner(t, "t", 3); t = __map_poner(t, "v", s);
+            toks = __map_poner(toks, a_texto(c), t); c = c + 1; continuar;
+        }
+        si (_dg(cp)) {
+            texto num = "";
+            mientras (i < n && _dg(codes[i])) { num = num + _chr(codes[i]); i = i + 1; }
+            si (i < n && codes[i] == 46) {
+                num = num + "."; i = i + 1;
+                mientras (i < n && _dg(codes[i])) { num = num + _chr(codes[i]); i = i + 1; }
+            }
+            numero t = __map_nuevo(); t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num);
+            toks = __map_poner(toks, a_texto(c), t); c = c + 1; continuar;
+        }
+        si (_al(cp)) {
+            texto id = "";
+            mientras (i < n && _an(codes[i])) { id = id + _chr(codes[i]); i = i + 1; }
+            entero tp = 1;
+            numero kwv = __map_obtener(kw, id);
+            si (kwv == 1) { tp = 6; }
+            numero t = __map_nuevo(); t = __map_poner(t, "t", tp); t = __map_poner(t, "v", id);
+            toks = __map_poner(toks, a_texto(c), t); c = c + 1; continuar;
+        }
+        texto op = _chr(cp);
+        si (i + 1 < n) {
+            entero nxt = codes[i + 1];
+            si (cp == 38 && nxt == 38) { op = "&&"; i = i + 1; }
+            si (cp == 124 && nxt == 124) { op = "||"; i = i + 1; }
+            si (cp == 62 && nxt == 61) { op = ">="; i = i + 1; }
+            si (cp == 60 && nxt == 61) { op = "<="; i = i + 1; }
+            si (cp == 33 && nxt == 61) { op = "!="; i = i + 1; }
+            si (cp == 61 && nxt == 61) { op = "=="; i = i + 1; }
+        }
+        numero t = __map_nuevo(); t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op);
+        toks = __map_poner(toks, a_texto(c), t); c = c + 1; i = i + 1;
+    }
+
+    numero t = __map_nuevo(); t = __map_poner(t, "t", 99); t = __map_poner(t, "v", "");
+    toks = __map_poner(toks, a_texto(c), t); toks = __map_poner(toks, "cnt", c);
+    retornar toks;
+}
+
+// ── SIMPLE parser ──────────────────────────────────────────────
+numero _pr_tokens = __map_nuevo();
+numero _pr_pos = 0;
+numero _pr_cnt = 0;
+
+funcion numero _tk() { retornar __map_obtener(_pr_tokens, a_texto(_pr_pos)); }
+funcion numero _tt() { numero t = _tk(); retornar __map_obtener(t, "t"); }
+funcion numero _tv() { numero t = _tk(); retornar __map_obtener(t, "v"); }
+funcion booleano _eof() { retornar _pr_pos > _pr_cnt; }
+funcion void _av() { _pr_pos = _pr_pos + 1; }
+
+funcion booleano _ch(numero tt, texto vv) {
+    numero t = _tk(); numero a = __map_obtener(t, "t"); numero b = __map_obtener(t, "v");
+    retornar a == tt && a_texto(b) == vv;
+}
+funcion booleano _tp() {
+    texto v = a_texto(_tv());
+    retornar _tt() == 6 && (v == "entero" || v == "texto" || v == "decimal" || v == "booleano" || v == "numero" || v == "void");
+}
+funcion void _sk() { si (_ch(5, ";")) { _pr_pos = _pr_pos + 1; } }
+
+// VERY simple parse: just parse var declarations
+funcion numero parse_simple() {
+    numero prog = __map_nuevo(); prog = __map_poner(prog, "tipo", "Programa");
+    numero stmts = __map_nuevo(); numero sc = 0;
+
+    mientras (!_eof()) {
+        si (_ch(5, ";") || _ch(5, "}")) { _pr_pos = _pr_pos + 1; continuar; }
+        numero tt = _tt(); texto tvs = a_texto(_tv());
+
+        // Only parse var decl and simple expressions
+        si (tt == 6 && _tp()) {
+            texto tvar = tvs; _pr_pos = _pr_pos + 1;
+            texto nm = a_texto(_tv()); _pr_pos = _pr_pos + 1;
+            numero vl = __map_nuevo(); vl = __map_poner(vl, "tipo", "Vacio");
+            si (_ch(4, "=")) { _pr_pos = _pr_pos + 1; _pr_pos = _pr_pos + 1; } // skip = and expression
+            _sk();
+            numero n = __map_nuevo(); n = __map_poner(n, "tipo", "VarDecl");
+            n = __map_poner(n, "nombre", nm); n = __map_poner(n, "tipo_var", tvar); n = __map_poner(n, "valor", vl);
+            stmts = __map_poner(stmts, a_texto(sc), n); sc = sc + 1;
+        } sino {
+            // Skip other statements
+            _pr_pos = _pr_pos + 1;
+        }
+    }
+    stmts = __map_poner(stmts, "cnt", sc);
+    prog = __map_poner(prog, "cuerpo", stmts);
+    retornar prog;
+}
+
+funcion numero parser_parse(numero tokens) {
+    _pr_tokens = tokens; _pr_pos = 0; _pr_cnt = __map_obtener(tokens, "cnt");
+    retornar parse_simple();
+}
+
+// Test
+imprimir("A");
+imprimir("Parsing...");
+numero toks = tokenizar("entero x = 42;");
+imprimir("B: ", __map_obtener(toks, "cnt"));
+numero ast = parser_parse(toks);
+imprimir("C: ", __map_obtener(ast, "tipo"));
+imprimir("DONE");

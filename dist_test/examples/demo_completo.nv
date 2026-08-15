@@ -1,0 +1,180 @@
+// demo_completo.nv — Demo completo de LÚMEN
+// Usa builtins directamente para evitar issues de import
+
+imprimir("=== 1. HOLA MUNDO ===");
+imprimir("Hola LUMEN!");
+
+imprimir("=== 2. VARIABLES ===");
+entero a = 42;
+decimal pi = 3.14159;
+texto saludo = "Hola";
+booleano activo = verdadero;
+imprimir(a);
+imprimir(pi);
+imprimir(saludo);
+imprimir(activo);
+
+imprimir("=== 3. MATEMATICAS ===");
+imprimir(10 + 20);
+imprimir(10 - 20);
+imprimir(10 * 20);
+imprimir(20 / 10);
+imprimir(20 % 10);
+
+imprimir("=== 4. CONDICIONALES ===");
+entero nota = 85;
+si nota >= 90 {
+    imprimir("A");
+} sino {
+    si nota >= 70 {
+        imprimir("B");
+    } sino {
+        imprimir("C");
+    }
+}
+
+imprimir("=== 5. BUCLES ===");
+entero i = 0;
+mientras i < 3 {
+    imprimir(i);
+    i = i + 1;
+}
+para (entero j = 0; j < 3; j = j + 1) {
+    imprimir(j);
+}
+
+imprimir("=== 6. FUNCIONES ===");
+funcion entero suma(entero a, entero b) { retornar a + b; }
+imprimir(suma(3, 4));
+
+imprimir("=== 7. STRUCTS ===");
+estructura Punto { x: entero, y: entero }
+Punto p = Punto { x: 3, y: 4 };
+imprimir(p.x);
+p.x = 10;
+imprimir(p.x);
+
+imprimir("=== 8. ENUMS ===");
+enum Color { Rojo, Verde, Azul }
+funcion texto color_str(Color col) {
+    elegir (col) {
+        caso Color::Rojo: retornar "rojo";
+        caso Color::Verde: retornar "verde";
+        caso Color::Azul: retornar "azul";
+    }
+}
+imprimir(color_str(Color::Rojo));
+
+imprimir("=== 9. GENERICOS ===");
+funcion T id<T>(T x) { retornar x; }
+imprimir(id<entero>(42));
+imprimir(id<texto>("hola"));
+
+// Generic structs tienen limitaciones en constructor
+
+imprimir("=== 10. CONVERSIONES ===");
+imprimir(a_texto(42));
+// a_entero("123") - builtin
+
+imprimir("=== 11. LISTAS ===");
+lista<entero> arr = [1, 2, 3];
+imprimir(largo(arr));
+arr.agregar(4);
+imprimir(largo(arr));
+imprimir(arr[0]);
+
+imprimir("=== 12. DICCIONARIOS ===");
+numero d = __map_nuevo();
+d = __map_poner(d, "Ana", 30);
+imprimir(__map_obtener(d, "Ana"));
+
+imprimir("=== 13. JSON ===");
+texto js = __json_texto(__json_parsear("{\"a\":1}"));
+imprimir(js);
+
+imprimir("=== 14. TIPO DE ===");
+imprimir(__tipo_de(42));
+imprimir(__tipo_de("texto"));
+imprimir(__tipo_de(verdadero));
+imprimir(__tipo_de([1, 2, 3]));
+
+imprimir("=== 15. ASYNC ===");
+funcion entero wk() { retornar 99; }
+texto tid = __tarea_lanzar("wk");
+entero r2 = __tarea_esperar(tid);
+imprimir(r2);
+
+imprimir("=== 16. HASH ===");
+imprimir(__hash_sha256("x"));
+
+imprimir("=== 17. STRING ===");
+imprimir(__str_mayusculas("hola"));
+imprimir(__str_longitud("hola"));
+imprimir(__str_contiene("hola mundo", "mundo"));
+
+imprimir("=== 18. UNICODE ===");
+imprimir(__unicode_normalizar("cafe\u0301"));
+
+imprimir("=== 19. PADDING ===");
+imprimir(__str_padding_inicio("42", 5, "0"));
+
+imprimir("=== 20. ENCODING ===");
+imprimir(__codificacion_utf8("hola"));
+
+imprimir("=== 21. TERNARIO ===");
+entero edad = 20;
+texto msg = edad >= 18 ? "Mayor" : "Menor";
+imprimir(msg);
+
+imprimir("=== 22. CONJUNTOS ===");
+numero s = __conjunto_nuevo();
+s = __conjunto_agregar(s, "a");
+imprimir(__conjunto_tiene(s, "a"));
+
+imprimir("=== 23. DEQUE ===");
+numero dq = __deque_nuevo();
+dq = __deque_agregar_final(dq, 1);
+imprimir(__deque_longitud(dq));
+
+imprimir("=== 24. MONTICULO ===");
+numero h = __monticulo_nuevo();
+h = __monticulo_agregar(h, 5);
+imprimir(__monticulo_ver(h));
+
+imprimir("=== 25. ENLAZADA ===");
+numero ll = __enlazada_nuevo();
+ll = __enlazada_agregar_final(ll, 10);
+imprimir(__enlazada_longitud(ll));
+
+imprimir("=== 26. REGEX ===");
+imprimir(__regex_coincide("\\d+", "abc123"));
+
+imprimir("=== 27. FS ===");
+imprimir(__fs_listar("."));
+
+imprimir("=== 28. TIME ===");
+imprimir(__tiempo_ahora());
+imprimir(__tiempo_formatear(0));
+
+imprimir("=== 29. ENV ===");
+imprimir(__env_listar());
+
+imprimir("=== 30. HASH SHA512 ===");
+imprimir(__hash_sha512("x"));
+
+imprimir("=== 31. CORO ===");
+imprimir(__coro_crear("suma", 1, 2));
+
+imprimir("=== 32. TIPO ===");
+imprimir(__tipo_de(3.14));
+
+imprimir("=== 33. STRESS ===");
+entero total = 0;
+entero k = 0;
+mientras k < 100 {
+    total = total + k;
+    k = k + 1;
+}
+imprimir(total);
+
+imprimir("=== FIN ===");

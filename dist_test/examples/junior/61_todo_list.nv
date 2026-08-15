@@ -1,0 +1,20 @@
+importar ingles;
+
+struct Tarea {
+    descripcion: string,
+    completa: boolean
+}
+
+array<Tarea> tareas = [];
+tareas.agregar(Tarea { descripcion: "Comprar leche", completa: false });
+tareas.agregar(Tarea { descripcion: "Estudiar", completa: false });
+
+Tarea primera = tareas[0];
+primera.completa = true;
+
+integer i = 0;
+while (i < tareas.largo()) {
+    string estado = tareas[i].completa ? "hecho" : "pendiente";
+    print(tareas[i].descripcion + " - " + estado);
+    i = i + 1;
+}

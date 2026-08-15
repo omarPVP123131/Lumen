@@ -1,0 +1,5 @@
+// ejemplo2.nv — Programa de prueba para compiler_v3
+entero a = 10;
+entero b = 32;
+entero suma = a + b;
+imprimir(suma);

@@ -1,0 +1,8 @@
+funcion texto f(texto a, entero b) {
+    texto r = "";
+    si b > 0 {
+        r = "ok";
+    }
+    retornar r;
+}
+imprimir(f("x", 5));

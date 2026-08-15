@@ -1,0 +1,12 @@
+importar ingles;
+
+function integer tirar_dado() {
+    integer semilla = 42;
+    semilla = (semilla * 7 + 13) % 100;
+    return (semilla % 6) + 1;
+}
+
+print(tirar_dado());
+print(tirar_dado());
+print(tirar_dado());
+print(tirar_dado());

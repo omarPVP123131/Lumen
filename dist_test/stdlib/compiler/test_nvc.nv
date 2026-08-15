@@ -1,0 +1,28 @@
+// test_nvc.nv — Prueba del pipeline librería + builtin .nvc
+importar "lexer.nv";
+importar "parser.nv";
+importar "codegen.nv";
+
+texto src = "entero x = 42; imprimir(x);";
+imprimir("Source: ", src);
+
+// 1. Lexer (prefijo de import: lexer_)
+numero tk = lexer_lexer_tokenizar(src);
+imprimir("Tokens: ", __map_obtener(tk, "cnt"));
+
+// 2. Parser (prefijo de import: parser_)
+numero ast = parser_parser_parsear(tk);
+imprimir("AST tipo: ", __map_obtener(ast, "tipo"));
+
+// 3. Codegen (prefijo de import: codegen_)
+numero cg = codegen_codegen_generar(ast);
+imprimir("Instructions: ", __map_obtener(cg, "pos"));
+
+// 4. Serialize to .nvc using builtin
+lista<entero> bytes = __codegen_a_nvc(cg);
+imprimir("NVC len: ", largo(bytes));
+
+// 5. Write to file
+__escribir_archivo_bin("test_output.nvc", bytes);
+imprimir("NVC written to test_output.nvc");
+imprimir("=== DONE ===");

@@ -1,0 +1,13 @@
+imprimir("=== Probe WSA doble ===");
+sea w = __ffi_cargar("ws2_32.dll");
+sea wsa = __ffi_asignar(400);
+sea r1 = __ffi_llamar(w, "WSAStartup", "entero,entero", [514, wsa], "entero");
+imprimir("WSAStartup: ", r1);
+sea fd = __ffi_llamar(w, "socket", "entero,entero,entero", [2, 1, 0], "entero");
+imprimir("socket: ", fd);
+sea e2 = __ffi_llamar(w, "WSAGetLastError", "", [], "entero");
+imprimir("error1: ", e2);
+sea e3 = __ffi_llamar(w, "WSAGetLastError", "", [], "entero");
+imprimir("error2: ", e3);
+__ffi_liberar(wsa, 400);
+imprimir("--- FIN ---");

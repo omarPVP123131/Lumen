@@ -1,0 +1,9 @@
+importar ingles;
+
+print((42, "hola", 3.0));
+print((10, 20, 30).0);
+print((10, 20, 30).1);
+
+(integer, string) par = (100, "mundo");
+print(par.0);
+print(par.1);

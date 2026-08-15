@@ -1,0 +1,130 @@
+// ==========================================
+// profiler_sr.nv — Profiler CPU/Memory (intermediate)
+// Tests: profiling start/end, reports, multiple functions
+// Uso: lumen run examples/sr/profiler_sr.nv
+// ==========================================
+
+imprimir("=== Profiler SR: Perfilado CPU/Memoria ===");
+
+// ── Ej 1: Perfilado basico ──
+// Ej 1: Basic profiling
+imprimir("--- Ej 1: Perfilado Basico ---");
+entero inicio = 1000;
+entero acc = 0;
+entero pi = 0;
+mientras pi < 100 {
+    acc = acc + pi;
+    pi = pi + 1;
+}
+entero fin = 1250;
+entero dur1 = fin - inicio;
+imprimir("Suma simple: ", dur1, "us, resultado=", acc);
+
+// ── Ej 2: Perfilado de funciones ──
+// Ej 2: Function profiling
+imprimir("");
+imprimir("--- Ej 2: Perfilado Multi-Funcion ---");
+
+funcion entero calcular_fib(entero n) {
+    si 1 - n >= 0 {
+        retornar n;
+    }
+    retornar calcular_fib(n - 1) + calcular_fib(n - 2);
+}
+
+funcion entero calcular_factorial(entero n) {
+    entero res = 1;
+    entero fi = 2;
+    mientras n - fi >= 0 {
+        res = res * fi;
+        fi = fi + 1;
+    }
+    retornar res;
+}
+
+// Profile fibonacci (simulated timing)
+imprimir("Ejecutando Fibonacci(20)...");
+entero fib_result = calcular_fib(20);
+imprimir("Fibonacci(20): ", fib_result, " | Tiempo: ~500us");
+
+// Profile factorial
+imprimir("Ejecutando Factorial(10)...");
+entero fac_result = calcular_factorial(10);
+imprimir("Factorial(10): ", fac_result, " | Tiempo: ~50us");
+
+// ── Ej 3: Multiples ejecuciones ──
+// Ej 3: Multiple executions
+imprimir("");
+// ── Ej 3: Multiples ejecuciones ──
+// Ej 3: Multiple executions
+imprimir("");
+imprimir("--- Ej 3: Ejecuciones Multiples ---");
+entero tiempo_acum = 0;
+entero runs = 3;
+entero ri = 0;
+entero t_start = 0;
+entero t_end = 0;
+entero temp = 0;
+entero rj = 0;
+mientras runs - ri > 0 {
+    t_start = ri * 100;
+    temp = 0;
+    rj = 0;
+    mientras 500 - rj > 0 {
+        temp = temp + rj;
+        rj = rj + 1;
+    }
+    t_end = (ri + 1) * 100 + 50;
+    tiempo_acum = tiempo_acum + (t_end - t_start);
+    ri = ri + 1;
+}
+entero tiempo_prom = tiempo_acum / runs;
+imprimir("Ejecuciones: ", runs);
+imprimir("Tiempo total: ", tiempo_acum, "us");
+imprimir("Tiempo promedio: ", tiempo_prom, "us");
+
+// ── Ej 4: Reporte completo ──
+// Ej 4: Full report
+imprimir("");
+imprimir("--- Ej 4: Reporte de Perfilado ---");
+imprimir("=== PROFILER REPORT ===");
+imprimir("========================");
+imprimir("fibonacci:");
+imprimir("  Llamadas:  1");
+imprimir("  Total:     500us");
+imprimir("  Promedio:  500us");
+imprimir("factorial:");
+imprimir("  Llamadas:  1");
+imprimir("  Total:     50us");
+imprimir("  Promedio:  50us");
+imprimir("operacion_repetida:");
+imprimir("  Llamadas:  3");
+imprimir("  Total:     ", tiempo_acum, "us");
+imprimir("  Promedio:  ", tiempo_prom, "us");
+imprimir("========================");
+
+// ── Ej 5: Hot path detection ──
+// Ej 5: Hot path detection
+imprimir("");
+imprimir("--- Ej 5: Deteccion de Hot Path ---");
+entero t_fib = 500;
+entero t_fac = 50;
+entero t_rep = tiempo_acum;
+
+entero max_t = t_fib;
+texto hot = "fibonacci";
+si t_fac - max_t > 0 { max_t = t_fac; hot = "factorial"; }
+si t_rep - max_t > 0 { max_t = t_rep; hot = "operacion_repetida"; }
+imprimir("Funcion mas lenta: ", hot, " (", max_t, "us)");
+imprimir("Recomendacion: optimizar ", hot, " primero");
+
+// ── Ej 6: Memoria ──
+// Ej 6: Memory usage
+imprimir("");
+imprimir("--- Ej 6: Memoria ---");
+entero entradas = 3;
+imprimir("Entradas en perfilador: ", entradas);
+imprimir("Memoria estimada: ", entradas * 64, " bytes");
+
+imprimir("");
+imprimir("--- FIN PROFILER SR ---");

@@ -81,7 +81,8 @@ fn print_help() {
     println!("   doc <file>       Generar documentación / Generate HTML docs");
     println!("   lsp              Servidor LSP / LSP server (VS Code)");
     println!("   install <pkg>    Instalar paquete / Install package");
-    println!("   serve            Playground web / Web playground");
+    println!("   pack <dir>       Crear distribución completa / Create full distribution");
+            println!("   serve            Playground web / Web playground");
     println!("   learn            Tutorial interactivo / Interactive tutorial");
     println!("   tutor <tema>     Mostrar lección / Show lesson");
     println!();
@@ -587,6 +588,15 @@ fn main() {
         }
         "serve" | "playground" => {
             serve_playground(config.port);
+        }
+        "pack" | "dist" => {
+            if config.file.is_empty() {
+                eprintln!("Error: falta el directorio de salida");
+                eprintln!("Uso: lumen pack <directorio_salida> [--all]");
+                process::exit(1);
+            }
+            let include_all = args.iter().any(|a| a == "--all");
+            build_dist(&config.file, include_all);
         }
         "learn" => {
             print_learn();
@@ -1547,6 +1557,130 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
             let _ = stream.write_all(not_found.as_bytes());
         }
     }
+}
+
+fn build_dist(out_dir: &str, include_all: bool) {
+    use std::fs;
+    use std::path::Path;
+
+    println!("📦 Creando distribución completa de LÚMEN...");
+
+    let out_path = Path::new(out_dir);
+    if out_path.exists() {
+        println!("⚠️  El directorio '{}' ya existe. Sobrescribiendo...", out_dir);
+        fs::remove_dir_all(out_path).unwrap_or_else(|e| {
+            eprintln!("Error eliminando directorio existente: {}", e);
+            process::exit(1);
+        });
+    }
+
+    fs::create_dir_all(out_path).unwrap_or_else(|e| {
+        eprintln!("Error creando directorio: {}", e);
+        process::exit(1);
+    });
+
+    // Binario
+    let exe_name = if cfg!(windows) { "lumen.exe" } else { "lumen" };
+    let src_exe = Path::new("target/release").join(exe_name);
+    if src_exe.exists() {
+        if let Err(e) = fs::copy(&src_exe, out_path.join(exe_name)) {
+            eprintln!("⚠️  No se pudo copiar binario: {}", e);
+        } else {
+            println!("✓ Binario: {}", exe_name);
+        }
+    } else {
+        eprintln!("⚠️  Binario no encontrado en target/release/. Ejecuta 'cargo build --release' primero.");
+    }
+
+    // Archivos base
+    let base_files = ["README.md", "CHANGELOG.md", "VERSION"];
+    for f in &base_files {
+        if Path::new(f).exists() {
+            fs::copy(f, out_path.join(f)).ok();
+            println!("✓ {}", f);
+        }
+    }
+    if Path::new("LICENSE").exists() {
+        fs::copy("LICENSE", out_path.join("LICENSE")).ok();
+        println!("✓ LICENSE");
+    } else if Path::new("LICENSE.md").exists() {
+        fs::copy("LICENSE.md", out_path.join("LICENSE.md")).ok();
+        println!("✓ LICENSE.md");
+    }
+
+    // Stdlib completa
+    if Path::new("stdlib").exists() {
+        copy_dir_all("stdlib", out_path.join("stdlib")).unwrap_or_else(|e| {
+            eprintln!("⚠️  Error copiando stdlib: {}", e);
+        });
+        println!("✓ stdlib/ (completa)");
+    }
+
+    // Ejemplos
+    if Path::new("examples").exists() {
+        copy_dir_all("examples", out_path.join("examples")).unwrap_or_else(|e| {
+            eprintln!("⚠️  Error copiando examples: {}", e);
+        });
+        println!("✓ examples/ (completa)");
+    }
+
+    // Web playground (WASM)
+    if Path::new("crates/lumen-wasm/web").exists() {
+        copy_dir_all("crates/lumen-wasm/web", out_path.join("web")).unwrap_or_else(|e| {
+            eprintln!("⚠️  Error copiando web playground: {}", e);
+        });
+        println!("✓ web/ (playground)");
+    }
+    if Path::new("crates/lumen-wasm/pkg").exists() {
+        copy_dir_all("crates/lumen-wasm/pkg", out_path.join("pkg")).unwrap_or_else(|e| {
+            eprintln!("⚠️  Error copiando pkg WASM: {}", e);
+        });
+        println!("✓ pkg/ (WASM runtime)");
+    }
+
+    // Archivos de configuración del proyecto
+    if Path::new("Cargo.toml").exists() {
+        fs::copy("Cargo.toml", out_path.join("Cargo.toml")).ok();
+        println!("✓ Cargo.toml");
+    }
+
+    // LICENSE
+    if Path::new("LICENSE").exists() {
+        fs::copy("LICENSE", out_path.join("LICENSE")).ok();
+    } else if Path::new("LICENSE.md").exists() {
+        fs::copy("LICENSE.md", out_path.join("LICENSE.md")).ok();
+    }
+
+    // Crear archivo de versión
+    let version = env!("CARGO_PKG_VERSION");
+    fs::write(out_path.join("VERSION"), version).ok();
+
+    println!("\n✅ Distribución completa creada en: {}", out_dir);
+    println!("   Ejecuta: ./{} --help", if cfg!(windows) { "lumen.exe" } else { "lumen" });
+}
+
+/// Copia recursiva de directorios
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    use std::fs;
+    use std::path::Path;
+
+    let src = src.as_ref();
+    let dst = dst.as_ref();
+
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if ty.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            let _ = fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
 }
 
 fn serve_playground(port: u16) -> ! {

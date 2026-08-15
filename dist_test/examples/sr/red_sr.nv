@@ -1,0 +1,41 @@
+// ==========================================
+// red_sr.nv — Network operations (senior)
+// Uso: lumen run -L stdlib/ examples/sr/red_sr.nv
+// ==========================================
+
+imprimir("=== Red SR: HTTP POST, TCP Connections & HTTP Response ===");
+
+// ── Example 1: HTTP POST ──
+imprimir("--- Ej 1: HTTP POST ---");
+sea post_body = "{\"nombre\":\"Lumen\",\"version\":\"1.6.0\"}";
+sea post_res = __http_enviar("http://httpbin.org/post", post_body);
+imprimir("POST to httpbin.org: response length ", post_res.largo());
+
+// ── Example 2: TCP Connection Test ──
+imprimir("--- Ej 2: TCP Connection Test ---");
+funcion texto test_conexion(texto host, texto puerto) {
+    sea addr = host + ":" + puerto;
+    sea connected = __tcp_conectar(addr);
+    retornar addr + " = " + connected;
+}
+
+imprimir(test_conexion("google.com", "80"));
+imprimir(test_conexion("github.com", "443"));
+imprimir(test_conexion("example.com", "80"));
+
+// ── Example 3: HTTP GET Multiple Endpoints ──
+imprimir("--- Ej 3: HTTP GET ---");
+sea r1 = __http_obtener("http://httpbin.org/get?msg=hello");
+imprimir("httpbin.org/get: ", r1.largo(), " bytes");
+
+sea r2 = __http_obtener("http://httpbin.org/uuid");
+imprimir("httpbin.org/uuid: ", r2.largo(), " bytes");
+
+// Demonstrate TCP listener
+sea listen_ok = __tcp_escuchar("127.0.0.1:7777");
+imprimir("Listening on 7777: ", listen_ok);
+
+// HTTP server stub
+imprimir("HTTP server: ", __http_servidor("0.0.0.0:4000"));
+
+imprimir("--- FIN RED SR ---");

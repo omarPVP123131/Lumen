@@ -1,0 +1,14 @@
+importar ingles;
+
+function float cuota_mensual(float capital, float tasa, integer meses) {
+    float tasa_mensual = tasa / 12.0 / 100.0;
+    float factor = 1.0;
+    integer i = 0;
+    while (i < meses) {
+        factor = factor * (1.0 + tasa_mensual);
+        i = i + 1;
+    }
+    return capital * tasa_mensual * factor / (factor - 1.0);
+}
+
+print(cuota_mensual(10000.0, 5.0, 12));

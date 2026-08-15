@@ -1,0 +1,65 @@
+// SPRINT 1: Stream, Async I/O, Timer
+imprimir("=== Sprint 1: Stream + Async I/O + Timer ===");
+
+// Stream
+imprimir("--- Stream ---");
+sea items = __stream_desde([1, 2, 3, 4, 5]);
+funcion texto duplicar(numero x) { retornar x * 2; }
+funcion booleano es_par(numero x) { retornar x % 2 == 0; }
+sea mapped = __stream_mapear(items, "duplicar");
+sea filtered = __stream_filtrar(mapped, "es_par");
+sea collected = __stream_colectar(filtered);
+imprimir("stream result: ", collected);
+
+// Async file read/write
+imprimir("--- Async I/O ---");
+sea f = __escribir_archivo_async("test_async.txt", "contenido async");
+sea res_f = __tarea_esperar(f);
+sea r = __leer_archivo_async("test_async.txt");
+sea res_r = __tarea_esperar(r);
+imprimir("write:", res_f, " read:", res_r);
+
+// Sleep
+imprimir("--- Timer ---");
+sea t1 = __tiempo_ahora();
+__dormir(10);
+sea t2 = __tiempo_ahora();
+sea diff = __tiempo_diferencia(t2, t1);
+imprimir("slept 10ms, actual:", diff, "ms");
+
+// Select
+imprimir("--- Select ---");
+sea ca = __canal_nuevo();
+sea cb = __canal_nuevo();
+__canal_enviar(ca, "soy A");
+sea sel = __seleccionar(ca, cb);
+imprimir("select: ", sel);
+
+// Par map
+imprimir("--- Parallel ---");
+funcion texto gritar(texto s) { retornar s + "!"; }
+sea gritos = __par_mapear(["hola", "mundo"], "gritar");
+imprimir("par map: ", gritos);
+
+// Par join
+funcion texto fn_a() { retornar "A"; }
+funcion texto fn_b() { retornar "B"; }
+sea joined = __par_unir("fn_a", ninguno, "fn_b", ninguno);
+imprimir("par join: ", joined);
+
+// Actor
+imprimir("--- Actor ---");
+sea actor = __actor_nuevo();
+__actor_enviar(actor, "mensaje1");
+imprimir("actor sent OK");
+
+// Generator (fn that returns progressive values)
+funcion texto contador(entero prev) {
+    retornar prev + 1;
+}
+sea gen = __generador_nuevo("contador");
+sea g1 = __generador_siguiente(gen, 0);
+sea g2 = __generador_siguiente(gen, g1);
+imprimir("generator:", g1, g2);
+
+imprimir("--- FIN SPRINT 1 ---");

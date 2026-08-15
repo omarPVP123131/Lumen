@@ -1,0 +1,74 @@
+// ==========================================
+// matematicas_sr.nv — Math operations (senior)
+// Uso: lumen run -L stdlib/ examples/sr/matematicas_sr.nv
+// ==========================================
+importar "matematicas.nv";
+
+imprimir("=== Matematicas SR: Intermediate Math ===");
+
+// ── Example 1: Trigonometry ──
+imprimir("--- Ej 1: Trigonometría ---");
+// seno(0) = 0, seno(pi/2) ≈ 1, seno(pi) ≈ 0
+imprimir("seno(0)      = ", matematicas_seno(0));
+imprimir("seno(1.5708) = ", matematicas_seno(1.5708));
+imprimir("seno(3.1416) = ", matematicas_seno(3.1416));
+
+// coseno(0) = 1, coseno(pi/2) ≈ 0, coseno(pi) ≈ -1
+imprimir("coseno(0)      = ", matematicas_coseno(0));
+imprimir("coseno(1.5708) = ", matematicas_coseno(1.5708));
+imprimir("coseno(3.1416) = ", matematicas_coseno(3.1416));
+
+// Verify identity: sin²(x) + cos²(x) ≈ 1
+numero x = 0.785;  // pi/4
+numero sin2 = matematicas_potencia(matematicas_seno(x), 2);
+numero cos2 = matematicas_potencia(matematicas_coseno(x), 2);
+imprimir("sin²+cos² (pi/4) = ", sin2 + cos2);
+
+// ── Example 2: Quadratic Formula ──
+imprimir("--- Ej 2: Fórmula Cuadrática ---");
+// Solve ax² + bx + c = 0
+// x = (-b ± sqrt(b² - 4ac)) / (2a)
+
+funcion texto resolver_cuadratica(numero a, numero b, numero c) {
+    numero discriminante = matematicas_potencia(b, 2) - 4 * a * c;
+    si discriminante < 0 {
+        retornar "Sin soluciones reales";
+    }
+    numero raiz_disc = matematicas_raiz(discriminante);
+    numero x1 = (-b + raiz_disc) / (2 * a);
+    numero x2 = (-b - raiz_disc) / (2 * a);
+    retornar "x1=" + x1 + ", x2=" + x2;
+}
+
+// x² - 5x + 6 = 0 → roots: 2, 3
+imprimir("x² - 5x + 6 = 0: ", resolver_cuadratica(1, -5, 6));
+// x² - 2x + 1 = 0 → root: 1 (double)
+imprimir("x² - 2x + 1 = 0: ", resolver_cuadratica(1, -2, 1));
+// x² + 1 = 0 → no real solutions
+imprimir("x² + 1 = 0:     ", resolver_cuadratica(1, 0, 1));
+
+// ── Example 3: Distance Formula ──
+imprimir("--- Ej 3: Distancia entre Puntos ---");
+// Euclidean distance: sqrt((x2-x1)² + (y2-y1)²)
+
+funcion numero distancia_2d(numero x1, numero y1, numero x2, numero y2) {
+    numero dx = x2 - x1;
+    numero dy = y2 - y1;
+    retornar matematicas_raiz(matematicas_potencia(dx, 2) + matematicas_potencia(dy, 2));
+}
+
+imprimir("dist (0,0)→(3,4)   = ", distancia_2d(0, 0, 3, 4));
+imprimir("dist (1,2)→(4,6)   = ", distancia_2d(1, 2, 4, 6));
+imprimir("dist (-1,-1)→(2,3) = ", distancia_2d(-1, -1, 2, 3));
+
+// ── Example 4: Square Root ──
+imprimir("--- Ej 4: Raíz Cuadrada ---");
+imprimir("raiz(0)    = ", matematicas_raiz(0));
+imprimir("raiz(1)    = ", matematicas_raiz(1));
+imprimir("raiz(4)    = ", matematicas_raiz(4));
+imprimir("raiz(16)   = ", matematicas_raiz(16));
+imprimir("raiz(100)  = ", matematicas_raiz(100));
+imprimir("raiz(2)    = ", matematicas_raiz(2));
+imprimir("raiz(-1)   = ", matematicas_raiz(-1));
+
+imprimir("--- FIN MATEMATICAS SR ---");

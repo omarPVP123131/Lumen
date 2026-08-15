@@ -1,0 +1,103 @@
+// ==========================================
+// crypto_real.nv — Crypto operations (real-world)
+// Uso: lumen run -L stdlib/ examples/real/crypto_real.nv
+// ==========================================
+importar "crypto.nv";
+
+imprimir("=== Crypto REAL: Real-World Scenarios ===");
+
+// ── Example 1: Password Hasher (Salted SHA256) ──
+imprimir("--- Ej 1: Password Hasher ---");
+funcion texto hashear_password(texto password, texto sal) {
+    retornar crypto_sha256(sal + ":" + password);
+}
+
+funcion booleano verificar_password(texto password, texto sal, texto hash) {
+    retornar hashear_password(password, sal) == hash;
+}
+
+// Usage: hash with random salt
+sea usuarios = [
+    "usuario1:sal123",
+    "usuario2:sal456",
+    "admin:sal789"
+];
+
+entero i = 0;
+mientras i < 3 {
+    sea partes = usuarios[i];
+    si partes[0] == "a" {
+        sea h = hashear_password("admin123", "sal789");
+        imprimir("admin hash: ", h);
+    }
+    i = i + 1;
+}
+
+sea sal1 = "Xk9mP2";
+sea hash1 = hashear_password("MiPassword", sal1);
+imprimir("Password + sal: ", hash1);
+imprimir("Verify correct: ", verificar_password("MiPassword", sal1, hash1));
+imprimir("Verify wrong:   ", verificar_password("WrongPass", sal1, hash1));
+
+// ── Example 2: Token Validator (JWT Auth System) ──
+imprimir("--- Ej 2: Token Validator ---");
+
+funcion texto crear_token(texto usuario_id, texto rol, texto secreto) {
+    texto claims = "{\"sub\":\"" + usuario_id + "\",\"rol\":\"" + rol + "\",\"iat\":" + __tiempo_ahora() + "}";
+    retornar crypto_jwt_codificar(claims, secreto);
+}
+
+funcion texto validar_token(texto token, texto secreto) {
+    sea claims = crypto_jwt_decodificar(token, secreto);
+    retornar claims;
+}
+
+sea app_secret = "app-super-secret-key-2026";
+sea user_token = crear_token("user-42", "editor", app_secret);
+imprimir("User token:  ", user_token);
+imprimir("Valid claims:", validar_token(user_token, app_secret));
+
+// Token with different roles
+sea admin_token = crear_token("admin-1", "superadmin", app_secret);
+imprimir("Admin token: ", admin_token);
+
+// ── Example 3: Encrypted Message System ──
+imprimir("--- Ej 3: Encrypted Message ---");
+
+funcion texto encriptar_mensaje(texto mensaje, texto clave_compartida) {
+    // Hash the key to ensure it's the right length
+    sea key_hash = crypto_sha256(clave_compartida);
+    retornar crypto_aes_encriptar(key_hash, mensaje);
+}
+
+funcion texto desencriptar_mensaje(texto cifrado, texto clave_compartida) {
+    sea key_hash = crypto_sha256(clave_compartida);
+    retornar crypto_aes_desencriptar(key_hash, cifrado);
+}
+
+// Alice sends encrypted message to Bob
+sea shared_key = "alice-y-bob-2026";
+sea msg_original = "Reunion a las 15:00 en la sala B";
+sea msg_cifrado = encriptar_mensaje(msg_original, shared_key);
+imprimir("Original:     ", msg_original);
+imprimir("Encrypted:    ", msg_cifrado);
+
+// Bob decrypts
+sea msg_descifrado = desencriptar_mensaje(msg_cifrado, shared_key);
+imprimir("Decrypted:    ", msg_descifrado);
+
+// Eve can't read it (wrong key)
+sea eve_msg = desencriptar_mensaje(msg_cifrado, "clave-de-eve");
+imprimir("Eve sees:     ", eve_msg);
+
+// Hash verification for file integrity
+sea file_data = "contenido importante del archivo";
+sea file_hash = crypto_sha512(file_data);
+imprimir("File hash:    ", file_hash.largo(), " chars");
+
+// Verify integrity
+sea tampered_data = "contenido importante del archivo MODIFICADO";
+sea tampered_hash = crypto_sha512(tampered_data);
+imprimir("Integridad OK: ", file_hash != tampered_hash);
+
+imprimir("--- FIN CRYPTO REAL ---");

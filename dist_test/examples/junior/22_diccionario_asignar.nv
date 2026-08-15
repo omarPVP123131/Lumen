@@ -1,0 +1,12 @@
+importar ingles;
+
+struct Entrada {
+    clave: string,
+    valor: integer
+}
+
+Entrada e = Entrada { clave: "x", valor: 10 };
+print(e.valor);
+
+e.valor = 20;
+print(e.valor);

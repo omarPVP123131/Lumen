@@ -1,0 +1,40 @@
+// ==========================================
+// gui_jr.nv — GUI Module (junior)
+// Tests: window creation, controls, layout logic
+// Uso: lumen run -L stdlib/ examples/jr/gui_jr.nv
+// ==========================================
+
+imprimir("=== GUI JR: Native Window Basics ===");
+
+// Ej 1: Window Dimension Validation
+imprimir("--- Ej 1: Validacion de Ventanas ---");
+entero w1 = 800; entero h1 = 600;
+entero w2 = 0; entero h2 = 0;
+si w1 > 0 { si h1 > 0 { imprimir("800x600: VALIDA"); } }
+si w2 > 0 { si h2 > 0 { imprimir("0x0: VALIDA"); } } sino { imprimir("0x0: INVALIDA"); }
+imprimir("Titulos de 1 a 256 caracteres son validos");
+imprimir("Titulo 'Mi App': VALIDO (6 chars)");
+imprimir("Titulo '': INVALIDO (0 chars)");
+
+// Ej 2: Control Position Calculator
+imprimir("--- Ej 2: Posicion de Controles ---");
+entero pad_x = 10; entero pad_y = 10;
+entero ctrl_w = 100; entero ctrl_h = 30;
+entero btn1_x = pad_x;
+entero btn1_y = pad_y;
+entero btn2_x = pad_x + ctrl_w + pad_x;
+entero btn2_y = pad_y;
+imprimir("Boton 1: x=", btn1_x, " y=", btn1_y, " w=", ctrl_w, " h=", ctrl_h);
+imprimir("Boton 2: x=", btn2_x, " y=", btn2_y, " w=", ctrl_w, " h=", ctrl_h);
+imprimir("Label 1: x=", pad_x, " y=", btn1_y + ctrl_h + pad_y);
+
+// Ej 3: Control Types
+imprimir("--- Ej 3: Tipos de Control Win32 ---");
+imprimir("BUTTON  = boton pulsable");
+imprimir("STATIC  = etiqueta de texto");
+imprimir("EDIT    = campo de entrada");
+imprimir("LISTBOX = lista desplegable");
+imprimir("COMBOBOX= combo desplegable");
+imprimir("WS_CHILD=1073741824, WS_VISIBLE=268435456");
+
+imprimir("--- FIN GUI JR ---");

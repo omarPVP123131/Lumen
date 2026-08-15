@@ -1,0 +1,11 @@
+importar "io.nv";
+
+imprimir("=== IO Test via FFI ===");
+
+sea escrito = io_escribir_buffer("test_ffi_io.txt", "Hola Lumen desde FFI!");
+imprimir("escrito: ", escrito);
+
+sea contenido = io_leer_lineas("test_ffi_io.txt");
+imprimir("leido: ", contenido);
+
+imprimir("--- FIN ---");

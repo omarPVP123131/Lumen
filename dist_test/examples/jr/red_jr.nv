@@ -1,0 +1,34 @@
+// ==========================================
+// red_jr.nv — Network operations (junior)
+// Uso: lumen run -L stdlib/ examples/jr/red_jr.nv
+// ==========================================
+
+imprimir("=== Red JR: TCP Connect, HTTP GET & Server Stub ===");
+
+// ── Example 1: TCP Connection Test ──
+imprimir("--- Ej 1: TCP Connect ---");
+sea conectado = __tcp_conectar("example.com:80");
+imprimir("example.com:80 = ", conectado);
+
+sea local_ok = __tcp_conectar("127.0.0.1:9999");
+imprimir("localhost:9999 = ", local_ok);
+
+// ── Example 2: HTTP GET Simple ──
+imprimir("--- Ej 2: HTTP GET ---");
+sea respuesta = __http_obtener("http://httpbin.org/get");
+imprimir("httpbin.org/get: received length ", respuesta.largo());
+imprimir("Response OK: ", respuesta.largo() > 0);
+
+// Fetch another endpoint
+sea en_resp = __http_obtener("http://httpbin.org/ip");
+imprimir("httpbin.org/ip: received ", en_resp.largo(), " bytes");
+
+// ── Example 3: Server Stub ──
+imprimir("--- Ej 3: Server Stub ---");
+sea listen_ok = __tcp_escuchar("127.0.0.1:9998");
+imprimir("Listening 127.0.0.1:9998: ", listen_ok);
+
+sea server_info = __http_servidor("127.0.0.1:8080");
+imprimir("HTTP server: ", server_info);
+
+imprimir("--- FIN RED JR ---");

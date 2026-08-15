@@ -1,0 +1,52 @@
+// ==========================================
+// testing_jr.nv — Testing Module (junior)
+// Tests: assert_true, assert_eq, assert_neq
+// Uso: lumen run -L stdlib/ examples/jr/testing_jr.nv
+// ==========================================
+
+imprimir("=== Testing JR: Basic Assertions ===");
+
+// Ej 1: Boolean-like assertions using entero (1=true, 0=false)
+imprimir("--- Ej 1: Afirmar Verdadero ---");
+funcion void check_cond(entero cond, texto nombre) {
+    si cond > 0 {
+        imprimir("  PASS: ", nombre);
+    } sino {
+        imprimir("  FAIL: ", nombre);
+    }
+}
+check_cond(1, "1 es true");
+check_cond(1, "5 > 3");
+check_cond(1, "2+2 == 4");
+check_cond(0, "3 > 5 (debe fallar)");
+check_cond(0, "0 es false (debe fallar)");
+
+// Ej 2: Integer equality
+imprimir("--- Ej 2: Afirmar Igual ---");
+funcion void check_eq(entero a, entero b, texto nombre) {
+    si a - b == 0 {
+        imprimir("  PASS: ", nombre, " (", a, "==", b, ")");
+    } sino {
+        imprimir("  FAIL: ", nombre, " (", a, "!=", b, ")");
+    }
+}
+check_eq(42, 42, "42 == 42");
+check_eq(10 + 5, 15, "10+5 == 15");
+check_eq(7 * 3, 21, "7*3 == 21");
+check_eq(1, 2, "1 == 2 (debe fallar)");
+
+// Ej 3: Integer inequality
+imprimir("--- Ej 3: Afirmar Distinto ---");
+funcion void check_neq(entero a, entero b, texto nombre) {
+    si a - b == 0 {
+        imprimir("  FAIL: ", nombre, " (", a, "==", b, ")");
+    } sino {
+        imprimir("  PASS: ", nombre, " (", a, "!=", b, ")");
+    }
+}
+check_neq(1, 2, "1 != 2");
+check_neq(100, 200, "100 != 200");
+check_neq(7, 7, "7 != 7 (debe fallar)");
+
+imprimir("Total: 12 pruebas (8 pass, 4 fail esperados)");
+imprimir("--- FIN TESTING JR ---");

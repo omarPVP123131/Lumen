@@ -1,0 +1,84 @@
+// ==========================================
+// gui_real.nv — GUI Module (real-world)
+// Tests: form builder, dialog mock, layout calculator
+// Uso: lumen run -L stdlib/ examples/real/gui_real.nv
+// ==========================================
+
+imprimir("=== GUI REAL: Form Builder & Dialogs ===");
+
+// ── Ej 1: Form Builder Engine ──
+// Ej 1: Dynamic form generation from field definitions
+imprimir("--- Ej 1: Motor de Formularios ---");
+funcion lista<lista<texto>> construir_formulario(lista<texto> campos, lista<texto> tipos) {
+    lista<lista<texto>> controles = [];
+    entero i = 0;
+    mientras i < largo(campos) {
+        texto tipo_ctrl = "EDIT";
+        si tipos[i] == "texto" { tipo_ctrl = "EDIT"; }
+        si tipos[i] == "numero" { tipo_ctrl = "EDIT"; }
+        si tipos[i] == "booleano" { tipo_ctrl = "CHECKBOX"; }
+        si tipos[i] == "fecha" { tipo_ctrl = "DATETIME"; }
+        controles.agregar([campos[i), tipo_ctrl]];
+        i = i + 1;
+    }
+    retornar controles;
+}
+lista<texto> nombres = ["nombre", "edad", "activo", "fecha_nac"];
+lista<texto> tipos = ["texto", "numero", "booleano", "fecha"];
+lista<lista<texto>> form_built = construir_formulario(nombres, tipos);
+imprimir("Formulario generado automaticamente:");
+entero i = 0;
+mientras i < largo(form_built) {
+    imprimir("  ", form_built[i][0], " -> ", form_built[i][1]);
+    i = i + 1;
+}
+// Calculate total form height
+entero alto_form = largo(form_built) * 30 + 40;  // fields + button
+imprimir("Alto total: ", alto_form, "px (", largo(form_built), " campos + boton)");
+
+// ── Ej 2: Dialog Box Mock ──
+// Ej 2: Simulate dialog creation and result handling
+imprimir("--- Ej 2: Simulador de Dialogos ---");
+funcion texto simular_dialogo(texto titulo, texto mensaje, lista<texto> botones) {
+    imprimir("╔══ ", titulo, " ══╗");
+    imprimir("║ ", mensaje);
+    entero j = 0;
+    mientras j < largo(botones) {
+        imprimir("║  [", botones[j], "]");
+        j = j + 1;
+    }
+    // Simulate: always return first button
+    retornar botones[0];
+}
+texto resultado = simular_dialogo("Confirmar", "Desea guardar los cambios?", ["Si", "No", "Cancelar"]);
+imprimir("Resultado del dialogo: ", resultado);
+// Dialog types
+imprimir("Tipos de dialogo:");
+imprimir("  MessageBox: OK, OK/Cancel, Yes/No, Yes/No/Cancel");
+imprimir("  OpenFile: filtro de archivos, multiseleccion");
+imprimir("  SaveFile: ruta por defecto, extension");
+
+// ── Ej 3: Responsive Layout Calculator ──
+// Ej 3: Calculate control positions for window resize
+imprimir("--- Ej 3: Layout Responsivo ---");
+funcion lista<entero> layout_responsivo(entero win_w, entero win_h, entero num_ctrls) {
+    // Distribute controls evenly with margins
+    entero margin = 10;
+    entero avail_w = win_w - 2 * margin;
+    entero avail_h = win_h - 2 * margin;
+    entero ctrl_w = 120;
+    entero ctrl_h = 28;
+    entero cols = avail_w / (ctrl_w + margin);
+    si cols < 1 { cols = 1; }
+    retornar [cols, ctrl_w, ctrl_h, margin];
+}
+imprimir("Ventana 800x600 -> ", layout_responsivo(800, 600, 8)[0], " columnas de controles");
+imprimir("Ventana 400x300 -> ", layout_responsivo(400, 300, 5)[0], " columnas de controles");
+imprimir("Ventana 200x150 -> ", layout_responsivo(200, 150, 3)[0], " columna de controles");
+// Window minimum size calculation
+funcion entero min_width(entero num_ctrls, entero ctrl_w, entero margin) {
+    retornar ctrl_w + 2 * margin;
+}
+imprimir("Ancho minimo para 1 control: ", min_width(1, 120, 10), "px");
+
+imprimir("--- FIN GUI REAL ---");

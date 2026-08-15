@@ -1,0 +1,773 @@
+// Módulo tui — Terminal UI escrita en LÚMEN puro.
+// Usa tui_core.nv para FFI directo al OS + ANSI escape codes.
+// Sin dependencias Rust. Dual ES/EN API.
+// Uso: importar "tui.nv"
+
+importar "tui_core.nv";
+
+// ============================================================
+// INICIALIZACIÓN / INIT
+// ============================================================
+
+funcion booleano iniciar() {
+    retornar tui_core__tc_raw(verdadero);
+}
+funcion booleano init() { retornar iniciar(); }
+
+funcion booleano cerrar() {
+    retornar tui_core__tc_raw(falso);
+}
+funcion booleano close() { retornar cerrar(); }
+
+funcion booleano limpiar() {
+    retornar tui_core__tc_limpiar();
+}
+funcion booleano clear() { retornar limpiar(); }
+
+funcion cualquiera tamano() {
+    retornar tui_core__tc_size();
+}
+funcion cualquiera size() { retornar tamano(); }
+
+funcion texto tecla() {
+    retornar tui_core__tc_leer_byte();
+}
+funcion texto key() { retornar tecla(); }
+
+// ============================================================
+// ESCRITURA / WRITE
+// ============================================================
+
+funcion booleano escribir(texto s, entero x, entero y) {
+    retornar tui_core__tc_escribir(s, x, y);
+}
+funcion booleano write(texto s, entero x, entero y) { retornar escribir(s, x, y); }
+
+funcion booleano color(texto fg, texto bg) {
+    retornar tui_core__tc_color(fg, bg);
+}
+
+// ============================================================
+// VENTANA CON BORDES / WINDOW
+// ============================================================
+
+funcion texto ventana(texto titulo, texto contenido) {
+    entero w = 60;
+    entero x = 1;
+    entero y = 1;
+    tui_core__tc_escribir("╭" + _repetir("─", w - 2) + "╮", x, y); y = y + 1;
+    tui_core__tc_escribir("│ " + titulo + _repetir(" ", w - 3 - titulo.largo()) + "│", x, y); y = y + 1;
+    tui_core__tc_escribir("├" + _repetir("─", w - 2) + "┤", x, y); y = y + 1;
+    tui_core__tc_escribir("│ " + contenido + _repetir(" ", w - 3 - contenido.largo()) + "│", x, y); y = y + 1;
+    tui_core__tc_escribir("╰" + _repetir("─", w - 2) + "╯", x, y);
+    retornar "ok";
+}
+
+// ============================================================
+// PAGER — visor de texto con scroll
+// ============================================================
+
+funcion texto pager(texto contenido, entero ancho, entero alto) {
+    lista<texto> lineas = __str_dividir(contenido, "\n");
+    entero total = lineas.largo();
+    entero scroll = 0;
+    entero visibles = alto - 2;
+    si visibles < 1 { visibles = 1; }
+    mientras verdadero {
+        tui_core__tc_limpiar();
+        entero i = 0;
+        mientras i < visibles && scroll + i < total {
+            texto ln = lineas[scroll + i];
+            entero pad = ancho - 3 - ln.largo();
+            si pad < 0 { pad = 0; }
+            tui_core__tc_escribir("│ " + ln + _repetir(" ", pad), 1, 1 + i);
+            i = i + 1;
+        }
+        texto estado = "[" + (scroll + 1) + "/" + total + "]";
+        si scroll > 0 { estado = "↑ " + estado; }
+        si scroll + visibles < total { estado = estado + " ↓"; }
+        tui_core__tc_escribir("└" + _repetir("─", ancho - 3) + " " + estado, 1, alto);
+        texto k = tui_core__tc_leer_byte();
+        si k == "q" || k == "ESC" { romper; }
+        si k == "UP" || k == "k" { si scroll > 0 { scroll = scroll - 1; } }
+        si k == "DOWN" || k == "j" { si scroll + visibles < total { scroll = scroll + 1; } }
+        si k == "PGUP" { scroll = scroll - visibles; si scroll < 0 { scroll = 0; } }
+        si k == "PGDN" { scroll = scroll + visibles; si scroll + visibles > total { scroll = total - visibles; } si scroll < 0 { scroll = 0; } }
+        si k == "HOME" { scroll = 0; }
+        si k == "END" { scroll = total - visibles; si scroll < 0 { scroll = 0; } }
+    }
+    retornar "ok";
+}
+
+// ============================================================
+// MARKDOWN VIEWER — visor de markdown básico
+// ============================================================
+
+funcion texto _render_md(texto md, entero ancho, entero nlinea) {
+    lista<texto> lineas = __str_dividir(md, "\n");
+    si nlinea >= lineas.largo() { retornar ""; }
+    texto l = lineas[nlinea];
+    si l.largo() > 0 && l[0] == "#" {
+        entero nivel = 1;
+        mientras nivel < l.largo() && l[nivel] == "#" { nivel = nivel + 1; }
+        texto titulo = _trim(_desde(l, nivel));
+        retornar _repetir("═", ancho) + "\n  " + titulo;
+    }
+    si l.largo() > 2 && l[0] == "-" && l[1] == " " {
+        retornar "  • " + _desde(l, 2);
+    }
+    retornar "  " + l;
+}
+
+funcion texto markdown_viewer(texto md, entero ancho, entero alto) {
+    lista<texto> lineas = __str_dividir(md, "\n");
+    entero total = lineas.largo();
+    entero scroll = 0;
+    entero visibles = alto - 1;
+    si visibles < 1 { visibles = 1; }
+    mientras verdadero {
+        tui_core__tc_limpiar();
+        entero j = 0;
+        mientras j < visibles && scroll + j < total {
+            tui_core__tc_escribir(_render_md(md, ancho, scroll + j), 1, 1 + j);
+            j = j + 1;
+        }
+        tui_core__tc_escribir("MD [" + (scroll + 1) + "/" + total + "] q=salir", 1, alto);
+        texto k = tui_core__tc_leer_byte();
+        si k == "q" || k == "ESC" { romper; }
+        si k == "UP" || k == "k" { si scroll > 0 { scroll = scroll - 1; } }
+        si k == "DOWN" || k == "j" { si scroll + visibles < total { scroll = scroll + 1; } }
+        si k == "PGUP" { scroll = scroll - visibles; si scroll < 0 { scroll = 0; } }
+        si k == "PGDN" { scroll = scroll + visibles; si scroll + visibles > total { scroll = total - visibles; } si scroll < 0 { scroll = 0; } }
+    }
+    retornar "ok";
+}
+
+// ============================================================
+// UTILIDADES
+// ============================================================
+
+funcion texto _repetir(texto s, entero n) {
+    texto res = ""; entero i = 0;
+    mientras i < n { res = res + s; i = i + 1; }
+    retornar res;
+}
+
+funcion texto _trim(texto s) {
+    entero inicio = 0;
+    mientras inicio < s.largo() && s[inicio] == " " { inicio = inicio + 1; }
+    entero fin = s.largo() - 1;
+    mientras fin > inicio && s[fin] == " " { fin = fin - 1; }
+    texto res = "";
+    entero i = inicio;
+    mientras i <= fin { res = res + s[i]; i = i + 1; }
+    retornar res;
+}
+
+funcion texto _desde(texto s, entero inicio) {
+    texto r = "";
+    entero i = inicio;
+    mientras i < s.largo() { r = r + s[i]; i = i + 1; }
+    retornar r;
+}
+
+funcion texto _hasta(texto s, entero fin) {
+    texto r = "";
+    entero i = 0;
+    mientras i < fin && i < s.largo() { r = r + s[i]; i = i + 1; }
+    retornar r;
+}
+
+// ============================================================
+// PROGRESS BAR — barra de progreso animada
+// ============================================================
+
+funcion texto progress_bar(entero actual, entero total, entero ancho) {
+    entero pct = 0;
+    si total > 0 { pct = (actual * 100) / total; }
+    entero llenos = (actual * ancho) / total;
+    si llenos < 0 { llenos = 0; }
+    si llenos > ancho { llenos = ancho; }
+    texto barra = "[";
+    entero i = 0;
+    mientras i < llenos { barra = barra + "■"; i = i + 1; }
+    mientras i < ancho { barra = barra + "·"; i = i + 1; }
+    barra = barra + "] " + pct + "%";
+    retornar barra;
+}
+
+// ============================================================
+// MENÚ — navegación con teclado
+// ============================================================
+
+funcion entero menu(lista<texto> opciones, texto titulo) {
+    entero n = opciones.largo();
+    si n == 0 { retornar -1; }
+    entero selec = 0;
+    tui_core__tc_limpiar();
+    mientras verdadero {
+        tui_core__tc_escribir(titulo, 2, 1);
+        tui_core__tc_escribir(_repetir("─", 40), 2, 2);
+        entero i = 0;
+        mientras i < n {
+            texto linea = "  ";
+            si i == selec { linea = "> "; }
+            tui_core__tc_escribir(linea + opciones[i], 2, 4 + i);
+            i = i + 1;
+        }
+        tui_core__tc_escribir(_repetir("─", 40), 2, 4 + n);
+        tui_core__tc_escribir("↑↓=navegar ENTER=seleccionar q=salir", 2, 5 + n);
+        texto k = tui_core__tc_leer_byte();
+        si k == "UP" { si selec > 0 { selec = selec - 1; } }
+        sino si k == "DOWN" { si selec < n - 1 { selec = selec + 1; } }
+        sino si k == "\n" { retornar selec; }
+        sino si k == "q" || k == "ESC" { retornar -1; }
+    }
+}
+
+// ============================================================
+// DIÁLOGO — confirmación/input
+// ============================================================
+
+funcion booleano dialogo_confirmar(texto mensaje) {
+    tui_core__tc_limpiar();
+    tui_core__tc_escribir("╔" + _repetir("═", 38) + "╗", 10, 8);
+    tui_core__tc_escribir("║ " + mensaje + _repetir(" ", 36 - mensaje.largo()) + "║", 10, 9);
+    tui_core__tc_escribir("╠" + _repetir("═", 38) + "╣", 10, 10);
+    tui_core__tc_escribir("║ [S]í  [N]o" + _repetir(" ", 25) + "║", 10, 11);
+    tui_core__tc_escribir("╚" + _repetir("═", 38) + "╝", 10, 12);
+    mientras verdadero {
+        texto k = tui_core__tc_leer_byte();
+        si k == "s" || k == "S" || k == "\n" { retornar verdadero; }
+        si k == "n" || k == "N" || k == "q" || k == "ESC" { retornar falso; }
+    }
+}
+
+funcion texto dialogo_input(texto mensaje) {
+    tui_core__tc_limpiar();
+    tui_core__tc_escribir("╔" + _repetir("═", 38) + "╗", 10, 8);
+    tui_core__tc_escribir("║ " + mensaje + _repetir(" ", 36 - mensaje.largo()) + "║", 10, 9);
+    tui_core__tc_escribir("╠" + _repetir("═", 38) + "╣", 10, 10);
+    tui_core__tc_escribir("║ " + _repetir(" ", 36) + "║", 10, 11);
+    tui_core__tc_escribir("╚" + _repetir("═", 38) + "╝", 10, 12);
+    texto entrada = "";
+    // Posicionar cursor dentro del diálogo
+    tui_core__tc_escribir("> ", 11, 11);
+    mientras verdadero {
+        texto k = tui_core__tc_leer_byte();
+        si k == "\n" { retornar entrada; }
+        si k == "BACKSPACE" {
+            si entrada.largo() > 0 {
+                entrada = _hasta(entrada, entrada.largo() - 1);
+                tui_core__tc_escribir(" ", 13 + entrada.largo(), 11);
+            }
+        }
+        si k == "ESC" { retornar ""; }
+        si k.largo() == 1 && __str_ord(k)[0] >= 32 && __str_ord(k)[0] <= 126 {
+            entrada = entrada + k;
+            tui_core__tc_escribir(k, 13 + entrada.largo() - 1, 11);
+        }
+    }
+}
+
+// ============================================================
+// TABLA — datos en columnas
+// ============================================================
+
+funcion texto tabla(lista<texto> headers, cualquiera filas, entero ancho) {
+    entero nc = headers.largo();
+    si nc == 0 { retornar ""; }
+    entero cw = (ancho - 2) / nc - 2;
+    si cw < 5 { cw = 5; }
+
+    texto linea_sep = "├";
+    texto linea_head = "│";
+    entero i = 0;
+    mientras i < nc {
+        linea_sep = linea_sep + _repetir("─", cw + 1) + "┼";
+        texto h = headers[i];
+        si h.largo() > cw { h = _desde(h, 0) + "..."; }
+        linea_head = linea_head + " " + h + _repetir(" ", cw - h.largo()) + " │";
+        i = i + 1;
+    }
+    // Reemplazar último caracter
+    texto top = "╒" + _desde(linea_sep, 2);
+    linea_sep = _desde(linea_sep, 0) + "┤";
+    linea_head = _desde(linea_head, 0) + "│";
+    texto bot = "╘" + _desde(linea_sep, 2);
+    top = "╒" + _desde(top, 1);
+
+    retornar top + "\n" + linea_head + "\n" + linea_sep + "\n";
+}
+
+// ============================================================
+// SPINNER — indicador de carga animado
+// ============================================================
+
+funcion texto spinner(entero paso) {
+    lista<texto> frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    entero idx = paso % frames.largo();
+    retornar frames[idx];
+}
+
+// ============================================================
+// NOTIFICACIÓN / TOAST — mensaje temporal en esquina
+// ============================================================
+
+funcion texto notificar(texto mensaje, entero ancho) {
+    texto borde = "╔" + _repetir("═", ancho - 2) + "╗";
+    texto linea = "║ " + mensaje + _repetir(" ", ancho - 4 - mensaje.largo()) + "║";
+    texto cierre = "╚" + _repetir("═", ancho - 2) + "╝";
+    tui_core__tc_escribir(borde, 2, 2);
+    tui_core__tc_escribir(linea, 2, 3);
+    tui_core__tc_escribir(cierre, 2, 4);
+    retornar "ok";
+}
+
+// ============================================================
+// BARRA DE ESTADO — barra inferior profesional
+// ============================================================
+
+funcion texto barra_estado(texto modo, texto archivo, texto pos, entero ancho) {
+    texto izq = " " + modo + " | " + archivo + " ";
+    texto der = " " + pos + " ";
+    entero esp = ancho - izq.largo() - der.largo();
+    si esp < 1 { esp = 1; }
+    texto linea = izq + _repetir(" ", esp) + der;
+    // Invertir colores para la barra de estado
+    tui_core__tc_color("blanco", "azul");
+    tui_core__tc_escribir(linea, 1, ancho);
+    tui_core__tc_color("", "");
+    retornar "ok";
+}
+
+// ============================================================
+// PANEL DIVIDIDO — dos vistas lado a lado
+// ============================================================
+
+funcion texto panel_dividido(texto izq, texto der, entero ancho, entero alto) {
+    lista<texto> li = __str_dividir(izq, "\n");
+    lista<texto> ld = __str_dividir(der, "\n");
+    entero mitad = ancho / 2;
+    entero y = 0;
+    mientras y < alto - 1 {
+        texto linea = "";
+        si y < li.largo() { linea = li[y]; } sino { linea = ""; }
+        si linea.largo() > mitad - 2 { linea = _hasta(linea, mitad - 3) + "…"; }
+        linea = linea + _repetir(" ", mitad - 1 - linea.largo());
+        linea = linea + "│";
+        texto linea_d = "";
+        si y < ld.largo() { linea_d = ld[y]; } sino { linea_d = ""; }
+        si linea_d.largo() > ancho - mitad - 2 { linea_d = _hasta(linea_d, ancho - mitad - 3) + "…"; }
+        linea = linea + " " + linea_d;
+        tui_core__tc_escribir(linea, 1, 1 + y);
+        y = y + 1;
+    }
+    // Separador vertical
+    tui_core__tc_escribir("│", mitad, 1);
+    retornar "ok";
+}
+
+// ============================================================
+// EDITOR — editor de texto simple (versión estable)
+// ============================================================
+
+funcion texto editor(texto titulo, entero ancho, entero alto) {
+    // Usar map para líneas (índice → texto)
+    cualquiera lineas = __map_nuevo();
+    lineas = __map_poner(lineas, 0, "");
+    entero total = 1;
+    entero cx = 0;
+    entero cy = 0;
+    entero scroll = 0;
+    entero area = alto - 2;
+    si area < 1 { area = 1; }
+
+    mientras verdadero {
+        tui_core__tc_limpiar();
+        tui_core__tc_escribir("╔═ " + titulo + _repetir("═", ancho - 4 - titulo.largo()) + "╗", 1, 1);
+        entero v = 0;
+        mientras v < area && scroll + v < total {
+            texto ln = __map_obtener(lineas, scroll + v);
+            entero pad = ancho - 2 - ln.largo();
+            si pad < 0 { pad = 0; }
+            tui_core__tc_escribir(" " + ln + _repetir(" ", pad) + " ", 1, 2 + v);
+            v = v + 1;
+        }
+        texto inf = " L" + (cy + 1) + " C" + (cx + 1) + " " + total + " líneas ";
+        tui_core__tc_escribir("╘" + _repetir("═", ancho - 4 - inf.largo()) + " " + inf + "╛", 1, alto);
+        tui_core__tc_escribir("", 2 + cx, 2 + cy - scroll);
+
+        texto k = tui_core__tc_leer_byte();
+        si k == "ESC" { retornar "ok"; }
+        sino si k == "\n" {
+            texto actual = __map_obtener(lineas, cy);
+            texto resto = "";
+            si cx < actual.largo() { resto = _desde(actual, cx); }
+            lineas = __map_poner(lineas, cy, _hasta(actual, cx));
+            // Mover líneas hacia abajo
+            entero t = total;
+            mientras t > cy + 1 {
+                lineas = __map_poner(lineas, t, __map_obtener(lineas, t - 1));
+                t = t - 1;
+            }
+            lineas = __map_poner(lineas, cy + 1, resto);
+            total = total + 1;
+            cy = cy + 1; cx = 0;
+            si cy >= scroll + area { scroll = scroll + 1; }
+        }
+        sino si k == "UP" {
+            si cy > 0 { cy = cy - 1; texto ln = __map_obtener(lineas, cy); si cx > ln.largo() { cx = ln.largo(); } }
+            si cy < scroll { scroll = cy; }
+        }
+        sino si k == "DOWN" {
+            si cy < total - 1 { cy = cy + 1; texto ln = __map_obtener(lineas, cy); si cx > ln.largo() { cx = ln.largo(); } }
+            si cy >= scroll + area { scroll = scroll + 1; }
+        }
+        sino si k == "LEFT" { si cx > 0 { cx = cx - 1; } }
+        sino si k == "RIGHT" { texto ln = __map_obtener(lineas, cy); si cx < ln.largo() { cx = cx + 1; } }
+        sino si k == "HOME" { cx = 0; }
+        sino si k == "END" { texto ln = __map_obtener(lineas, cy); cx = ln.largo(); }
+        sino si k == "BACKSPACE" {
+            si cx > 0 {
+                texto ln = __map_obtener(lineas, cy);
+                lineas = __map_poner(lineas, cy, _hasta(ln, cx - 1) + _desde(ln, cx));
+                cx = cx - 1;
+            } sino si cy > 0 {
+                texto arriba = __map_obtener(lineas, cy - 1);
+                texto actual = __map_obtener(lineas, cy);
+                cx = arriba.largo();
+                lineas = __map_poner(lineas, cy - 1, arriba + actual);
+                // Mover líneas hacia arriba
+                entero t = cy;
+                mientras t < total - 1 {
+                    lineas = __map_poner(lineas, t, __map_obtener(lineas, t + 1));
+                    t = t + 1;
+                }
+                total = total - 1;
+                cy = cy - 1;
+            }
+        }
+        sino si k == "DEL" {
+            texto ln = __map_obtener(lineas, cy);
+            si cx < ln.largo() {
+                lineas = __map_poner(lineas, cy, _hasta(ln, cx) + _desde(ln, cx + 1));
+            } sino si cy < total - 1 {
+                texto sig = __map_obtener(lineas, cy + 1);
+                lineas = __map_poner(lineas, cy, ln + sig);
+                entero t = cy + 1;
+                mientras t < total - 1 {
+                    lineas = __map_poner(lineas, t, __map_obtener(lineas, t + 1));
+                    t = t + 1;
+                }
+                total = total - 1;
+            }
+        }
+        sino si k.largo() == 1 && __str_ord(k)[0] >= 32 && __str_ord(k)[0] <= 126 {
+            texto ln = __map_obtener(lineas, cy);
+            lineas = __map_poner(lineas, cy, _hasta(ln, cx) + k + _desde(ln, cx));
+            cx = cx + 1;
+        }
+    }
+}
+
+// ============================================================
+// AYUDA — overlay de ayuda contextual
+// ============================================================
+
+funcion texto ayuda(lista<texto> items) {
+    tui_core__tc_limpiar();
+    tui_core__tc_escribir("╔══════════════════════════════════╗", 15, 4);
+    tui_core__tc_escribir("║           AYUDA                  ║", 15, 5);
+    tui_core__tc_escribir("╠══════════════════════════════════╣", 15, 6);
+    entero i = 0;
+    mientras i < items.largo() {
+        lista<texto> parts = __str_dividir(items[i], "\t");
+        texto tecla = "  ";
+        texto desc = "";
+        si parts.largo() > 0 { tecla = parts[0]; }
+        si parts.largo() > 1 { desc = parts[1]; }
+        tui_core__tc_escribir("║ " + tecla + _repetir(" ", 8 - tecla.largo()) + desc + _repetir(" ", 26 - desc.largo()) + "║", 15, 7 + i);
+        i = i + 1;
+    }
+    tui_core__tc_escribir("╚══════════════════════════════════╝", 15, 7 + i);
+    tui_core__tc_escribir("Presiona cualquier tecla para cerrar", 17, 8 + i);
+    tui_core__tc_leer_byte();
+    retornar "ok";
+}
+
+// ============================================================
+// GRÁFICO DE BARRAS — gráfico ASCII horizontal
+// ============================================================
+
+funcion texto grafico_barras(lista<texto> etiquetas, lista<entero> valores, entero ancho) {
+    entero max = 0; entero i = 0;
+    mientras i < valores.largo() { si valores[i] > max { max = valores[i]; } i = i + 1; }
+    si max == 0 { max = 1; }
+    entero bar_w = ancho - 12;
+    si bar_w < 5 { bar_w = 5; }
+    texto res = "";
+    i = 0;
+    mientras i < valores.largo() {
+        entero largo = (valores[i] * bar_w) / max;
+        si largo > bar_w { largo = bar_w; }
+        texto lbl = etiquetas[i];
+        si lbl.largo() > 8 { lbl = _hasta(lbl, 8); }
+        res = res + lbl + _repetir(" ", 8 - lbl.largo()) + " │";
+        entero j = 0; mientras j < largo { res = res + "█"; j = j + 1; }
+        res = res + _repetir(" ", bar_w - largo) + "│ " + valores[i] + "\n";
+        i = i + 1;
+    }
+    retornar res;
+}
+
+// ============================================================
+// CALENDAR PICKER — selector de fecha
+// ============================================================
+
+funcion texto __render_mes(entero anyo, entero mes) {
+    lista<texto> meses = __str_dividir("Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic", " ");
+    entero dia_sem = 0; // Día de la semana del 1ro (asumimos lunes=0)
+    // Calcular día de la semana (Zeller simplificado)
+    entero a = anyo; entero m = mes;
+    si m < 3 { a = a - 1; m = m + 12; }
+    dia_sem = (1 + (13 * (m + 1)) / 5 + a + a / 4 - a / 100 + a / 400) % 7;
+    // Ajustar para que lunes=0
+    dia_sem = (dia_sem + 6) % 7;
+
+    entero dias = 31;
+    si mes == 4 || mes == 6 || mes == 9 || mes == 11 { dias = 30; }
+    sino si mes == 2 {
+        si anyo % 400 == 0 { dias = 29; }
+        sino si anyo % 100 == 0 { dias = 28; }
+        sino si anyo % 4 == 0 { dias = 29; }
+        sino { dias = 28; }
+    }
+
+    texto res = "     " + meses[mes - 1] + " " + anyo + "\n";
+    res = res + " Lu Ma Mi Ju Vi Sa Do\n";
+    entero i = 0; mientras i < dia_sem { res = res + "   "; i = i + 1; }
+    entero d = 1;
+    mientras d <= dias {
+        si d < 10 { res = res + " "; }
+        res = res + d + " ";
+        si (dia_sem + d) % 7 == 0 { res = res + "\n"; }
+        d = d + 1;
+    }
+    retornar res;
+}
+
+funcion texto calendar_picker() {
+    // Obtener fecha actual del sistema
+    entero ts = __tiempo_ahora();
+    entero dias = ts / 86400;
+    // Año actual (aproximado)
+    entero anyo = 1970;
+    entero rest = dias;
+    mientras rest > 365 {
+        entero bisiesto = 0;
+        si anyo % 400 == 0 { bisiesto = 1; }
+        sino si anyo % 100 == 0 { bisiesto = 0; }
+        sino si anyo % 4 == 0 { bisiesto = 1; }
+        si bisiesto == 1 {
+            si rest > 366 { rest = rest - 366; anyo = anyo + 1; } sino { romper; }
+        } sino { rest = rest - 365; anyo = anyo + 1; }
+    }
+    entero mes = 1;
+    mientras mes <= 12 {
+        entero dm = 31;
+        si mes == 4 || mes == 6 || mes == 9 || mes == 11 { dm = 30; }
+        sino si mes == 2 {
+            si anyo % 400 == 0 { dm = 29; }
+            sino si anyo % 100 == 0 { dm = 28; }
+            sino si anyo % 4 == 0 { dm = 29; }
+            sino { dm = 28; }
+        }
+        si rest < dm { romper; }
+        rest = rest - dm; mes = mes + 1;
+    }
+    tui_core__tc_limpiar();
+    tui_core__tc_escribir(__render_mes(anyo, mes), 5, 3);
+    tui_core__tc_escribir("Presiona cualquier tecla para salir", 5, 13);
+    tui_core__tc_leer_byte();
+    retornar "ok";
+}
+
+// ============================================================
+// CODE VIEWER — visor de código con números de línea
+// ============================================================
+
+funcion texto code_viewer(texto codigo, entero ancho, entero alto) {
+    lista<texto> lineas = __str_dividir(codigo, "\n");
+    entero total = lineas.largo();
+    entero scroll = 0;
+    entero vis = alto - 1;
+    si vis < 1 { vis = 1; }
+    entero num_w = 1; entero temp = total;
+    mientras temp >= 10 { temp = temp / 10; num_w = num_w + 1; }
+    si num_w < 3 { num_w = 3; }
+    mientras verdadero {
+        tui_core__tc_limpiar();
+        entero i = 0;
+        mientras i < vis && scroll + i < total {
+            texto num = a_texto(scroll + i + 1);
+            num = _repetir(" ", num_w - num.largo()) + num;
+            tui_core__tc_escribir(num + "│ " + lineas[scroll + i], 1, 1 + i);
+            i = i + 1;
+        }
+        texto estado = "CÓDIGO [" + (scroll + 1) + "/" + total + "] q=salir ↑↓";
+        tui_core__tc_escribir(estado, 1, alto);
+        texto k = tui_core__tc_leer_byte();
+        si k == "q" || k == "ESC" { romper; }
+        si k == "UP" || k == "k" { si scroll > 0 { scroll = scroll - 1; } }
+        si k == "DOWN" || k == "j" { si scroll + vis < total { scroll = scroll + 1; } }
+        si k == "PGUP" { scroll = scroll - vis; si scroll < 0 { scroll = 0; } }
+        si k == "PGDN" { scroll = scroll + vis; si scroll + vis > total { scroll = total - vis; } si scroll < 0 { scroll = 0; } }
+    }
+    retornar "ok";
+}
+
+// ============================================================
+// WIZARD — asistente multi-paso
+// ============================================================
+
+funcion texto wizard(lista<texto> pasos, lista<texto> contenidos) {
+    entero n = pasos.largo();
+    si n == 0 { retornar "ok"; }
+    entero paso = 0;
+    mientras paso < n {
+        tui_core__tc_limpiar();
+        // Barra de progreso de pasos
+        texto bar = " ";
+        entero i = 0;
+        mientras i < n {
+            si i == paso { bar = bar + "[●] "; } sino { bar = bar + "[○] "; }
+            i = i + 1;
+        }
+        tui_core__tc_escribir(pasos[paso], 2, 1);
+        tui_core__tc_escribir(_repetir("─", 40), 2, 2);
+        tui_core__tc_escribir(contenidos[paso], 2, 4);
+        tui_core__tc_escribir(bar, 2, 8);
+        tui_core__tc_escribir("[ENTER]=siguiente [q]=salir", 2, 10);
+        texto k = tui_core__tc_leer_byte();
+        si k == "q" || k == "ESC" { romper; }
+        si k == "\n" { paso = paso + 1; }
+    }
+    retornar "ok";
+}
+
+// ============================================================
+// DIFF VIEWER — visor de diferencias lado a lado
+// ============================================================
+
+funcion texto diff_viewer(texto a, texto b, entero ancho, entero alto) {
+    lista<texto> la = __str_dividir(a, "\n");
+    lista<texto> lb = __str_dividir(b, "\n");
+    entero max = la.largo();
+    si lb.largo() > max { max = lb.largo(); }
+    entero mitad = (ancho - 4) / 2;
+    entero scroll = 0;
+    entero vis = alto - 1;
+    si vis < 1 { vis = 1; }
+    mientras verdadero {
+        tui_core__tc_limpiar();
+        entero i = 0;
+        mientras i < vis && scroll + i < max {
+            texto la_i = ""; si scroll + i < la.largo() { la_i = la[scroll + i]; }
+            texto lb_i = ""; si scroll + i < lb.largo() { lb_i = lb[scroll + i]; }
+            si la_i.largo() > mitad - 1 { la_i = _hasta(la_i, mitad - 2) + "…"; }
+            si lb_i.largo() > ancho - mitad - 3 { lb_i = _hasta(lb_i, ancho - mitad - 4) + "…"; }
+            texto sep = " │ ";
+            si la_i != "" && lb_i != "" && la_i != lb_i { sep = " ║ "; }
+            texto diff_sym = "";
+            si la_i == "" && lb_i != "" { diff_sym = "+ "; }
+            sino si la_i != "" && lb_i == "" { diff_sym = "- "; }
+            sino si la_i != lb_i { diff_sym = "~ "; }
+            tui_core__tc_escribir(diff_sym + la_i + _repetir(" ", mitad - la_i.largo()) + sep + lb_i, 1, 1 + i);
+            i = i + 1;
+        }
+        texto estado = "DIFF [" + (scroll + 1) + "/" + max + "] q=salir ↑↓";
+        tui_core__tc_escribir(estado, 1, alto);
+        texto k = tui_core__tc_leer_byte();
+        si k == "q" || k == "ESC" { romper; }
+        si k == "UP" || k == "k" { si scroll > 0 { scroll = scroll - 1; } }
+        si k == "DOWN" || k == "j" { si scroll + vis < max { scroll = scroll + 1; } }
+        si k == "PGUP" { scroll = scroll - vis; si scroll < 0 { scroll = 0; } }
+        si k == "PGDN" { scroll = scroll + vis; si scroll + vis > max { scroll = max - vis; } si scroll < 0 { scroll = 0; } }
+    }
+    retornar "ok";
+}
+
+// ============================================================
+// EXPLORADOR — navegador de archivos
+// ============================================================
+
+funcion texto explorador(texto ruta, entero ancho, entero alto) {
+    texto dir_actual = ruta;
+    entero scroll = 0;
+    entero selec = 0;
+    entero vis = alto - 2;
+    si vis < 1 { vis = 1; }
+    mientras verdadero {
+        tui_core__tc_limpiar();
+        tui_core__tc_escribir("📁 " + dir_actual, 1, 1);
+        tui_core__tc_escribir(_repetir("─", ancho - 1), 1, 2);
+        cualquiera items = __fs_listar(dir_actual);
+        lista<texto> archivos = [];
+        si __tipo_de(items) == "lista" { archivos = items; }
+        entero total = archivos.largo();
+        entero i = 0;
+        mientras i < vis && scroll + i < total {
+            texto icono = "  ";
+            texto nom = archivos[scroll + i];
+            si scroll + i == selec { icono = "> "; }
+            si nom.largo() > ancho - 5 { nom = _hasta(nom, ancho - 8) + "…"; }
+            tui_core__tc_escribir(icono + nom + _repetir(" ", ancho - 4 - nom.largo()), 1, 3 + i);
+            i = i + 1;
+        }
+        texto inf = "[" + (selec + 1) + "/" + total + "] ENTER=abrir q=salir ↑↓";
+        tui_core__tc_escribir(inf, 1, alto);
+        texto k = tui_core__tc_leer_byte();
+        si k == "q" || k == "ESC" { romper; }
+        si k == "UP" { si selec > 0 { selec = selec - 1; } si selec < scroll { scroll = selec; } }
+        si k == "DOWN" { si selec < total - 1 { selec = selec + 1; } si selec >= scroll + vis { scroll = selec - vis + 1; } }
+        si k == "\n" {
+            si selec < total {
+                texto nom = archivos[selec];
+                dir_actual = dir_actual + "\\" + nom;
+                scroll = 0; selec = 0;
+            }
+        }
+        si k == "BACKSPACE" {
+            // Subir al directorio padre
+            entero ult = dir_actual.largo() - 1;
+            mientras ult >= 0 && dir_actual[ult] != "\\" && dir_actual[ult] != "/" { ult = ult - 1; }
+            si ult > 0 { dir_actual = _hasta(dir_actual, ult); } sino { dir_actual = "."; }
+            scroll = 0; selec = 0;
+        }
+    }
+    retornar "ok";
+}
+
+// ============================================================
+// ALIASES SINTaxis DUAL ES/EN
+// ============================================================
+
+funcion texto window(texto title, texto content) { retornar ventana(title, content); }
+funcion texto visor_markdown(texto md, entero ancho, entero alto) { retornar markdown_viewer(md, ancho, alto); }
+funcion texto barra_progreso(entero actual, entero total, entero ancho) { retornar progress_bar(actual, total, ancho); }
+funcion entero pag_menu(lista<texto> options, texto title) { retornar menu(options, title); }
+funcion booleano confirm_dialog(texto message) { retornar dialogo_confirmar(message); }
+funcion texto input_dialog(texto message) { retornar dialogo_input(message); }
+funcion texto table(lista<texto> headers, cualquiera rows, entero ancho) { retornar tabla(headers, rows, ancho); }
+funcion texto notify(texto message, entero ancho) { retornar notificar(message, ancho); }
+funcion texto status_bar(texto mode, texto file, texto pos, entero width) { retornar barra_estado(mode, file, pos, width); }
+funcion texto split_panel(texto left, texto right, entero width, entero height) { retornar panel_dividido(left, right, width, height); }
+funcion texto help(lista<texto> items) { retornar ayuda(items); }
+funcion texto bar_chart(lista<texto> labels, lista<entero> values, entero width) { retornar grafico_barras(labels, values, width); }
+funcion texto visor_codigo(texto code, entero width, entero height) { retornar code_viewer(code, width, height); }
+funcion texto assistant(lista<texto> steps, lista<texto> contents) { retornar wizard(steps, contents); }
+funcion texto visor_diff(texto a, texto b, entero width, entero height) { retornar diff_viewer(a, b, width, height); }
+funcion texto explorer(texto path, entero width, entero height) { retornar explorador(path, width, height); }
+funcion texto girador(entero step) { retornar spinner(step); }
+funcion texto selector_calendario() { retornar calendar_picker(); }

@@ -163,6 +163,12 @@ jobs:
           cp ../../../CHANGELOG.md lumen-${{ matrix.target }}/
           cp ../../../LICENSE* lumen-${{ matrix.target }}/ 2>/dev/null || true
           cp ../../../VERSION lumen-${{ matrix.target }}/ 2>/dev/null || true
+          # Include stdlib, examples, and web playground for complete development environment
+          cp -r ../../../stdlib lumen-${{ matrix.target }}/
+          cp -r ../../../examples lumen-${{ matrix.target }}/
+          cp -r ../../../crates/lumen-wasm/web lumen-${{ matrix.target }}/
+          # Copy WASM pkg for web playground
+          cp -r ../../../crates/lumen-wasm/pkg lumen-${{ matrix.target }}/ 2>/dev/null || true
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             7z a -tzip ../../../lumen-${{ matrix.target }}.zip lumen-${{ matrix.target }}/
           else

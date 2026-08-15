@@ -1,0 +1,103 @@
+// ==========================================
+// json_real.nv — JSON parsing (real-world)
+// Uso: lumen run -L stdlib/ examples/real/json_real.nv
+// ==========================================
+importar "json.nv";
+
+imprimir("=== JSON REAL: Real-World JSON Applications ===");
+
+// ── Example 1: API Response Parser ──
+imprimir("--- Ej 1: Parser de Respuesta API ---");
+
+// Simulate an API response
+sea api_response = "{";
+api_response = api_response + "\"status\": \"success\", ";
+api_response = api_response + "\"code\": 200, ";
+api_response = api_response + "\"data\": {";
+api_response = api_response + "\"user_id\": 42, ";
+api_response = api_response + "\"username\": \"lumen_dev\", ";
+api_response = api_response + "\"email\": \"dev@lumen-lang.org\", ";
+api_response = api_response + "\"roles\": [\"admin\", \"developer\"], ";
+api_response = api_response + "\"last_login\": \"2026-07-28T10:30:00Z\"";
+api_response = api_response + "}, ";
+api_response = api_response + "\"meta\": {";
+api_response = api_response + "\"request_id\": \"req-abc-123\", ";
+api_response = api_response + "\"server_time\": 0.045";
+api_response = api_response + "}";
+api_response = api_response + "}";
+
+sea respuesta = json_parsear(api_response);
+imprimir("Respuesta API (parseada):");
+imprimir(respuesta);
+imprimir("");
+imprimir("Respuesta API (serializada):");
+imprimir(json_serializar(respuesta));
+
+// ── Example 2: Config Loader ──
+imprimir("--- Ej 2: Cargador de Configuración ---");
+
+funcion booleano cargar_y_mostrar_config(texto config_json) {
+    sea config = json_parsear(config_json);
+    imprimir("Configuración cargada:");
+    imprimir("  Parseado:    ", config);
+    imprimir("  Serializado: ", json_serializar(config));
+    retornar verdadero;
+}
+
+// App config
+sea app_config = "{";
+app_config = app_config + "\"app_name\": \"LúmenStudio\", ";
+app_config = app_config + "\"version\": \"2.0.0\", ";
+app_config = app_config + "\"debug\": false, ";
+app_config = app_config + "\"server\": {";
+app_config = app_config + "\"host\": \"0.0.0.0\", ";
+app_config = app_config + "\"port\": 8080, ";
+app_config = app_config + "\"cors\": true";
+app_config = app_config + "}, ";
+app_config = app_config + "\"database\": {";
+app_config = app_config + "\"url\": \"postgresql://localhost/lumen\", ";
+app_config = app_config + "\"pool_size\": 10, ";
+app_config = app_config + "\"timeout\": 30";
+app_config = app_config + "}, ";
+app_config = app_config + "\"features\": [\"syntax_highlight\", \"auto_complete\", \"debugger\"]";
+app_config = app_config + "}";
+
+cargar_y_mostrar_config(app_config);
+
+// ── Example 3: Data Transformer ──
+imprimir("--- Ej 3: Transformador de Datos ---");
+
+funcion booleano transformar_datos() {
+    // Original data
+    sea entrada_json = "[";
+    entrada_json = entrada_json + "{\"name\": \"Ana\", \"score\": 85, \"grade\": \"B\"},";
+    entrada_json = entrada_json + "{\"name\": \"Luis\", \"score\": 92, \"grade\": \"A\"},";
+    entrada_json = entrada_json + "{\"name\": \"María\", \"score\": 78, \"grade\": \"C\"}";
+    entrada_json = entrada_json + "]";
+
+    imprimir("Datos originales:");
+    sea original = json_parsear(entrada_json);
+    imprimir(json_serializar(original));
+
+    // Build transformed data (summary)
+    sea resumen_json = "{";
+    resumen_json = resumen_json + "\"total_students\": 3, ";
+    resumen_json = resumen_json + "\"average_score\": 85, ";
+    resumen_json = resumen_json + "\"top_student\": \"Luis\", ";
+    resumen_json = resumen_json + "\"grades_distribution\": {";
+    resumen_json = resumen_json + "\"A\": 1, ";
+    resumen_json = resumen_json + "\"B\": 1, ";
+    resumen_json = resumen_json + "\"C\": 1";
+    resumen_json = resumen_json + "}";
+    resumen_json = resumen_json + "}";
+
+    imprimir("");
+    imprimir("Resumen transformado:");
+    sea resumen = json_parsear(resumen_json);
+    imprimir(json_serializar(resumen));
+    retornar verdadero;
+}
+
+transformar_datos();
+
+imprimir("--- FIN JSON REAL ---");

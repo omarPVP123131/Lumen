@@ -1,0 +1,95 @@
+// ==========================================
+// tracing_sr.nv — Distributed Tracing (intermediate)
+// Tests: span creation, nesting, attributes, export
+// Uso: lumen run examples/sr/tracing_sr.nv
+// ==========================================
+
+imprimir("=== Tracing SR: Trazado Distribuido ===");
+
+// ── Ej 1: Crear y finalizar un span ──
+// Ej 1: Create and finish a span
+imprimir("--- Ej 1: Span Basico ---");
+texto span_id = "span-001";
+texto span_nombre = "operacion_principal";
+entero span_inicio = 1000;
+entero span_fin = 1250;
+entero duracion = span_fin - span_inicio;
+imprimir("Span: ", span_id, " '", span_nombre, "'");
+imprimir("Inicio: ", span_inicio, "us, Fin: ", span_fin, "us");
+imprimir("Duracion: ", duracion, "us");
+
+// ── Ej 2: Span con atributos ──
+// Ej 2: Span with attributes
+imprimir("");
+imprimir("--- Ej 2: Span con Atributos ---");
+imprimir("Span: db_query");
+imprimir("  db.tipo = sqlite");
+imprimir("  db.tabla = usuarios");
+imprimir("  db.operacion = SELECT");
+imprimir("  db.filas = 42");
+imprimir("  duracion = 85us");
+
+// ── Ej 3: Spans anidados ──
+// Ej 3: Nested spans
+imprimir("");
+imprimir("--- Ej 3: Jerarquia de Spans ---");
+imprimir("[ACTIVO] peticion_http (320us)");
+imprimir("  [OK] validar_token (45us)");
+imprimir("  [OK] procesar_datos (210us)");
+imprimir("    [OK] formatear_respuesta (25us)");
+imprimir("  [OK] enviar_respuesta (15us)");
+
+// ── Ej 4: Span con error ──
+// Ej 4: Span with error
+imprimir("");
+imprimir("--- Ej 4: Propagacion de Errores ---");
+imprimir("[ERROR] conectar_servidor: Connection refused");
+imprimir("  host: db.ejemplo.com");
+imprimir("  puerto: 5432");
+imprimir("  reintentos: 3");
+imprimir("  causa: timeout");
+
+// ── Ej 5: Waterfall de latencias ──
+// Ej 5: Latency waterfall
+imprimir("");
+imprimir("--- Ej 5: Waterfall de Latencias ---");
+entero total_latencia = 0;
+
+entero t_auth = 45;
+entero t_db = 120;
+entero t_cache = 15;
+entero t_ser = 30;
+entero t_env = 20;
+
+total_latencia = t_auth + t_db + t_cache + t_ser + t_env;
+
+imprimir("Autenticacion:    ", t_auth, "us (", t_auth * 100 / total_latencia, "%)");
+imprimir("Base de datos:    ", t_db, "us (", t_db * 100 / total_latencia, "%)");
+imprimir("Cache:            ", t_cache, "us (", t_cache * 100 / total_latencia, "%)");
+imprimir("Serializacion:    ", t_ser, "us (", t_ser * 100 / total_latencia, "%)");
+imprimir("Envio:            ", t_env, "us (", t_env * 100 / total_latencia, "%)");
+imprimir("TOTAL:            ", total_latencia, "us");
+
+// Find bottleneck
+entero max_lat = t_auth;
+texto cuello = "autenticacion";
+si t_db - max_lat > 0 { max_lat = t_db; cuello = "base de datos"; }
+si t_cache - max_lat > 0 { max_lat = t_cache; cuello = "cache"; }
+si t_ser - max_lat > 0 { max_lat = t_ser; cuello = "serializacion"; }
+si t_env - max_lat > 0 { max_lat = t_env; cuello = "envio"; }
+imprimir("");
+imprimir("Cuello de botella: ", cuello, " (", max_lat, "us)");
+
+// ── Ej 6: Export JSON ──
+// Ej 6: JSON export
+imprimir("");
+imprimir("--- Ej 6: Export JSON ---");
+texto json = "[";
+json = json + "{\"id\":\"span-001\",\"nombre\":\"peticion\",\"duracion\":" + a_texto(total_latencia) + "},";
+json = json + "{\"id\":\"span-002\",\"nombre\":\"auth\",\"duracion\":" + a_texto(t_auth) + "},";
+json = json + "{\"id\":\"span-003\",\"nombre\":\"db\",\"duracion\":" + a_texto(t_db) + "}";
+json = json + "]";
+imprimir(json);
+
+imprimir("");
+imprimir("--- FIN TRACING SR ---");

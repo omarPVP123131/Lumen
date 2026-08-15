@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LÚMEN Playground — v2.4.2</title>
+<style>
+  /* ── Catppuccin Mocha Palette ───────────────────────────── */
+  :root {
+    --base:      #1e1e2e;
+    --mantle:    #181825;
+    --crust:     #11111b;
+    --surface0:  #313244;
+    --surface1:  #45475a;
+    --surface2:  #585b70;
+    --overlay0:  #6c7086;
+    --overlay1:  #7f849c;
+    --text:      #cdd6f4;
+    --subtext0:  #a6adc8;
+    --subtext1:  #bac2de;
+    --blue:      #89b4fa;
+    --lavender:  #b4befe;
+    --mauve:     #cba6f7;
+    --green:     #a6e3a1;
+    --yellow:    #f9e2af;
+    --red:       #f38ba8;
+    --peach:     #fab387;
+    --teal:      #94e2d5;
+    --sky:       #89dceb;
+    --pink:      #f5c2e7;
+    --flamingo:  #f2cdcd;
+    --rosewater: #f5e0dc;
+    --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    --font-ui:   'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-ui);
+    background: var(--base);
+    color: var(--text);
+  }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--crust); }
+  ::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--surface2); }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  header {
+    background: var(--mantle);
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--surface0);
+    flex-shrink: 0;
+    height: 48px;
+  }
+  header .logo { display: flex; align-items: center; gap: 8px; }
+  header .logo h1 { font-size: 18px; font-weight: 700; color: var(--mauve); letter-spacing: 1px; }
+  header .logo .badge { font-size: 11px; background: var(--surface0); color: var(--overlay1); padding: 2px 8px; border-radius: 4px; }
+  header .spacer { flex: 1; }
+  header .header-status { font-size: 12px; color: var(--overlay0); display: flex; align-items: center; gap: 6px; }
+  header .header-status .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  header .header-status .dot.ready { background: var(--green); }
+  header .header-status .dot.busy  { background: var(--yellow); }
+  header .header-status .dot.error { background: var(--red); }
+
+  /* ── View toggle ────────────────────────────────────────── */
+  .view-toggle {
+    display: flex;
+    background: var(--crust);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .view-toggle button {
+    background: transparent;
+    border: none;
+    color: var(--overlay1);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .view-toggle button.active { background: var(--surface1); color: var(--text); }
+
+  /* ── Main Layout ────────────────────────────────────────── */
+  .main-container { display: flex; flex: 1; height: calc(100vh - 48px - 28px); overflow: hidden; }
+
+  .panel { display: flex; flex-direction: column; min-width: 0; }
+  .panel.code-panel { flex: 1; }
+  .panel.output-panel { flex: 1; border-left: 1px solid var(--surface0); }
+
+  .panel-header { background: var(--mantle); padding: 6px 14px; font-size: 11px; font-weight: 600; color: var(--subtext0); display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+  .panel-actions { display: flex; gap: 8px; align-items: center; }
+  .example-select {
+    background: var(--crust); color: var(--text); border: 1px solid var(--surface0);
+    border-radius: 6px; padding: 3px 8px; font-size: 12px; max-width: 260px;
+  }
+
+  .editor-wrapper { display: flex; flex: 1; overflow: hidden; position: relative; }
+  .editor-wrapper .cm-editor { flex: 1; height: 100%; font-size: 13px; }
+  .editor-wrapper .cm-editor.cm-focused { outline: none; }
+  .editor-wrapper .cm-gutters {
+    background: var(--crust); color: var(--overlay0); border: none;
+  }
+  .editor-wrapper .cm-activeLine { background: rgba(137, 180, 250, 0.07); }
+  .editor-wrapper .cm-activeLineGutter { background: rgba(137, 180, 250, 0.1); color: var(--text); }
+  .cm-error-line { background: rgba(243, 139, 168, 0.15); }
+  .cm-error-line .cm-line { text-decoration: underline wavy rgba(243, 139, 168, 0.6); text-underline-offset: 3px; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+    background: var(--mantle); border-top: 1px solid var(--surface0); flex-shrink: 0; flex-wrap: wrap;
+  }
+  button {
+    background: var(--surface0); color: var(--text); border: none; border-radius: 6px;
+    padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-ui);
+  }
+  button:hover { background: var(--surface1); }
+  button.primary { background: var(--green); color: var(--crust); font-weight: 700; }
+  button.primary:hover { background: var(--teal); }
+  button.small { padding: 3px 8px; font-size: 11px; }
+  .separator { width: 1px; height: 16px; background: var(--surface0); }
+
+  .backend-toggle { display: flex; border: 1px solid var(--surface0); border-radius: 6px; overflow: hidden; }
+  .backend-toggle button { border-radius: 0; padding: 5px 9px; font-size: 11px; background: var(--crust); }
+  .backend-toggle button.active { background: var(--blue); color: var(--crust); font-weight: 700; }
+
+  /* ── JS Interop Bar ─────────────────────────────────────── */
+  .interop-bar {
+    display: flex; align-items: center; gap: 6px; padding: 4px 12px;
+    background: var(--crust); border-top: 1px solid var(--surface0); flex-shrink: 0; flex-wrap: wrap;
+  }
+  .interop-bar .label { font-size: 11px; color: var(--overlay1); font-weight: 600; }
+
+  /* ── Output ─────────────────────────────────────────────── */
+  .output-tabs { display: flex; background: var(--crust); font-size: 11px; flex-shrink: 0; }
+  .output-tab {
+    padding: 5px 14px; cursor: pointer; color: var(--overlay0); font-weight: 600;
+    border-right: 1px solid var(--surface0); user-select: none;
+  }
+  .output-tab.active { background: var(--surface0); color: var(--text); }
+  .output-tab .count { background: var(--surface1); border-radius: 8px; padding: 0 6px; font-size: 10px; margin-left: 4px; }
+  .output-content { flex: 1; overflow: auto; position: relative; }
+  .output-pane { display: none; height: 100%; overflow: auto; padding: 12px 14px; font-family: var(--font-mono); font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+  .output-pane.active { display: block; }
+  .error-highlight { color: var(--red); background: rgba(243, 139, 168, 0.1); border-left: 3px solid var(--red); padding: 6px 10px; border-radius: 0 4px 4px 0; margin-bottom: 6px; white-space: pre-wrap; }
+  .console-entry { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 4px; font-family: var(--font-mono); font-size: 12px; }
+  .console-entry .prefix { color: var(--overlay0); flex-shrink: 0; }
+  .console-entry.warn { color: var(--yellow); }
+  .console-entry.error { color: var(--red); }
+  .console-entry.info { color: var(--subtext0); }
+
+  /* ── Statusbar ──────────────────────────────────────────── */
+  .statusbar {
+    display: flex; align-items: center; gap: 16px; height: 28px; padding: 0 14px;
+    background: var(--mantle); border-top: 1px solid var(--surface0);
+    font-size: 11px; color: var(--overlay0); flex-shrink: 0;
+  }
+  .statusbar .label { color: var(--overlay1); }
+  .statusbar .spacer { flex: 1; }
+  .statusbar .version { color: var(--mauve); font-weight: 700; }
+
+  /* ── Toast ──────────────────────────────────────────────── */
+  .toast {
+    position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--surface1); color: var(--text); padding: 8px 18px; border-radius: 8px;
+    font-size: 13px; opacity: 0; transition: all 0.25s ease; z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { background: var(--green); color: var(--crust); }
+  .toast.error { background: var(--red); color: var(--crust); }
+
+  /* ═══ Vista Bloques ══════════════════════════════════════ */
+  .blocks-view { display: none; flex: 1; height: calc(100vh - 48px - 28px); position: relative; }
+  .blocks-view.active { display: flex; }
+  .code-view { display: flex; flex: 1; }
+  .code-view.hidden { display: none; }
+
+  .blocks-palette {
+    width: 260px; background: var(--crust); border-right: 1px solid var(--surface0);
+    overflow-y: auto; padding: 10px; flex-shrink: 0;
+  }
+  .blocks-palette h3 {
+    font-size: 11px; color: var(--overlay1); text-transform: uppercase;
+    letter-spacing: 1px; margin: 10px 0 6px;
+  }
+  .block-template {
+    display: block; width: 100%; text-align: left; margin-bottom: 6px;
+    color: var(--crust); font-size: 12px; font-weight: 700; font-family: var(--font-mono);
+    padding: 7px 10px; border-radius: 6px; cursor: grab;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: transform 0.08s;
+  }
+  .block-template:hover { transform: translateX(2px); }
+
+  .blocks-canvas {
+    flex: 1; background: var(--base); overflow-y: auto; padding: 16px 20px;
+  }
+  .blocks-canvas .empty-hint {
+    color: var(--overlay0); font-size: 13px; text-align: center; margin-top: 60px;
+    font-style: italic;
+  }
+  .blocks-canvas .empty-hint strong { color: var(--overlay1); font-style: normal; }
+
+  .block {
+    background: var(--mauve); color: var(--crust); border-radius: 6px;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    padding: 5px 8px; margin: 4px 0; display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap; box-shadow: 0 2px 4px rgba(0,0,0,0.35); min-height: 28px;
+  }
+  .block .b-label { white-space: pre; }
+  .block .b-input {
+    background: rgba(17,17,27,0.45); color: var(--text); border: none; border-radius: 4px;
+    font-family: var(--font-mono); font-size: 11px; padding: 2px 6px; min-width: 60px; outline: none;
+  }
+  .block .b-input:focus { box-shadow: 0 0 0 1px var(--text); }
+  .block .b-select {
+    background: var(--crust); color: var(--text); border: none; border-radius: 4px;
+    font-size: 11px; font-family: var(--font-mono); padding: 2px 4px;
+  }
+  .block .b-actions { display: flex; gap: 2px; margin-left: auto; }
+  .block .b-btn {
+    background: rgba(17,17,27,0.35); border: none; border-radius: 4px; cursor: pointer;
+    color: var(--crust); font-size: 11px; font-weight: 800; width: 20px; height: 20px; line-height: 1;
+  }
+  .block .b-btn:hover { background: rgba(17,17,27,0.7); color: var(--text); }
+  .block .b-btn.del:hover { background: var(--red); color: var(--crust); }
+  .block-children { margin-left: 22px; border-left: 2px dashed var(--surface1); padding-left: 8px; }
+
+  .block.b-sentencia { background: var(--blue); }
+  .block.b-variable { background: var(--green); }
+  .block.b-control { background: var(--peach); }
+  .block.b-funcion { background: var(--pink); }
+  .block.b-imprimir { background: var(--teal); }
+  .block.b-comentario { background: var(--surface1); color: var(--subtext0); font-style: italic; }
+
+  .block.b-funcion, .block.b-control { position: relative; }
+  .block.b-funcion::after, .block.b-control::after {
+    content: '⤷'; position: absolute; right: 30px; font-size: 10px; opacity: 0.6;
+  }
+
+  /* ── Example Picker (F4.2) ──────────────────────────────────── */
+  .example-picker { position: relative; flex: 1; min-width: 200px; }
+  .example-picker-btn {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px; background: var(--mantle); border: 1px solid var(--surface0);
+    border-radius: 6px; color: var(--text); font-size: 13px; cursor: pointer;
+    gap: 8px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .example-picker-btn:hover { border-color: var(--surface1); background: var(--surface0); }
+  .example-picker-btn:focus { outline: 2px solid var(--mauve); outline-offset: -2px; }
+  .example-picker-btn[aria-expanded="true"] { border-color: var(--mauve); box-shadow: 0 0 0 2px var(--mantle); }
+  .picker-arrow { font-size: 10px; color: var(--overlay0); transition: transform .15s; }
+  .example-picker-btn[aria-expanded="true"] .picker-arrow { transform: rotate(180deg); }
+
+  .example-picker-panel {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--crust); border: 1px solid var(--surface0); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4); max-height: 60vh; overflow: hidden;
+    display: flex; flex-direction: column; z-index: 100;
+  }
+  .picker-header { padding: 8px; border-bottom: 1px solid var(--surface0); display: flex; flex-direction: column; gap: 6px; }
+  #exampleSearch { width: 100%; padding: 6px 10px; background: var(--mantle); border: 1px solid var(--surface0); border-radius: 4px; color: var(--text); font-size: 12px; }
+  #exampleSearch:focus { outline: 2px solid var(--mauve); outline-offset: -2px; }
+  .picker-cats { display: flex; gap: 4px; flex-wrap: wrap; }
+  .cat-btn { padding: 3px 8px; background: var(--mantle); border: 1px solid var(--surface0); border-radius: 4px; font-size: 11px; color: var(--subtext1); cursor: pointer; }
+  .cat-btn:hover { background: var(--surface0); color: var(--text); }
+  .cat-btn.active { background: var(--mauve); color: var(--crust); border-color: var(--mauve); }
+
+  .picker-sections { flex: 1; overflow-y: auto; padding: 4px; }
+  .picker-section { margin-bottom: 8px; }
+  .picker-section-title { font-size: 10px; color: var(--overlay0); text-transform: uppercase; letter-spacing: .5px; padding: 4px 8px; font-weight: 600; }
+  .picker-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--text); }
+  .picker-item:hover { background: var(--surface0); }
+  .picker-item:focus { outline: 2px solid var(--mauve); outline-offset: -2px; }
+  .picker-item-fav { color: var(--yellow); font-size: 14px; flex-shrink: 0; }
+  .picker-item-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .picker-item-tag { font-size: 10px; background: var(--surface0); color: var(--peach); padding: 1px 5px; border-radius: 3px; }
+  .picker-item-import { font-size: 10px; background: var(--surface0); color: var(--sky); padding: 1px 5px; border-radius: 3px; }
+  .picker-empty { padding: 12px; color: var(--overlay0); font-size: 12px; text-align: center; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "@codemirror/state": "./vendor/cm/cm-state.js",
+    "@codemirror/view": "./vendor/cm/cm-view.js",
+    "@codemirror/language": "./vendor/cm/cm-language.js",
+    "@codemirror/commands": "./vendor/cm/cm-commands.js",
+    "@codemirror/autocomplete": "./vendor/cm/cm-autocomplete.js",
+    "@lezer/common": "./vendor/cm/lezer-common.js",
+    "@lezer/highlight": "./vendor/cm/lezer-highlight.js",
+    "@lezer/lr": "./vendor/cm/lezer-lr.js",
+    "style-mod": "./vendor/cm/style-mod.js",
+    "w3c-keyname": "./vendor/cm/w3c-keyname.js",
+    "crelt": "./vendor/cm/crelt.js",
+    "@marijn/find-cluster-break": "./vendor/cm/marijn-find-cluster-break.js"
+  }
+}
+</script>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header>
+  <div class="logo">
+    <h1>◈ LÚMEN</h1>
+    <span class="badge">Playground</span>
+  </div>
+  <div class="view-toggle" id="viewToggle">
+    <button data-view="code" class="active">📝 Código</button>
+    <button data-view="blocks">🧩 Bloques</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="header-status">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Inicializando...</span>
+  </div>
+</header>
+
+<!-- ═══ VISTA CÓDIGO ═══ -->
+<div class="code-view" id="codeView">
+  <div class="panel code-panel">
+    <div class="panel-header">
+      <span>📝 Código fuente (.nv)</span>
+      <div class="panel-actions">
+        <div id="examplePicker" class="example-picker">
+          <button type="button" id="examplePickerBtn" class="example-picker-btn" aria-haspopup="listbox" aria-expanded="false">
+            <span id="examplePickerLabel">— Cargar ejemplo —</span>
+            <span class="picker-arrow">▼</span>
+          </button>
+          <div id="examplePickerPanel" class="example-picker-panel" role="listbox" hidden>
+            <div class="picker-header">
+              <input type="search" id="exampleSearch" placeholder="🔍 Buscar..." aria-label="Buscar ejemplos">
+              <div class="picker-cats" id="exampleCats"></div>
+            </div>
+            <div class="picker-sections" id="exampleSections"></div>
+          </div>
+        </div>
+        <button id="saveBtn" class="small" title="Guardar en el navegador">💾 Guardar</button>
+        <button id="downloadNvBtn" class="small" title="Descargar código como .nv">⬇ .nv</button>
+        <button id="uploadNvBtn" class="small" title="Subir archivo .nv">⬆ .nv</button>
+        <button id="shareBtn" class="small" title="Copiar URL compartible (#code=base64)">🔗 Compartir</button>
+        <button id="historyBtn" class="small" title="Historial de ejecuciones recientes">🕘 Historial</button>
+      </div>
+    </div>
+    <div class="editor-wrapper">
+      <div id="editorHost" class="editor-host"></div>
+    </div>
+    <div class="toolbar">
+      <button id="runBtn" class="primary">▶ Ejecutar</button>
+      <button id="clearBtn">🗑 Limpiar salida</button>
+      <div class="separator"></div>
+      <button id="checkBtn">✓ Verificar</button>
+      <button id="tokensBtn">🔤 Tokens</button>
+      <button id="downloadBtn">⬇ .nvc</button>
+      <div class="separator"></div>
+      <div id="backendToggle" class="backend-toggle" title="Motor de ejecución">
+        <button data-backend="wasm" class="active">Navegador (WASM)</button>
+        <button data-backend="server">Servidor (VM Rust)</button>
+      </div>
+      <div class="separator"></div>
+      <span style="font-size:11px;color:var(--overlay0);">
+        <kbd style="background:var(--surface0);padding:1px 5px;border-radius:3px;font-size:10px;">Ctrl+Enter</kbd>
+      </span>
+    </div>
+    <div class="interop-bar">
+      <span class="label">🔄 JS ↔ LÚMEN</span>
+      <button id="jsCallDemo" class="small">LÚMEN → JS</button>
+      <button id="lumenFromJsBtn" class="small">JS → LÚMEN</button>
+      <button id="registerBridgeBtn" class="small">Registrar bridges</button>
+      <button id="testBridgeBtn" class="small">Probar bridges</button>
+      <button id="alertDemo" class="small">alert()</button>
+      <button id="titleDemo" class="small">doc.title</button>
+    </div>
+  </div>
+
+  <div class="panel output-panel">
+    <div class="panel-header"><span>🖥️ Salida</span></div>
+    <div class="output-tabs">
+      <div class="output-tab active" data-pane="output">Salida</div>
+      <div class="output-tab" data-pane="console">Consola <span class="count" id="consoleCount">0</span></div>
+      <div class="output-tab" data-pane="js">JS Interop</div>
+    </div>
+    <div class="output-content">
+      <div id="output-pane" class="output-pane active">Presiona <strong>▶ Ejecutar</strong> para correr el código...</div>
+      <div id="console-pane" class="output-pane"><div class="console-entry info"><span class="prefix">➜</span><span>Consola de LÚMEN.</span></div></div>
+      <div id="js-pane" class="output-pane"><div class="console-entry info"><span class="prefix">⟷</span><span>Interacciones JS ↔ LÚMEN aparecen aquí.</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VISTA BLOQUES ═══ -->
+<div class="blocks-view" id="blocksView">
+  <div class="blocks-palette" id="blocksPalette"></div>
+  <div class="blocks-canvas" id="blocksCanvas">
+    <div class="empty-hint" id="blocksEmpty">
+      <strong>🧩 Constructor de bloques</strong><br>
+      Haz clic en un bloque de la paleta (izquierda) para agregarlo.<br>
+      Usa <strong>↑ ↓</strong> para mover, <strong>→</strong> para anidar dentro del bloque anterior y <strong>←</strong> para desanidar.
+    </div>
+  </div>
+</div>
+
+<!-- ═══ STATUSBAR ═══ -->
+<div class="statusbar">
+  <span class="status-item"><span class="label">VM:</span> <span id="vmStatus">—</span></span>
+  <span class="status-item"><span class="label">Estado:</span> <span id="runStatus">listo</span></span>
+  <span class="spacer"></span>
+  <span class="status-item"><span class="label">Tiempo:</span> <span id="execTime">—</span></span>
+  <span class="version" id="versionDisplay">v—</span>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div id="toast" class="toast"></div>
+
+<!-- Ejemplos embebidos (fallback offline F4.1): generado por scripts/gen-embedded-examples.ps1 -->
+<script src="embedded_examples.js"></script>
+<script type="module">
+import init, { LumenRuntime } from '../pkg/lumen_wasm.js';
+import { EditorState, StateField, StateEffect } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine, highlightActiveLineGutter, Decoration, placeholder } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap, indentWithTab, autocompletion, completionKeymap } from '@codemirror/commands';
+import { bracketMatching, indentOnInput, syntaxHighlighting } from '@codemirror/language';
+import { autocompletion as autocompleteExtension } from '@codemirror/autocomplete';
+import { lumenLanguage, lumenHighlighting } from './vendor/lumen-mode.js';
+
+// ── CodeMirror 6 (F2.1) — reemplaza al textarea ─────────────
+const setErrorLine = StateEffect.define();
+const errorLineDeco = Decoration.line({ class: 'cm-error-line' });
+const errorLineField = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) if (e.is(setErrorLine)) {
+      deco = e.value ? Decoration.set([errorLineDeco.range(e.value)]) : Decoration.none;
+    }
+    return deco;
+  },
+  provide: f => EditorView.decorations.from(f),
+});
+
+// ── State ──────────────────────────────────────────────────
+let runtime = null;
+let consoleLogs = [];
+let execBackend = localStorage.getItem('lumen_playground_backend') === 'server' ? 'server' : 'wasm'; // 'wasm' (navegador) | 'server' (VM Rust del servidor)
+const HISTORY_KEY = 'lumen_playground_history';
+const HISTORY_MAX = 10;
+
+// ── DOM refs ───────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const editorHost = $('editorHost');
+let editor = null;
+const outputPane  = $('output-pane');
+const consolePane = $('console-pane');
+const jsPane      = $('js-pane');
+const statusText  = $('statusText');
+const statusDot   = $('statusDot');
+const vmStatus    = $('vmStatus');
+const runStatus   = $('runStatus');
+const execTime    = $('execTime');
+const versionDisp = $('versionDisplay');
+const examplePickerBtn = $('examplePickerBtn');
+const examplePickerLabel = $('examplePickerLabel');
+const examplePickerPanel = $('examplePickerPanel');
+const exampleSearch = $('exampleSearch');
+const exampleCats = $('exampleCats');
+const exampleSections = $('exampleSections');
+const toastEl     = $('toast');
+const consoleCnt  = $('consoleCount');
+const codeView    = $('codeView');
+const blocksView  = $('blocksView');
+
+// ── Bridges JS ↔ LÚMEN ─────────────────────────────────────
+window.__lumen_call = function(fnName, args) {
+  const bridges = {
+    console_log: (msg) => { console.log('[LÚMEN]', msg); addConsoleEntry('info', String(msg)); return ''; },
+    alert: (msg) => { window.alert('[LÚMEN] ' + msg); addJSEntry('alert() llamado con: ' + msg); return ''; },
+    get_title: () => { const t = document.title; addJSEntry('document.title consultado: "' + t + '"'); return t; },
+    set_title: (title) => { document.title = '[LÚMEN] ' + title; addJSEntry('document.title cambiado a: "' + title + '"'); return ''; },
+    random_number: (min, max) => {
+      const lo = min !== undefined ? Number(min) : 0;
+      const hi = max !== undefined ? Number(max) : 100;
+      const result = Math.floor(Math.random() * (hi - lo + 1)) + lo;
+      addJSEntry(`random_number(${lo}, ${hi}) = ${result}`);
+      return String(result);
+    },
+    add: (a, b) => { const result = Number(a) + Number(b); addJSEntry(`JS suma: ${a} + ${b} = ${result}`); return String(result); },
+    multiply: (a, b) => { const result = Number(a) * Number(b); addJSEntry(`JS multiplica: ${a} * ${b} = ${result}`); return String(result); },
+    uppercase: (s) => { const result = String(s).toUpperCase(); addJSEntry(`JS uppercase: "${s}" → "${result}"`); return result; },
+    lowercase: (s) => { const result = String(s).toLowerCase(); addJSEntry(`JS lowercase: "${s}" → "${result}"`); return result; },
+    random: () => { const r = Math.random(); addJSEntry(`JS random: ${r}`); return String(r); },
+    date: () => { const d = new Date().toISOString(); addJSEntry(`JS date: ${d}`); return d; },
+    now_timestamp: () => { const ts = Date.now(); addJSEntry(`JS timestamp: ${ts}`); return String(ts); },
+    eval_expression: (expr) => {
+      try { const result = eval(expr); addJSEntry(`JS eval("${expr}") = ${result}`); return String(result); }
+      catch(e) { addJSEntry(`JS eval error: ${e.message}`, 'error'); return 'Error: ' + e.message; }
+    },
+    get_url: () => { const url = window.location.href; addJSEntry(`URL: ${url}`); return url; },
+    get_user_agent: () => { const ua = navigator.userAgent; addJSEntry(`User Agent: "${ua.substring(0, 60)}..."`); return ua; },
+    sum_array: (...nums) => { const result = nums.reduce((a, b) => Number(a) + Number(b), 0); addJSEntry(`JS sum_array: [${nums}] = ${result}`); return String(result); },
+    json_stringify: (obj) => {
+      try { const parsed = JSON.parse(obj); addJSEntry(`JS JSON.stringify: ${JSON.stringify(parsed)}`); return JSON.stringify(parsed); }
+      catch { addJSEntry(`JS JSON.stringify (raw): "${obj}"`); return JSON.stringify(obj); }
+    },
+  };
+  if (bridges[fnName]) {
+    try { const result = bridges[fnName](...args); addBridgeResult(fnName, args, result); return result; }
+    catch(e) { console.error('[LÚMEN Bridge Error]', fnName, e); addJSEntry(`Bridge error: ${fnName} → ${e.message}`, 'error'); return 'Bridge error: ' + e.message; }
+  }
+  console.warn('[LÚMEN] Unknown bridge function:', fnName);
+  addJSEntry(`Unknown bridge: ${fnName}`, 'warn');
+  return 'Unknown function: ' + fnName;
+};
+
+function addBridgeResult(fnName, args, result) {
+  addJSEntry(`${fnName}(${(args||[]).map(a => `"${a}"`).join(', ')}) → "${String(result).substring(0, 60)}"`, 'info');
+}
+function addConsoleEntry(level, msg) {
+  const entry = document.createElement('div');
+  entry.className = 'console-entry ' + level;
+  const icon = { info: '➜', warn: '⚠', error: '✗' }[level] || '•';
+  entry.innerHTML = `<span class="prefix">${icon}</span><span>${escapeHtml(msg)}</span>`;
+  consolePane.appendChild(entry);
+  consolePane.scrollTop = consolePane.scrollHeight;
+  consoleLogs.push({ level, msg });
+  consoleCnt.textContent = consoleLogs.length;
+}
+function addJSEntry(msg, level) {
+  level = level || 'info';
+  const entry = document.createElement('div');
+  entry.className = 'console-entry ' + level;
+  const icon = { info: '⟷', warn: '⚠', error: '✗' }[level] || '•';
+  entry.innerHTML = `<span class="prefix">${icon}</span><span>${escapeHtml(msg)}</span>`;
+  jsPane.appendChild(entry);
+  jsPane.scrollTop = jsPane.scrollHeight;
+}
+function clearOutput() { outputPane.innerHTML = ''; }
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function showToast(msg, type) {
+  toastEl.textContent = msg;
+  toastEl.className = 'toast ' + (type || '') + ' show';
+  clearTimeout(toastEl._hide);
+  toastEl._hide = setTimeout(() => toastEl.classList.remove('show'), 2500);
+}
+
+function setStatus(state, msg) { statusDot.className = 'dot ' + state; statusText.textContent = msg; }
+
+// ── Editor CodeMirror ──────────────────────────────────────
+function getCode()      { return editor ? editor.state.doc.toString() : ''; }
+function initEditor() {
+  editor = new EditorView({
+    parent: editorHost,
+    state: EditorState.create({
+      doc: '',
+      extensions: [
+        lineNumbers(),
+        history(),
+        drawSelection(),
+        dropCursor(),
+        rectangularSelection(),
+        crosshairCursor(),
+        highlightActiveLineGutter(),
+        highlightActiveLine(),
+        indentOnInput(),
+        bracketMatching(),
+        placeholder('// Escribe código LÚMEN aquí...\n\nimprimir("¡Hola, LÚMEN!");\n\n// Presiona Ctrl+Enter para ejecutar'),
+        keymap.of([
+          ...defaultKeymap,
+          ...historyKeymap,
+          indentWithTab,
+          { key: 'Ctrl-Enter', run: () => { runCode(); return true; } },
+          { key: 'Shift-Enter', run: () => { runCode(); return true; } },
+        ]),
+        lumenLanguage,
+        errorLineField,
+      ],
+    }),
+  });
+  updateLineNumbers();
+  // Helpers expuestos para debug/automatización (consola DevTools)
+  window.getCode = getCode;
+  window.setCode = setCode;
+  window.runCode = runCode;
+  setupAutosave();
+}
+function updateLineNumbers() {} // CodeMirror gestiona su propio gutter
+function markErrorLine(errMsg) {
+  const m = errMsg.match(/\[(\d+):(\d+)\]/);
+  if (!m) return errMsg;
+  const line = parseInt(m[1], 10);
+  const info = editor.state.doc.lineAt(Math.min(line, editor.state.doc.lines));
+  editor.dispatch({ effects: setErrorLine.of(info.from) });
+  return errMsg;
+}
+function clearErrorMark() {
+  if (editor) editor.dispatch({ effects: setErrorLine.of(null) });
+}
+
+// ── Tabs ───────────────────────────────────────────────────
+document.querySelectorAll('.output-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
+    tab.classList.add('active');
+    const pane = document.getElementById(tab.dataset.pane + '-pane');
+    if (pane) pane.classList.add('active');
+  });
+});
+
+// ── Vista toggle ───────────────────────────────────────────
+$('viewToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  document.querySelectorAll('#viewToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const isBlocks = btn.dataset.view === 'blocks';
+  codeView.classList.toggle('hidden', isBlocks);
+  blocksView.classList.toggle('active', isBlocks);
+  if (isBlocks) renderBlocks();
+});
+
+// ── Run ────────────────────────────────────────────────────
+async function runCode() {
+  const code = getCode().trim();
+  if (!code) { showToast('No hay código para ejecutar.', 'error'); return; }
+  if (execBackend === 'server' && !location.protocol.startsWith('http')) {
+    showToast('El modo Servidor requiere el playground vía lumen serve (http://localhost:PORT).', 'error');
+    return;
+  }
+  if (execBackend === 'wasm' && !runtime) {
+    showToast('VM no cargada aún. Espera un momento...', 'error'); return;
+  }
+  setStatus('busy', 'Ejecutando...');
+  runStatus.textContent = '⚡ ejecutando';
+  outputPane.innerHTML = 'Ejecutando...';
+  const start = performance.now();
+  if (execBackend === 'server') {
+    try {
+      const res = await fetch('/api/run', { method: 'POST', body: code });
+      const json = await res.json();
+      const elapsed = (performance.now() - start).toFixed(1);
+      execTime.textContent = elapsed + 'ms (servidor)';
+      outputPane.innerHTML = '';
+      if (json.ok) {
+        outputPane.textContent = json.output || '(sin salida)';
+        setStatus('ready', 'Completado');
+        runStatus.textContent = '✓ completado';
+        showToast('Ejecución completada (servidor)', 'success');
+        pushHistory(code, json.output || '', true, 'server', elapsed);
+      } else {
+        const div = document.createElement('div');
+        div.className = 'error-highlight';
+        div.textContent = markErrorLine(json.error || 'Error desconocido');
+        outputPane.appendChild(div);
+        setStatus('error', 'Error');
+        runStatus.textContent = '✗ error';
+        showToast('Error de ejecución', 'error');
+        pushHistory(code, json.error || '', false, 'server', elapsed);
+      }
+    } catch(e) {
+      execTime.textContent = (performance.now() - start).toFixed(1) + 'ms';
+      const div = document.createElement('div');
+      div.className = 'error-highlight';
+      div.textContent = 'Error de red: ' + e.message;
+      outputPane.appendChild(div);
+      setStatus('error', 'Error');
+      runStatus.textContent = '✗ error';
+      showToast('No se pudo contactar al servidor', 'error');
+      pushHistory(code, 'Error de red: ' + e.message, false, 'server', '—');
+    }
+    return;
+  }
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    const result = runtime.run(code);
+    const elapsed = (performance.now() - start).toFixed(1);
+    execTime.textContent = elapsed + 'ms';
+    outputPane.innerHTML = '';
+    if (result && result.startsWith('Error')) {
+      const div = document.createElement('div');
+      div.className = 'error-highlight';
+      div.textContent = markErrorLine(result);
+      outputPane.appendChild(div);
+      setStatus('error', 'Error');
+      runStatus.textContent = '✗ error';
+      showToast('Error de ejecución', 'error');
+      pushHistory(code, result, false, 'wasm', elapsed);
+    } else {
+      outputPane.textContent = result || '(sin salida)';
+      setStatus('ready', 'Completado');
+      runStatus.textContent = '✓ completado';
+      showToast('Ejecución completada', 'success');
+      pushHistory(code, result || '', true, 'wasm', elapsed);
+    }
+  } catch(e) {
+    execTime.textContent = (performance.now() - start).toFixed(1) + 'ms';
+    const div = document.createElement('div');
+    div.className = 'error-highlight';
+    div.textContent = 'Error: ' + e.message;
+    outputPane.appendChild(div);
+    setStatus('error', 'Error');
+    runStatus.textContent = '✗ error';
+    showToast('Error: ' + e.message, 'error');
+    pushHistory(code, 'Error: ' + e.message, false, 'wasm', '—');
+  }
+}
+
+function checkCode() {
+  if (!runtime) { showToast('VM no cargada', 'error'); return; }
+  const code = getCode().trim();
+  if (!code) { showToast('No hay código.', 'error'); return; }
+  outputPane.innerHTML = 'Verificando...';
+  setStatus('busy', 'Verificando...');
+  setTimeout(() => {
+    try {
+      const err = runtime.check(code);
+      if (err) {
+        const div = document.createElement('div');
+        div.className = 'error-highlight';
+        div.textContent = markErrorLine(err);
+        outputPane.innerHTML = '';
+        outputPane.appendChild(div);
+        setStatus('error', 'Error encontrado');
+        showToast('Error de verificación', 'error');
+      } else {
+        outputPane.innerHTML = '✓ Código válido — sin errores léxicos, sintácticos ni semánticos.';
+        setStatus('ready', 'Código válido');
+        showToast('Código válido ✓', 'success');
+      }
+    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  }, 50);
+}
+
+function showTokens() {
+  if (!runtime) { showToast('VM no cargada', 'error'); return; }
+  const code = getCode().trim();
+  if (!code) { showToast('No hay código.', 'error'); return; }
+  try {
+    const tokens = runtime.tokenize(code);
+    document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
+    document.querySelector('[data-pane="output"]').classList.add('active');
+    outputPane.classList.add('active');
+    outputPane.textContent = tokens;
+    showToast('Tokens generados', 'success');
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function downloadBytecode() {
+  if (!runtime) { showToast('VM no cargada', 'error'); return; }
+  const code = getCode().trim();
+  if (!code) { showToast('No hay código.', 'error'); return; }
+  try {
+    const bytes = runtime.compile_to_bytes(code);
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'programa.nvc';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Bytecode .nvc descargado: ' + bytes.length + ' bytes', 'success');
+  } catch(e) {
+    const div = document.createElement('div');
+    div.className = 'error-highlight';
+    div.textContent = markErrorLine(String(e));
+    outputPane.innerHTML = '';
+    outputPane.appendChild(div);
+    showToast('No se pudo compilar', 'error');
+  }
+}
+
+// ── Ejemplos (API del servidor + fallback embebido) ────────
+const BUILTIN_EXAMPLES = [
+  { name: 'Hola Mundo', code: `imprimir("¡Hola, LÚMEN!");
+imprimir("Este es el playground interactivo.");` },
+  { name: 'Matemáticas', code: `entero a = 42;
+entero b = 10;
+imprimir("a + b = ", a + b);
+imprimir("a - b = ", a - b);
+imprimir("a * b = ", a * b);
+imprimir("a / b = ", a / b);
+imprimir("3.14 * 2 = ", 3.14 * 2);` },
+  { name: 'Fibonacci', code: `funcion entero fib(entero n) {
+    si n <= 1 { retornar n; }
+    retornar fib(n - 1) + fib(n - 2);
+}
+entero i = 0;
+mientras i <= 10 {
+    imprimir("fib(", i, ") = ", fib(i));
+    i = i + 1;
+}` },
+  { name: 'Bucles y listas', code: `lista<entero> nums = [10, 20, 30, 40, 50];
+para entero n en nums {
+    imprimir("item: ", n);
+}
+entero total = 0;
+entero i = 0;
+mientras i < 5 {
+    total = total + i;
+    i = i + 1;
+}
+imprimir("total: ", total);` },
+  { name: 'Ternario', code: `entero x = 42;
+texto r = x > 18 ? "mayor de edad" : "menor de edad";
+imprimir(x, " es ", r);` },
+  { name: 'Enum + elegir', code: `enum Color { Rojo, Verde, Azul }
+funcion texto describir(Color c) {
+    elegir c {
+        caso Color::Rojo  { retornar "rojo"; }
+        caso Color::Verde { retornar "verde"; }
+        caso Color::Azul  { retornar "azul"; }
+    }
+}
+imprimir(describir(Color::Rojo));
+imprimir(describir(Color::Azul));` },
+  { name: 'Resultado<T,E>', code: `funcion Resultado<entero, texto> dividir(entero a, entero b) {
+    si b == 0 { retornar Error("dividir por cero"); }
+    retornar Exito(a / b);
+}
+elegir dividir(10, 2) {
+    caso Exito(v) { imprimir("10/2 = ", v); }
+    caso Error(e) { imprimir("Error: ", e); }
+}
+elegir dividir(10, 0) {
+    caso Exito(v) { imprimir("10/0 = ", v); }
+    caso Error(e) { imprimir("Error capturado: ", e); }
+}` },
+  { name: 'Diccionario', code: `diccionario<texto, entero> edades = {};
+edades["Ana"] = 25;
+edades["Bob"] = 30;
+imprimir("Edad de Ana: ", edades["Ana"]);
+imprimir("Edad de Bob: ", edades["Bob"]);` },
+  { name: 'JS Interop', code: `imprimir("=== LÚMEN llama a JS ===");
+texto suma = __js_call("add", "40", "2");
+imprimir("40 + 2 = ", suma);
+texto mayus = __js_call("uppercase", "lumen lenguaje");
+imprimir("MAYÚSCULAS: ", mayus);
+texto ts = __js_call("now_timestamp", "");
+imprimir("Timestamp JS: ", ts);
+texto r = __js_eval("'Hola desde JS_EVAL: ' + (42 * 3)");
+imprimir(r);` },
+  { name: 'Interpolación', code: `texto nombre = "Ana";
+entero edad = 28;
+imprimir("Hola, me llamo {nombre} y tengo {edad} años.");
+imprimir("El año que viene tendré {edad + 1} años.");` },
+  { name: 'Corrutinas', code: `funcion texto tarea_a() {
+    imprimir("A: inicio");
+    __coro_ceder();
+    imprimir("A: después del primer yield");
+    __coro_ceder();
+    imprimir("A: después del segundo yield");
+    retornar "A: fin";
+}
+texto a = __coro_crear("tarea_a");
+imprimir("Creada: ", a);
+__coro_reanudar(a);
+__coro_reanudar(a);
+__coro_reanudar(a);
+imprimir("Fin del demo.");` },
+  { name: 'Closures IIFE', code: `funcion(entero, entero) -> entero suma = lambda(a, b) {
+    retornar a + b;
+};
+imprimir(suma(10, 20));
+funcion texto saludo() -> texto {
+    imprimir("Hola Mundo");
+    retornar "ok";
+};
+imprimir(saludo());` },
+];
+
+let examplesFromApi = [];
+const EMBEDDED_EXAMPLES = window.LUMEN_EMBEDDED_EXAMPLES || [];
+const FAV_KEY = 'lumen_playground_favs';
+const CATS_ORDER = ['basics', 'functions', 'data', 'pro', 'stdlib', 'other'];
+
+function inferCategory(name, code = '') {
+  const n = name.toLowerCase();
+  if (code.includes('importar')) return 'stdlib';
+  if (n.includes('hola') || n.includes('basico') || n.includes('basic') || n.startsWith('0') || n.startsWith('1')) return 'basics';
+  if (n.includes('funcion') || n.includes('function') || n.includes('lambda') || n.includes('closure') || n.includes('retornar')) return 'functions';
+  if (n.includes('array') || n.includes('lista') || n.includes('list') || n.includes('estruct') || n.includes('struct') || n.includes('enum') || n.includes('opcion') || n.includes('resultado') || n.includes('tupla') || n.includes('tuple') || n.includes('destr')) return 'data';
+  if (n.includes('async') || n.includes('corut') || n.includes('actor') || n.includes('par ') || n.includes('stream') || n.includes('select') || n.includes('timer') || n.includes('channel') || n.includes('mutex') || n.includes('hilo') || n.includes('thread')) return 'pro';
+  if (n.includes('test') || n.includes('bench') || n.includes('demo') || n.includes('stress') || n.includes('json') || n.includes('csv') || n.includes('sqlite') || n.includes('http') || n.includes('red') || n.includes('tui') || n.includes('grafic') || n.includes('canvas') || n.includes('audio') || n.includes('tilemap') || n.includes('chart') || n.includes('gui')) return 'pro';
+  return 'other';
+}
+
+function getFavs() { return new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]')); }
+function toggleFav(name) { const favs = getFavs(); if (favs.has(name)) favs.delete(name); else favs.add(name); localStorage.setItem(FAV_KEY, JSON.stringify([...favs])); renderPicker(); }
+
+function buildAllExamples() {
+  const list = [];
+  // API examples
+  examplesFromApi.forEach(ex => {
+    list.push({ source: 'api', key: 'api:' + ex.name, name: ex.name, category: ex.category || inferCategory(ex.name), code: null, usesImport: false });
+  });
+  // Embedded examples (from embedded_examples.js)
+  EMBEDDED_EXAMPLES.forEach(ex => {
+    list.push({ source: 'emb', key: 'emb:' + ex.file, name: ex.name, category: inferCategory(ex.name, ex.code), code: ex.code, usesImport: ex.code?.includes('importar') });
+  });
+  // Builtin examples
+  BUILTIN_EXAMPLES.forEach((ex, i) => {
+    list.push({ source: 'builtin', key: String(i), name: ex.name, category: inferCategory(ex.name, ex.code), code: ex.code, usesImport: ex.code?.includes('importar') });
+  });
+  return list;
+}
+
+function renderPicker() {
+  const all = buildAllExamples();
+  const favs = getFavs();
+  const search = exampleSearch.value.toLowerCase();
+
+  exampleSections.innerHTML = '';
+
+  // Favorites section
+  const favItems = all.filter(ex => favs.has(ex.name) && (ex.name.toLowerCase().includes(search) || search === ''));
+  if (favItems.length > 0) {
+    exampleSections.appendChild(makeSection('⭐ Favoritos', favItems, favs));
+  }
+
+  // Recents section
+  const recents = JSON.parse(localStorage.getItem('lumen_playground_recents') || '[]');
+  const recentItems = all.filter(ex => recents.includes(ex.name) && (ex.name.toLowerCase().includes(search) || search === ''));
+  if (recentItems.length > 0) {
+    exampleSections.appendChild(makeSection('🕘 Recientes', recentItems, favs));
+  }
+
+  // Category sections
+  const catsMap = {};
+  all.filter(ex => !favs.has(ex.name) && !recents.includes(ex.name) && (ex.name.toLowerCase().includes(search) || search === ''))
+    .forEach(ex => { const c = ex.category; if (!catsMap[c]) catsMap[c] = []; catsMap[c].push(ex); });
+
+  CATS_ORDER.forEach(cat => {
+    if (catsMap[cat] && catsMap[cat].length > 0) {
+      const label = { basics: '📚 Básicos', functions: '⚙️ Funciones', data: '📦 Datos', pro: '🚀 Avanzado', stdlib: '📚 Stdlib', other: '📂 Otros' }[cat] || cat;
+      exampleSections.appendChild(makeSection(label, catsMap[cat], favs));
+    }
+  });
+
+  if (exampleSections.children.length === 0) {
+    exampleSections.innerHTML = '<div class="picker-empty">No hay ejemplos que coincidan</div>';
+  }
+}
+
+function makeSection(title, items, favs) {
+  const sec = document.createElement('div');
+  sec.className = 'picker-section';
+  sec.innerHTML = '<div class="picker-section-title">' + title + '</div>';
+  items.forEach(ex => {
+    const item = document.createElement('div');
+    item.className = 'picker-item';
+    item.dataset.key = ex.key;
+    item.dataset.name = ex.name;
+    item.dataset.code = ex.code || '';
+    item.dataset.source = ex.source;
+    item.setAttribute('role', 'option');
+    item.tabIndex = 0;
+    const isFav = favs.has(ex.name);
+    item.innerHTML = (isFav ? '<span class="picker-item-fav" title="Favorito">★</span>' : '<span class="picker-item-fav" title="Añadir a favoritos">☆</span>') +
+      '<span class="picker-item-name">' + escapeHtml(ex.name) + '</span>' +
+      (ex.usesImport ? '<span class="picker-item-tag picker-item-import" title="Usa importar">📦 importar</span>' : '');
+    item.querySelector('.picker-item-fav').addEventListener('click', e => { e.stopPropagation(); toggleFav(ex.name); });
+    item.addEventListener('click', () => pickExample(item));
+    item.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickExample(item); } });
+    sec.appendChild(item);
+  });
+  return sec;
+}
+
+function pickExample(item) {
+  const key = item.dataset.key;
+  const name = item.dataset.name;
+  const code = item.dataset.code;
+  const source = item.dataset.source;
+
+  if (source === 'emb' || source === 'builtin') {
+    if (code) { setCode(code); if (!loadSavedCode(key)) saveCode(key); }
+    else if (source === 'builtin') { setCode(BUILTIN_EXAMPLES[parseInt(key)].code); if (!loadSavedCode(key)) saveCode(key); }
+    else { /* emb sin código no debería pasar */ }
+  } else if (source === 'api') {
+    fetch('/api/examples/' + encodeURIComponent(name))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => { setCode(data.content || data.code || '// (sin contenido)'); if (!loadSavedCode(key)) saveCode(key); })
+      .catch(() => showToast('Error cargando ejemplo', 'error'));
+  }
+  addRecentExample(name);
+  examplePickerLabel.textContent = name;
+  closePicker();
+  showToast('Ejemplo cargado: ' + name, 'success');
+}
+
+function closePicker() { examplePickerPanel.hidden = true; examplePickerBtn.setAttribute('aria-expanded', 'false'); }
+
+examplePickerBtn.addEventListener('click', e => { e.stopPropagation(); const open = examplePickerPanel.hidden; examplePickerPanel.hidden = !open; examplePickerBtn.setAttribute('aria-expanded', open); if (open) { exampleSearch.focus(); exampleSearch.value = ''; renderPicker(); } });
+exampleSearch.addEventListener('input', () => renderPicker());
+document.addEventListener('click', e => { if (!examplePickerPanel.hidden && !examplePickerPanel.contains(e.target) && e.target !== examplePickerBtn) closePicker(); });
+
+async function loadExamples() {
+  try {
+    const res = await fetch('/api/examples');
+    if (res.ok) {
+      examplesFromApi = await res.json();
+      showToast('Selector: ' + examplesFromApi.length + ' ejemplos del servidor', 'success');
+    }
+  } catch(e) { /* fallback */ }
+  renderPicker();
+}
+
+function setCode(src) {
+  const code = String(src);
+  if (editor) {
+    const doc = editor.state.doc;
+    editor.dispatch({ changes: { from: 0, to: doc.length, insert: code } });
+  }
+  updateLineNumbers();
+  document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
+  document.querySelector('[data-pane="output"]').classList.add('active');
+  outputPane.classList.add('active');
+}
+
+// ── Persistencia ───────────────────────────────────────────
+let autosaveTimer = null;
+const AUTOSAVE_DELAY = 2000;
+const STORAGE_PREFIX = 'lumen_playground_code_';
+
+function getStorageKey(exampleName) {
+  return STORAGE_PREFIX + (exampleName || 'default');
+}
+
+function saveCode(exampleName = null) {
+  const code = getCode();
+  const key = getStorageKey(exampleName);
+  localStorage.setItem(key, code);
+  if (!exampleName) localStorage.setItem('lumen_playground_code', code);
+  showToast(exampleName ? 'Código guardado para: ' + exampleName : 'Código guardado en el navegador', 'success');
+}
+
+function loadSavedCode(exampleName = null) {
+  const key = getStorageKey(exampleName);
+  const saved = localStorage.getItem(key);
+  if (saved) {
+    setCode(saved);
+    return true;
+  }
+  if (!exampleName) {
+    const fallback = localStorage.getItem('lumen_playground_code');
+    if (fallback) { setCode(fallback); return true; }
+  }
+  return false;
+}
+
+function setupAutosave() {
+  editor.view.updateListener.of(update => {
+    if (update.docChanged) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(() => saveCode(currentExampleName()), AUTOSAVE_DELAY);
+    }
+  });
+}
+
+function currentExampleName() {
+  const val = exampleSel.value;
+  if (val.startsWith('api:')) return 'api:' + val.slice(4);
+  if (val.startsWith('emb:')) return 'emb:' + val.slice(4);
+  return null;
+}
+
+function downloadCode() {
+  const code = getCode();
+  const name = currentExampleName() || 'codigo';
+  const cleanName = name.replace(/^[^:]+:/, '').replace(/\.nv$/, '') + '.nv';
+  const blob = new Blob([code], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cleanName;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Descargado: ' + cleanName, 'success');
+}
+
+function uploadCode() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.nv,.txt';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCode(reader.result);
+      saveCode(currentExampleName());
+      showToast('Subido y guardado: ' + file.name, 'success');
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function shareUrl() {
+  const code = getCode();
+  const b64 = btoa(unescape(encodeURIComponent(code)));
+  const url = location.origin + location.pathname + '#code=' + b64;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('¡URL copiada al portapapeles!', 'success');
+  }).catch(() => {
+    prompt('Copia esta URL:', url);
+  });
+}
+
+// ── Historial de ejemplos recientes para selector ────────────
+function addRecentExample(name) {
+  let recents = JSON.parse(localStorage.getItem('lumen_playground_recents') || '[]');
+  recents = recents.filter(r => r !== name);
+  recents.unshift(name);
+  recents = recents.slice(0, 10);
+  localStorage.setItem('lumen_playground_recents', JSON.stringify(recents));
+}
+
+// ── Bloques: definiciones ──────────────────────────────────
+const BLOCK_DEFS = {
+  imprimir:   { cat: 'Básicos',    cls: 'b-imprimir',        label: 'imprimir()',        make: () => ({ v: '"Hola LÚMEN"' }) },
+  declarar:   { cat: 'Básicos',    cls: 'b-variable',        label: 'declarar',          make: () => ({ tipo: 'entero', nm: 'x', v: '0' }) },
+  asignar:    { cat: 'Básicos',    cls: 'b-variable',        label: 'asignar',           make: () => ({ nm: 'x', v: '1' }) },
+  operacion:  { cat: 'Básicos',    cls: 'b-variable',        label: '=',                 make: () => ({ nm: 'x', op: '+', a: '1', b: '2' }) },
+  comentario: { cat: 'Básicos',    cls: 'b-comentario',      label: '//',                make: () => ({ txt: 'un comentario' }) },
+  si:         { cat: 'Control',    cls: 'b-control',         label: 'si',                make: () => ({ cond: 'x > 0', children: [] }) },
+  mientras:   { cat: 'Control',    cls: 'b-control',         label: 'mientras',          make: () => ({ cond: 'x < 10', children: [] }) },
+  para:       { cat: 'Control',    cls: 'b-control',         label: 'para (clásico)',    make: () => ({ init: 'i = 0', cond: 'i < 5', paso: 'i = i + 1', children: [] }) },
+  foreach:    { cat: 'Control',    cls: 'b-control',         label: 'para cada',         make: () => ({ tipo: 'entero', var: 'n', lista: '[1, 2, 3]', children: [] }) },
+  funcion:    { cat: 'Funciones',  cls: 'b-funcion',         label: 'función',           make: () => ({ tipo: 'entero', nm: 'suma', params: 'entero a, entero b', children: [] }) },
+  retornar:   { cat: 'Funciones',  cls: 'b-sentencia',       label: 'retornar',          make: () => ({ v: '0' }) },
+};
+
+const BLOCK_CATS = ['Básicos', 'Control', 'Funciones'];
+
+let program = []; // [{ id, inputs, children: [] }]
+let nextBlockId = 1;
+
+function renderBlocks() {
+  const canvas = $('blocksCanvas');
+  canvas.innerHTML = '';
+  const emptyHint = document.getElementById('blocksEmpty');
+  if (program.length === 0) {
+    if (emptyHint) canvas.appendChild(emptyHint);
+  }
+  program.forEach(b => canvas.appendChild(renderBlock(b)));
+}
+
+function renderBlock(b) {
+  const def = BLOCK_DEFS[b.id];
+  const wrap = document.createElement('div');
+  wrap.className = 'block ' + def.cls;
+
+  const label = document.createElement('span');
+  label.className = 'b-label';
+  label.textContent = def.label;
+
+  const inputsEl = [];
+  if (b.id === 'imprimir') inputsEl.push(input('v', b.inputs, null, 'expr'));
+  if (b.id === 'declarar') {
+    inputsEl.push(select('tipo', b.inputs, ['entero', 'decimal', 'texto', 'booleano', 'lista<entero>']));
+    inputsEl.push(input('nm', b.inputs, 'nombre'));
+    inputsEl.push(text('='));
+    inputsEl.push(input('v', b.inputs, null, 'valor'));
+  }
+  if (b.id === 'asignar') {
+    inputsEl.push(input('nm', b.inputs, 'nombre'));
+    inputsEl.push(text('='));
+    inputsEl.push(input('v', b.inputs, null, 'valor'));
+  }
+  if (b.id === 'operacion') {
+    inputsEl.push(input('nm', b.inputs, 'variable'));
+    inputsEl.push(text('='));
+    inputsEl.push(input('a', b.inputs));
+    inputsEl.push(select('op', b.inputs, ['+', '-', '*', '/', '%', '==', '<', '>']));
+    inputsEl.push(input('b', b.inputs));
+  }
+  if (b.id === 'comentario') {
+    inputsEl.push(input('txt', b.inputs, 'texto', ''));
+  }
+  if (b.id === 'si') {
+    inputsEl.push(input('cond', b.inputs, null, 'condición'));
+  }
+  if (b.id === 'mientras') {
+    inputsEl.push(input('cond', b.inputs, null, 'condición'));
+  }
+  if (b.id === 'para') {
+    inputsEl.push(text('para (')); inputsEl.push(input('init', b.inputs, 'i = 0'));
+    inputsEl.push(text(';')); inputsEl.push(input('cond', b.inputs, 'i < 5'));
+    inputsEl.push(text(';')); inputsEl.push(input('paso', b.inputs, 'i = i + 1')); inputsEl.push(text(')'));
+  }
+  if (b.id === 'foreach') {
+    inputsEl.push(text('para')); inputsEl.push(select('tipo', b.inputs, ['entero', 'texto', 'decimal']));
+    inputsEl.push(input('var', b.inputs, 'n'));
+    inputsEl.push(text('en'));
+    inputsEl.push(input('lista', b.inputs, '[1, 2, 3]'));
+  }
+  if (b.id === 'funcion') {
+    inputsEl.push(text('funcion'));
+    inputsEl.push(select('tipo', b.inputs, ['entero', 'decimal', 'texto', 'booleano', 'nada']));
+    inputsEl.push(input('nm', b.inputs, 'nombre'));
+    inputsEl.push(text('('));
+    inputsEl.push(input('params', b.inputs, 'entero a, entero b'));
+    inputsEl.push(text(')'));
+  }
+  if (b.id === 'retornar') {
+    inputsEl.push(input('v', b.inputs, null, 'valor'));
+  }
+
+  wrap.appendChild(label);
+  inputsEl.forEach(el => wrap.appendChild(el));
+
+  const actionsWrap = document.createElement('div');
+  actionsWrap.className = 'b-actions';
+  const addBtn = (sym, cls, fn) => {
+    const btn = document.createElement('button');
+    btn.className = 'b-btn ' + (cls || '');
+    btn.textContent = sym;
+    btn.title = sym;
+    btn.addEventListener('click', fn);
+    actionsWrap.appendChild(btn);
+  };
+  addBtn('↑', '', () => moveBlock(b, -1));
+  addBtn('↓', '', () => moveBlock(b, +1));
+  addBtn('→', '', () => indentBlock(b));
+  addBtn('←', '', () => outdentBlock(b));
+  addBtn('✕', 'del', () => removeBlock(b));
+  wrap.appendChild(actionsWrap);
+
+  if (b.children && b.children.length > 0) {
+    const childWrap = document.createElement('div');
+    childWrap.className = 'block-children';
+    b.children.forEach(c => childWrap.appendChild(renderBlock(c)));
+    wrap.appendChild(childWrap);
+  }
+  return wrap;
+}
+
+function input(key, inputs, placeholder, width) {
+  const el = document.createElement('input');
+  el.className = 'b-input';
+  el.value = inputs[key] || '';
+  if (placeholder) el.placeholder = placeholder;
+  if (width) el.style.minWidth = width === 'expr' ? '120px' : (width === 'valor' ? '90px' : '70px');
+  el.addEventListener('input', () => { inputs[key] = el.value; });
+  return el;
+}
+function select(key, inputs, options) {
+  const el = document.createElement('select');
+  el.className = 'b-select';
+  options.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o; opt.textContent = o;
+    el.appendChild(opt);
+  });
+  el.value = inputs[key] || options[0];
+  el.addEventListener('change', () => { inputs[key] = el.value; });
+  return el;
+}
+function text(t) {
+  const el = document.createElement('span');
+  el.className = 'b-label';
+  el.textContent = t;
+  return el;
+}
+
+function findPath(target, list, path) {
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] === target) return path.concat(i);
+    if (list[i].children) {
+      const r = findPath(target, list[i].children, path.concat(i, 'c'));
+      if (r) return r;
+    }
+  }
+  return null;
+}
+function getByPath(list, path) {
+  let node = list;
+  for (const p of path) {
+    if (p === 'c') { node = node.children; } else { node = node[p]; }
+  }
+  return node;
+}
+
+function moveBlock(b, delta) {
+  const path = findPath(b, program, []);
+  if (!path) return;
+  const parent = path.length >= 2 && path[path.length - 2] === 'c'
+    ? getByPath(program, path.slice(0, path.length - 2)).children
+    : program;
+  const idx = path[path.length - 1];
+  const newIdx = idx + delta;
+  if (newIdx < 0 || newIdx >= parent.length) return;
+  const [blk] = parent.splice(idx, 1);
+  parent.splice(newIdx, 0, blk);
+  renderBlocks();
+}
+function indentBlock(b) {
+  const path = findPath(b, program, []);
+  if (!path || path[path.length - 1] === 0) return;
+  const parent = path.length >= 2 && path[path.length - 2] === 'c'
+    ? getByPath(program, path.slice(0, path.length - 2)).children
+    : program;
+  const idx = path[path.length - 1];
+  const prev = parent[idx - 1];
+  if (!prev.children) return;
+  const [blk] = parent.splice(idx, 1);
+  prev.children.push(blk);
+  renderBlocks();
+}
+function outdentBlock(b) {
+  const path = findPath(b, program, []);
+  if (!path || path.length < 2) return;
+  const idx = path[path.length - 1];
+  const parent = getByPath(program, path.slice(0, path.length - 2)).children;
+  const [blk] = parent.splice(idx, 1);
+  if (path.length < 4) {
+    program.splice(path[0] + 1, 0, blk);
+  } else {
+    const gp = getByPath(program, path.slice(0, path.length - 4)).children;
+    gp.splice(path[path.length - 3] + 1, 0, blk);
+  }
+  renderBlocks();
+}
+function removeBlock(b) {
+  const path = findPath(b, program, []);
+  if (!path) return;
+  const parent = path.length >= 2 && path[path.length - 2] === 'c'
+    ? getByPath(program, path.slice(0, path.length - 2)).children
+    : program;
+  parent.splice(path[path.length - 1], 1);
+  renderBlocks();
+}
+
+function generateCode() {
+  const lines = [];
+  const emit = (b, depth) => {
+    const ind = '    '.repeat(depth);
+    const d = BLOCK_DEFS[b.id];
+    const I = b.inputs;
+    let code = '';
+    switch (b.id) {
+      case 'imprimir':   code = `imprimir(${I.v || '""'});`; break;
+      case 'declarar':   code = `${I.tipo} ${I.nm} = ${I.v || '0'};`; break;
+      case 'asignar':    code = `${I.nm} = ${I.v};`; break;
+      case 'operacion':  code = `${I.nm} = ${I.a} ${I.op} ${I.b};`; break;
+      case 'comentario': code = `// ${I.txt}`; break;
+      case 'si':         code = `si ${I.cond || 'verdadero'} {`; break;
+      case 'mientras':   code = `mientras ${I.cond || 'verdadero'} {`; break;
+      case 'para':       code = `para (${I.init || 'i = 0'}; ${I.cond || 'i < 5'}; ${I.paso || 'i = i + 1'}) {`; break;
+      case 'foreach':    code = `para ${I.tipo} ${I.var} en ${I.lista || '[]'} {`; break;
+      case 'funcion':    {
+        const ret = I.tipo === 'nada' ? 'nada' : I.tipo;
+        code = `funcion ${ret} ${I.nm}(${I.params || ''}) {`;
+        break;
+      }
+      case 'retornar':   code = `retornar ${I.v || '0'};`; break;
+    }
+    lines.push(ind + code);
+    if (b.children) b.children.forEach(c => emit(c, depth + 1));
+    if (['si', 'mientras', 'para', 'foreach', 'funcion'].includes(b.id)) lines.push(ind + '}');
+  };
+  program.forEach(b => emit(b, 0));
+  return lines.join('\n');
+}
+
+// ── Paleta de bloques ──────────────────────────────────────
+const CAT_COLORS = { 'Básicos': 'var(--green)', 'Control': 'var(--peach)', 'Funciones': 'var(--pink)' };
+
+function buildPalette() {
+  const palette = $('blocksPalette');
+  BLOCK_CATS.forEach(cat => {
+    const h = document.createElement('h3');
+    h.textContent = cat;
+    palette.appendChild(h);
+    Object.entries(BLOCK_DEFS).forEach(([id, def]) => {
+      if (def.cat !== cat) return;
+      const btn = document.createElement('button');
+      btn.className = 'block-template';
+      btn.style.background = CAT_COLORS[cat];
+      btn.textContent = (def.label === '=' ? 'operación' : def.label) + '  ➕';
+      btn.addEventListener('click', () => {
+        const b = { id, inputs: def.make(), children: [] };
+        if (['si', 'mientras', 'para', 'foreach', 'funcion'].includes(id)) b.children = [];
+        program.push(b);
+        renderBlocks();
+        showToast('Bloque agregado: ' + def.label, 'success');
+      });
+      palette.appendChild(btn);
+    });
+  });
+}
+
+// ── Bloques → código y ejecución ───────────────────────────
+
+// ── JS ↔ LÚMEN Interop Buttons ────────────────────────────
+$('jsCallDemo').addEventListener('click', () => {
+  setCode(`imprimir("=== LÚMEN llama a JS ===");
+__js_call("console_log", "¡Hola! Este mensaje viene de LÚMEN.");
+texto titulo = __js_call("get_title", "");
+imprimir("Título actual: ", titulo);
+texto suma = __js_call("add", "100", "23");
+imprimir("100 + 23 = ", suma);
+texto rn = __js_call("random_number", "1", "100");
+imprimir("Random 1-100: ", rn);
+imprimir("=== Fin LÚMEN → JS ===");`);
+  showToast('Demo LÚMEN → JS cargado. Presiona ▶ Ejecutar', 'success');
+});
+$('lumenFromJsBtn').addEventListener('click', () => {
+  if (!runtime) { showToast('Runtime no cargado aún', 'error'); return; }
+  try {
+    const result = runtime.run("imprimir('Called from JS!'); imprimir('JS → LÚMEN funciona correctamente.');");
+    outputPane.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.color = 'var(--peach)';
+    div.innerHTML = '<strong>⟵ JS llamó a LÚMEN:</strong>\n' + escapeHtml(result || '(sin salida)');
+    outputPane.appendChild(div);
+    addJSEntry('JS → LÚMEN: runtime.run() completado', 'info');
+    showToast('JS llamó a LÚMEN exitosamente', 'success');
+    document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
+    document.querySelector('[data-pane="output"]').classList.add('active');
+    outputPane.classList.add('active');
+  } catch(e) { addJSEntry('JS → LÚMEN error: ' + e.message, 'error'); showToast('Error: ' + e.message, 'error'); }
+});
+$('registerBridgeBtn').addEventListener('click', () => {
+  if (!runtime) { showToast('Runtime no cargado aún', 'error'); return; }
+  try {
+    runtime.register_js_function("console_log", "(msg) => { console.log('[LÚMEN]', msg); return ''; }");
+    runtime.register_js_function("alert", "(msg) => { window.alert('[LÚMEN] ' + msg); return ''; }");
+    runtime.register_js_function("get_title", "() => document.title");
+    runtime.register_js_function("set_title", "(title) => { document.title = '[LÚMEN] ' + title; return ''; }");
+    runtime.register_js_function("random_number", "(min, max) => String(Math.floor(Math.random() * (Number(max) - Number(min) + 1)) + Number(min))");
+    runtime.register_js_function("add", "(a, b) => String(Number(a) + Number(b))");
+    const registered = runtime.list_js_functions();
+    addJSEntry(`Bridges registrados via Rust API: ${registered}`, 'info');
+    outputPane.innerHTML = '<span style="color:var(--green)">✓ Funciones JS registradas desde Rust: ' + registered + '</span>';
+    showToast('Bridges registrados: ' + registered, 'success');
+  } catch(e) { addJSEntry('Error registrando bridges: ' + e.message, 'error'); showToast('Error: ' + e.message, 'error'); }
+});
+$('testBridgeBtn').addEventListener('click', () => {
+  if (!runtime) { showToast('Runtime no cargado aún', 'error'); return; }
+  setCode(`imprimir("=== Bridge Test Suite ===");
+imprimir("1. random_number(10, 50):");
+texto r1 = __js_call("random_number", "10", "50");
+texto r2 = __js_call("random_number", "10", "50");
+imprimir("   ", r1, ", ", r2);
+imprimir("2. add: ", __js_call("add", "42", "58"));
+imprimir("3. multiply: ", __js_call("multiply", "6", "7"));
+imprimir("4. uppercase: ", __js_call("uppercase", "hello world"));
+imprimir("5. sum_array: ", __js_call("sum_array", "1", "2", "3", "4", "5"));
+imprimir("6. eval: ", __js_call("eval_expression", "Math.pow(2, 10)"));
+imprimir("7. date: ", __js_call("date", ""));
+imprimir("=== Bridge Test Completado ===");`);
+  showToast('Suite de bridges cargada. Presiona ▶ Ejecutar', 'success');
+});
+$('alertDemo').addEventListener('click', () => {
+  setCode(`imprimir("Llamando a alert() desde LÚMEN...");
+__js_call("alert", "¡Hola desde LÚMEN! Este es un mensaje de alerta JS.");
+imprimir("¿Viste la alerta en el navegador?");
+__js_call("console_log", "Alerta mostrada correctamente desde LÚMEN");
+imprimir("Bridge alert() completado.");`);
+  showToast('Demo de alert() cargado', 'success');
+});
+$('titleDemo').addEventListener('click', () => {
+  setCode(`texto tituloActual = __js_call("get_title", "");
+imprimir("Título actual de la página: ", tituloActual);
+__js_call("set_title", "¡Título cambiado por LÚMEN!");
+imprimir("Título cambiado. Mira la pestaña del navegador.");
+texto nuevoTitulo = __js_call("get_title", "");
+imprimir("Nuevo título: ", nuevoTitulo);
+__js_eval("setTimeout(() => { document.title = 'LÚMEN Playground — v2.4.2'; }, 3000)");
+imprimir("Título se restaurará en 3 segundos.");`);
+  showToast('Demo de document.title cargado', 'success');
+});
+
+// ── Event Listeners ───────────────────────────────────────
+$('runBtn').addEventListener('click', runCode);
+$('backendToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-backend]');
+  if (!btn) return;
+  setBackend(btn.dataset.backend);
+});
+
+function setBackend(backend) {
+  execBackend = backend;
+  localStorage.setItem('lumen_playground_backend', backend);
+  document.querySelectorAll('#backendToggle button').forEach(b => b.classList.toggle('active', b.dataset.backend === backend));
+  vmStatus.textContent = backend === 'server' ? 'servidor (VM Rust)' : '—';
+  showToast(backend === 'server' ? 'Ejecutando en el servidor (VM Rust nativa)' : 'Ejecutando en el navegador (WASM)', 'success');
+}
+
+// ── Historial de ejecuciones ────────────────────────────────
+$('historyBtn').addEventListener('click', toggleHistoryPanel);
+
+function toggleHistoryPanel() {
+  let panel = $('historyPanel');
+  if (panel) {
+    panel.remove();
+    return;
+  }
+  const list = getHistory();
+  if (list.length === 0) {
+    showToast('Aún no hay ejecuciones.', 'error');
+    return;
+  }
+  panel = document.createElement('div');
+  panel.id = 'historyPanel';
+  panel.setAttribute('role', 'dialog');
+  panel.style.cssText = 'position:fixed;top:70px;right:16px;width:340px;max-height:60vh;overflow:auto;background:var(--crust);border:1px solid var(--surface1);border-radius:8px;padding:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);';
+  panel.innerHTML = '<div style="font-size:12px;color:var(--overlay1);padding:4px 6px;border-bottom:1px solid var(--surface0);margin-bottom:6px;">🕘 Ejecuciones recientes <span style="color:var(--overlay0);font-weight:400;">(hasta ' + HISTORY_MAX + ')</span></div>';
+  list.forEach((h, i) => {
+    const row = document.createElement('button');
+    row.className = 'small';
+    row.style.cssText = 'display:block;width:100%;text-align:left;border:1px solid var(--surface0);background:var(--mantle);border-radius:6px;padding:6px 8px;margin-bottom:6px;cursor:pointer;';
+    const ok = h.ok ? '✓' : '✗';
+    const preview = (h.code || '').split('\n').find(l => l.trim()) || '(vacío)';
+    row.innerHTML = '<div style="font-size:11px;color:var(--overlay0);">' + ok + ' ' + h.time + ' · ' + h.backend + ' · ' + h.ms + 'ms</div>' +
+      '<div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;color:var(--text);">' + escapeHtml(preview) + '</div>' +
+      '<div style="font-size:10px;color:var(--overlay0);max-height:40px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(h.output || '') + '</div>';
+    row.addEventListener('click', () => { setCode(h.code); showToast('Código cargado desde el historial', 'success'); });
+    panel.appendChild(row);
+  });
+  document.body.appendChild(panel);
+  setTimeout(() => {
+    const handler = (ev) => {
+      if (panel && ev.target !== panel && !panel.contains(ev.target)) {
+        panel.remove();
+        document.removeEventListener('click', handler);
+      }
+    };
+    document.addEventListener('click', handler);
+  }, 0);
+}
+
+function pushHistory(code, output, ok, backend, ms) {
+  try {
+    let list = getHistory();
+    list.unshift({ code, output, ok, backend, ms, time: new Date().toLocaleTimeString() });
+    list = list.slice(0, HISTORY_MAX);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch (_) { /* localStorage lleno o deshabilitado — ignorar */ }
+}
+
+function getHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (_) { return []; }
+}
+$('clearBtn').addEventListener('click', () => {
+  clearOutput();
+  consolePane.innerHTML = '';
+  consoleLogs = [];
+  consoleCnt.textContent = '0';
+  jsPane.innerHTML = '';
+  addJSEntry('Panel limpiado.', 'info');
+  showToast('Salida limpiada', 'success');
+});
+$('checkBtn').addEventListener('click', checkCode);
+$('tokensBtn').addEventListener('click', showTokens);
+$('downloadBtn').addEventListener('click', downloadBytecode);
+$('saveBtn').addEventListener('click', saveCode);
+$('downloadNvBtn').addEventListener('click', downloadCode);
+$('uploadNvBtn').addEventListener('click', uploadCode);
+$('shareBtn').addEventListener('click', shareUrl);
+
+// ── Barra de acciones de bloques ───────────────────────────
+$('blocksPalette').addEventListener('click', (e) => {
+  const btn = e.target.closest('#genCodeBtn, #runBlocksBtn, #clearBlocksBtn');
+  if (!btn) return;
+  if (btn.id === 'genCodeBtn') {
+    setCode(generateCode());
+    showToast('Código generado desde bloques → vista Código', 'success');
+  }
+});
+$('blocksView').insertAdjacentHTML('afterbegin', `
+  <div style="display:flex;gap:6px;padding:8px 12px;background:var(--mantle);border-bottom:1px solid var(--surface0);position:absolute;top:0;right:0;z-index:5;">
+    <button id="genCodeBtn" class="primary" style="background:var(--mauve);">🧩 → 📝 Generar Código</button>
+    <button id="runBlocksBtn">▶ Ejecutar bloques</button>
+    <button id="clearBlocksBtn">🗑 Limpiar</button>
+  </div>`);
+document.getElementById('genCodeBtn').addEventListener('click', () => {
+  setCode(generateCode());
+  showToast('Código generado desde bloques', 'success');
+});
+document.getElementById('runBlocksBtn').addEventListener('click', () => {
+  if (program.length === 0) { showToast('No hay bloques', 'error'); return; }
+  const src = generateCode();
+  if (!runtime) { showToast('VM no cargada', 'error'); return; }
+  setStatus('busy', 'Ejecutando bloques...');
+  const start = performance.now();
+  const result = runtime.run(src);
+  execTime.textContent = (performance.now() - start).toFixed(1) + 'ms';
+  outputPane.innerHTML = '';
+  if (result && result.startsWith('Error')) {
+    const div = document.createElement('div');
+    div.className = 'error-highlight';
+    div.textContent = result;
+    outputPane.appendChild(div);
+    setStatus('error', 'Error');
+    runStatus.textContent = '✗ error';
+  } else {
+    outputPane.textContent = result || '(sin salida)';
+    setStatus('ready', 'Bloques ejecutados');
+    runStatus.textContent = '✓ completado';
+    showToast('Bloques ejecutados', 'success');
+  }
+  document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
+  document.querySelector('[data-pane="output"]').classList.add('active');
+  outputPane.classList.add('active');
+});
+document.getElementById('clearBlocksBtn').addEventListener('click', () => {
+  program = [];
+  renderBlocks();
+  showToast('Bloques limpiados', 'success');
+});
+
+// ── Init ───────────────────────────────────────────────────
+async function initRuntime() {
+  try {
+    await init();
+    runtime = new LumenRuntime();
+    const ver = LumenRuntime.version();
+    versionDisp.textContent = 'v' + ver;
+    vmStatus.textContent = '✓ cargada';
+    setStatus('ready', 'Listo');
+    runStatus.textContent = 'listo';
+    outputPane.innerHTML = '✅ VM cargada correctamente.<br>Escribe código LÚMEN y presiona <strong>▶ Ejecutar</strong> o <kbd>Ctrl+Enter</kbd>.<br>O cambia a la vista <strong>🧩 Bloques</strong> para construir programas visualmente.';
+    showToast('LÚMEN v' + ver + ' cargado', 'success');
+    addConsoleEntry('info', 'Runtime LÚMEN inicializado (v' + ver + ')');
+    addConsoleEntry('info', 'Puentes JS: console_log, alert, get_title, set_title, random_number, add, multiply, uppercase, lowercase, random, date, now_timestamp, eval_expression, get_url, get_user_agent, sum_array, json_stringify');
+    addJSEntry('LÚMEN Runtime v' + ver + ' listo. 17 funciones bridge disponibles.', 'info');
+  } catch(e) {
+    console.error('Init error:', e);
+    vmStatus.textContent = '✗ error';
+    setStatus('error', 'Error de carga');
+    outputPane.innerHTML = '<div class="error-highlight">Error al cargar la VM: ' + escapeHtml(e.message || e) + '</div>';
+    showToast('Error al cargar: ' + e.message, 'error');
+  }
+}
+
+// Populate builtin examples + restore guardado
+// Cargar código desde URL compartida (#code=base64)
+if (location.hash.startsWith('#code=')) {
+  try {
+    const b64 = location.hash.slice(6);
+    const code = decodeURIComponent(escape(atob(b64)));
+    setCode(code);
+    showToast('Código cargado desde URL compartida', 'success');
+  } catch(e) { console.warn('URL compartida inválida:', e); }
+}
+initEditor();
+const savedBackend = localStorage.getItem('lumen_playground_backend');
+if (savedBackend === 'wasm' || savedBackend === 'server') setBackend(savedBackend);
+const saved = localStorage.getItem('lumen_playground_code');
+if (saved) setCode(saved);
+buildPalette();
+loadExamples();
+initRuntime();
+</script>
+</body>
+</html>

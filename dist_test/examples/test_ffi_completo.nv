@@ -1,0 +1,44 @@
+imprimir("=== FFI Memory + C calls ===");
+
+// Cargar librería del sistema
+sea lib = __ffi_cargar("msvcrt.dll");
+imprimir("lib: ", lib);
+
+// Allocar memoria
+sea buf = __ffi_asignar(64);
+imprimir("buf ptr: ", buf);
+
+// Escribir a memoria
+__ffi_escribir(buf, 0, "Hola desde LÚMEN via FFI!");
+imprimir("escrito OK");
+
+// Leer de memoria
+sea leido = __ffi_leer(buf, 0, 10);
+imprimir("leido: ", leido);
+
+// Liberar memoria
+__ffi_liberar(buf, 64);
+imprimir("liberado OK");
+
+// --- Llamadas a C ---
+// _getpid() - sin args
+sea pid = __ffi_llamar(lib, "_getpid", "", [], "entero");
+imprimir("pid: ", pid);
+
+// abs(-42) - 1 arg entero
+sea abs = __ffi_llamar(lib, "abs", "entero", [-42], "entero");
+imprimir("abs: ", abs);
+
+// sqrt(100.0) - 1 arg decimal
+sea raiz = __ffi_llamar(lib, "sqrt", "decimal", [100.0], "decimal");
+imprimir("sqrt: ", raiz);
+
+// strlen("Hola") - 1 arg texto
+sea len = __ffi_llamar(lib, "strlen", "texto", ["Hola"], "entero");
+imprimir("strlen: ", len);
+
+// _stricmp("ABC", "abc") - 2 args texto
+sea cmp = __ffi_llamar(lib, "_stricmp", "texto,texto", ["ABC", "abc"], "entero");
+imprimir("stricmp: ", cmp);
+
+imprimir("--- FIN ---");

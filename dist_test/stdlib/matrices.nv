@@ -1,0 +1,132 @@
+// Modulo matrices - operaciones sobre listas anidadas (matrices 2D)
+// Matrices module - 2D matrix operations
+// Uso: importar "matrices.nv"
+// Las matrices son lista<lista<entero>> - listas de filas
+
+// Crear una matriz de tamano filas x columnas con valor inicial
+funcion lista<lista<entero>> crear(entero filas, entero columnas, entero inicial) {
+    lista<lista<entero>> m = [];
+    entero i = 0;
+    mientras i < filas {
+        lista<entero> fila = [];
+        entero j = 0;
+        mientras j < columnas {
+            fila = fila ++ [inicial];
+            j = j + 1;
+        }
+        m = m ++ [fila];
+        i = i + 1;
+    }
+    retornar m;
+}
+
+// Crear matriz identidad / Create identity matrix
+funcion lista<lista<entero>> identidad(entero n) {
+    lista<lista<entero>> m = crear(n, n, 0);
+    entero i = 0;
+    mientras i < n {
+        m[i][i] = 1;
+        i = i + 1;
+    }
+    retornar m;
+}
+
+// Transponer una matriz (filas <-> columnas) / Transpose matrix
+funcion lista<lista<entero>> transponer(lista<lista<entero>> m) {
+    entero filas = largo(m);
+    entero columnas = 0;
+    si filas > 0 { columnas = largo(m[0]); }
+    lista<lista<entero>> t = crear(columnas, filas, 0);
+    entero i = 0;
+    mientras i < filas {
+        entero j = 0;
+        mientras j < columnas {
+            t[j][i] = m[i][j];
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar t;
+}
+
+// Sumar dos matrices del mismo tamano / Add two matrices
+funcion lista<lista<entero>> sumar(lista<lista<entero>> a, lista<lista<entero>> b) {
+    entero filas = largo(a);
+    entero columnas = largo(a[0]);
+    lista<lista<entero>> r = crear(filas, columnas, 0);
+    entero i = 0;
+    mientras i < filas {
+        entero j = 0;
+        mientras j < columnas {
+            r[i][j] = a[i][j] + b[i][j];
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar r;
+}
+
+// Restar dos matrices / Subtract two matrices
+funcion lista<lista<entero>> restar(lista<lista<entero>> a, lista<lista<entero>> b) {
+    entero filas = largo(a);
+    entero columnas = largo(a[0]);
+    lista<lista<entero>> r = crear(filas, columnas, 0);
+    entero i = 0;
+    mientras i < filas {
+        entero j = 0;
+        mientras j < columnas {
+            r[i][j] = a[i][j] - b[i][j];
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar r;
+}
+
+// Multiplicar dos matrices / Multiply two matrices
+funcion lista<lista<entero>> multiplicar(lista<lista<entero>> a, lista<lista<entero>> b) {
+    entero fa = largo(a);
+    entero ca = largo(a[0]);
+    entero cb = largo(b[0]);
+    lista<lista<entero>> r = crear(fa, cb, 0);
+    entero i = 0;
+    mientras i < fa {
+        entero j = 0;
+        mientras j < cb {
+            entero k = 0;
+            mientras k < ca {
+                r[i][j] = r[i][j] + a[i][k] * b[k][j];
+                k = k + 1;
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar r;
+}
+
+// Obtener dimensiones / Get dimensions
+funcion entero filas(lista<lista<entero>> m) {
+    retornar largo(m);
+}
+
+funcion entero columnas(lista<lista<entero>> m) {
+    si largo(m) > 0 { retornar largo(m[0]); }
+    retornar 0;
+}
+
+// Imprimir matriz / Print matrix
+funcion void imprimir_matriz(lista<lista<entero>> m) {
+    entero i = 0;
+    mientras i < largo(m) {
+        texto linea = "";
+        entero j = 0;
+        mientras j < largo(m[i]) {
+            linea = linea + m[i][j];
+            si j < largo(m[i]) - 1 { linea = linea + " "; }
+            j = j + 1;
+        }
+        imprimir(linea);
+        i = i + 1;
+    }
+}

@@ -1,0 +1,262 @@
+// DEMO GRÁFICOS — Demostración interactiva de gráficos estadísticos
+// CHARTS DEMO — Interactive demonstration of statistical charts
+// Uso: lumen run examples/charts_demo.nv
+// Requiere: SDL2.dll, importa graficos.nv + graficos_charts.nv + graficos_canvas.nv
+//
+// Controles:
+//   [1] = Gráfico de barras
+//   [2] = Gráfico de líneas
+//   [3] = Gráfico de pastel
+//   [4] = Gráfico de dispersión
+//   [ESC] = Salir
+
+importar "graficos.nv";
+importar "graficos_charts.nv";
+importar "graficos_canvas.nv";
+importar "matematicas.nv";
+
+// ============================================================
+// CONSTANTES / CONSTANTS
+// ============================================================
+
+entero SDL_INIT_VIDEO = 32;
+entero SCREEN_W = 800;
+entero SCREEN_H = 600;
+entero SDL_SCANCODE_ESC = 41;
+entero SDL_SCANCODE_1 = 30;
+entero SDL_SCANCODE_2 = 31;
+entero SDL_SCANCODE_3 = 32;
+entero SDL_SCANCODE_4 = 33;
+
+// ============================================================
+// DATOS DE EJEMPLO / SAMPLE DATA
+// ============================================================
+
+/// Ventas mensuales (datos de ejemplo para barras y líneas)
+funcion lista<graficos_charts_Serie> datos_ventas() {
+    retornar [
+        graficos_charts_Serie{nombre: "Producto A", datos: [30.0, 45.0, 38.0, 52.0, 48.0, 60.0,
+            55.0, 62.0, 58.0, 70.0, 65.0, 75.0],
+            color_r: 255, color_g: 100, color_b: 100},
+        graficos_charts_Serie{nombre: "Producto B", datos: [20.0, 25.0, 30.0, 28.0, 35.0, 42.0,
+            38.0, 45.0, 40.0, 52.0, 48.0, 55.0],
+            color_r: 100, color_g: 200, color_b: 255},
+        graficos_charts_Serie{nombre: "Producto C", datos: [15.0, 18.0, 22.0, 20.0, 28.0, 30.0,
+            25.0, 32.0, 28.0, 38.0, 35.0, 40.0],
+            color_r: 100, color_g: 255, color_b: 100},
+    ];
+}
+
+/// Meses como etiquetas
+funcion lista<texto> meses() {
+    retornar ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
+             "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+}
+funcion list<string> months() {
+    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+}
+
+/// Temperaturas para gráfico de líneas
+funcion lista<graficos_charts_Serie> datos_temperatura() {
+    retornar [
+        graficos_charts_Serie{nombre: "Temp. Máx", datos: [22.0, 24.0, 28.0, 30.0, 35.0,
+            38.0, 40.0, 39.0, 35.0, 30.0, 26.0, 23.0],
+            color_r: 255, color_g: 150, color_b: 50},
+        graficos_charts_Serie{nombre: "Temp. Mín", datos: [10.0, 12.0, 15.0, 18.0, 22.0,
+            25.0, 27.0, 26.0, 23.0, 19.0, 14.0, 11.0],
+            color_r: 100, color_g: 150, color_b: 255},
+    ];
+}
+
+/// Market share para gráfico de pastel
+funcion graficos_charts_Serie datos_market_share() {
+    retornar graficos_charts_Serie{
+        nombre: "Market Share",
+        datos: [35.0, 25.0, 20.0, 12.0, 8.0],
+        color_r: 200, color_g: 200, color_b: 200,
+    };
+}
+
+/// Dispersión aleatoria para scatter plot
+funcion lista<graficos_charts_Serie> datos_dispersion() {
+    retornar [
+        graficos_charts_Serie{nombre: "Grupo A", datos: [12.0, 15.0, 22.0, 18.0, 25.0,
+            30.0, 28.0, 35.0, 32.0, 40.0, 38.0, 45.0,
+            42.0, 50.0, 48.0],
+            color_r: 255, color_g: 100, color_b: 100},
+        graficos_charts_Serie{nombre: "Grupo B", datos: [8.0, 10.0, 14.0, 12.0, 18.0,
+            22.0, 20.0, 28.0, 25.0, 32.0, 30.0, 35.0,
+            33.0, 38.0, 36.0],
+            color_r: 100, color_g: 255, color_b: 100},
+        graficos_charts_Serie{nombre: "Grupo C", datos: [5.0, 8.0, 12.0, 10.0, 15.0,
+            18.0, 16.0, 22.0, 20.0, 25.0, 23.0, 28.0,
+            26.0, 30.0, 29.0],
+            color_r: 255, color_g: 255, color_b: 100},
+    ];
+}
+
+// ============================================================
+// CONFIGURACIÓN DE GRÁFICOS / CHART CONFIGURATION
+// ============================================================
+
+/// Configuración para gráficos de 800x600
+funcion graficos_charts_ChartConfig config_ventas() {
+    retornar graficos_charts_ChartConfig{
+        titulo: "Ventas Mensuales",
+        etiqueta_x: "Mes",
+        etiqueta_y: "Unidades",
+        ancho: SCREEN_W,
+        alto: SCREEN_H,
+        mostrar_leyenda: verdadero,
+        mostrar_rejilla: verdadero,
+        color_fondo_r: 20,
+        color_fondo_g: 25,
+        color_fondo_b: 40,
+    };
+}
+
+/// Configuración para temperaturas
+funcion graficos_charts_ChartConfig config_temp() {
+    retornar graficos_charts_ChartConfig{
+        titulo: "Temperaturas Anuales",
+        etiqueta_x: "Mes",
+        etiqueta_y: "°C",
+        ancho: SCREEN_W,
+        alto: SCREEN_H,
+        mostrar_leyenda: verdadero,
+        mostrar_rejilla: verdadero,
+        color_fondo_r: 20,
+        color_fondo_g: 25,
+        color_fondo_b: 40,
+    };
+}
+
+/// Configuración para market share
+funcion graficos_charts_ChartConfig config_market() {
+    retornar graficos_charts_ChartConfig{
+        titulo: "Market Share",
+        etiqueta_x: "",
+        etiqueta_y: "",
+        ancho: SCREEN_W,
+        alto: SCREEN_H,
+        mostrar_leyenda: verdadero,
+        mostrar_rejilla: falso,
+        color_fondo_r: 20,
+        color_fondo_g: 25,
+        color_fondo_b: 40,
+    };
+}
+
+/// Configuración para scatter
+funcion graficos_charts_ChartConfig config_scatter() {
+    retornar graficos_charts_ChartConfig{
+        titulo: "Diagrama de Dispersión",
+        etiqueta_x: "Índice",
+        etiqueta_y: "Valor",
+        ancho: SCREEN_W,
+        alto: SCREEN_H,
+        mostrar_leyenda: verdadero,
+        mostrar_rejilla: verdadero,
+        color_fondo_r: 20,
+        color_fondo_g: 25,
+        color_fondo_b: 40,
+    };
+}
+
+// ============================================================
+// BUCLE PRINCIPAL / MAIN LOOP
+// ============================================================
+
+imprimir("=== Charts Demo ===");
+imprimir("Controles: [1]Barras [2]Líneas [3]Pastel [4]Dispersión [ESC]Salir");
+
+// Inicializar SDL2
+si !graficos_iniciar(SDL_INIT_VIDEO) {
+    imprimir("Error: No se pudo iniciar SDL2");
+    retornar;
+}
+
+// Crear ventana y renderer
+entero win = graficos_ventana("LÚMEN Charts Demo", 100, 100, SCREEN_W, SCREEN_H, 0);
+si win == 0 {
+    imprimir("Error: No se pudo crear ventana");
+    graficos_salir();
+    retornar;
+}
+
+entero ren = graficos_renderizador(win, -1, 0);
+si ren == 0 {
+    imprimir("Error: No se pudo crear renderer");
+    graficos_cerrar_ventana(win);
+    graficos_salir();
+    retornar;
+}
+
+// Inicializar canvas
+graficos_canvas_iniciar(ren);
+
+// Estado del gráfico actual (1-4)
+entero chart_type = 1;
+
+// Buffer de eventos
+entero evt_buf = __ffi_asignar(64);
+
+// Variables de datos (preparadas una vez)
+lista<graficos_charts_Serie> ventas = datos_ventas();
+lista<graficos_charts_Serie> temps = datos_temperatura();
+graficos_charts_Serie market = datos_market_share();
+lista<graficos_charts_Serie> scatter = datos_dispersion();
+lista<texto> meses_list = meses();
+
+// Bucle principal
+mientras verdadero {
+    // Leer eventos
+    texto evt = graficos_leer_evento(evt_buf);
+
+    si evt == "QUIT" { romper; }
+
+    // Detectar teclas [1]-[4] para cambiar tipo de gráfico
+    entero kb = graficos_teclado();
+    si kb != 0 {
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_ESC) { romper; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_1) { chart_type = 1; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_2) { chart_type = 2; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_3) { chart_type = 3; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_4) { chart_type = 4; }
+    }
+
+    // Dibujar el gráfico correspondiente
+    // (nota: usar prefijo graficos_charts_ por el nombre del archivo)
+    si chart_type == 1 {
+        graficos_charts_grafico_barras(0, 0, ventas, meses_list, config_ventas());
+    } sino si chart_type == 2 {
+        graficos_charts_grafico_lineas(0, 0, temps, meses_list, config_temp());
+    } sino si chart_type == 3 {
+        entero radio = 150;
+        si SCREEN_W < SCREEN_H { radio = SCREEN_W / 4; }
+        graficos_charts_grafico_pastel(0, 30, radio, market, config_market());
+    } sino si chart_type == 4 {
+        graficos_charts_grafico_dispersion(0, 0, scatter, config_scatter());
+    }
+
+    // Mostrar indicador de tipo de gráfico en esquina superior derecha
+    lista<texto> tipos = ["BAR", "LINE", "PIE", "SCATTER"];
+    texto tipo_actual = tipos[chart_type - 1];
+    graficos_canvas_rectangulo_relleno(SCREEN_W - 90, 5, 85, 20,
+        40, 40, 60, 200);
+    graficos_canvas_texto(SCREEN_W - 80, 8, tipo_actual,
+        200, 200, 100, 255);
+
+    // Presentar
+    graficos_presentar(ren);
+
+    // Esperar 16ms (~60 FPS)
+    graficos_dormir(16);
+}
+
+// Limpieza
+__ffi_liberar(evt_buf, 64);
+graficos_cerrar_ventana(win);
+graficos_salir();
+imprimir("Charts Demo finalizada.");

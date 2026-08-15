@@ -1,0 +1,15 @@
+importar ingles;
+
+function string dia_texto(integer n) {
+    match (n) {
+        case 1: { return "lunes"; }
+        case 2: { return "martes"; }
+        case 3: { return "miercoles"; }
+        case 4: { return "jueves"; }
+        case 5: { return "viernes"; }
+        default: { return "fin de semana"; }
+    }
+}
+
+print(dia_texto(3));
+print(dia_texto(7));

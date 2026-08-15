@@ -1,0 +1,10 @@
+importar ingles;
+
+integer a = 10;
+integer b = 3;
+
+print(a + b);
+print(a - b);
+print(a * b);
+print(a / b);
+print(a % b);

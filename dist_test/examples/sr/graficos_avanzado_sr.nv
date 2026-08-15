@@ -1,0 +1,87 @@
+// ==========================================
+// graficos_avanzado_sr.nv — Advanced Graphics (intermediate)
+// Tests: sprite animation frames, audio info, particle physics
+// Uso: lumen run -L stdlib/ examples/sr/graficos_avanzado_sr.nv
+// ==========================================
+
+imprimir("=== Graficos Avanzado SR: Sprites y Particulas ===");
+
+// ── Ej 1: Sprite Sheet Frame Calculation ──
+// Ej 1: Calculate source rect for sprite sheet animation
+imprimir("--- Ej 1: Calculo de Frames de Sprite Sheet ---");
+// Given a horizontal sprite sheet with frame_width x frame_height
+// Calculate source rectangle for frame N
+funcion lista<entero> calc_src_rect(entero frame, entero fw, entero fh) {
+    // Source rect: {frame*fw, 0, fw, fh}
+    retornar [frame * fw, 0, fw, fh];
+}
+funcion lista<entero> calc_dst_rect(entero x, entero y, entero fw, entero fh) {
+    // Destination rect: {x, y, fw, fh}
+    retornar [x, y, fw, fh];
+}
+// Test with 32x32 frames
+entero fw = 32;
+entero fh = 32;
+imprimir("Sprite sheet: ", fw, "x", fh, " por frame");
+entero f = 0;
+mientras f < 5 {
+    lista<entero> src = calc_src_rect(f, fw, fh);
+    lista<entero> dst = calc_dst_rect(100 + f * 10, 200, fw, fh);
+    imprimir("Frame ", f, ": src=(", src[0], ",", src[1], ",", src[2], ",", src[3],
+        ") dst=(", dst[0], ",", dst[1], ",", dst[2], ",", dst[3], ")");
+    f = f + 1;
+}
+
+// ── Ej 2: Audio Format Information ──
+// Ej 2: Audio format constants and validation
+imprimir("--- Ej 2: Formatos de Audio ---");
+// MIX_DEFAULT_FORMAT = AUDIO_S16LSB = 0x8010 = 32816
+entero AUDIO_S16LSB = 32816;
+entero AUDIO_S8 = 8;
+entero AUDIO_U8 = 9;
+entero AUDIO_S16MSB = 16;
+imprimir("Formatos de audio SDL:");
+imprimir("  S16LSB (default) = ", AUDIO_S16LSB);
+imprimir("  S8               = ", AUDIO_S8);
+imprimir("  U8               = ", AUDIO_U8);
+imprimir("  S16MSB           = ", AUDIO_S16MSB);
+// Audio format is 16 bits: upper byte = signed?, lower byte = bit depth
+funcion entero bits_por_muestra(entero formato) {
+    retornar formato % 256;
+}
+imprimir("Bits/muestra S16LSB: ", bits_por_muestra(AUDIO_S16LSB));
+imprimir("Bits/muestra S8:     ", bits_por_muestra(AUDIO_S8));
+imprimir("Bits/muestra U8:     ", bits_por_muestra(AUDIO_U8));
+
+// ── Ej 3: Particle Physics Simulation ──
+// Ej 3: Simulate particle movement, gravity, and fading
+imprimir("--- Ej 3: Fisica de Particulas ---");
+// Physics constants (gravity and friction)
+numero GRAVEDAD = 0.15;
+numero FRICCION = 0.98;
+// Simulate particle over multiple frames
+numero px = 50.0;
+numero py = 100.0;
+numero vx = 3.0;
+numero vy = -5.0;
+entero vida = 10;
+imprimir("Particula inicial: (", px, ",", py, ") v=(", vx, ",", vy, ") vida=", vida);
+entero frame = 0;
+mientras frame < 5 {
+    // Update physics
+    px = px + vx;
+    py = py + vy;
+    vy = vy + GRAVEDAD;   // gravity pulls down
+    vx = vx * FRICCION;   // friction slows horizontal
+    vida = vida - 1;
+    imprimir("Frame ", frame + 1, ": pos=(", px, ",", py, ") vel=(", vx, ",", vy, ") vida=", vida);
+    frame = frame + 1;
+}
+// Check if particle is still alive
+si vida > 0 {
+    imprimir("Particula VIVA al final");
+} sino {
+    imprimir("Particula MUERTA al final de la simulacion");
+}
+
+imprimir("--- FIN GRAFICOS AVANZADO SR ---");

@@ -1,0 +1,23 @@
+imprimir("=== Fecha Builtins Test ===");
+
+sea ahora = __tiempo_ahora();
+imprimir("ahora: ", ahora);
+
+sea formateado = __tiempo_formatear(ahora, "%Y-%m-%d");
+imprimir("formateado: ", formateado);
+
+sea formateado2 = __tiempo_formatear(ahora, "%Y-%m-%d %H:%M:%S");
+imprimir("completo: ", formateado2);
+
+sea parseado = __tiempo_parsear("2026-01-15 10:30:00", "%Y-%m-%d %H:%M:%S");
+imprimir("parseado: ", parseado);
+
+sea diff = __tiempo_diferencia(parseado, ahora);
+imprimir("diff segs: ", diff);
+
+sea t1 = __tiempo_parsear("2026-01-01 00:00:00", "%Y-%m-%d %H:%M:%S");
+sea t2 = __tiempo_parsear("2026-01-02 00:00:00", "%Y-%m-%d %H:%M:%S");
+sea diff_dias = __tiempo_diferencia(t2, t1);
+imprimir("diff 1 dia: ", diff_dias);
+
+imprimir("--- FIN ---");

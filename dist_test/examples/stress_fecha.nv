@@ -1,0 +1,25 @@
+// STRESS TEST: 10,000 operaciones de fecha
+// Mide rendimiento de builtins temporales
+// Uso: lumen run examples/stress_fecha.nv
+
+importar "fecha.nv";
+
+imprimir("=== Stress Test Fecha ===");
+
+sea inicio = fecha_ahora();
+entero i = 0;
+
+mientras i < 10000 {
+    sea ts = fecha_ahora();
+    sea fmt = fecha_formatear(ts, "%Y-%m-%d");
+    sea parsed = fecha_parsear(fmt + " 00:00:00", "%Y-%m-%d %H:%M:%S");
+    sea diff = fecha_diferencia(ts, parsed);
+    i = i + 1;
+}
+
+sea fin = fecha_ahora();
+sea total_ms = fecha_diferencia(fin, inicio);
+imprimir("10,000 ops en ", total_ms, "ms");
+imprimir("promedio: ", total_ms / 10000, "ms/op");
+
+imprimir("--- FIN STRESS ---");

@@ -1,0 +1,15 @@
+importar ingles;
+
+struct Caja {
+    valor: integer
+}
+
+function integer obtener_valor(Caja c) {
+    return c.valor;
+}
+
+Caja c1 = Caja { valor: 42 };
+Caja c2 = Caja { valor: 99 };
+
+print(obtener_valor(c1));
+print(obtener_valor(c2));

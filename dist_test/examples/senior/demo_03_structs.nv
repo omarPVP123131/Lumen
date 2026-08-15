@@ -1,0 +1,20 @@
+importar ingles;
+
+// Test: structs + trait impl
+estructura Contador { valor: entero }
+
+rasgo Incrementable {
+    funcion void inc(yo);
+    funcion entero get(yo);
+}
+
+impl Incrementable para Contador {
+    funcion void inc(yo) { yo.valor = yo.valor + 1; }
+    funcion entero get(yo) { retornar yo.valor; }
+}
+
+Contador c = Contador { valor: 0 };
+c.inc();
+c.inc();
+c.inc();
+imprimir("Contador: " + c.get());
