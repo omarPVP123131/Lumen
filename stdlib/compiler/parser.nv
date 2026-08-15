@@ -73,6 +73,39 @@ funcion booleano _st_es_foreach(numero st) {
     retornar v2 == "en" || v2 == "in";
 }
 
+// Lookahead puro: `sea <patron> = <expr> sino { ... }` (guard-let)?
+// Escanea hasta `;` a nivel 0 buscando `sino`/`else` (como is_guard_let del Rust).
+funcion booleano _st_es_guard_let(numero st) {
+    numero pos = __map_obtener(st, "pos");
+    numero cnt = __map_obtener(st, "cnt");
+    numero tk = __map_obtener(st, "tokens");
+    entero bd = 0;
+    entero pd = 0;
+    entero kd = 0;
+    numero i = pos;
+    mientras (i < cnt) {
+        numero t = __map_obtener(tk, a_texto(i));
+        numero tt = __map_obtener(t, "t");
+        texto v = a_texto(__map_obtener(t, "v"));
+        si (bd == 0 && pd == 0 && kd == 0 && v == ";") { retornar falso; }
+        si (tt == 5) {
+            si (v == "{") { bd = bd + 1; }
+            sino si (v == "}") { bd = bd - 1; }
+            sino si (v == "(") { pd = pd + 1; }
+            sino si (v == ")") { pd = pd - 1; }
+            sino si (v == "[") { kd = kd + 1; }
+            sino si (v == "]") { kd = kd - 1; }
+        }
+        sino si (tt == 6) {
+            si ((v == "sino" || v == "else") && bd == 0 && pd == 0 && kd == 0) {
+                retornar verdadero;
+            }
+        }
+        i = i + 1;
+    }
+    retornar falso;
+}
+
 funcion booleano _st_ch(numero st, numero tt, texto vv) {
     si (_st_eof(st)) { retornar falso; }
     numero tk = _st_tk(st);
@@ -713,6 +746,37 @@ funcion numero _parse_stmt(numero st) {
     numero tt = _st_tt(st);
     texto tvs = a_texto(_st_tv(st));
 
+    si (tt == 6 && (tvs == "sea" || tvs == "let") && _st_es_guard_let(st)) {
+        // Guard-let (Fase 65): sea <patron> = <expr> sino { ... }
+        // Se desugara a IfLet con cuerpo Vacio: value -> Store temp ->
+        // test tipo + bind -> Jmp end -> [sino body] -> end (espejo del IR Rust)
+        st = _st_adv(st);
+        numero rpat = _parse_expr(st);
+        numero patron = __map_obtener(rpat, "node");
+        st = __map_obtener(rpat, "st");
+        si (_st_ch(st, 4, "=")) { st = _st_adv(st); }
+        numero rv2 = _parse_expr(st);
+        numero valor = __map_obtener(rv2, "node");
+        st = __map_obtener(rv2, "st");
+        numero els_v = __map_nuevo();
+        els_v = __map_poner(els_v, "tipo", "Vacio");
+        si (_st_kw(st, "sino") || _st_kw(st, "else")) {
+            st = _st_adv(st);
+            numero rb3 = _parse_blk(st);
+            els_v = __map_obtener(rb3, "node");
+            st = __map_obtener(rb3, "st");
+        }
+        numero n6 = __map_nuevo();
+        n6 = __map_poner(n6, "tipo", "IfLet");
+        n6 = __map_poner(n6, "patron", patron);
+        n6 = __map_poner(n6, "valor", valor);
+        numero cv6 = __map_nuevo();
+        cv6 = __map_poner(cv6, "tipo", "Vacio");
+        n6 = __map_poner(n6, "cuerpo", cv6);
+        n6 = __map_poner(n6, "sino", els_v);
+        retornar _res(st, n6);
+    }
+
     si (tt == 6 && (tvs == "sea" || tvs == "let")) {
         st = _st_adv(st);
         texto svar = "let";
@@ -1240,6 +1304,41 @@ funcion numero _parse_stmt(numero st) {
                 numero rc_v = _parse_expr(st);
                 numero cval = __map_obtener(rc_v, "node");
                 st = __map_obtener(rc_v, "st");
+                // OR patterns: caso A | B | C → (sel==A) || (sel==B) || (sel==C)
+                numero or_cnt = 0;
+                numero cmp_or = 0;
+                mientras (_st_ch(st, 4, "|")) {
+                    st = _st_adv(st);
+                    numero ra_o = _parse_expr(st);
+                    numero aval = __map_obtener(ra_o, "node");
+                    st = __map_obtener(ra_o, "st");
+                    numero ca_o = __map_nuevo();
+                    ca_o = __map_poner(ca_o, "tipo", "Binary");
+                    ca_o = __map_poner(ca_o, "op", "==");
+                    ca_o = __map_poner(ca_o, "izq", sel);
+                    ca_o = __map_poner(ca_o, "der", aval);
+                    si or_cnt == 0 {
+                        numero c0 = __map_nuevo();
+                        c0 = __map_poner(c0, "tipo", "Binary");
+                        c0 = __map_poner(c0, "op", "==");
+                        c0 = __map_poner(c0, "izq", sel);
+                        c0 = __map_poner(c0, "der", cval);
+                        numero or1 = __map_nuevo();
+                        or1 = __map_poner(or1, "tipo", "Binary");
+                        or1 = __map_poner(or1, "op", "||");
+                        or1 = __map_poner(or1, "izq", c0);
+                        or1 = __map_poner(or1, "der", ca_o);
+                        cmp_or = or1;
+                    } sino {
+                        numero orn = __map_nuevo();
+                        orn = __map_poner(orn, "tipo", "Binary");
+                        orn = __map_poner(orn, "op", "||");
+                        orn = __map_poner(orn, "izq", cmp_or);
+                        orn = __map_poner(orn, "der", ca_o);
+                        cmp_or = orn;
+                    }
+                    or_cnt = or_cnt + 1;
+                }
                 si (_st_ch(st, 5, ":")) { st = _st_adv(st); }
                 // body del caso: statements hasta `}` o `caso` (sin consumir el `}` — es el cierre del elegir)
                  numero stmts_c = __map_nuevo();
@@ -1261,10 +1360,14 @@ funcion numero _parse_stmt(numero st) {
                  b_c = __map_poner(b_c, "tipo", "Block");
                  b_c = __map_poner(b_c, "cuerpo", stmts_c);
                  numero cmp = __map_nuevo();
-                 cmp = __map_poner(cmp, "tipo", "Binary");
-                 cmp = __map_poner(cmp, "op", "==");
-                 cmp = __map_poner(cmp, "izq", sel);
-                 cmp = __map_poner(cmp, "der", cval);
+                 si or_cnt > 0 {
+                     cmp = cmp_or;
+                 } sino {
+                     cmp = __map_poner(cmp, "tipo", "Binary");
+                     cmp = __map_poner(cmp, "op", "==");
+                     cmp = __map_poner(cmp, "izq", sel);
+                     cmp = __map_poner(cmp, "der", cval);
+                 }
                  numero ifn = __map_nuevo();
                  ifn = __map_poner(ifn, "tipo", "If");
                  ifn = __map_poner(ifn, "cond", cmp);

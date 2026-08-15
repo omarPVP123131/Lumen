@@ -1,2 +1,2 @@
 examples/demo_completo.nv
-examples/demo_completo.nvc
+stdlib/compiler/compile.nvc

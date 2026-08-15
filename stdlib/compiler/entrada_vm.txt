@@ -1,1 +1,1 @@
-examples/demo_completo.nvc
+stdlib/compiler/self_fase70_impl_trait2.nvc
