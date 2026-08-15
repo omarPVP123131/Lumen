@@ -8,16 +8,14 @@
 #include <math.h>
 #include <time.h>
 
-/* POSIX headers for non-Windows */
-#if !defined(_WIN32) && !defined(__APPLE__)
-#include <regex.h>
-#include <dirent.h>
+/* POSIX headers for non-Windows (Linux + macOS) */
+#if !defined(_WIN32)
 #include <unistd.h>
 #include <pthread.h>
+#if !defined(__APPLE__)
+#include <regex.h>
+#include <dirent.h>
 #endif
-#if defined(__APPLE__)
-#include <pthread.h>
-/* macOS has regex in libsystem but different API; disable for now */
 #endif
 
 #ifdef _WIN32
@@ -1004,7 +1002,8 @@ static Val _ffi_call(Val h, const char* nm, Val args, const char* ret) {
 #else
   if (!strcmp(nm, "_putenv")) {
     if (args.argc > 0) {
-      char* env_str = args.items[0].s ? args.items[0].s : "";
+      /* putenv takes char* not const char*; macOS/Linux both need mutable string */
+      char* env_str = args.items[0].s ? (char*)args.items[0].s : "";
       return _v_int(putenv(env_str));
     }
     return _v_int(0);
