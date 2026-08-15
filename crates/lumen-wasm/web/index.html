@@ -246,6 +246,46 @@
   .block.b-funcion::after, .block.b-control::after {
     content: '⤷'; position: absolute; right: 30px; font-size: 10px; opacity: 0.6;
   }
+
+  /* ── Example Picker (F4.2) ──────────────────────────────────── */
+  .example-picker { position: relative; flex: 1; min-width: 200px; }
+  .example-picker-btn {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px; background: var(--mantle); border: 1px solid var(--surface0);
+    border-radius: 6px; color: var(--text); font-size: 13px; cursor: pointer;
+    gap: 8px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .example-picker-btn:hover { border-color: var(--surface1); background: var(--surface0); }
+  .example-picker-btn:focus { outline: 2px solid var(--mauve); outline-offset: -2px; }
+  .example-picker-btn[aria-expanded="true"] { border-color: var(--mauve); box-shadow: 0 0 0 2px var(--mantle); }
+  .picker-arrow { font-size: 10px; color: var(--overlay0); transition: transform .15s; }
+  .example-picker-btn[aria-expanded="true"] .picker-arrow { transform: rotate(180deg); }
+
+  .example-picker-panel {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--crust); border: 1px solid var(--surface0); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4); max-height: 60vh; overflow: hidden;
+    display: flex; flex-direction: column; z-index: 100;
+  }
+  .picker-header { padding: 8px; border-bottom: 1px solid var(--surface0); display: flex; flex-direction: column; gap: 6px; }
+  #exampleSearch { width: 100%; padding: 6px 10px; background: var(--mantle); border: 1px solid var(--surface0); border-radius: 4px; color: var(--text); font-size: 12px; }
+  #exampleSearch:focus { outline: 2px solid var(--mauve); outline-offset: -2px; }
+  .picker-cats { display: flex; gap: 4px; flex-wrap: wrap; }
+  .cat-btn { padding: 3px 8px; background: var(--mantle); border: 1px solid var(--surface0); border-radius: 4px; font-size: 11px; color: var(--subtext1); cursor: pointer; }
+  .cat-btn:hover { background: var(--surface0); color: var(--text); }
+  .cat-btn.active { background: var(--mauve); color: var(--crust); border-color: var(--mauve); }
+
+  .picker-sections { flex: 1; overflow-y: auto; padding: 4px; }
+  .picker-section { margin-bottom: 8px; }
+  .picker-section-title { font-size: 10px; color: var(--overlay0); text-transform: uppercase; letter-spacing: .5px; padding: 4px 8px; font-weight: 600; }
+  .picker-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--text); }
+  .picker-item:hover { background: var(--surface0); }
+  .picker-item:focus { outline: 2px solid var(--mauve); outline-offset: -2px; }
+  .picker-item-fav { color: var(--yellow); font-size: 14px; flex-shrink: 0; }
+  .picker-item-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .picker-item-tag { font-size: 10px; background: var(--surface0); color: var(--peach); padding: 1px 5px; border-radius: 3px; }
+  .picker-item-import { font-size: 10px; background: var(--surface0); color: var(--sky); padding: 1px 5px; border-radius: 3px; }
+  .picker-empty { padding: 12px; color: var(--overlay0); font-size: 12px; text-align: center; }
 </style>
 <script type="importmap">
 {
@@ -254,6 +294,7 @@
     "@codemirror/view": "./vendor/cm/cm-view.js",
     "@codemirror/language": "./vendor/cm/cm-language.js",
     "@codemirror/commands": "./vendor/cm/cm-commands.js",
+    "@codemirror/autocomplete": "./vendor/cm/cm-autocomplete.js",
     "@lezer/common": "./vendor/cm/lezer-common.js",
     "@lezer/highlight": "./vendor/cm/lezer-highlight.js",
     "@lezer/lr": "./vendor/cm/lezer-lr.js",
@@ -290,8 +331,23 @@
     <div class="panel-header">
       <span>📝 Código fuente (.nv)</span>
       <div class="panel-actions">
-        <select id="exampleSelect" class="example-select"><option value="">— Cargar ejemplo —</option></select>
+        <div id="examplePicker" class="example-picker">
+          <button type="button" id="examplePickerBtn" class="example-picker-btn" aria-haspopup="listbox" aria-expanded="false">
+            <span id="examplePickerLabel">— Cargar ejemplo —</span>
+            <span class="picker-arrow">▼</span>
+          </button>
+          <div id="examplePickerPanel" class="example-picker-panel" role="listbox" hidden>
+            <div class="picker-header">
+              <input type="search" id="exampleSearch" placeholder="🔍 Buscar..." aria-label="Buscar ejemplos">
+              <div class="picker-cats" id="exampleCats"></div>
+            </div>
+            <div class="picker-sections" id="exampleSections"></div>
+          </div>
+        </div>
         <button id="saveBtn" class="small" title="Guardar en el navegador">💾 Guardar</button>
+        <button id="downloadNvBtn" class="small" title="Descargar código como .nv">⬇ .nv</button>
+        <button id="uploadNvBtn" class="small" title="Subir archivo .nv">⬆ .nv</button>
+        <button id="shareBtn" class="small" title="Copiar URL compartible (#code=base64)">🔗 Compartir</button>
         <button id="historyBtn" class="small" title="Historial de ejecuciones recientes">🕘 Historial</button>
       </div>
     </div>
@@ -371,8 +427,9 @@
 import init, { LumenRuntime } from '../pkg/lumen_wasm.js';
 import { EditorState, StateField, StateEffect } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine, highlightActiveLineGutter, Decoration, placeholder } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { bracketMatching, indentOnInput } from '@codemirror/language';
+import { defaultKeymap, history, historyKeymap, indentWithTab, autocompletion, completionKeymap } from '@codemirror/commands';
+import { bracketMatching, indentOnInput, syntaxHighlighting } from '@codemirror/language';
+import { autocompletion as autocompleteExtension } from '@codemirror/autocomplete';
 import { lumenLanguage, lumenHighlighting } from './vendor/lumen-mode.js';
 
 // ── CodeMirror 6 (F2.1) — reemplaza al textarea ─────────────
@@ -410,7 +467,12 @@ const vmStatus    = $('vmStatus');
 const runStatus   = $('runStatus');
 const execTime    = $('execTime');
 const versionDisp = $('versionDisplay');
-const exampleSel  = $('exampleSelect');
+const examplePickerBtn = $('examplePickerBtn');
+const examplePickerLabel = $('examplePickerLabel');
+const examplePickerPanel = $('examplePickerPanel');
+const exampleSearch = $('exampleSearch');
+const exampleCats = $('exampleCats');
+const exampleSections = $('exampleSections');
 const toastEl     = $('toast');
 const consoleCnt  = $('consoleCount');
 const codeView    = $('codeView');
@@ -532,6 +594,7 @@ function initEditor() {
   window.getCode = getCode;
   window.setCode = setCode;
   window.runCode = runCode;
+  setupAutosave();
 }
 function updateLineNumbers() {} // CodeMirror gestiona su propio gutter
 function markErrorLine(errMsg) {
@@ -819,63 +882,140 @@ imprimir(saludo());` },
 
 let examplesFromApi = [];
 const EMBEDDED_EXAMPLES = window.LUMEN_EMBEDDED_EXAMPLES || [];
+const FAV_KEY = 'lumen_playground_favs';
+const CATS_ORDER = ['basics', 'functions', 'data', 'pro', 'stdlib', 'other'];
+
+function inferCategory(name, code = '') {
+  const n = name.toLowerCase();
+  if (code.includes('importar')) return 'stdlib';
+  if (n.includes('hola') || n.includes('basico') || n.includes('basic') || n.startsWith('0') || n.startsWith('1')) return 'basics';
+  if (n.includes('funcion') || n.includes('function') || n.includes('lambda') || n.includes('closure') || n.includes('retornar')) return 'functions';
+  if (n.includes('array') || n.includes('lista') || n.includes('list') || n.includes('estruct') || n.includes('struct') || n.includes('enum') || n.includes('opcion') || n.includes('resultado') || n.includes('tupla') || n.includes('tuple') || n.includes('destr')) return 'data';
+  if (n.includes('async') || n.includes('corut') || n.includes('actor') || n.includes('par ') || n.includes('stream') || n.includes('select') || n.includes('timer') || n.includes('channel') || n.includes('mutex') || n.includes('hilo') || n.includes('thread')) return 'pro';
+  if (n.includes('test') || n.includes('bench') || n.includes('demo') || n.includes('stress') || n.includes('json') || n.includes('csv') || n.includes('sqlite') || n.includes('http') || n.includes('red') || n.includes('tui') || n.includes('grafic') || n.includes('canvas') || n.includes('audio') || n.includes('tilemap') || n.includes('chart') || n.includes('gui')) return 'pro';
+  return 'other';
+}
+
+function getFavs() { return new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]')); }
+function toggleFav(name) { const favs = getFavs(); if (favs.has(name)) favs.delete(name); else favs.add(name); localStorage.setItem(FAV_KEY, JSON.stringify([...favs])); renderPicker(); }
+
+function buildAllExamples() {
+  const list = [];
+  // API examples
+  examplesFromApi.forEach(ex => {
+    list.push({ source: 'api', key: 'api:' + ex.name, name: ex.name, category: ex.category || inferCategory(ex.name), code: null, usesImport: false });
+  });
+  // Embedded examples (from embedded_examples.js)
+  EMBEDDED_EXAMPLES.forEach(ex => {
+    list.push({ source: 'emb', key: 'emb:' + ex.file, name: ex.name, category: inferCategory(ex.name, ex.code), code: ex.code, usesImport: ex.code?.includes('importar') });
+  });
+  // Builtin examples
+  BUILTIN_EXAMPLES.forEach((ex, i) => {
+    list.push({ source: 'builtin', key: String(i), name: ex.name, category: inferCategory(ex.name, ex.code), code: ex.code, usesImport: ex.code?.includes('importar') });
+  });
+  return list;
+}
+
+function renderPicker() {
+  const all = buildAllExamples();
+  const favs = getFavs();
+  const search = exampleSearch.value.toLowerCase();
+
+  exampleSections.innerHTML = '';
+
+  // Favorites section
+  const favItems = all.filter(ex => favs.has(ex.name) && (ex.name.toLowerCase().includes(search) || search === ''));
+  if (favItems.length > 0) {
+    exampleSections.appendChild(makeSection('⭐ Favoritos', favItems, favs));
+  }
+
+  // Recents section
+  const recents = JSON.parse(localStorage.getItem('lumen_playground_recents') || '[]');
+  const recentItems = all.filter(ex => recents.includes(ex.name) && (ex.name.toLowerCase().includes(search) || search === ''));
+  if (recentItems.length > 0) {
+    exampleSections.appendChild(makeSection('🕘 Recientes', recentItems, favs));
+  }
+
+  // Category sections
+  const catsMap = {};
+  all.filter(ex => !favs.has(ex.name) && !recents.includes(ex.name) && (ex.name.toLowerCase().includes(search) || search === ''))
+    .forEach(ex => { const c = ex.category; if (!catsMap[c]) catsMap[c] = []; catsMap[c].push(ex); });
+
+  CATS_ORDER.forEach(cat => {
+    if (catsMap[cat] && catsMap[cat].length > 0) {
+      const label = { basics: '📚 Básicos', functions: '⚙️ Funciones', data: '📦 Datos', pro: '🚀 Avanzado', stdlib: '📚 Stdlib', other: '📂 Otros' }[cat] || cat;
+      exampleSections.appendChild(makeSection(label, catsMap[cat], favs));
+    }
+  });
+
+  if (exampleSections.children.length === 0) {
+    exampleSections.innerHTML = '<div class="picker-empty">No hay ejemplos que coincidan</div>';
+  }
+}
+
+function makeSection(title, items, favs) {
+  const sec = document.createElement('div');
+  sec.className = 'picker-section';
+  sec.innerHTML = '<div class="picker-section-title">' + title + '</div>';
+  items.forEach(ex => {
+    const item = document.createElement('div');
+    item.className = 'picker-item';
+    item.dataset.key = ex.key;
+    item.dataset.name = ex.name;
+    item.dataset.code = ex.code || '';
+    item.dataset.source = ex.source;
+    item.setAttribute('role', 'option');
+    item.tabIndex = 0;
+    const isFav = favs.has(ex.name);
+    item.innerHTML = (isFav ? '<span class="picker-item-fav" title="Favorito">★</span>' : '<span class="picker-item-fav" title="Añadir a favoritos">☆</span>') +
+      '<span class="picker-item-name">' + escapeHtml(ex.name) + '</span>' +
+      (ex.usesImport ? '<span class="picker-item-tag picker-item-import" title="Usa importar">📦 importar</span>' : '');
+    item.querySelector('.picker-item-fav').addEventListener('click', e => { e.stopPropagation(); toggleFav(ex.name); });
+    item.addEventListener('click', () => pickExample(item));
+    item.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickExample(item); } });
+    sec.appendChild(item);
+  });
+  return sec;
+}
+
+function pickExample(item) {
+  const key = item.dataset.key;
+  const name = item.dataset.name;
+  const code = item.dataset.code;
+  const source = item.dataset.source;
+
+  if (source === 'emb' || source === 'builtin') {
+    if (code) { setCode(code); if (!loadSavedCode(key)) saveCode(key); }
+    else if (source === 'builtin') { setCode(BUILTIN_EXAMPLES[parseInt(key)].code); if (!loadSavedCode(key)) saveCode(key); }
+    else { /* emb sin código no debería pasar */ }
+  } else if (source === 'api') {
+    fetch('/api/examples/' + encodeURIComponent(name))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => { setCode(data.content || data.code || '// (sin contenido)'); if (!loadSavedCode(key)) saveCode(key); })
+      .catch(() => showToast('Error cargando ejemplo', 'error'));
+  }
+  addRecentExample(name);
+  examplePickerLabel.textContent = name;
+  closePicker();
+  showToast('Ejemplo cargado: ' + name, 'success');
+}
+
+function closePicker() { examplePickerPanel.hidden = true; examplePickerBtn.setAttribute('aria-expanded', 'false'); }
+
+examplePickerBtn.addEventListener('click', e => { e.stopPropagation(); const open = examplePickerPanel.hidden; examplePickerPanel.hidden = !open; examplePickerBtn.setAttribute('aria-expanded', open); if (open) { exampleSearch.focus(); exampleSearch.value = ''; renderPicker(); } });
+exampleSearch.addEventListener('input', () => renderPicker());
+document.addEventListener('click', e => { if (!examplePickerPanel.hidden && !examplePickerPanel.contains(e.target) && e.target !== examplePickerBtn) closePicker(); });
+
 async function loadExamples() {
   try {
     const res = await fetch('/api/examples');
     if (res.ok) {
       examplesFromApi = await res.json();
-      examplesFromApi.forEach(ex => {
-        const opt = document.createElement('option');
-        opt.value = 'api:' + ex.name;
-        opt.textContent = '📁 examples/' + ex.name;
-        exampleSel.appendChild(opt);
-      });
       showToast('Selector: ' + examplesFromApi.length + ' ejemplos del servidor', 'success');
-      return;
     }
-  } catch(e) { /* servido sin API (file://, GitHub Pages) — fallback embebido */ }
-  if (EMBEDDED_EXAMPLES.length > 0) {
-    EMBEDDED_EXAMPLES.forEach(ex => {
-      const opt = document.createElement('option');
-      opt.value = 'emb:' + ex.file;
-      opt.textContent = '💾 ' + ex.file;
-      exampleSel.appendChild(opt);
-    });
-    console.log('Playground: selector poblado con ' + EMBEDDED_EXAMPLES.length + ' ejemplos embebidos (modo offline)');
-  }
+  } catch(e) { /* fallback */ }
+  renderPicker();
 }
-
-exampleSel.addEventListener('change', async () => {
-  const val = exampleSel.value;
-  if (!val) return;
-  if (val.startsWith('emb:')) {
-    const file = val.slice(4);
-    const ex = EMBEDDED_EXAMPLES.find(e => e.file === file);
-    if (ex) {
-      setCode(ex.code);
-      showToast('Ejemplo cargado: ' + ex.name, 'success');
-      return;
-    }
-  }
-  if (val.startsWith('api:')) {
-    const name = val.slice(4);
-    const ex = examplesFromApi.find(e => e.name === name);
-    if (ex) {
-      const res = await fetch('/api/examples/' + encodeURIComponent(ex.name));
-      if (res.ok) {
-        const data = await res.json();
-        setCode(data.content || data.code || '// (sin contenido)');
-        showToast('Ejemplo cargado: ' + ex.name, 'success');
-        return;
-      }
-    }
-  }
-  const idx = parseInt(val, 10);
-  if (!isNaN(idx) && idx >= 0 && idx < BUILTIN_EXAMPLES.length) {
-    setCode(BUILTIN_EXAMPLES[idx].code);
-    showToast('Ejemplo cargado: ' + BUILTIN_EXAMPLES[idx].name, 'success');
-  }
-});
 
 function setCode(src) {
   const code = String(src);
@@ -890,9 +1030,102 @@ function setCode(src) {
 }
 
 // ── Persistencia ───────────────────────────────────────────
-function saveCode() {
-  localStorage.setItem('lumen_playground_code', getCode());
-  showToast('Código guardado en el navegador', 'success');
+let autosaveTimer = null;
+const AUTOSAVE_DELAY = 2000;
+const STORAGE_PREFIX = 'lumen_playground_code_';
+
+function getStorageKey(exampleName) {
+  return STORAGE_PREFIX + (exampleName || 'default');
+}
+
+function saveCode(exampleName = null) {
+  const code = getCode();
+  const key = getStorageKey(exampleName);
+  localStorage.setItem(key, code);
+  if (!exampleName) localStorage.setItem('lumen_playground_code', code);
+  showToast(exampleName ? 'Código guardado para: ' + exampleName : 'Código guardado en el navegador', 'success');
+}
+
+function loadSavedCode(exampleName = null) {
+  const key = getStorageKey(exampleName);
+  const saved = localStorage.getItem(key);
+  if (saved) {
+    setCode(saved);
+    return true;
+  }
+  if (!exampleName) {
+    const fallback = localStorage.getItem('lumen_playground_code');
+    if (fallback) { setCode(fallback); return true; }
+  }
+  return false;
+}
+
+function setupAutosave() {
+  editor.view.updateListener.of(update => {
+    if (update.docChanged) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(() => saveCode(currentExampleName()), AUTOSAVE_DELAY);
+    }
+  });
+}
+
+function currentExampleName() {
+  const val = exampleSel.value;
+  if (val.startsWith('api:')) return 'api:' + val.slice(4);
+  if (val.startsWith('emb:')) return 'emb:' + val.slice(4);
+  return null;
+}
+
+function downloadCode() {
+  const code = getCode();
+  const name = currentExampleName() || 'codigo';
+  const cleanName = name.replace(/^[^:]+:/, '').replace(/\.nv$/, '') + '.nv';
+  const blob = new Blob([code], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cleanName;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Descargado: ' + cleanName, 'success');
+}
+
+function uploadCode() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.nv,.txt';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCode(reader.result);
+      saveCode(currentExampleName());
+      showToast('Subido y guardado: ' + file.name, 'success');
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function shareUrl() {
+  const code = getCode();
+  const b64 = btoa(unescape(encodeURIComponent(code)));
+  const url = location.origin + location.pathname + '#code=' + b64;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('¡URL copiada al portapapeles!', 'success');
+  }).catch(() => {
+    prompt('Copia esta URL:', url);
+  });
+}
+
+// ── Historial de ejemplos recientes para selector ────────────
+function addRecentExample(name) {
+  let recents = JSON.parse(localStorage.getItem('lumen_playground_recents') || '[]');
+  recents = recents.filter(r => r !== name);
+  recents.unshift(name);
+  recents = recents.slice(0, 10);
+  localStorage.setItem('lumen_playground_recents', JSON.stringify(recents));
 }
 
 // ── Bloques: definiciones ──────────────────────────────────
@@ -1340,6 +1573,9 @@ $('checkBtn').addEventListener('click', checkCode);
 $('tokensBtn').addEventListener('click', showTokens);
 $('downloadBtn').addEventListener('click', downloadBytecode);
 $('saveBtn').addEventListener('click', saveCode);
+$('downloadNvBtn').addEventListener('click', downloadCode);
+$('uploadNvBtn').addEventListener('click', uploadCode);
+$('shareBtn').addEventListener('click', shareUrl);
 
 // ── Barra de acciones de bloques ───────────────────────────
 $('blocksPalette').addEventListener('click', (e) => {
@@ -1417,12 +1653,15 @@ async function initRuntime() {
 }
 
 // Populate builtin examples + restore guardado
-BUILTIN_EXAMPLES.forEach((ex, i) => {
-  const opt = document.createElement('option');
-  opt.value = String(i);
-  opt.textContent = ex.name;
-  exampleSel.appendChild(opt);
-});
+// Cargar código desde URL compartida (#code=base64)
+if (location.hash.startsWith('#code=')) {
+  try {
+    const b64 = location.hash.slice(6);
+    const code = decodeURIComponent(escape(atob(b64)));
+    setCode(code);
+    showToast('Código cargado desde URL compartida', 'success');
+  } catch(e) { console.warn('URL compartida inválida:', e); }
+}
 initEditor();
 const savedBackend = localStorage.getItem('lumen_playground_backend');
 if (savedBackend === 'wasm' || savedBackend === 'server') setBackend(savedBackend);

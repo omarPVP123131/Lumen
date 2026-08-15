@@ -20,12 +20,15 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 - **Fix C backend**: temp-capture en CALLS de usuario (`{ Val _r = _f_x(); PUSH(_r); }` en `_f_/{}`, `CallValue` y `_fref_call`) — gcc evalua LHS antes de la función callee → corrupción de pila compartida. `fase65_guard_let`/`_2` byte-idénticos en C y VM.
 - **Batería dual `aot_bateria_dual.ps1`**: **C OK=38 DIFF=0 (paridad total) · RUST OK=12 DIFF=26 (límite de diseño: sin strings/structs/colecciones) · FAIL=0 SKIP=1 HANG=0**.
 
-### Agregado (Playground Web — Ronda L1 del plan completada)
-- **`lumen serve` real** (servidor HTTP estático Rust puro, sin Python): `--port`, `LUMEN_PORT` env, MIME types, headers COOP/COEP, 404, anti path-traversal, redirección `/` → `/web/index.html`. Verificado (200/404).
+### Agregado (Playground Web — Ronda L1 + F1.2/F2.3/F4.2 completadas)
+- **`lumen serve` real** (servidor HTTP estático Rust puro, sin Python): `--port`, `LUMEN_PORT` env, MIME types, headers COOP/COEP, 404, anti path-traversal, redirección `/` → `/web/index.html`. **Cache ETag/If-None-Match** (304 Not Modified) + variable `LUMEN_PORT`. Verificado (200/304/404/JSON).
 - **Backend `/api/run`**: `POST` → compila y ejecuta con la **VM Rust nativa** (`run_source_capture`) → JSON `{ok,output}`/`{ok,error}` con spans `(linea,col)`. `GET /api/health`, `/api/examples`, `/api/examples/{file}`.
-- **CodeMirror 6 vendorizado** (11 módulos ESM planos + import map, sin CDN) + **modo LUMEN generado** desde `token.rs` (74 keywords, `StreamLanguage` + syntax highlighting Catppuccin). Editor: error-line marking, `Ctrl+Enter`, gutter, autosave localStorage.
-- **Sigma L1**: stdlib embebida via build.rs (`embedded_stdlib.rs`, 31 archivos) + `ModuleLoader::with_memory_files`; `run_lumen`/`check_lumen`/`compile_to_bytes` con loader virtual; 128 ejemplos embebidos (`embedded_examples.js` autogenerado) con fallback offline; `.nvc` descargable desde el browser; toggle **WASM ↔ Servidor** (VM Rust vía `/api/run`).
-- **Historial de ejecuciones**: botón `🕘 Historial` (panel flotante, hasta 10 runs desde localStorage) + **toggle backend PERSISTENTE** (`lumen_playground_backend`). `pkg/lumen_wasm_bg.wasm` 2.37 MB regenado con fixes OR/rangos.
+- **CodeMirror 6 vendorizado** (11 módulos ESM planos + import map, sin CDN) + **modo LUMEN generado** desde `token.rs` (74 keywords, `StreamLanguage` + syntax highlighting Catppuccin). **Autocompletado** con `@codemirror/autocomplete` (`Ctrl+Space`, keywords + snippets), **minimapa** (EditorView espejo sincronizado), **error gutter mejorado** con tooltips. Autosave localStorage.
+- **Sigma L1**: stdlib embebida via build.rs (`embedded_stdlib.rs`, 31 archivos) + `ModuleLoader::with_memory_files`; `run_lumen`/`check_lumen`/`compile_to_bytes` con loader virtual; 128 ejemplos embebidos (`embedded_examples.js` autogenerado) con fallback offline; `.nvc` descargable; toggle **WASM ↔ Servidor**.
+- **Selector F4.2**: categorías (basics/functions/data/pro/stdlib/other), búsqueda textual, favoritos en localStorage, marcador "📦 importar". Dropdown personalizado con secciones (Favoritos, Recientes, Categorías).
+- **Historial de ejecuciones**: botón `🕘 Historial` (panel flotante, hasta 10 runs) + **toggle backend PERSISTENTE** (`lumen_playground_backend`).
+- **2 ejemplos interactivos** (convención 2 por fase): `canvas_demo.nv` (canvas drawing vía JS bridges) + `clock_demo.nv` (reloj tiempo real). Bridges JS (`__js_call`, `__js_eval`) + corutinas.
+- `pkg/lumen_wasm_bg.wasm` 2.37 MB regenerado con fixes OR/rangos/autocompletado.
 
 ### Arreglado
 - **`tcp_listener` cfg**: campo del struct VM sin cfg (std::net siempre disponible) — `cargo test -p lumen-sema` compilaba lumen-vm sin features y fallaba. 

@@ -1,6 +1,6 @@
 # Siguientes Pasos — Roadmap LÚMEN v2.4 → v3.0
 
-**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 117/117 compilan · 112 CORRECTOS** (8 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos/concurrencia/stream/async byte-idénticos** (8 Ago 2026, batería 39/40). **Bootstrapping doble (compilador + VM) CONFIRMADO con fixpoint SHA-256 `3DA624D6...` (150,684 B)**. **Release v2.4.2 ✅ (14 Ago):** tag CI-autogenerado tras AOT optimizado (Cranelift 20x/C 18x), Fases 61-63 self-hosted (OR/if-let/rangos), Playground Ronda L1 completa.
+**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 117/117 compilan · 112 CORRECTOS** (8 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos/concurrencia/stream/async byte-idénticos** (8 Ago 2026, batería 39/40). **Bootstrapping doble (compilador + VM) CONFIRMADO con fixpoint SHA-256 `3DA624D6...` (150,684 B)**. **Release v2.4.2 ✅ (14 Ago):** tag CI-autogenerado tras AOT optimizado (Cranelift 20x/C 18x), Fases 61-63 self-hosted (OR/if-let/rangos), Playground Ronda L1 + F1.2/F2.3/F4.2 completadas.
 
 ---
 
@@ -10,7 +10,7 @@
 |------|-------------|---------|-------|
 | **AI/ML (Fases 186-200)** | 🔴 Alta | 🔥 Alto | Tensores, redes neuronales, DataFrames. Feature diferenciadora. |
 | **Docs & Comunidad** | 🟢 Baja | 🔥 Muy Alto | Documentación, tutoriales, web, ejemplos. Lo que más necesita un lenguaje nuevo. |
-| **Playground Web completo** | 🟡 Media | 🔥 Alto | `wasm-pack` + playground funcional con ejemplos interactivos. |
+| **Playground Web completo** | 🟢 Baja | 🔥 Muy Alto | ✅ COMPLETADO: Ronda L1 + F1.2 (ETag/LUMEN_PORT) + F2.3 (autocompletado/minimap/error gutter) + F4.2 (categorías/búsqueda/favoritos/importar marker) + 2 ejemplos interactivos. Solo faltan L2/L3 (F3.3, F5.1, F5.2, F6.1, F6.2, F8.1, F8.2, F9.2). |
 
 ## 🟡 Prioridad Media — Moderado + Alto Impacto
 

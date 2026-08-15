@@ -400,6 +400,22 @@ fn parse_args(args: &[String]) -> Config {
                     process::exit(1);
                 }
             }
+            "--port-env" => {
+                // Deprecado: use LUMEN_PORT env var
+                i += 1;
+                if i < args.len() {
+                    match args[i].parse::<u16>() {
+                        Ok(p) => port = p,
+                        Err(_) => {
+                            eprintln!("Error: puerto inválido '{}'", args[i]);
+                            process::exit(1);
+                        }
+                    }
+                } else {
+                    eprintln!("Error: falta el puerto después de '--port-env'");
+                    process::exit(1);
+                }
+            }
             s if command.is_empty() => {
                 command = s.to_string();
             }
@@ -421,6 +437,13 @@ fn parse_args(args: &[String]) -> Config {
     let stdlib_alt = PathBuf::from("../stdlib");
     if stdlib_alt.is_dir() && !lib_dirs.iter().any(|p| p == &stdlib_alt) {
         lib_dirs.push(stdlib_alt);
+    }
+
+    // LUMEN_PORT env var: prioridad sobre default 8080, pero no sobre --port explícito
+    if let Ok(env_port) = env::var("LUMEN_PORT") {
+        if let Ok(p) = env_port.parse::<u16>() {
+            port = p;
+        }
     }
 
     Config {
@@ -1419,6 +1442,7 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
         return;
     }
     let mut content_length: usize = 0;
+    let mut if_none_match: Option<String> = None;
     let mut buf = String::new();
     loop {
         buf.clear();
@@ -1436,6 +1460,12 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
             .and_then(|(k, v)| k.eq_ignore_ascii_case("Content-Length").then_some(v))
         {
             content_length = rest.trim().parse().unwrap_or(0);
+        }
+        if let Some(rest) = buf
+            .split_once(':')
+            .and_then(|(k, v)| k.eq_ignore_ascii_case("If-None-Match").then_some(v))
+        {
+            if_none_match = Some(rest.trim().to_string());
         }
     }
     let raw_path = parts[1];
@@ -1479,11 +1509,31 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
     let file_path = root.join(&rel);
     match fs::read(&file_path) {
         Ok(data) => {
+            // Compute ETag from file metadata (mtime + size)
+            let etag = fs::metadata(&file_path)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map(|t| {
+                    let secs = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+                    format!("\"{}-{}\"", secs, data.len())
+                })
+                .unwrap_or_else(|| format!("\"{}\"", data.len()));
+
+            // Check If-None-Match
+            if let Some(ref inm) = if_none_match {
+                if inm == &etag {
+                    let not_modified = "HTTP/1.1 304 Not Modified\r\nETag: ".to_string() + &etag + "\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(not_modified.as_bytes());
+                    return;
+                }
+            }
+
             let header = format!(
-                "{}Content-Type: {}\r\nContent-Length: {}\r\nCross-Origin-Opener-Policy: same-origin\r\nCross-Origin-Embedder-Policy: require-corp\r\nCache-Control: public, max-age=0, must-revalidate\r\nConnection: close\r\n\r\n",
+                "{}Content-Type: {}\r\nContent-Length: {}\r\nETag: {}\r\nCross-Origin-Opener-Policy: same-origin\r\nCross-Origin-Embedder-Policy: require-corp\r\nCache-Control: public, max-age=0, must-revalidate\r\nConnection: close\r\n\r\n",
                 status_line,
                 mime_type(&rel),
-                data.len()
+                data.len(),
+                etag
             );
             let _ = stream.write_all(header.as_bytes());
             let _ = stream.write_all(&data);

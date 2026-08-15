@@ -13,8 +13,8 @@
 | `lumen serve [--port N]` | Servidor HTTP estático en Rust puro (`crates/lumen-cli/src/main.rs`), sin Python. MIME types, headers COOP/COEP, 404, anti path-traversal, redirección `/` → `/web/index.html`. Endpoints: `GET /api/health`, `GET /api/examples`, `GET /api/examples/{file}`, `POST /api/run` (VM Rust nativa → `{ok,output}`/`{ok,error}`). Verificado (200/404/JSON). |
 | Runtime WASM | `crates/lumen-wasm/src/lib.rs`: `LumenRuntime` wasm-bindgen con `run`, `run_with_files`, `check`, `tokenize`, `compile_to_bytes`, `version`, `register_js_function`. Pipeline completo (lexer→parser→sema→IR→codegen→VM) en el browser. |
 | Stdlib embebida | `crates/lumen-wasm/build.rs` genera `embedded_stdlib.rs` (31 archivos incl) + `ModuleLoader::with_memory_files` resuelve imports desde memoria (F3.1). |
-| Editor CodeMirror 6 | `web/vendor/cm/` (11 módulos ESM planos, vendor local sin CDN) + modo LUMEN generado desde `token.rs` (74 keywords, `StreamLanguage` + Catppuccin). Autosave localStorage, error-line marking, `Ctrl+Enter`, gutter (F2.1). |
-| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), selector de 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v2.4.2. |
+| Editor CodeMirror 6 | `web/vendor/cm/` (11 módulos ESM planos, vendor local sin CDN) + modo LUMEN generado desde `token.rs` (74 keywords, `StreamLanguage` + Catppuccin). **Autosave localStorage, error-line marking, `Ctrl+Enter`, gutter, autocompletado (`Ctrl+Space` + keywords/snippets), minimapa** (F2.1 + F2.3). |
+| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), **selector con categorías, búsqueda, favoritos, marcador "importar"**, 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v2.4.2. |
 | Descargar .nvc | `compile_to_bytes(source)` → `Uint8Array` → Blob descargable (F9.1). |
 | Build WASM | `wasm-pack build crates/lumen-wasm --target web` + `pkg/` en .gitignore (regenerable). |
 | Batería F4.1 | 128 ejemplos embebidos en `embedded_examples.js` (autogenerado por `gen-embedded-examples.ps1`). |
@@ -46,7 +46,7 @@ Orden de ejecución global sugerido: **todas las L1 → todas las L2 → todas l
 | Nivel | Fase | Descripción | Criterios de aceptación |
 |---|---|---|---|
 | L1 | F1.1 | Endpoints `/api/health` y `/api/examples` (índice: nombre, archivo, descripción de los 117 ejemplos) + `GET /api/examples/{file}` con contenido | `curl /api/health` → 200 JSON `{status,version}`; índice lista 117 entradas y cada `{file}` devuelve el contenido exacto del repo; 404 correcto para archivo inexistente; `/api/*` con headers CORS y sin cache agresiva |
-| L2 | F1.2 | Cache del índice (mtime + ETag) + `--port` por env var `LUMEN_PORT` | Segunda petición con `If-None-Match` correcto → 304; cambiar un ejemplo en disco → el índice refleja el cambio sin reiniciar; `LUMEN_PORT=9000 lumen serve` escucha en 9000 |
+| L2 | F1.2 | Cache del índice (mtime + ETag) + `--port` por env var `LUMEN_PORT` | ✅ Segunda petición con `If-None-Match` correcto → 304; cambiar un ejemplo en disco → el índice refleja el cambio sin reiniciar; `LUMEN_PORT=9000 lumen serve` escucha en 9000 |
 | L3 | F1.3 | `GET /api/compile-native` (POST del `.nv` → responde `.nvc` descargable hoy; exe tras Etapa 3 AOT) + `GET /api/meta` (versión del compilador, stdlib embebida, features) | POST válido devuelve `.nvc` ejecutable con `lumen run`; POST inválido devuelve 422 con el error del compilador; `/api/meta` informa `aot:false` hasta Etapa 3 |
 
 ### F2 — Editor (CodeMirror)
@@ -54,8 +54,8 @@ Orden de ejecución global sugerido: **todas las L1 → todas las L2 → todas l
 | Nivel | Fase | Descripción | Criterios de aceptación |
 |---|---|---|---|
 | L1 | F2.1 | CodeMirror 6 vendor local (`web/vendor/codemirror/`) + gramática LÚMEN v1: keywords ES/EN, strings, números, comentarios, operadores. Tema Catppuccin igual al CSS actual | La lista de keywords se genera del lexer real (script `gen-lumen-mode.js`), no a mano; los 18 ejemplos se ven coloreados correctamente; `Ctrl+Enter` sigue ejecutando; 0 errores en consola del browser |
-| L2 | F2.2 | Autosave localStorage (2s), compartir por URL (hash base64 `#code=...` + botón copiar enlace), descargar `.nv`, subir `.nv` (file picker) | Recargar página restaura el código; abrir enlace en otra pestaña restaura el código; roundtrip descargar→subir byte-idéntico; persistencia separada por ejemplo |
-| L3 | F2.3 | Línea de error resaltada en gutter (mapa span→línea), autocompletado (`Ctrl+Space`: keywords + snippets), minimapa | Un E042/E020 muestra la línea exacta subrayada y el panel de errores navega a ella; `Ctrl+Space` inserta keywords/snippets sin errores de parse; minimapa sincronizado con scroll |
+| L2 | F2.2 | Autosave localStorage (2s), compartir por URL (hash base64 `#code=...` + botón copiar enlace), descargar `.nv`, subir `.nv` (file picker) | ✅ Recargar página restaura el código; abrir enlace en otra pestaña restaura el código; roundtrip descargar→subir byte-idéntico; persistencia separada por ejemplo |
+| L3 | F2.3 | Línea de error resaltada en gutter (mapa span→línea), autocompletado (`Ctrl+Space`: keywords + snippets), minimapa | ✅ Un E042/E020 muestra la línea exacta subrayada y el panel de errores navega a ella; `Ctrl+Space` inserta keywords/snippets sin errores de parse; minimapa sincronizado con scroll |
 
 ### F3 — Runtime-lenguaje completo en browser (loader virtual)
 
@@ -70,7 +70,7 @@ Orden de ejecución global sugerido: **todas las L1 → todas las L2 → todas l
 | Nivel | Fase | Descripción | Criterios de aceptación |
 |---|---|---|---|
 | L1 | F4.1 | Selector poblado con los 117 ejemplos reales: fetch a `/api/examples` cuando hay servidor; fallback a JSON embebido (funciona en `file://` y GitHub Pages) | Con servidor: selector lista 117 nombres con categoría; sin servidor: al menos 40 ejemplos clave disponibles; cambio de ejemplo carga el código y actualiza línea de números |
-| L2 | F4.2 | Categorías (basics/functions/data/pro/stdlib), búsqueda, favoritos en localStorage, marcador "usa stdlib/importar" | Filtrar por categoría y búsqueda textual funciona; favoritos persisten entre sesiones; el marcador detecta `importar` en el código del ejemplo |
+| L2 | F4.2 | Categorías (basics/functions/data/pro/stdlib), búsqueda, favoritos en localStorage, marcador "usa stdlib/importar" | ✅ Filtrar por categoría y búsqueda textual funciona; favoritos persisten entre sesiones; el marcador detecta `importar` en el código del ejemplo |
 | L3 | F4.3 | Ejemplos interactivos: los que usan bridges JS (canvas, DOM, alert) se ejecutan con su bridge activo; botón "probar" que corre un ejemplo con asserts y muestra ✓/✗ | ≥5 ejemplos interactivos funcionan (p.ej. canvas, título de página); el botón "probar" reporta pass/fail por assert con salida visible |
 
 ### F5 — Insights (AST / Disasm)
