@@ -105,17 +105,15 @@
   }
 
   .editor-wrapper { display: flex; flex: 1; overflow: hidden; position: relative; }
-  .line-numbers {
-    width: 42px; background: var(--crust); color: var(--overlay0); font-family: var(--font-mono);
-    font-size: 13px; line-height: 1.5; text-align: right; padding: 10px 8px 10px 0;
-    overflow: hidden; user-select: none; flex-shrink: 0; white-space: pre;
+  .editor-wrapper .cm-editor { flex: 1; height: 100%; font-size: 13px; }
+  .editor-wrapper .cm-editor.cm-focused { outline: none; }
+  .editor-wrapper .cm-gutters {
+    background: var(--crust); color: var(--overlay0); border: none;
   }
-  #code {
-    flex: 1; background: var(--base); color: var(--text); border: none; outline: none;
-    font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
-    padding: 10px 12px; resize: none; tab-size: 4; white-space: pre; overflow: auto;
-  }
-  #code .error-line, .error-line { background: rgba(243, 139, 168, 0.15); }
+  .editor-wrapper .cm-activeLine { background: rgba(137, 180, 250, 0.07); }
+  .editor-wrapper .cm-activeLineGutter { background: rgba(137, 180, 250, 0.1); color: var(--text); }
+  .cm-error-line { background: rgba(243, 139, 168, 0.15); }
+  .cm-error-line .cm-line { text-decoration: underline wavy rgba(243, 139, 168, 0.6); text-underline-offset: 3px; }
 
   .toolbar {
     display: flex; align-items: center; gap: 6px; padding: 6px 12px;
@@ -249,6 +247,23 @@
     content: '⤷'; position: absolute; right: 30px; font-size: 10px; opacity: 0.6;
   }
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "@codemirror/state": "./vendor/cm/cm-state.js",
+    "@codemirror/view": "./vendor/cm/cm-view.js",
+    "@codemirror/language": "./vendor/cm/cm-language.js",
+    "@codemirror/commands": "./vendor/cm/cm-commands.js",
+    "@lezer/common": "./vendor/cm/lezer-common.js",
+    "@lezer/highlight": "./vendor/cm/lezer-highlight.js",
+    "@lezer/lr": "./vendor/cm/lezer-lr.js",
+    "style-mod": "./vendor/cm/style-mod.js",
+    "w3c-keyname": "./vendor/cm/w3c-keyname.js",
+    "crelt": "./vendor/cm/crelt.js",
+    "@marijn/find-cluster-break": "./vendor/cm/marijn-find-cluster-break.js"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -280,9 +295,7 @@
       </div>
     </div>
     <div class="editor-wrapper">
-      <div class="line-numbers" id="lineNumbers">1</div>
-      <textarea id="code" spellcheck="false"
-        placeholder="// Escribe código LÚMEN aquí...&#10;&#10;imprimir(&quot;¡Hola, LÚMEN!&quot;);&#10;&#10;// Presiona Ctrl+Enter para ejecutar"></textarea>
+      <div id="editorHost" class="editor-host"></div>
     </div>
     <div class="toolbar">
       <button id="runBtn" class="primary">▶ Ejecutar</button>
@@ -351,8 +364,30 @@
 <!-- ═══ TOAST ═══ -->
 <div id="toast" class="toast"></div>
 
+<!-- Ejemplos embebidos (fallback offline F4.1): generado por scripts/gen-embedded-examples.ps1 -->
+<script src="embedded_examples.js"></script>
 <script type="module">
 import init, { LumenRuntime } from '../pkg/lumen_wasm.js';
+import { EditorState, StateField, StateEffect } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine, highlightActiveLineGutter, Decoration, placeholder } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { bracketMatching, indentOnInput } from '@codemirror/language';
+import { lumenLanguage, lumenHighlighting } from './vendor/lumen-mode.js';
+
+// ── CodeMirror 6 (F2.1) — reemplaza al textarea ─────────────
+const setErrorLine = StateEffect.define();
+const errorLineDeco = Decoration.line({ class: 'cm-error-line' });
+const errorLineField = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) if (e.is(setErrorLine)) {
+      deco = e.value ? Decoration.set([errorLineDeco.range(e.value)]) : Decoration.none;
+    }
+    return deco;
+  },
+  provide: f => EditorView.decorations.from(f),
+});
 
 // ── State ──────────────────────────────────────────────────
 let runtime = null;
@@ -361,8 +396,8 @@ let execBackend = 'wasm'; // 'wasm' (navegador) | 'server' (VM Rust del servidor
 
 // ── DOM refs ───────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const codeEl      = $('code');
-const lineNumEl   = $('lineNumbers');
+const editorHost = $('editorHost');
+let editor = null;
 const outputPane  = $('output-pane');
 const consolePane = $('console-pane');
 const jsPane      = $('js-pane');
@@ -458,38 +493,55 @@ function showToast(msg, type) {
 
 function setStatus(state, msg) { statusDot.className = 'dot ' + state; statusText.textContent = msg; }
 
-// ── Line numbers ───────────────────────────────────────────
-function updateLineNumbers() {
-  const lines = codeEl.value.split('\n');
-  lineNumEl.textContent = lines.map((_, i) => i + 1).join('\n');
+// ── Editor CodeMirror ──────────────────────────────────────
+function getCode()      { return editor ? editor.state.doc.toString() : ''; }
+function initEditor() {
+  editor = new EditorView({
+    parent: editorHost,
+    state: EditorState.create({
+      doc: '',
+      extensions: [
+        lineNumbers(),
+        history(),
+        drawSelection(),
+        dropCursor(),
+        rectangularSelection(),
+        crosshairCursor(),
+        highlightActiveLineGutter(),
+        highlightActiveLine(),
+        indentOnInput(),
+        bracketMatching(),
+        placeholder('// Escribe código LÚMEN aquí...\n\nimprimir("¡Hola, LÚMEN!");\n\n// Presiona Ctrl+Enter para ejecutar'),
+        keymap.of([
+          ...defaultKeymap,
+          ...historyKeymap,
+          indentWithTab,
+          { key: 'Ctrl-Enter', run: () => { runCode(); return true; } },
+          { key: 'Shift-Enter', run: () => { runCode(); return true; } },
+        ]),
+        lumenLanguage,
+        errorLineField,
+      ],
+    }),
+  });
+  updateLineNumbers();
+  // Helpers expuestos para debug/automatización (consola DevTools)
+  window.getCode = getCode;
+  window.setCode = setCode;
+  window.runCode = runCode;
 }
-codeEl.addEventListener('input', updateLineNumbers);
-codeEl.addEventListener('scroll', () => { lineNumEl.scrollTop = codeEl.scrollTop; });
-codeEl.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runCode(); }
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const s = codeEl.selectionStart;
-    codeEl.value = codeEl.value.slice(0, s) + '    ' + codeEl.value.slice(codeEl.selectionEnd);
-    codeEl.selectionStart = codeEl.selectionEnd = s + 4;
-    updateLineNumbers();
-  }
-});
-
+function updateLineNumbers() {} // CodeMirror gestiona su propio gutter
 function markErrorLine(errMsg) {
   const m = errMsg.match(/\[(\d+):(\d+)\]/);
   if (!m) return errMsg;
   const line = parseInt(m[1], 10);
-  clearErrorMark();
-  const lines = lineNumEl.textContent.split('\n');
-  if (line >= 1 && line <= lines.length) {
-    const lne = lineNumEl.children[0];
-    if (lne) lne.textContent = lines.join('\n');
-  }
-  codeEl.dataset.errorLine = String(line);
+  const info = editor.state.doc.lineAt(Math.min(line, editor.state.doc.lines));
+  editor.dispatch({ effects: setErrorLine.of(info.from) });
   return errMsg;
 }
-function clearErrorMark() { delete codeEl.dataset.errorLine; }
+function clearErrorMark() {
+  if (editor) editor.dispatch({ effects: setErrorLine.of(null) });
+}
 
 // ── Tabs ───────────────────────────────────────────────────
 document.querySelectorAll('.output-tab').forEach(tab => {
@@ -515,7 +567,7 @@ $('viewToggle').addEventListener('click', (e) => {
 
 // ── Run ────────────────────────────────────────────────────
 async function runCode() {
-  const code = codeEl.value.trim();
+  const code = getCode().trim();
   if (!code) { showToast('No hay código para ejecutar.', 'error'); return; }
   if (execBackend === 'server' && !location.protocol.startsWith('http')) {
     showToast('El modo Servidor requiere el playground vía lumen serve (http://localhost:PORT).', 'error');
@@ -595,7 +647,7 @@ async function runCode() {
 
 function checkCode() {
   if (!runtime) { showToast('VM no cargada', 'error'); return; }
-  const code = codeEl.value.trim();
+  const code = getCode().trim();
   if (!code) { showToast('No hay código.', 'error'); return; }
   outputPane.innerHTML = 'Verificando...';
   setStatus('busy', 'Verificando...');
@@ -621,7 +673,7 @@ function checkCode() {
 
 function showTokens() {
   if (!runtime) { showToast('VM no cargada', 'error'); return; }
-  const code = codeEl.value.trim();
+  const code = getCode().trim();
   if (!code) { showToast('No hay código.', 'error'); return; }
   try {
     const tokens = runtime.tokenize(code);
@@ -635,7 +687,7 @@ function showTokens() {
 
 function downloadBytecode() {
   if (!runtime) { showToast('VM no cargada', 'error'); return; }
-  const code = codeEl.value.trim();
+  const code = getCode().trim();
   if (!code) { showToast('No hay código.', 'error'); return; }
   try {
     const bytes = runtime.compile_to_bytes(code);
@@ -757,6 +809,7 @@ imprimir(saludo());` },
 ];
 
 let examplesFromApi = [];
+const EMBEDDED_EXAMPLES = window.LUMEN_EMBEDDED_EXAMPLES || [];
 async function loadExamples() {
   try {
     const res = await fetch('/api/examples');
@@ -768,13 +821,33 @@ async function loadExamples() {
         opt.textContent = '📁 examples/' + ex.name;
         exampleSel.appendChild(opt);
       });
+      showToast('Selector: ' + examplesFromApi.length + ' ejemplos del servidor', 'success');
+      return;
     }
-  } catch(e) { /* servido sin API (file://) — solo ejemplos embebidos */ }
+  } catch(e) { /* servido sin API (file://, GitHub Pages) — fallback embebido */ }
+  if (EMBEDDED_EXAMPLES.length > 0) {
+    EMBEDDED_EXAMPLES.forEach(ex => {
+      const opt = document.createElement('option');
+      opt.value = 'emb:' + ex.file;
+      opt.textContent = '💾 ' + ex.file;
+      exampleSel.appendChild(opt);
+    });
+    console.log('Playground: selector poblado con ' + EMBEDDED_EXAMPLES.length + ' ejemplos embebidos (modo offline)');
+  }
 }
 
 exampleSel.addEventListener('change', async () => {
   const val = exampleSel.value;
   if (!val) return;
+  if (val.startsWith('emb:')) {
+    const file = val.slice(4);
+    const ex = EMBEDDED_EXAMPLES.find(e => e.file === file);
+    if (ex) {
+      setCode(ex.code);
+      showToast('Ejemplo cargado: ' + ex.name, 'success');
+      return;
+    }
+  }
   if (val.startsWith('api:')) {
     const name = val.slice(4);
     const ex = examplesFromApi.find(e => e.name === name);
@@ -796,7 +869,11 @@ exampleSel.addEventListener('change', async () => {
 });
 
 function setCode(src) {
-  codeEl.value = src;
+  const code = String(src);
+  if (editor) {
+    const doc = editor.state.doc;
+    editor.dispatch({ changes: { from: 0, to: doc.length, insert: code } });
+  }
   updateLineNumbers();
   document.querySelectorAll('.output-tab, .output-pane').forEach(el => el.classList.remove('active'));
   document.querySelector('[data-pane="output"]').classList.add('active');
@@ -805,7 +882,7 @@ function setCode(src) {
 
 // ── Persistencia ───────────────────────────────────────────
 function saveCode() {
-  localStorage.setItem('lumen_playground_code', codeEl.value);
+  localStorage.setItem('lumen_playground_code', getCode());
   showToast('Código guardado en el navegador', 'success');
 }
 
@@ -1273,9 +1350,9 @@ BUILTIN_EXAMPLES.forEach((ex, i) => {
   opt.textContent = ex.name;
   exampleSel.appendChild(opt);
 });
+initEditor();
 const saved = localStorage.getItem('lumen_playground_code');
-if (saved) codeEl.value = saved;
-updateLineNumbers();
+if (saved) setCode(saved);
 buildPalette();
 loadExamples();
 initRuntime();

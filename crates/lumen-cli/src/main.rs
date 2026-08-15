@@ -1459,6 +1459,14 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
     let status_line = "HTTP/1.1 200 OK\r\n";
     let not_found = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 9\r\n\r\nNot Found";
 
+    // Redirección canónica: "/" → "/web/index.html" (base del documento correcta
+    // para los imports relativos de CodeMirror: ./vendor/... y ../pkg/...)
+    if path_no_query == "/" {
+        let redirect = "HTTP/1.1 301 Moved Permanently\r\nLocation: /web/index.html\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let _ = stream.write_all(redirect.as_bytes());
+        return;
+    }
+
     // Path traversal guard
     if rel.contains("..") {
         let _ = stream.write_all(not_found.as_bytes());
