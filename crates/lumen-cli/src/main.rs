@@ -82,7 +82,7 @@ fn print_help() {
     println!("   lsp              Servidor LSP / LSP server (VS Code)");
     println!("   install <pkg>    Instalar paquete / Install package");
     println!("   pack <dir>       Crear distribución completa / Create full distribution");
-            println!("   serve            Playground web / Web playground");
+    println!("   serve            Playground web / Web playground");
     println!("   learn            Tutorial interactivo / Interactive tutorial");
     println!("   tutor <tema>     Mostrar lección / Show lesson");
     println!();
@@ -1559,15 +1559,17 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
     }
 }
 
-fn build_dist(out_dir: &str, include_all: bool) {
+fn build_dist(out_dir: &str, _include_all: bool) {
     use std::fs;
-    use std::path::Path;
 
     println!("📦 Creando distribución completa de LÚMEN...");
 
     let out_path = Path::new(out_dir);
     if out_path.exists() {
-        println!("⚠️  El directorio '{}' ya existe. Sobrescribiendo...", out_dir);
+        println!(
+            "⚠️  El directorio '{}' ya existe. Sobrescribiendo...",
+            out_dir
+        );
         fs::remove_dir_all(out_path).unwrap_or_else(|e| {
             eprintln!("Error eliminando directorio existente: {}", e);
             process::exit(1);
@@ -1656,13 +1658,15 @@ fn build_dist(out_dir: &str, include_all: bool) {
     fs::write(out_path.join("VERSION"), version).ok();
 
     println!("\n✅ Distribución completa creada en: {}", out_dir);
-    println!("   Ejecuta: ./{} --help", if cfg!(windows) { "lumen.exe" } else { "lumen" });
+    println!(
+        "   Ejecuta: ./{} --help",
+        if cfg!(windows) { "lumen.exe" } else { "lumen" }
+    );
 }
 
 /// Copia recursiva de directorios
 fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
     use std::fs;
-    use std::path::Path;
 
     let src = src.as_ref();
     let dst = dst.as_ref();
