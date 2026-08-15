@@ -25,28 +25,40 @@ macro_rules! ffi_rt_ty {
 
 #[cfg(feature = "full")]
 macro_rules! ffi_rt_conv {
-    (I, $e:expr) => { Value::Int($e) };
-    (F, $e:expr) => { Value::Float($e) };
-    (S, $e:expr) => { ffi_ret_str($e) };
-    (V, $e:expr) => {{ $e; Value::Void }};
+    (I, $e:expr) => {
+        Value::Int($e)
+    };
+    (F, $e:expr) => {
+        Value::Float($e)
+    };
+    (S, $e:expr) => {
+        ffi_ret_str($e)
+    };
+    (V, $e:expr) => {{
+        $e;
+        Value::Void
+    }};
 }
 
 #[cfg(feature = "full")]
 macro_rules! ffi_int_call {
     (0, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
-        let sym: libloading::Symbol<unsafe extern "C" fn() -> ffi_rt_ty!($rtk)> = unsafe { $lib.get($name.as_bytes()) }
-            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let sym: libloading::Symbol<unsafe extern "C" fn() -> ffi_rt_ty!($rtk)> =
+            unsafe { $lib.get($name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         Ok(ffi_rt_conv!($rtk, unsafe { sym() }))
     }};
     (1, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
-        let sym: libloading::Symbol<unsafe extern "C" fn(i64) -> ffi_rt_ty!($rtk)> = unsafe { $lib.get($name.as_bytes()) }
-            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let sym: libloading::Symbol<unsafe extern "C" fn(i64) -> ffi_rt_ty!($rtk)> =
+            unsafe { $lib.get($name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         let v = ffi_ints($args);
         Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0]) }))
     }};
     (2, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
-        let sym: libloading::Symbol<unsafe extern "C" fn(i64, i64) -> ffi_rt_ty!($rtk)> = unsafe { $lib.get($name.as_bytes()) }
-            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let sym: libloading::Symbol<unsafe extern "C" fn(i64, i64) -> ffi_rt_ty!($rtk)> =
+            unsafe { $lib.get($name.as_bytes()) }
+                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         let v = ffi_ints($args);
         Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1]) }))
     }};
@@ -65,11 +77,14 @@ macro_rules! ffi_int_call {
         Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2], v[3]) }))
     }};
     (5, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
-        let sym: libloading::Symbol<unsafe extern "C" fn(i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk)> =
-            unsafe { $lib.get($name.as_bytes()) }
-                .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
+        let sym: libloading::Symbol<
+            unsafe extern "C" fn(i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+        > = unsafe { $lib.get($name.as_bytes()) }
+            .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         let v = ffi_ints($args);
-        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2], v[3], v[4]) }))
+        Ok(ffi_rt_conv!($rtk, unsafe {
+            sym(v[0], v[1], v[2], v[3], v[4])
+        }))
     }};
     (6, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
         let sym: libloading::Symbol<
@@ -77,7 +92,9 @@ macro_rules! ffi_int_call {
         > = unsafe { $lib.get($name.as_bytes()) }
             .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         let v = ffi_ints($args);
-        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2], v[3], v[4], v[5]) }))
+        Ok(ffi_rt_conv!($rtk, unsafe {
+            sym(v[0], v[1], v[2], v[3], v[4], v[5])
+        }))
     }};
     (7, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
         let sym: libloading::Symbol<
@@ -85,7 +102,9 @@ macro_rules! ffi_int_call {
         > = unsafe { $lib.get($name.as_bytes()) }
             .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         let v = ffi_ints($args);
-        Ok(ffi_rt_conv!($rtk, unsafe { sym(v[0], v[1], v[2], v[3], v[4], v[5], v[6]) }))
+        Ok(ffi_rt_conv!($rtk, unsafe {
+            sym(v[0], v[1], v[2], v[3], v[4], v[5], v[6])
+        }))
     }};
     (8, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
         let sym: libloading::Symbol<
@@ -109,7 +128,18 @@ macro_rules! ffi_int_call {
     }};
     (10, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
         let sym: libloading::Symbol<
-            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+            unsafe extern "C" fn(
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+            ) -> ffi_rt_ty!($rtk),
         > = unsafe { $lib.get($name.as_bytes()) }
             .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         let v = ffi_ints($args);
@@ -119,17 +149,44 @@ macro_rules! ffi_int_call {
     }};
     (11, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
         let sym: libloading::Symbol<
-            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+            unsafe extern "C" fn(
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+            ) -> ffi_rt_ty!($rtk),
         > = unsafe { $lib.get($name.as_bytes()) }
             .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         let v = ffi_ints($args);
         Ok(ffi_rt_conv!($rtk, unsafe {
-            sym(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10])
+            sym(
+                v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10],
+            )
         }))
     }};
     (12, $lib:expr, $name:expr, $rtk:tt, $args:expr) => {{
         let sym: libloading::Symbol<
-            unsafe extern "C" fn(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> ffi_rt_ty!($rtk),
+            unsafe extern "C" fn(
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+                i64,
+            ) -> ffi_rt_ty!($rtk),
         > = unsafe { $lib.get($name.as_bytes()) }
             .map_err(|e| format!("Símbolo '{}' no encontrado: {}", $name, e))?;
         let v = ffi_ints($args);
@@ -172,7 +229,9 @@ enum FfiRet {
 
 #[cfg(feature = "full")]
 fn ffi_ints(args: &[Value]) -> Vec<i64> {
-    args.iter().map(|v| v.as_num().unwrap_or(0.0) as i64).collect()
+    args.iter()
+        .map(|v| v.as_num().unwrap_or(0.0) as i64)
+        .collect()
 }
 
 #[cfg(feature = "full")]
@@ -181,12 +240,10 @@ fn parse_ffi_types(s: &str) -> Vec<FfiTy> {
         return Vec::new();
     }
     s.split(',')
-        .map(|t| {
-            match t.trim() {
-                "decimal" | "float" | "f" | "double" => FfiTy::Float,
-                "texto" | "string" | "s" | "str" => FfiTy::Str,
-                _ => FfiTy::Int,
-            }
+        .map(|t| match t.trim() {
+            "decimal" | "float" | "f" | "double" => FfiTy::Float,
+            "texto" | "string" | "s" | "str" => FfiTy::Str,
+            _ => FfiTy::Int,
         })
         .collect()
 }
@@ -245,22 +302,63 @@ fn ffi_call_typed(
     let n = shape.len();
     let r = parse_ffi_ret(ret);
     if shape == "E".repeat(n) {
-        ffi_int_arms!(args, lib, name, n, r,
-            (0, I, Int), (1, I, Int), (2, I, Int), (3, I, Int),
-            (4, I, Int), (5, I, Int), (6, I, Int), (7, I, Int),
-            (8, I, Int), (9, I, Int), (10, I, Int), (11, I, Int),
+        ffi_int_arms!(
+            args,
+            lib,
+            name,
+            n,
+            r,
+            (0, I, Int),
+            (1, I, Int),
+            (2, I, Int),
+            (3, I, Int),
+            (4, I, Int),
+            (5, I, Int),
+            (6, I, Int),
+            (7, I, Int),
+            (8, I, Int),
+            (9, I, Int),
+            (10, I, Int),
+            (11, I, Int),
             (12, I, Int),
-            (0, F, Float), (1, F, Float), (2, F, Float), (3, F, Float),
-            (4, F, Float), (5, F, Float), (6, F, Float), (7, F, Float),
-            (8, F, Float), (9, F, Float), (10, F, Float), (11, F, Float),
+            (0, F, Float),
+            (1, F, Float),
+            (2, F, Float),
+            (3, F, Float),
+            (4, F, Float),
+            (5, F, Float),
+            (6, F, Float),
+            (7, F, Float),
+            (8, F, Float),
+            (9, F, Float),
+            (10, F, Float),
+            (11, F, Float),
             (12, F, Float),
-            (0, S, Str), (1, S, Str), (2, S, Str), (3, S, Str),
-            (4, S, Str), (5, S, Str), (6, S, Str), (7, S, Str),
-            (8, S, Str), (9, S, Str), (10, S, Str), (11, S, Str),
+            (0, S, Str),
+            (1, S, Str),
+            (2, S, Str),
+            (3, S, Str),
+            (4, S, Str),
+            (5, S, Str),
+            (6, S, Str),
+            (7, S, Str),
+            (8, S, Str),
+            (9, S, Str),
+            (10, S, Str),
+            (11, S, Str),
             (12, S, Str),
-            (0, V, Void), (1, V, Void), (2, V, Void), (3, V, Void),
-            (4, V, Void), (5, V, Void), (6, V, Void), (7, V, Void),
-            (8, V, Void), (9, V, Void), (10, V, Void), (11, V, Void),
+            (0, V, Void),
+            (1, V, Void),
+            (2, V, Void),
+            (3, V, Void),
+            (4, V, Void),
+            (5, V, Void),
+            (6, V, Void),
+            (7, V, Void),
+            (8, V, Void),
+            (9, V, Void),
+            (10, V, Void),
+            (11, V, Void),
             (12, V, Void),
         );
     }
@@ -1702,7 +1800,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__tcp_listen" || name == "__tcp_escuchar" {
             let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::net::TcpListener::bind(&addr) {
@@ -1715,7 +1813,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__tcp_accept" || name == "__tcp_aceptar" {
             match &self.tcp_listener {
                 Some(l) => match l.accept() {
@@ -1765,7 +1863,7 @@ impl VM {
         }
 
         // ██ FFI builtins ██
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_cargar" || name == "__ffi_load" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match unsafe { libloading::Library::new(&path) } {
@@ -1780,7 +1878,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_llamar" || name == "__ffi_call" {
             let lib_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
@@ -1808,7 +1906,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_llamar_nv" {
             let lib_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
@@ -1844,7 +1942,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_asignar" || name == "__ffi_alloc" {
             let size = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let align = args.get(1).and_then(|v| v.as_num()).unwrap_or(8.0) as usize;
@@ -1863,7 +1961,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_liberar" || name == "__ffi_free" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let size = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1886,7 +1984,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_escribir" || name == "__ffi_write" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1906,7 +2004,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_leer" || name == "__ffi_read" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1927,7 +2025,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_peek" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -1946,7 +2044,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__ffi_poke" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
@@ -2216,7 +2314,7 @@ impl VM {
         }
 
         // ██ GUI builtins ██
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__gui_ventana" || name == "__gui_window" {
             let title = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let width = args.get(1).and_then(|v| v.as_num()).unwrap_or(800.0) as i32;
@@ -2232,7 +2330,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__gui_mostrar" || name == "__gui_show" {
             let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(w) = self.gui_windows.get(&id) {
@@ -2247,7 +2345,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__gui_cerrar" || name == "__gui_close" {
             let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if self.gui_windows.remove(&id).is_some() {
@@ -2258,7 +2356,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__gui_id" || name == "__gui_hwnd" {
             let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(w) = self.gui_windows.get(&id) {
@@ -2272,7 +2370,7 @@ impl VM {
             return Some(Ok(()));
         }
 
-#[cfg(feature = "full")]
+        #[cfg(feature = "full")]
         if name == "__gui_esperar" || name == "__gui_poll" {
             let id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(w) = self.gui_windows.get_mut(&id) {
@@ -2478,7 +2576,8 @@ impl VM {
             }
             #[cfg(target_arch = "wasm32")]
             {
-                self.task_results_sync.insert(task_id.clone(), Value::Bool(true));
+                self.task_results_sync
+                    .insert(task_id.clone(), Value::Bool(true));
             }
             self.push(Value::str(task_id));
             return Some(Ok(()));
@@ -2567,9 +2666,7 @@ impl VM {
                 if let Some((_, handle)) = self.thread_handles.remove_entry(&hid) {
                     match handle.join() {
                         Ok(val) => Some(val),
-                        Err(_) => Some(Value::Error(Box::new(Value::str(
-                            "Thread panicked",
-                        )))),
+                        Err(_) => Some(Value::Error(Box::new(Value::str("Thread panicked")))),
                     }
                 } else {
                     None
@@ -2788,7 +2885,10 @@ impl VM {
                         vm.run_function(&fn2, vec![a2]).unwrap_or(Value::Void)
                     }
                 });
-                (h1.join().unwrap_or(Value::Void), h2.join().unwrap_or(Value::Void))
+                (
+                    h1.join().unwrap_or(Value::Void),
+                    h2.join().unwrap_or(Value::Void),
+                )
             };
             #[cfg(target_arch = "wasm32")]
             let (r1, r2) = {
@@ -3450,7 +3550,8 @@ impl VM {
                             coro.is_done = true;
                         }
                         self.current_coro = None;
-                        if let Some((saved_stack, saved_locals, saved_ip)) = self.main_saved.take() {
+                        if let Some((saved_stack, saved_locals, saved_ip)) = self.main_saved.take()
+                        {
                             self.stack = saved_stack;
                             self.locals = saved_locals;
                             self.ip = saved_ip;

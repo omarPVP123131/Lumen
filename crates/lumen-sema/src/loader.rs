@@ -133,9 +133,7 @@ impl ModuleLoader {
                     if path == "ingles" || path == "english" {
                         continue;
                     }
-                    let current_dir = if is_virtual(&current_norm) {
-                        current_norm.clone()
-                    } else if current_norm.is_dir() {
+                    let current_dir = if is_virtual(&current_norm) || current_norm.is_dir() {
                         current_norm.clone()
                     } else {
                         current_norm
@@ -280,8 +278,7 @@ fn parse_source(source: &str, path: &Path) -> Result<Program, ModuleError> {
     // presente); los virtuales del playground se parsean siempre.
     use std::sync::{Mutex, OnceLock};
     use std::time::SystemTime;
-    static SOURCE_CACHE: OnceLock<Mutex<HashMap<PathBuf, (SystemTime, Program)>>> =
-        OnceLock::new();
+    static SOURCE_CACHE: OnceLock<Mutex<HashMap<PathBuf, (SystemTime, Program)>>> = OnceLock::new();
     let cache = SOURCE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
     if let Some(mt) = mtime {
@@ -703,7 +700,7 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &
                 }
             }
         }
-Expr::List { items, .. } => {
+        Expr::List { items, .. } => {
             for item in items.iter_mut() {
                 prefix_expr(item, prefix, locals, known);
             }
@@ -1239,7 +1236,10 @@ mod tests {
     fn test_memory_loader_fallback_to_disk_still_works() {
         let mut loader = ModuleLoader::with_default_search_paths();
         let program = loader
-            .resolve_imports("funcion entero main() { retornar 42; }", Path::new("__lumen_mem__/main.nv"))
+            .resolve_imports(
+                "funcion entero main() { retornar 42; }",
+                Path::new("__lumen_mem__/main.nv"),
+            )
             .expect("código sin imports debe resolver");
         assert_eq!(program.len(), 1);
     }

@@ -30,7 +30,10 @@ fn main() {
     }
     let ir = IRBuilder::new().build(&prog);
     let c = lumen_aot::compile_to_c(&ir);
-    let out_path = args.get(2).cloned().unwrap_or_else(|| format!("{}.c", path));
+    let out_path = args
+        .get(2)
+        .cloned()
+        .unwrap_or_else(|| format!("{}.c", path));
     std::fs::write(&out_path, &c).unwrap();
     println!("C escrito en {}", out_path);
 }

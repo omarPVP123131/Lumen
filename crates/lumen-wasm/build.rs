@@ -15,21 +15,15 @@ fn main() {
     if let Ok(read) = fs::read_dir(&stdlib_dir) {
         let mut files: Vec<_> = read
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |x| x == "nv"))
+            .filter(|e| e.path().extension().is_some_and(|x| x == "nv"))
             .collect();
         files.sort_by_key(|e| e.file_name());
         for entry in files {
             let name = entry.file_name().to_string_lossy().to_string();
             let path = entry.path();
             // Ruta del include_str! relativa al archivo generado (OUT_DIR).
-            let rel = path
-                .to_str()
-                .unwrap()
-                .replace('\\', "/");
-            entries.push(format!(
-                "    (\"{}\", include_str!(\"{}\")),",
-                name, rel
-            ));
+            let rel = path.to_str().unwrap().replace('\\', "/");
+            entries.push(format!("    (\"{}\", include_str!(\"{}\")),", name, rel));
             // Recompilar si un archivo de stdlib cambia
             println!("cargo:rerun-if-changed={}", rel);
         }
@@ -42,5 +36,8 @@ fn main() {
     );
     fs::write(&out_path, generated).expect("no se pudo escribir embedded_stdlib.rs");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:warning=embedded_stdlib.rs: {} archivos de stdlib embebidos", entries.len());
+    println!(
+        "cargo:warning=embedded_stdlib.rs: {} archivos de stdlib embebidos",
+        entries.len()
+    );
 }

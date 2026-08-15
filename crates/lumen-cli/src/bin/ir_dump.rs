@@ -25,7 +25,10 @@ fn main() {
     let ir = IRBuilder::new().build(&prog);
     println!("entry: {}", ir.entry);
     for (name, func) in &ir.funcs {
-        println!("\n=== {} (params: {:?}, entry label {}) ===", name, func.params, func.entry);
+        println!(
+            "\n=== {} (params: {:?}, entry label {}) ===",
+            name, func.params, func.entry
+        );
         for (i, ins) in func.instrs.iter().enumerate() {
             println!("  {:4} {:?}", i, ins);
         }

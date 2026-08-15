@@ -22,7 +22,10 @@ fn repro_virtual_flatten_stdlib() {
     }
     assert!(files.contains_key("texto.nv"), "texto.nv embebido");
     assert!(files.contains_key("coleccion.nv"), "coleccion.nv embebido");
-    assert!(files.contains_key("matematicas.nv"), "matematicas.nv embebido");
+    assert!(
+        files.contains_key("matematicas.nv"),
+        "matematicas.nv embebido"
+    );
 
     let cases: Vec<(&str, &str, &str)> = vec![
         (
@@ -49,21 +52,21 @@ fn repro_virtual_flatten_stdlib() {
 
     for (name, src, expected) in cases {
         let mut loader = lumen_sema::ModuleLoader::with_memory_files(files.clone());
-        let program = match loader.resolve_imports(src, std::path::Path::new("__lumen_mem__/main.nv"))
-        {
-            Ok(p) => p,
-            Err(e) => {
-                let msg = module_error_str(&e);
-                assert!(
-                    msg.contains(expected),
-                    "[{}] resolve_imports error: {}",
-                    name,
-                    msg
-                );
-                eprintln!("[{}] ok (error de compile): {}", name, msg);
-                continue;
-            }
-        };
+        let program =
+            match loader.resolve_imports(src, std::path::Path::new("__lumen_mem__/main.nv")) {
+                Ok(p) => p,
+                Err(e) => {
+                    let msg = module_error_str(&e);
+                    assert!(
+                        msg.contains(expected),
+                        "[{}] resolve_imports error: {}",
+                        name,
+                        msg
+                    );
+                    eprintln!("[{}] ok (error de compile): {}", name, msg);
+                    continue;
+                }
+            };
 
         let sema = lumen_sema::SemanticAnalyzer::new();
         let mut prog = program;

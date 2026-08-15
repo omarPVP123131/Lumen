@@ -157,8 +157,8 @@ pub enum TokenKind {
     Question,     // ?
 
     // Range operators
-    DotDot,       // ..
-    DotDotEqual,  // ..=
+    DotDot,      // ..
+    DotDotEqual, // ..=
 
     // Delimiters
     LeftParen,    // (

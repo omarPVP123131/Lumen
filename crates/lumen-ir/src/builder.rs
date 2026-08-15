@@ -1112,7 +1112,12 @@ impl IRBuilder {
                 }
                 self.emit(Instr::ArrayNew(items.len()));
             }
-            Expr::Range { start, end, inclusive, .. } => {
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
                 let start_label = self.new_label();
                 let end_label = self.new_label();
                 let i_temp = format!("__rng_i_{}", self.temp_counter);
@@ -1127,7 +1132,11 @@ impl IRBuilder {
                 self.emit(Instr::Store(cmp_temp.clone()));
                 self.emit(Instr::Load(cmp_temp.clone()));
                 self.gen_expr(end);
-                self.emit(Instr::Binary(if *inclusive { Op::LessEqual } else { Op::Less }));
+                self.emit(Instr::Binary(if *inclusive {
+                    Op::LessEqual
+                } else {
+                    Op::Less
+                }));
                 self.emit(Instr::JmpIf(end_label));
                 self.emit(Instr::Load(cmp_temp.clone()));
                 self.emit(Instr::ArrayPush);

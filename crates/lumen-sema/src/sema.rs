@@ -1108,7 +1108,7 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
-Stmt::GuardLet {
+            Stmt::GuardLet {
                 pattern,
                 value,
                 else_body,
@@ -1287,7 +1287,10 @@ Stmt::GuardLet {
                     self.bind_pattern_vars(&arm.value, arm.span);
                     let arm_val_type = self.analyze_expr(&arm.value);
                     let is_range_arm = matches!(&arm.value, Expr::Range { .. });
-                    let is_pattern_arm = matches!(&arm.value, Expr::Algun { .. } | Expr::Exito { .. } | Expr::Error { .. });
+                    let is_pattern_arm = matches!(
+                        &arm.value,
+                        Expr::Algun { .. } | Expr::Exito { .. } | Expr::Error { .. }
+                    );
                     if !is_range_arm
                         && !is_pattern_arm
                         && arm_val_type != expr_type
@@ -2837,7 +2840,9 @@ Stmt::GuardLet {
                     TypeInfo::Lista(Box::new(item_type))
                 }
             }
-            Expr::Range { start, end, span, .. } => {
+            Expr::Range {
+                start, end, span, ..
+            } => {
                 let start_type = self.analyze_expr(start);
                 let end_type = self.analyze_expr(end);
                 for t in [&start_type, &end_type] {

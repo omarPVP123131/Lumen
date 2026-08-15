@@ -109,10 +109,15 @@ impl LumenRuntime {
     /// Ejecuta código fuente con archivos de proyecto adicionales (multi-archivo).
     /// `names`/`contents` van en paralelo (misma longitud); los archivos del
     /// proyecto tienen prioridad sobre la stdlib embebida por nombre base.
-    pub fn run_with_files(&mut self, source: &str, names: Vec<String>, contents: Vec<String>) -> String {
+    pub fn run_with_files(
+        &mut self,
+        source: &str,
+        names: Vec<String>,
+        contents: Vec<String>,
+    ) -> String {
         self.output.clear();
         let mut files = HashMap::new();
-        for (n, c) in names.into_iter().zip(contents.into_iter()) {
+        for (n, c) in std::iter::zip(names, contents) {
             files.insert(n, c);
         }
         run_lumen_with_files(source, files)
@@ -280,11 +285,11 @@ fn run_lumen_with_files(source: &str, project_files: HashMap<String, String>) ->
     let mut files = memory_stdlib();
     files.extend(project_files);
     let mut loader = lumen_sema::ModuleLoader::with_memory_files(files);
-    let mut program = match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv"))
-    {
-        Ok(p) => p,
-        Err(e) => return format!("Error de imports: {}", module_error_str(&e)),
-    };
+    let mut program =
+        match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv")) {
+            Ok(p) => p,
+            Err(e) => return format!("Error de imports: {}", module_error_str(&e)),
+        };
 
     // Semantic analysis
     let sema = lumen_sema::SemanticAnalyzer::new();
@@ -311,11 +316,11 @@ fn run_lumen_with_files(source: &str, project_files: HashMap<String, String>) ->
 pub fn run_lumen(source: &str) -> String {
     // Resolver imports con loader virtual (stdlib embebida en memoria)
     let mut loader = lumen_sema::ModuleLoader::with_memory_files(memory_stdlib());
-    let mut program = match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv"))
-    {
-        Ok(p) => p,
-        Err(e) => return format!("Error de imports: {}", module_error_str(&e)),
-    };
+    let mut program =
+        match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv")) {
+            Ok(p) => p,
+            Err(e) => return format!("Error de imports: {}", module_error_str(&e)),
+        };
 
     // Semantic analysis
     let sema = lumen_sema::SemanticAnalyzer::new();
@@ -373,11 +378,11 @@ pub fn compile_to_bytes(source: &str) -> Result<Vec<u8>, String> {
 /// `None` si todo está bien.
 pub fn check_lumen(source: &str) -> Option<String> {
     let mut loader = lumen_sema::ModuleLoader::with_memory_files(memory_stdlib());
-    let mut program = match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv"))
-    {
-        Ok(p) => p,
-        Err(e) => return Some(format!("Error de imports: {}", module_error_str(&e))),
-    };
+    let mut program =
+        match loader.resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv")) {
+            Ok(p) => p,
+            Err(e) => return Some(format!("Error de imports: {}", module_error_str(&e))),
+        };
 
     let sema = lumen_sema::SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
@@ -387,7 +392,6 @@ pub fn check_lumen(source: &str) -> Option<String> {
 
     None
 }
-
 
 // ── Introspección del pkg embebido (diagnóstico) ─────────────────────
 #[cfg(feature = "wasm")]

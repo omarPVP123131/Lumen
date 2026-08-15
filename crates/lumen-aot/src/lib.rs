@@ -140,11 +140,7 @@ impl AotCompiler {
 
     fn compile_body(&mut self, name: &str, func: &LumenFunc) {
         if std::env::var_os("LUMEN_AOT_DEBUG").is_some() {
-            eprintln!(
-                "[aot] compile_body({}) instrs={}",
-                name,
-                func.instrs.len()
-            );
+            eprintln!("[aot] compile_body({}) instrs={}", name, func.instrs.len());
             for ins in &func.instrs {
                 eprintln!("[aot]   {:?}", ins);
             }
@@ -165,7 +161,11 @@ impl AotCompiler {
         // (los VarDecl sin inicializador emiten ConstInt 0 + Store).
         use cranelift::frontend::Variable;
         let mut vars: HashMap<String, Variable> = HashMap::new();
-        fn var_of(builder: &mut FunctionBuilder, vars: &mut HashMap<String, Variable>, n: &str) -> Variable {
+        fn var_of(
+            builder: &mut FunctionBuilder,
+            vars: &mut HashMap<String, Variable>,
+            n: &str,
+        ) -> Variable {
             if let Some(&v) = vars.get(n) {
                 return v;
             }
@@ -218,11 +218,13 @@ impl AotCompiler {
         }
         let zero = builder.ins().iconst(i64, 0);
         for n in &used_names {
-            let v = var_of(&mut builder, &mut vars, n); builder.def_var(v, zero);
+            let v = var_of(&mut builder, &mut vars, n);
+            builder.def_var(v, zero);
         }
         for (pi, pname) in func.params.iter().enumerate() {
             let val = entry_params.get(pi).copied().unwrap_or(zero);
-            let v = var_of(&mut builder, &mut vars, pname); builder.def_var(v, val);
+            let v = var_of(&mut builder, &mut vars, pname);
+            builder.def_var(v, val);
         }
 
         // ── Emisión lineal ──
@@ -268,14 +270,16 @@ impl AotCompiler {
                     kinds.push(true);
                 }
                 Instr::Load(n) => {
-                    let v = var_of(&mut builder, &mut vars, n); stack.push(builder.use_var(v));
+                    let v = var_of(&mut builder, &mut vars, n);
+                    stack.push(builder.use_var(v));
                     kinds.push(*var_kinds.get(n).unwrap_or(&false));
                 }
                 Instr::Store(n) => {
                     if let Some(v) = stack.pop() {
                         let k = kinds.pop().unwrap_or(false);
                         var_kinds.insert(n.to_string(), k);
-                        let vv = var_of(&mut builder, &mut vars, n); builder.def_var(vv, v);
+                        let vv = var_of(&mut builder, &mut vars, n);
+                        builder.def_var(vv, v);
                     }
                 }
                 Instr::Binary(op) => {
@@ -323,12 +327,16 @@ impl AotCompiler {
                         | Op::GreaterEqual => {
                             if matches!(op, Op::Equal | Op::NotEqual) && ka && kb {
                                 // comparación de strings: strcmp vía shim
-                                let fref = self.module.declare_func_in_func(self.str_eq_id, builder.func);
+                                let fref = self
+                                    .module
+                                    .declare_func_in_func(self.str_eq_id, builder.func);
                                 let call = builder.ins().call(fref, &[a, b]);
                                 let eq = builder.inst_results(call)[0];
                                 let z = builder.ins().iconst(i64, 0);
                                 let one = builder.ins().iconst(i64, 1);
-                                if matches!(op, Op::Equal) { eq } else {
+                                if matches!(op, Op::Equal) {
+                                    eq
+                                } else {
                                     let is_zero = builder.ins().icmp(IntCC::Equal, eq, z);
                                     builder.ins().select(is_zero, one, z)
                                 }
@@ -353,7 +361,11 @@ impl AotCompiler {
                             let z = builder.ins().iconst(i64, 0);
                             let za = builder.ins().icmp(IntCC::NotEqual, a, z);
                             let zb = builder.ins().icmp(IntCC::NotEqual, b, z);
-                            let r = if *op == Op::And { builder.ins().band(za, zb) } else { builder.ins().bor(za, zb) };
+                            let r = if *op == Op::And {
+                                builder.ins().band(za, zb)
+                            } else {
+                                builder.ins().bor(za, zb)
+                            };
                             let one = builder.ins().iconst(i64, 1);
                             builder.ins().select(r, one, z)
                         }
@@ -382,7 +394,11 @@ impl AotCompiler {
                 Instr::Print => {
                     let v = stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0));
                     let k = kinds.pop().unwrap_or(false);
-                    let fid = if k { self.print_str_id } else { self.print_i64_id };
+                    let fid = if k {
+                        self.print_str_id
+                    } else {
+                        self.print_i64_id
+                    };
                     let fref = self.module.declare_func_in_func(fid, builder.func);
                     builder.ins().call(fref, &[v]);
                 }
@@ -398,7 +414,11 @@ impl AotCompiler {
                     match name.as_str() {
                         "imprimir" | "print" => {
                             for (av, ak) in args.iter().zip(arg_kinds.iter()) {
-                                let fid = if *ak { self.print_str_id } else { self.print_i64_id };
+                                let fid = if *ak {
+                                    self.print_str_id
+                                } else {
+                                    self.print_i64_id
+                                };
                                 let fref = self.module.declare_func_in_func(fid, builder.func);
                                 builder.ins().call(fref, &[*av]);
                             }
@@ -415,7 +435,8 @@ impl AotCompiler {
                         }
                         _ => {
                             if let Some(info) = self.funcs.get(name).cloned() {
-                                let func_ref = self.module.declare_func_in_func(info.id, builder.func);
+                                let func_ref =
+                                    self.module.declare_func_in_func(info.id, builder.func);
                                 let call = builder.ins().call(func_ref, &args);
                                 let res = builder.inst_results(call)[0];
                                 stack.push(res);
@@ -696,7 +717,11 @@ pub fn compile_to_c(program: &Program) -> String {
     }
     for (name, func) in &program.funcs {
         if !func.params.is_empty() {
-            let plist: Vec<String> = func.params.iter().map(|p| format!("\"{}\"", esc(p))).collect();
+            let plist: Vec<String> = func
+                .params
+                .iter()
+                .map(|p| format!("\"{}\"", esc(p)))
+                .collect();
             out.push_str(&format!(
                 "  _regpars(\"{}\", (const char*[]){{ {} }}, {});\n",
                 esc(name),
@@ -707,7 +732,7 @@ pub fn compile_to_c(program: &Program) -> String {
     }
     out.push_str("}\n\n");
 
-    for (name, _) in &program.funcs {
+    for name in program.funcs.keys() {
         out.push_str(&format!("static Val _f_{}(void);\n", mangle(name)));
     }
     for n in &unknown {
@@ -733,7 +758,10 @@ pub fn compile_to_c(program: &Program) -> String {
         out.push_str(&emit_func(name, func, program, &name_sets, &gv_of));
     }
     for n in &unknown {
-        out.push_str(&format!("static Val _f_{}(void) {{ return _v_void(); }}\n\n", mangle(n)));
+        out.push_str(&format!(
+            "static Val _f_{}(void) {{ return _v_void(); }}\n\n",
+            mangle(n)
+        ));
     }
 
     let mut fnames: Vec<&String> = program.funcs.keys().collect();
@@ -800,7 +828,13 @@ fn op_code(op: &Op) -> i64 {
     }
 }
 
-fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeMap<String, Vec<String>>, gv_of: &dyn Fn(&str) -> String) -> String {
+fn emit_func(
+    name: &str,
+    func: &LumenFunc,
+    program: &Program,
+    name_sets: &BTreeMap<String, Vec<String>>,
+    gv_of: &dyn Fn(&str) -> String,
+) -> String {
     let mut s = String::new();
     s.push_str(&format!("static Val _f_{}(void) {{\n", mangle(name)));
 

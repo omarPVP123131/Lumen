@@ -3851,13 +3851,26 @@ para a en nums {
 
     #[test]
     fn test_parse_range_pattern() {
-        let source = "elegir (n) { caso 0..5: imprimir(\"bajo\"); caso 5..=10: imprimir(\"medio\"); }";
+        let source =
+            "elegir (n) { caso 0..5: imprimir(\"bajo\"); caso 5..=10: imprimir(\"medio\"); }";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
             assert_eq!(arms.len(), 2);
-            assert!(matches!(&arms[0].value, Expr::Range { inclusive: false, .. }));
-            assert!(matches!(&arms[1].value, Expr::Range { inclusive: true, .. }));
+            assert!(matches!(
+                &arms[0].value,
+                Expr::Range {
+                    inclusive: false,
+                    ..
+                }
+            ));
+            assert!(matches!(
+                &arms[1].value,
+                Expr::Range {
+                    inclusive: true,
+                    ..
+                }
+            ));
         } else {
             panic!("Expected Match statement");
         }
@@ -3882,7 +3895,10 @@ para a en nums {
         let source = "lista<entero> r = 0..10;";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+        if let DeclOrStmt::Decl(Decl::Variable {
+            init: Some(init), ..
+        }) = &program[0]
+        {
             assert!(matches!(init.as_ref(), Expr::Range { .. }));
         } else {
             panic!("Expected Variable declaration with init");

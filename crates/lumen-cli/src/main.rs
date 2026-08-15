@@ -1227,7 +1227,9 @@ fn first_comment_line(content: &str) -> String {
     for line in content.lines() {
         let trimmed = line.trim();
         let c = trimmed.trim_start_matches(['/', '*', '#', ' ']);
-        if !c.is_empty() && (trimmed.starts_with("//") || trimmed.starts_with('#') || trimmed.starts_with("/*")) {
+        if !c.is_empty()
+            && (trimmed.starts_with("//") || trimmed.starts_with('#') || trimmed.starts_with("/*"))
+        {
             return c.trim().to_string();
         }
     }
@@ -1239,7 +1241,7 @@ fn build_examples_index(examples_dir: &Path) -> String {
     if let Ok(read) = fs::read_dir(examples_dir) {
         let mut files: Vec<_> = read
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |x| x == "nv"))
+            .filter(|e| e.path().extension().is_some_and(|x| x == "nv"))
             .collect();
         files.sort_by_key(|e| e.file_name());
         for entry in files {
@@ -1268,8 +1270,7 @@ fn build_examples_index(examples_dir: &Path) -> String {
 fn escape_json(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('"', "\\\"")
-        .replace('\n', " ")
-        .replace('\r', " ")
+        .replace(['\n', '\r'], " ")
 }
 
 fn handle_api_request(
@@ -1298,15 +1299,9 @@ fn handle_api_request(
         let lib_dirs = vec![PathBuf::from("stdlib")];
         let (out, err) = run_source_capture(body, &lib_dirs, &tmp);
         let resp = if err.is_empty() {
-            format!(
-                "{{\"ok\":true,\"output\":\"{}\"}}",
-                escape_json_ml(&out)
-            )
+            format!("{{\"ok\":true,\"output\":\"{}\"}}", escape_json_ml(&out))
         } else {
-            format!(
-                "{{\"ok\":false,\"error\":\"{}\"}}",
-                escape_json_ml(&err)
-            )
+            format!("{{\"ok\":false,\"error\":\"{}\"}}", escape_json_ml(&err))
         };
         let _ = fs::remove_file(&tmp);
         json_ok(stream, &resp);
@@ -1336,7 +1331,9 @@ fn handle_api_request(
         p if p.starts_with("/api/examples/") => {
             let file = p.trim_start_matches("/api/examples/");
             if file.contains("..") || file.contains('\\') {
-                let _ = stream.write_all("HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found".as_bytes());
+                let _ = stream.write_all(
+                    "HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found".as_bytes(),
+                );
                 return true;
             }
             let safe = examples_dir.join(file);
@@ -1351,7 +1348,9 @@ fn handle_api_request(
                     json_ok(stream, &body);
                 }
                 Err(_) => {
-                    let _ = stream.write_all("HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found".as_bytes());
+                    let _ = stream.write_all(
+                        "HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found".as_bytes(),
+                    );
                 }
             }
             true
@@ -1376,7 +1375,9 @@ fn run_source_capture(source: &str, lib_dirs: &[PathBuf], base_path: &Path) -> (
             .map(|e| {
                 format!(
                     "{:?} — {} ({})",
-                    (e.span.start.line, e.span.start.col), e.message, e.code
+                    (e.span.start.line, e.span.start.col),
+                    e.message,
+                    e.code
                 )
             })
             .collect();
@@ -1447,10 +1448,10 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
             body = String::from_utf8_lossy(&v).to_string();
         }
     }
-    if path_no_query.starts_with("/api/") {
-        if handle_api_request(stream, path_no_query, root, method, &body) {
-            return;
-        }
+    if path_no_query.starts_with("/api/")
+        && handle_api_request(stream, path_no_query, root, method, &body)
+    {
+        return;
     }
     let rel = if path_no_query == "/" {
         "web/index.html".to_string()
