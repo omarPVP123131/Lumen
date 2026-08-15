@@ -1013,7 +1013,9 @@ fn build_native(path: &str, lib_dirs: &[PathBuf], backend: &str) {
             match s {
                 Ok(st) if st.success() => {
                     prof_time("gcc", &t);
-                    let _ = fs::remove_file(&c_path);
+                    if std::env::var_os("LUMEN_KEEP_OBJ").is_none() {
+                        let _ = fs::remove_file(&c_path);
+                    }
                     println!("✓ Binario nativo (C -O3): {}", exe_name.display());
                 }
                 Ok(st) => {

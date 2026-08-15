@@ -612,18 +612,19 @@ impl IRBuilder {
                 else_body,
                 ..
             } => {
+                let temp = format!("__mt_{}", self.temp_counter);
+                self.temp_counter += 1;
                 self.gen_expr(value);
-                self.gen_expr(pattern);
-                self.emit(Instr::Binary(Op::Equal));
-                let ok_l = self.new_label();
+                self.emit(Instr::Store(temp.clone()));
                 let else_l = self.new_label();
-                self.emit(Instr::JmpIf(else_l));
-                self.emit(Instr::Jmp(ok_l));
+                let end_l = self.new_label();
+                self.emit_if_let_pattern(&temp, pattern, else_l);
+                self.emit(Instr::Jmp(end_l));
                 self.emit(Instr::Label(else_l));
                 for n in else_body {
                     self.gen_decl_or_stmt(n);
                 }
-                self.emit(Instr::Label(ok_l));
+                self.emit(Instr::Label(end_l));
             }
             Stmt::Destructure { targets, value, .. } => {
                 let temp = format!("__dt_{}", self.temp_counter);

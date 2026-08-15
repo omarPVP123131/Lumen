@@ -1071,13 +1071,13 @@ fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeM
                     for _ in plen..*argc {
                         s.push_str("  (void)POP();\n");
                     }
-                    s.push_str(&format!("  PUSH(_f_{}());\n", mangle(n)));
+                    s.push_str(&format!("  {{ Val _r = _f_{}(); PUSH(_r); }}\n", mangle(n)));
                     s.push_str(&post);
                 } else {
                     for _ in 0..*argc {
                         s.push_str("  (void)POP();\n");
                     }
-                    s.push_str(&format!("  PUSH(_f_{}());\n", mangle(n)));
+                    s.push_str(&format!("  {{ Val _r = _f_{}(); PUSH(_r); }}\n", mangle(n)));
                 }
             }
             Instr::FuncRef(n) => {
@@ -1090,7 +1090,7 @@ fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeM
             Instr::CallValue(argc) => {
                 if *argc == 0 {
                     s.push_str(
-                        "  { Val _cf = POP(); if (!strcmp(_cf.s, \"largo\") || !strcmp(_cf.s, \"len\") || !strcmp(_cf.s, \"__str_longitud\")) { PUSH(_v_int(0)); } else { PUSH(_fref_call(_cf)); } }\n",
+                        "  { Val _cf = POP(); if (!strcmp(_cf.s, \"largo\") || !strcmp(_cf.s, \"len\") || !strcmp(_cf.s, \"__str_longitud\")) { PUSH(_v_int(0)); } else { Val _r = _fref_call(_cf); PUSH(_r); } }\n",
                     );
                 } else {
                     s.push_str(&format!(
@@ -1113,7 +1113,7 @@ fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeM
                             i, i
                         ));
                     }
-                    s.push_str("      PUSH(_fref_call(_cf));\n");
+                    s.push_str("      { Val _r = _fref_call(_cf); PUSH(_r); }\n");
                     s.push_str("    }\n  }\n");
                 }
             }
@@ -1162,7 +1162,7 @@ fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeM
             Instr::OptionNone => s.push_str("  PUSH(_none());\n"),
             Instr::MatchType(k) => {
                 let test = match *k {
-                    0 => "_u.t == T_SOME",
+                    0 => "_u.t == T_SOM",
                     1 => "_u.t == T_OK",
                     2 => "_u.t == T_ERR",
                     _ => "0",
@@ -1173,7 +1173,7 @@ fn emit_func(name: &str, func: &LumenFunc, program: &Program, name_sets: &BTreeM
                 ));
             }
             Instr::MatchPayload => {
-                s.push_str("  { Val _u = POP(); if (_u.t == T_SOME || _u.t == T_OK || _u.t == T_ERR) { PUSH(_u.items[0]); } else { PUSH(_u); } }\n");
+                s.push_str("  { Val _u = POP(); if (_u.t == T_SOM || _u.t == T_OK || _u.t == T_ERR) { PUSH(_u.items[0]); } else { PUSH(_u); } }\n");
             }
             Instr::TupleNew(n) => {
                 s.push_str(&format!(

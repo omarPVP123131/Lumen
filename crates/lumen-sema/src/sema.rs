@@ -1108,15 +1108,15 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
-            Stmt::GuardLet {
+Stmt::GuardLet {
                 pattern,
                 value,
                 else_body,
                 span,
             } => {
                 self.analyze_expr(value);
-                self.scopes.push(Scope::new());
                 self.bind_pattern_vars(pattern, *span);
+                self.scopes.push(Scope::new());
                 for n in else_body {
                     self.analyze_decl_or_stmt(n);
                 }
