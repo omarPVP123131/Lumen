@@ -7,21 +7,25 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
-#ifndef _WIN32
+
+/* POSIX headers for non-Windows */
+#if !defined(_WIN32) && !defined(__APPLE__)
 #include <regex.h>
 #include <dirent.h>
-#else
-#include <process.h>
+#include <unistd.h>
+#include <pthread.h>
 #endif
+#if defined(__APPLE__)
+#include <pthread.h>
+/* macOS has regex in libsystem but different API; disable for now */
+#endif
+
 #ifdef _WIN32
 extern char** environ;
 #include <windows.h>
-#endif
-#ifdef __APPLE__
-#include <pthread.h>
-#endif
-#ifndef _WIN32
-#include <pthread.h>
+#include <process.h>
+#else
+extern char** environ;
 #endif
 
 typedef struct Val {
@@ -630,6 +634,8 @@ static Val _heap_agregar(Val h, Val x) {
   return nv;
 }
 
+#if !defined(_WIN32) && !defined(__APPLE__)
+/* regex functions only on Linux (glibc) */
 static int _regex_m(const char* pat, const char* s) {
   regex_t re;
   if (regcomp(&re, pat, REG_EXTENDED) != 0) return 0;
@@ -664,6 +670,11 @@ static char* _regex_rep(const char* pat, const char* s, const char* rep) {
   regfree(&re);
   return out;
 }
+#else
+/* Stubs for Windows/macOS */
+static int _regex_m(const char* pat, const char* s) { (void)pat; (void)s; return 0; }
+static char* _regex_rep(const char* pat, const char* s, const char* rep) { (void)pat; (void)s; (void)rep; return _v_str(s).s; }
+#endif
 
 static const uint32_t _dec_tab[][3] = {
   {0x00C0,0x41,0x300},{0x00C1,0x41,0x301},{0x00C2,0x41,0x302},{0x00C3,0x41,0x303},{0x00C4,0x41,0x308},{0x00C5,0x41,0x30A},
@@ -860,6 +871,7 @@ static char* _time_fmt(int64_t ts, const char* fmt) {
   return m;
 }
 static Val _env_list(void) {
+#if !defined(_WIN32)
   int n = 0;
   while (environ[n]) n++;
   Val* xs = (Val*)malloc(sizeof(Val) * (n > 0 ? n : 1));
@@ -867,8 +879,13 @@ static Val _env_list(void) {
   Val v = _arrn(xs, n);
   free(xs);
   return v;
+#else
+  (void)0;
+  return _arrn(NULL, 0);
+#endif
 }
 static Val _fs_list(const char* path) {
+#if !defined(_WIN32)
   DIR* d = opendir(path);
   if (!d) return _v_void();
   Val* xs = NULL;
@@ -883,6 +900,11 @@ static Val _fs_list(const char* path) {
   Val v = _arrn(xs, n);
   free(xs);
   return v;
+}
+#else
+  (void)path;
+  return _v_void();
+#endif
 }
 static char* _trim(const char* s) {
   const char* p = s;
@@ -966,15 +988,26 @@ static Val _ffi_call(Val h, const char* nm, Val args, const char* ret) {
     if (args.argc > 0) return _v_int(system(args.items[args.argc - 1].s ? args.items[args.argc - 1].s : ""));
     return _v_int(0);
   }
+#if defined(_WIN32)
+  if (!strcmp(nm, "_getpid")) return _v_int((int64_t)_getpid());
+#else
   if (!strcmp(nm, "_getpid")) return _v_int((int64_t)getpid());
+#endif
   if (!strcmp(nm, "getenv")) {
     if (args.argc > 0) return _v_int((int64_t)(intptr_t)getenv(args.items[0].s ? args.items[0].s : ""));
     return _v_int(0);
   }
+#if defined(_WIN32)
   if (!strcmp(nm, "_putenv")) {
     if (args.argc > 0) return _v_int(_putenv(args.items[0].s ? args.items[0].s : ""));
     return _v_int(0);
   }
+#else
+  if (!strcmp(nm, "_putenv")) {
+    if (args.argc > 0) return _v_int(putenv(args.items[0].s ? args.items[0].s : ""));
+    return _v_int(0);
+  }
+#endif
   return _v_int(0);
 }
 
