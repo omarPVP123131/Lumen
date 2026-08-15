@@ -7,9 +7,12 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#ifndef _WIN32
 #include <regex.h>
 #include <dirent.h>
+#else
 #include <process.h>
+#endif
 #ifdef _WIN32
 extern char** environ;
 #include <windows.h>

@@ -1330,6 +1330,10 @@ mod tests {
 
     #[test]
     fn test_c_backend_gcc_runtime() {
+        // Skip on Windows: el runtime C usa POSIX (opendir, regex) no disponible nativamente
+        if cfg!(windows) {
+            return;
+        }
         if std::process::Command::new("gcc")
             .arg("--version")
             .output()
@@ -1338,9 +1342,6 @@ mod tests {
             return;
         }
         if std::env::var_os("MSYSTEM").is_some() {
-            // git-bash antepone sus propios mingw64/usr bin al PATH: los DLLs
-            // del msys2 gcc (libgcc_s_seh, libwinpthread, ...) se resuelven
-            // contra los de Git for Windows → 0xC0000139 al cargar cc1.
             return;
         }
         let program = sample_program("main");
