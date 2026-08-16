@@ -1,0 +1,7 @@
+{
+  "files.associations": {
+    "*.nv": "lumen"
+  },
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true
+}

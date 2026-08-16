@@ -445,6 +445,27 @@ impl Formatter {
             Stmt::Block { stmts, .. } => {
                 self.fmt_block(stmts);
             }
+            Stmt::Posponer { body, .. } => {
+                if top_level {
+                    self.push_indent();
+                }
+                self.push("posponer ");
+                self.fmt_block(body);
+            }
+            Stmt::TryCatch {
+                try_body,
+                err_var,
+                catch_body,
+                ..
+            } => {
+                if top_level {
+                    self.push_indent();
+                }
+                self.push("intentar ");
+                self.fmt_block(try_body);
+                self.push(&format!(" atrapar ({}) ", err_var));
+                self.fmt_block(catch_body);
+            }
             Stmt::Import { path, alias, .. } => {
                 if top_level {
                     self.push_indent();
@@ -456,6 +477,27 @@ impl Formatter {
                     self.push(a);
                 }
                 self.push(";");
+                self.newline();
+            }
+            Stmt::InlineAsm { code, .. } => {
+                if top_level {
+                    self.push_indent();
+                }
+                self.push(&format!("ensamblador {{ \"{}\" }}", escape_string(code)));
+                self.newline();
+            }
+            Stmt::InlineC { code, .. } => {
+                if top_level {
+                    self.push_indent();
+                }
+                self.push(&format!("bloque_c {{ \"{}\" }}", escape_string(code)));
+                self.newline();
+            }
+            Stmt::InlineRust { code, .. } => {
+                if top_level {
+                    self.push_indent();
+                }
+                self.push(&format!("bloque_rust {{ \"{}\" }}", escape_string(code)));
                 self.newline();
             }
             _ => {}
@@ -584,6 +626,37 @@ impl Formatter {
                 self.push(".");
                 self.push(field);
             }
+            Expr::SafeFieldAccess { expr, field, .. } => {
+                self.fmt_expr(expr);
+                self.push("?.");
+                self.push(field);
+            }
+            Expr::Elvis { expr, default, .. } => {
+                self.fmt_expr(expr);
+                self.push(" ?: ");
+                self.fmt_expr(default);
+            }
+            Expr::Comprehension { expr, var_name, iter, condition, .. } => {
+                self.push("[");
+                self.fmt_expr(expr);
+                self.push(&format!(" para {} en ", var_name));
+                self.fmt_expr(iter);
+                if let Some(cond) = condition {
+                    self.push(" si ");
+                    self.fmt_expr(cond);
+                }
+                self.push("]");
+            }
+            Expr::Query { var_name, source, where_clause, select_expr, .. } => {
+                self.push(&format!("consultar {} en ", var_name));
+                self.fmt_expr(source);
+                if let Some(w) = where_clause {
+                    self.push(" donde ");
+                    self.fmt_expr(w);
+                }
+                self.push(" seleccionar ");
+                self.fmt_expr(select_expr);
+            }
             Expr::StructInit {
                 struct_name: name,
                 fields,
@@ -645,6 +718,11 @@ impl Formatter {
                     self.push(")");
                 }
             }
+            Expr::Comptime { expr, .. } => {
+                self.push("en_tiempo_compilacion { ");
+                self.fmt_expr(expr);
+                self.push(" }");
+            }
             _ => {}
         }
     }
@@ -680,6 +758,14 @@ fn format_type(t: &Type) -> String {
         }
         Type::GenericStruct { name, .. } => name.clone(),
         Type::ImplTrait(name) => format!("impl {}", name),
+        Type::Prestado { inner, mutable } => {
+            if *mutable {
+                format!("prestado mut {}", format_type(inner))
+            } else {
+                format!("prestado {}", format_type(inner))
+            }
+        }
+        Type::Dueno(inner) => format!("dueno {}", format_type(inner)),
     }
 }
 
@@ -701,6 +787,7 @@ fn fmt_binop(op: &BinOp) -> &'static str {
         BinOp::Or => "||",
         BinOp::BitOr => "|",
         BinOp::BitAnd => "&",
+        BinOp::BitXor => "^",
         BinOp::ShiftLeft => "<<",
         BinOp::ShiftRight => ">>",
     }
@@ -710,6 +797,7 @@ fn fmt_unop(op: &UnOp) -> &'static str {
     match op {
         UnOp::Negate => "-",
         UnOp::Not => "!",
+        UnOp::BitNot => "~",
     }
 }
 

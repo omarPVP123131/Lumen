@@ -26,3 +26,4 @@ lumen-aot = { path = "../lumen-aot" }
 lumen-doc = { path = "../lumen-doc" }
 lumen-lsp = { path = "../lumen-lsp" }
 lumen-pkg = { path = "../lumen-pkg" }
+chrono = "0.4"
