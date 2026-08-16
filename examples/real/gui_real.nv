@@ -18,7 +18,7 @@ funcion lista<lista<texto>> construir_formulario(lista<texto> campos, lista<text
         si tipos[i] == "numero" { tipo_ctrl = "EDIT"; }
         si tipos[i] == "booleano" { tipo_ctrl = "CHECKBOX"; }
         si tipos[i] == "fecha" { tipo_ctrl = "DATETIME"; }
-        controles.agregar([campos[i), tipo_ctrl]];
+        controles.agregar([campos[i], tipo_ctrl]);
         i = i + 1;
     }
     retornar controles;
@@ -50,8 +50,8 @@ funcion texto simular_dialogo(texto titulo, texto mensaje, lista<texto> botones)
     // Simulate: always return first button
     retornar botones[0];
 }
-texto resultado = simular_dialogo("Confirmar", "Desea guardar los cambios?", ["Si", "No", "Cancelar"]);
-imprimir("Resultado del dialogo: ", resultado);
+texto res_dialogo = simular_dialogo("Confirmar", "Desea guardar los cambios?", ["Si", "No", "Cancelar"]);
+imprimir("Resultado del dialogo: ", res_dialogo);
 // Dialog types
 imprimir("Tipos de dialogo:");
 imprimir("  MessageBox: OK, OK/Cancel, Yes/No, Yes/No/Cancel");

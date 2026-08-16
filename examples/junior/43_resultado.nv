@@ -2,9 +2,9 @@ importar ingles;
 
 function result<integer, string> dividir(integer a, integer b) {
     if (b == 0) {
-        return err("division por cero");
+        return error("division por cero");
     }
-    return ok(a / b);
+    return exito(a / b);
 }
 
 result<integer, string> r1 = dividir(10, 2);

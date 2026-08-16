@@ -1,0 +1,51 @@
+// ============================================================================
+// LÚMEN — Demostración de Servidor WebSockets de Ultra-Baja Latencia (RFC 6455)
+// ============================================================================
+
+importar "websocket.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🚀 LÚMEN WEBSOCKET SERVER — RFC 6455 Real-Time Engine (v2.4.6)    ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Inicializar servidor en el puerto 8081
+imprimir("1. Creando servidor WebSocket en el puerto 8081...");
+websocket_WsServidor serv = websocket_crear_servidor(8081);
+imprimir("   ✓ Servidor WebSocket activo en ws://localhost:8081");
+
+// 2. Simulación de handshake HTTP Upgrade con cliente
+imprimir("");
+imprimir("2. Negociando Handshake RFC 6455 (HTTP 101 Switching Protocols)...");
+texto sec_key_cliente = "dGhlIHNhbXBsZSBub25jZQ==";
+texto handshake_resp = websocket_crear_respuesta_handshake(sec_key_cliente);
+imprimir("   [Cabecera de Respuesta Handshake]:");
+imprimir("   " + __str_subcadena(handshake_resp, 0, 75) + "...");
+
+// 3. Registrar conexiones de clientes en tiempo real
+imprimir("");
+imprimir("3. Conectando clientes multijugador / telemetría...");
+serv = websocket_registrar_conexion(serv, "192.168.1.10:54321", "/chat");
+serv = websocket_registrar_conexion(serv, "192.168.1.25:54322", "/telemetria");
+serv = websocket_registrar_conexion(serv, "10.0.0.8:54323", "/juego_3d");
+
+imprimir("   ✓ Total de clientes conectados: ", serv.conexiones.largo());
+
+// 4. Codificación y decodificación de tramas de texto
+imprimir("");
+imprimir("4. Transmisión de tramas de texto bidireccionales...");
+websocket_WsConexion cliente_1 = serv.conexiones[0];
+texto trama_enviada = websocket_enviar(cliente_1, "{\"evento\":\"posicion_jugador\",\"x\":120.5,\"y\":45.0}");
+imprimir("   Trama enviada al Cliente #1: ", trama_enviada);
+
+websocket_WsTrama trama_recibida = websocket_decodificar_trama(trama_enviada);
+imprimir("   ✓ Trama decodificada con éxito: Opcode=", trama_recibida.opcode, " Bytes=", trama_recibida.longitud);
+
+// 5. Difusión masiva (Broadcast) en 1 solo paso
+imprimir("");
+imprimir("5. Ejecutando Broadcast masivo a todos los clientes...");
+entero enviados = websocket_difundir(serv, "ALERTA_GLOBAL: Sincronización de reloj completada.");
+imprimir("   ✓ Mensajes difundidos con éxito a ", enviados, " clientes simultáneos.");
+
+imprimir("");
+imprimir("✨ ¡Servidor WebSocket RFC 6455 probado con éxito en LÚMEN!");

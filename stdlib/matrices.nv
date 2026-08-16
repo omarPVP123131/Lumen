@@ -1,7 +1,8 @@
-// Modulo matrices - operaciones sobre listas anidadas (matrices 2D)
-// Matrices module - 2D matrix operations
+// Modulo matrices - operaciones sobre listas anidadas (matrices 2D y Álgebra Lineal)
+// Matrices module - 2D matrix operations & Linear Algebra (Dual ES/EN API)
 // Uso: importar "matrices.nv"
-// Las matrices son lista<lista<entero>> - listas de filas
+
+importar "matematicas.nv";
 
 // Crear una matriz de tamano filas x columnas con valor inicial
 funcion lista<lista<entero>> crear(entero filas, entero columnas, entero inicial) {
@@ -11,10 +12,10 @@ funcion lista<lista<entero>> crear(entero filas, entero columnas, entero inicial
         lista<entero> fila = [];
         entero j = 0;
         mientras j < columnas {
-            fila = fila ++ [inicial];
+            fila.agregar(inicial);
             j = j + 1;
         }
-        m = m ++ [fila];
+        m.agregar(fila);
         i = i + 1;
     }
     retornar m;
@@ -103,6 +104,55 @@ funcion lista<lista<entero>> multiplicar(lista<lista<entero>> a, lista<lista<ent
         i = i + 1;
     }
     retornar r;
+}
+
+// Determinante de matriz 2x2: |A| = a*d - b*c
+funcion decimal determinante_2x2(lista<lista<decimal>> m) {
+    retornar m[0][0] * m[1][1] - m[0][1] * m[1][0];
+}
+
+// Determinante de matriz 3x3 por regla de Sarrus / Cofactores
+funcion decimal determinante_3x3(lista<lista<decimal>> m) {
+    decimal a = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]);
+    decimal b = m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]);
+    decimal c = m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    retornar a - b + c;
+}
+
+// Inversa de matriz 2x2: A^-1 = (1 / det) * [[d, -b], [-c, a]]
+funcion lista<lista<decimal>> inversa_2x2(lista<lista<decimal>> m) {
+    decimal det = determinante_2x2(m);
+    si det == 0.0 { retornar []; }
+    decimal inv_det = 1.0 / det;
+    retornar [
+        [m[1][1] * inv_det, -m[0][1] * inv_det],
+        [-m[1][0] * inv_det, m[0][0] * inv_det]
+    ];
+}
+
+// Producto Cruz 3D (Vector Cross Product): A x B
+funcion lista<decimal> vector_producto_cruz_3d(lista<decimal> a, lista<decimal> b) {
+    retornar [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+    ];
+}
+
+// Magnitud / Norma de un Vector Euclidiano
+funcion decimal vector_magnitud(lista<decimal> v) {
+    decimal suma = 0.0;
+    para x en v {
+        suma = suma + x * x;
+    }
+    retornar matematicas_raiz(suma);
+}
+
+// Normalización de Vector (Vector Unitario)
+funcion lista<decimal> vector_normalizar(lista<decimal> v) {
+    decimal mag = vector_magnitud(v);
+    si mag == 0.0 { retornar v; }
+    retornar [x / mag para x en v];
 }
 
 // Obtener dimensiones / Get dimensions

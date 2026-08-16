@@ -94,7 +94,7 @@ funcion lista<lista<booleano>> grilla_colision(lista<entero> m, entero w, entero
         lista<booleano> fila = [];
         entero j = 0;
         mientras j < w {
-            fila.agregar(m[i * w + j) > 0];
+            fila.agregar(m[i * w + j] > 0);
             j = j + 1;
         }
         g.agregar(fila);

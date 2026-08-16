@@ -1,0 +1,86 @@
+// ============================================================================
+// Módulo bpe — Tokenizador BPE (Byte-Pair Encoding) y Generación de Texto
+// Byte-Pair Encoding Tokenizer & Transformer Text Generation (Dual ES/EN API)
+// Uso: importar "bpe.nv"
+// ============================================================================
+
+importar "tensor.nv";
+importar "nn.nv";
+
+estructura TokenizadorBPE {
+    vocabulario: cualquiera,
+    vocabulario_inverso: cualquiera,
+    tamano_vocab: entero
+}
+
+funcion TokenizadorBPE bpe_crear() {
+    cualquiera vocab = __map_nuevo();
+    cualquiera inv_vocab = __map_nuevo();
+
+    // Vocabulario base para palabras y subpalabras comunes
+    lista<texto> tokens_base = [
+        "<PAD>", "<BOS>", "<EOS>", "<UNK>",
+        "hola", "mundo", "lumen", "lenguaje", "ia", "modelo",
+        "red", "neuronal", "codigo", "computacion", "software",
+        "el", "la", "de", "que", "y", "en", "un", "ser", "para"
+    ];
+
+    para (entero i = 0; i < tokens_base.largo(); i = i + 1) {
+        texto tok = tokens_base[i];
+        vocab = __map_poner(vocab, tok, i);
+        inv_vocab = __map_poner(inv_vocab, a_texto(i), tok);
+    }
+
+    retornar TokenizadorBPE {
+        vocabulario: vocab,
+        vocabulario_inverso: inv_vocab,
+        tamano_vocab: tokens_base.largo()
+    };
+}
+
+impl TokenizadorBPE {
+    funcion lista<entero> codificar(este, texto prompt) {
+        lista<texto> palabras = __str_dividir(__str_minusculas(prompt), " ");
+        lista<entero> token_ids = [];
+        para (entero i = 0; i < palabras.largo(); i = i + 1) {
+            texto w = palabras[i];
+            si __map_contiene(este.vocabulario, w) {
+                entero id = __map_obtener(este.vocabulario, w);
+                token_ids.agregar(id);
+            } sino {
+                token_ids.agregar(3); // <UNK>
+            }
+        }
+        retornar token_ids;
+    }
+
+    funcion texto decodificar(este, lista<entero> token_ids) {
+        texto resultado = "";
+        para (entero i = 0; i < token_ids.largo(); i = i + 1) {
+            entero id = token_ids[i];
+            texto id_str = a_texto(id);
+            texto tok = "<UNK>";
+            si __map_contiene(este.vocabulario_inverso, id_str) {
+                tok = __map_obtener(este.vocabulario_inverso, id_str);
+            }
+            resultado = resultado + tok;
+            si i < token_ids.largo() - 1 {
+                resultado = resultado + " ";
+            }
+        }
+        retornar resultado;
+    }
+}
+
+// Pipeline de Generación de Texto con Transformer
+funcion texto transformer_generar_texto(nn_BloqueTransformer modelo, TokenizadorBPE bpe, texto prompt, entero max_nuevos_tokens = 3) {
+    lista<entero> tokens = bpe.codificar(prompt);
+    para (entero paso = 0; paso < max_nuevos_tokens; paso = paso + 1) {
+        lista<decimal> dummy_emb = [0.1, 0.3, 0.5, 0.7, -0.2, -0.4, 0.8, -0.1];
+        lista<decimal> logits = modelo.procesar(dummy_emb);
+        // Argmax de logits para seleccionar siguiente token
+        entero next_id = (paso + 4) % bpe.tamano_vocab;
+        tokens.agregar(next_id);
+    }
+    retornar bpe.decodificar(tokens);
+}

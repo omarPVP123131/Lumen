@@ -1,21 +1,31 @@
-// Módulo sql — SQLite vía FFI directa
+// Módulo sql — SQLite vía FFI multiplataforma (Linux / Windows / macOS)
 // SQL module — pure LÚMEN via FFI, dual ES/EN API
 // Uso: importar "sql.nv"
 
+funcion cualquiera _sql_obtener_lib() {
+    cualquiera lib = __ffi_cargar("libsqlite3.so.0");
+    si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
+    lib = __ffi_cargar("libsqlite3.so");
+    si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
+    lib = __ffi_cargar("sqlite3.dll");
+    si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
+    lib = __ffi_cargar("libsqlite3.dylib");
+    si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
+    retornar "";
+}
+
 funcion entero abrir(texto ruta) {
-    cualquiera lib = __ffi_cargar("sqlite3.dll");
-    si __tipo_de(lib) != "texto" { retornar 0; }
+    cualquiera lib = _sql_obtener_lib();
+    si __tipo_de(lib) != "texto" || lib == "" { retornar 0; }
     entero len = ruta.largo();
     entero path_buf = __ffi_asignar(len + 1);
     __ffi_escribir(path_buf, 0, ruta);
-    __ffi_poke(path_buf, len, 0);
+    __ffi_poke_byte(path_buf, len, 0);
     entero db_buf = __ffi_asignar(8);
     entero rc = __ffi_llamar(lib, "sqlite3_open", "entero,entero", [path_buf, db_buf], "entero");
     entero db = 0;
     si rc == 0 {
-        entero val = 0; entero i = 7;
-        mientras i >= 0 { entero b = __ffi_peek(db_buf, i); val = val * 256 + b; i = i - 1; }
-        db = val;
+        db = __ffi_peek64(db_buf, 0);
     }
     __ffi_liberar(db_buf, 8);
     __ffi_liberar(path_buf, len + 1);
@@ -25,12 +35,12 @@ funcion entero open(texto path) { retornar abrir(path); }
 
 funcion entero ejecutar(entero db, texto sql) {
     si db == 0 { retornar -1; }
-    cualquiera lib = __ffi_cargar("sqlite3.dll");
-    si __tipo_de(lib) != "texto" { retornar -1; }
+    cualquiera lib = _sql_obtener_lib();
+    si __tipo_de(lib) != "texto" || lib == "" { retornar -1; }
     entero slen = sql.largo();
     entero sql_buf = __ffi_asignar(slen + 1);
     __ffi_escribir(sql_buf, 0, sql);
-    __ffi_poke(sql_buf, slen, 0);
+    __ffi_poke_byte(sql_buf, slen, 0);
     entero rc = __ffi_llamar(lib, "sqlite3_exec", "entero,entero,entero,entero,entero", [db, sql_buf, 0, 0, 0], "entero");
     __ffi_liberar(sql_buf, slen + 1);
     si rc != 0 { retornar -1; }
@@ -38,21 +48,19 @@ funcion entero ejecutar(entero db, texto sql) {
 }
 funcion entero exec(entero db, texto sql) { retornar ejecutar(db, sql); }
 
-funcion cualquiera consultar(entero db, texto sql) {
+funcion cualquiera ejecutar_consulta(entero db, texto sql) {
     si db == 0 { retornar ninguno; }
-    cualquiera lib = __ffi_cargar("sqlite3.dll");
-    si __tipo_de(lib) != "texto" { retornar ninguno; }
+    cualquiera lib = _sql_obtener_lib();
+    si __tipo_de(lib) != "texto" || lib == "" { retornar ninguno; }
     entero slen = sql.largo();
     entero sql_buf = __ffi_asignar(slen + 1);
     __ffi_escribir(sql_buf, 0, sql);
-    __ffi_poke(sql_buf, slen, 0);
+    __ffi_poke_byte(sql_buf, slen, 0);
     entero stmt_buf = __ffi_asignar(8);
     entero rc = __ffi_llamar(lib, "sqlite3_prepare_v2", "entero,entero,entero,entero,entero", [db, sql_buf, -1, stmt_buf, 0], "entero");
     entero stmt = 0;
     si rc == 0 {
-        entero val = 0; entero i = 7;
-        mientras i >= 0 { entero b = __ffi_peek(stmt_buf, i); val = val * 256 + b; i = i - 1; }
-        stmt = val;
+        stmt = __ffi_peek64(stmt_buf, 0);
     }
     __ffi_liberar(stmt_buf, 8);
     __ffi_liberar(sql_buf, slen + 1);
@@ -88,12 +96,13 @@ funcion cualquiera consultar(entero db, texto sql) {
     __ffi_llamar(lib, "sqlite3_finalize", "entero", [stmt], "entero");
     retornar filas;
 }
-funcion cualquiera query(entero db, texto sql) { retornar consultar(db, sql); }
+funcion cualquiera sql_consultar(entero db, texto sql) { retornar ejecutar_consulta(db, sql); }
+funcion cualquiera query_exec(entero db, texto sql) { retornar ejecutar_consulta(db, sql); }
 
 funcion booleano cerrar(entero db) {
     si db == 0 { retornar falso; }
-    cualquiera lib = __ffi_cargar("sqlite3.dll");
-    si __tipo_de(lib) != "texto" { retornar falso; }
+    cualquiera lib = _sql_obtener_lib();
+    si __tipo_de(lib) != "texto" || lib == "" { retornar falso; }
     retornar __ffi_llamar(lib, "sqlite3_close", "entero", [db], "entero") == 0;
 }
 funcion booleano close(entero db) { retornar cerrar(db); }

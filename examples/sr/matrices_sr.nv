@@ -110,9 +110,9 @@ imprimir_matriz(i3);
 // Verify I * A = A
 lista<lista<entero>> test_a = [[5, 3], [2, 7]];
 lista<lista<entero>> i2 = identidad(2);
-lista<lista<entero>> result = multiplicar(i2, test_a);
+lista<lista<entero>> res_mat = multiplicar(i2, test_a);
 imprimir("I * A = A? (debe ser [[5,3],[2,7]]):");
-imprimir_matriz(result);
-si result[0][0] - 5 == 0 { imprimir("  PASS: I*A = A"); } sino { imprimir("  FAIL"); }
+imprimir_matriz(res_mat);
+si res_mat[0][0] - 5 == 0 { imprimir("  PASS: I*A = A"); } sino { imprimir("  FAIL"); }
 
 imprimir("--- FIN MATRICES SR ---");

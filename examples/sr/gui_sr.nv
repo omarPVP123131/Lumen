@@ -19,9 +19,9 @@ funcion lista<lista<entero>> layout_formulario(entero x0, entero y0, entero num_
     mientras i < num_campos {
         entero ly = y0 + i * (h + gap);
         // Label position
-        controles.agregar([x0, ly, label_w, h)];
+        controles.agregar([x0, ly, label_w, h]);
         // Input position
-        controles.agregar([x0 + label_w + gap, ly, input_w, h)];
+        controles.agregar([x0 + label_w + gap, ly, input_w, h]);
         i = i + 1;
     }
     retornar controles;

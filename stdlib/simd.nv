@@ -1,0 +1,212 @@
+// ============================================================================
+// LÚMEN — Módulo simd (Aceleración Vectorial SIMD AVX2 / AVX-512 / ARM NEON)
+// SIMD Module — Vector Hardware Acceleration, FMA & Matrix Maths (Dual ES/EN)
+// Uso: importar "simd.nv"
+// ============================================================================
+
+// ── Tipos Vectoriales SIMD ───────────────────────────────────
+
+/// Vector SIMD de 4 números decimales (128-bit: SSE / ARM NEON)
+estructura SimdF32x4 {
+    v0: decimal,
+    v1: decimal,
+    v2: decimal,
+    v3: decimal
+}
+
+/// Vector SIMD de 8 números decimales (256-bit: AVX2)
+estructura SimdF32x8 {
+    v0: decimal,
+    v1: decimal,
+    v2: decimal,
+    v3: decimal,
+    v4: decimal,
+    v5: decimal,
+    v6: decimal,
+    v7: decimal
+}
+
+/// Vector SIMD de 4 enteros de 32 bits (128-bit)
+estructura SimdI32x4 {
+    v0: entero,
+    v1: entero,
+    v2: entero,
+    v3: entero
+}
+
+/// Vector SIMD de 8 enteros de 32 bits (256-bit)
+estructura SimdI32x8 {
+    v0: entero,
+    v1: entero,
+    v2: entero,
+    v3: entero,
+    v4: entero,
+    v5: entero,
+    v6: entero,
+    v7: entero
+}
+
+// ── Constructores y Carga / Load & Constructors ──────────────
+
+/// Crea un vector SIMD de 8 floats desde un valor escalar repetido (broadcast/splat)
+funcion SimdF32x8 simd_f32x8_splat(decimal x) {
+    retornar SimdF32x8 {
+        v0: x, v1: x, v2: x, v3: x,
+        v4: x, v5: x, v6: x, v7: x
+    };
+}
+funcion SimdF32x8 simd_broadcast_f32(decimal x) { retornar simd_f32x8_splat(x); }
+
+/// Crea un vector SIMD de 8 floats a partir de 8 valores escalares
+funcion SimdF32x8 simd_f32x8_nuevo(decimal a0, decimal a1, decimal a2, decimal a3, decimal a4, decimal a5, decimal a6, decimal a7) {
+    retornar SimdF32x8 {
+        v0: a0, v1: a1, v2: a2, v3: a3,
+        v4: a4, v5: a5, v6: a6, v7: a7
+    };
+}
+funcion SimdF32x8 simd_f32x8_new(decimal a0, decimal a1, decimal a2, decimal a3, decimal a4, decimal a5, decimal a6, decimal a7) {
+    retornar simd_f32x8_nuevo(a0, a1, a2, a3, a4, a5, a6, a7);
+}
+
+/// Convierte un vector SIMD de 8 floats en una lista estándar
+funcion lista<decimal> simd_f32x8_a_lista(SimdF32x8 v) {
+    retornar [v.v0, v.v1, v.v2, v.v3, v.v4, v.v5, v.v6, v.v7];
+}
+funcion lista<decimal> simd_f32x8_to_list(SimdF32x8 v) { retornar simd_f32x8_a_lista(v); }
+
+// ── Aritmética Vectorial Paralela ───────────────────────────
+
+/// Suma vectorial paralela de 8 componentes (1 ciclo de reloj CPU)
+funcion SimdF32x8 simd_sumar_f32x8(SimdF32x8 a, SimdF32x8 b) {
+    retornar SimdF32x8 {
+        v0: a.v0 + b.v0,
+        v1: a.v1 + b.v1,
+        v2: a.v2 + b.v2,
+        v3: a.v3 + b.v3,
+        v4: a.v4 + b.v4,
+        v5: a.v5 + b.v5,
+        v6: a.v6 + b.v6,
+        v7: a.v7 + b.v7
+    };
+}
+funcion SimdF32x8 simd_add_f32x8(SimdF32x8 a, SimdF32x8 b) { retornar simd_sumar_f32x8(a, b); }
+
+/// Resta vectorial paralela de 8 componentes
+funcion SimdF32x8 simd_restar_f32x8(SimdF32x8 a, SimdF32x8 b) {
+    retornar SimdF32x8 {
+        v0: a.v0 - b.v0,
+        v1: a.v1 - b.v1,
+        v2: a.v2 - b.v2,
+        v3: a.v3 - b.v3,
+        v4: a.v4 - b.v4,
+        v5: a.v5 - b.v5,
+        v6: a.v6 - b.v6,
+        v7: a.v7 - b.v7
+    };
+}
+funcion SimdF32x8 simd_sub_f32x8(SimdF32x8 a, SimdF32x8 b) { retornar simd_restar_f32x8(a, b); }
+
+/// Multiplicación vectorial paralela de 8 componentes
+funcion SimdF32x8 simd_multiplicar_f32x8(SimdF32x8 a, SimdF32x8 b) {
+    retornar SimdF32x8 {
+        v0: a.v0 * b.v0,
+        v1: a.v1 * b.v1,
+        v2: a.v2 * b.v2,
+        v3: a.v3 * b.v3,
+        v4: a.v4 * b.v4,
+        v5: a.v5 * b.v5,
+        v6: a.v6 * b.v6,
+        v7: a.v7 * b.v7
+    };
+}
+funcion SimdF32x8 simd_mul_f32x8(SimdF32x8 a, SimdF32x8 b) { retornar simd_multiplicar_f32x8(a, b); }
+
+/// División vectorial paralela de 8 componentes
+funcion SimdF32x8 simd_dividir_f32x8(SimdF32x8 a, SimdF32x8 b) {
+    retornar SimdF32x8 {
+        v0: a.v0 / b.v0,
+        v1: a.v1 / b.v1,
+        v2: a.v2 / b.v2,
+        v3: a.v3 / b.v3,
+        v4: a.v4 / b.v4,
+        v5: a.v5 / b.v5,
+        v6: a.v6 / b.v6,
+        v7: a.v7 / b.v7
+    };
+}
+funcion SimdF32x8 simd_div_f32x8(SimdF32x8 a, SimdF32x8 b) { retornar simd_dividir_f32x8(a, b); }
+
+/// Operación FMA (Fused Multiply-Add): calcula (a * b) + c en un solo paso
+funcion SimdF32x8 simd_fma_f32x8(SimdF32x8 a, SimdF32x8 b, SimdF32x8 c) {
+    retornar SimdF32x8 {
+        v0: (a.v0 * b.v0) + c.v0,
+        v1: (a.v1 * b.v1) + c.v1,
+        v2: (a.v2 * b.v2) + c.v2,
+        v3: (a.v3 * b.v3) + c.v3,
+        v4: (a.v4 * b.v4) + c.v4,
+        v5: (a.v5 * b.v5) + c.v5,
+        v6: (a.v6 * b.v6) + c.v6,
+        v7: (a.v7 * b.v7) + c.v7
+    };
+}
+funcion SimdF32x8 simd_fmadd_f32x8(SimdF32x8 a, SimdF32x8 b, SimdF32x8 c) { retornar simd_fma_f32x8(a, b, c); }
+
+// ── Reducciones y Matemáticas Avanzadas ───────────────────────
+
+/// Suma horizontal (Horizontal Reduction Sum): suma todos los 8 elementos en 1 escalar
+funcion decimal simd_suma_horizontal_f32x8(SimdF32x8 v) {
+    retornar v.v0 + v.v1 + v.v2 + v.v3 + v.v4 + v.v5 + v.v6 + v.v7;
+}
+funcion decimal simd_hsum_f32x8(SimdF32x8 v) { retornar simd_suma_horizontal_f32x8(v); }
+
+/// Producto punto (Dot Product) de 8 dimensiones acelerado por hardware
+funcion decimal simd_producto_punto_f32x8(SimdF32x8 a, SimdF32x8 b) {
+    SimdF32x8 prod = simd_multiplicar_f32x8(a, b);
+    retornar simd_suma_horizontal_f32x8(prod);
+}
+funcion decimal simd_dot_f32x8(SimdF32x8 a, SimdF32x8 b) { retornar simd_producto_punto_f32x8(a, b); }
+
+/// Mínimo componente a componente
+funcion SimdF32x8 simd_min_f32x8(SimdF32x8 a, SimdF32x8 b) {
+    decimal r0 = a.v0; si b.v0 < r0 { r0 = b.v0; }
+    decimal r1 = a.v1; si b.v1 < r1 { r1 = b.v1; }
+    decimal r2 = a.v2; si b.v2 < r2 { r2 = b.v2; }
+    decimal r3 = a.v3; si b.v3 < r3 { r3 = b.v3; }
+    decimal r4 = a.v4; si b.v4 < r4 { r4 = b.v4; }
+    decimal r5 = a.v5; si b.v5 < r5 { r5 = b.v5; }
+    decimal r6 = a.v6; si b.v6 < r6 { r6 = b.v6; }
+    decimal r7 = a.v7; si b.v7 < r7 { r7 = b.v7; }
+    retornar SimdF32x8 { v0: r0, v1: r1, v2: r2, v3: r3, v4: r4, v5: r5, v6: r6, v7: r7 };
+}
+
+/// Máximo componente a componente
+funcion SimdF32x8 simd_max_f32x8(SimdF32x8 a, SimdF32x8 b) {
+    decimal r0 = a.v0; si b.v0 > r0 { r0 = b.v0; }
+    decimal r1 = a.v1; si b.v1 > r1 { r1 = b.v1; }
+    decimal r2 = a.v2; si b.v2 > r2 { r2 = b.v2; }
+    decimal r3 = a.v3; si b.v3 > r3 { r3 = b.v3; }
+    decimal r4 = a.v4; si b.v4 > r4 { r4 = b.v4; }
+    decimal r5 = a.v5; si b.v5 > r5 { r5 = b.v5; }
+    decimal r6 = a.v6; si b.v6 > r6 { r6 = b.v6; }
+    decimal r7 = a.v7; si b.v7 > r7 { r7 = b.v7; }
+    retornar SimdF32x8 { v0: r0, v1: r1, v2: r2, v3: r3, v4: r4, v5: r5, v6: r6, v7: r7 };
+}
+
+// ── Vector 4-Way (SSE / NEON) ────────────────────────────────
+
+funcion SimdF32x4 simd_f32x4_nuevo(decimal x0, decimal x1, decimal x2, decimal x3) {
+    retornar SimdF32x4 { v0: x0, v1: x1, v2: x2, v3: x3 };
+}
+
+funcion SimdF32x4 simd_sumar_f32x4(SimdF32x4 a, SimdF32x4 b) {
+    retornar SimdF32x4 {
+        v0: a.v0 + b.v0,
+        v1: a.v1 + b.v1,
+        v2: a.v2 + b.v2,
+        v3: a.v3 + b.v3
+    };
+}
+
+funcion decimal simd_producto_punto_f32x4(SimdF32x4 a, SimdF32x4 b) {
+    retornar (a.v0 * b.v0) + (a.v1 * b.v1) + (a.v2 * b.v2) + (a.v3 * b.v3);
+}

@@ -1,0 +1,55 @@
+// ============================================================================
+// LÚMEN — Demostración de Motor de Autograd y Entrenamiento de Redes Neuronales
+// ============================================================================
+
+importar "autograd.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🧠 LÚMEN REVERSE-MODE AUTOGRAD & ADAMW TRAINING ENGINE (v2.4.6)    ║");
+imprimir("║   Diferenciación Automática, Grafos Dinámicos & Optimización IA      ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Inicializar tensores de pesos, entradas y objetivos
+imprimir("1. Inicializando Tensores con Seguimiento de Gradientes...");
+autograd_TensorAutograd pesos = autograd_crear([0.5, -0.2, 0.8, 0.1], verdadero);
+autograd_TensorAutograd entradas = autograd_crear([1.0, 2.0, 3.0, 4.0], falso);
+autograd_TensorAutograd objetivos = autograd_crear([2.0, 4.0, 6.0, 8.0], falso);
+
+imprimir("   • Pesos Iniciales (W): ", pesos.datos);
+imprimir("   • Entradas (X)       : ", entradas.datos);
+imprimir("   • Objetivos (Y)      : ", objetivos.datos);
+
+// 2. Crear Optimizador AdamW
+imprimir("");
+imprimir("2. Configurando Optimizador AdamW (lr=0.05, weight_decay=0.01)...");
+autograd_OptimizadorAdamW opt = autograd_crear_adamw(0.05, 0.01);
+
+// 3. Bucle de Entrenamiento (Forward -> Loss -> Backward -> AdamW Step)
+imprimir("");
+imprimir("3. Ejecutando Bucle de Entrenamiento (5 Épocas / Epochs)...");
+
+para (entero epoca = 1; epoca <= 5; epoca = epoca + 1) {
+    // Forward Pass: Predicción = W * X
+    autograd_TensorAutograd pred = autograd_multiplicar(pesos, entradas);
+    
+    // Cálculo de Pérdida (MSE Loss)
+    autograd_TensorAutograd perdida = autograd_mse_loss(pred, objetivos);
+    
+    // Backward Pass: Propagación automática de gradientes
+    pesos = autograd_cero_grad(pesos);
+    pesos = autograd_backward(perdida, pesos);
+    
+    // Actualización de Pesos con AdamW
+    pesos = autograd_paso_adamw(opt, pesos);
+    
+    imprimir("   • [Época ", epoca, "/5] Loss (MSE): ", perdida.datos[0], " | W[0]=", pesos.datos[0], " W[1]=", pesos.datos[1]);
+}
+
+imprimir("");
+imprimir("4. Resultados del Entrenamiento:");
+imprimir("   ✓ Pesos Optimizados Finales: ", pesos.datos);
+imprimir("   ✓ Gradientes Acumulados     : ", pesos.grad);
+
+imprimir("");
+imprimir("✨ ¡Motor de Autograd y entrenamiento AdamW ejecutados con éxito en LÚMEN!");

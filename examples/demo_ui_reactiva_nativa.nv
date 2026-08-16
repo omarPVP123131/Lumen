@@ -1,0 +1,45 @@
+// ============================================================================
+// LÚMEN — Demostración de UI Declarativa Reactiva Nativa (Windows / Linux / Web)
+// ============================================================================
+
+importar "ui_reactiva.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   📱 LÚMEN REACTIVE UI NATIVE DESKTOP FRAMEWORK (v2.4.6)             ║");
+imprimir("║   Virtual DOM, State Hooks & Render Nativo Direct2D / Win32          ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Inicializar hook de estado reactivo
+imprimir("1. Creando Hook de Estado Reactivo (use_state)...");
+ui_reactiva_EstadoReactivo contador = ui_reactiva_ui_estado_crear("0");
+imprimir("   ✓ Estado inicial: valor = '", contador.valor, "' (v", contador.version, ")");
+
+// 2. Construir árbol de componentes declarativos (Virtual DOM)
+imprimir("");
+imprimir("2. Construyendo Árbol de Componentes Declarativo...");
+lista<ui_reactiva_NodoVirtual> hijos = [];
+hijos.agregar(ui_reactiva_ui_texto("👥 Sesión de Usuario Activa", "font-weight: bold;"));
+hijos.agregar(ui_reactiva_ui_boton("Incrementar Contador", "btn_inc"));
+hijos.agregar(ui_reactiva_ui_caja_texto("Escribe un mensaje...", "txt_input"));
+
+ui_reactiva_NodoVirtual app = ui_reactiva_ui_tarjeta("Dashboard de Telemetría LÚMEN", hijos);
+imprimir("   ✓ Componente <Card> creado con ", app.elementos.largo(), " elementos hijos");
+
+// 3. Simular evento de click y actualización de estado
+imprimir("");
+imprimir("3. Disparando evento onClick y recalculando Virtual DOM...");
+contador = ui_reactiva_ui_estado_actualizar(contador, "1");
+ui_reactiva_NodoVirtual app_actualizada = ui_reactiva_ui_tarjeta("Dashboard de Telemetría LÚMEN [Clicks: 1]", hijos);
+
+texto diff_resultado = ui_reactiva_ui_vdom_diff(app, app_actualizada);
+imprimir("   ✓ Virtual DOM Diffing: ", diff_resultado);
+
+// 4. Lanzar render en ventana nativa de escritorio
+imprimir("");
+imprimir("4. Renderizando en Ventana Nativa de Escritorio...");
+texto ventana_info = ui_reactiva_ui_lanzar_ventana_nativa("LÚMEN Studio Desktop", 1024, 768, app_actualizada);
+imprimir(ventana_info);
+
+imprimir("");
+imprimir("✨ ¡UI Reactiva Nativa de escritorio ejecutada con éxito en LÚMEN!");

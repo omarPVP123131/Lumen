@@ -1,0 +1,137 @@
+// ============================================================================
+// LÚMEN — Módulo sanitizer (AddressSanitizer ASan, LeakSanitizer & Bounds Checking)
+// Memory Safety Verification, Allocation Tracking & Zero-Leak Auditing (Dual ES/EN)
+// Uso: importar "sanitizer.nv"
+// ============================================================================
+
+// ── Estructuras de Datos / Data Structures ───────────────────
+
+estructura BloqueMemoria {
+    id: entero,
+    direccion_ptr: entero,
+    tamano_bytes: entero,
+    linea_origen: entero,
+    etiqueta: texto,
+    liberado: booleano
+}
+
+estructura SanitizerAuditor {
+    total_bloques_asignados: entero,
+    bytes_asignados_acumulados: entero,
+    bytes_vivos_actuales: entero,
+    fugas_detectadas: entero,
+    accesos_fuera_de_limite: entero,
+    bloques: lista<BloqueMemoria>,
+    asan_activo: booleano,
+    lsan_activo: booleano
+}
+
+// ── 1. Constructor del Auditor de Memoria ────────────────────
+
+/// Inicializa el auditor de AddressSanitizer y LeakSanitizer
+funcion SanitizerAuditor sanitizer_iniciar(booleano asan = verdadero, booleano lsan = verdadero) {
+    lista<BloqueMemoria> b_list = [];
+    retornar SanitizerAuditor {
+        total_bloques_asignados: 0,
+        bytes_asignados_acumulados: 0,
+        bytes_vivos_actuales: 0,
+        fugas_detectadas: 0,
+        accesos_fuera_de_limite: 0,
+        bloques: b_list,
+        asan_activo: asan,
+        lsan_activo: lsan
+    };
+}
+funcion SanitizerAuditor sanitizer_init(booleano asan = verdadero, booleano lsan = verdadero) {
+    retornar sanitizer_iniciar(asan, lsan);
+}
+
+// ── 2. Rastreo de Asignaciones y Liberaciones (LSan) ──────────
+
+/// Registra una asignación de memoria dinámica
+funcion SanitizerAuditor sanitizer_registrar_asignacion(SanitizerAuditor aud, entero ptr, entero bytes, entero linea, texto tag = "heap_alloc") {
+    lista<BloqueMemoria> b = aud.bloques;
+    entero nuevo_id = b.largo() + 1;
+    
+    BloqueMemoria blk = BloqueMemoria {
+        id: nuevo_id,
+        direccion_ptr: ptr,
+        tamano_bytes: bytes,
+        linea_origen: linea,
+        etiqueta: tag,
+        liberado: falso
+    };
+    b.agregar(blk);
+    
+    aud.bloques = b;
+    aud.total_bloques_asignados = aud.total_bloques_asignados + 1;
+    aud.bytes_asignados_acumulados = aud.bytes_asignados_acumulados + bytes;
+    aud.bytes_vivos_actuales = aud.bytes_vivos_actuales + bytes;
+    retornar aud;
+}
+funcion SanitizerAuditor sanitizer_track_alloc(SanitizerAuditor a, entero p, entero s, entero l, texto tag) {
+    retornar sanitizer_registrar_asignacion(a, p, s, l, tag);
+}
+
+/// Registra la liberación de un bloque de memoria
+funcion SanitizerAuditor sanitizer_registrar_liberacion(SanitizerAuditor aud, entero ptr) {
+    lista<BloqueMemoria> b = aud.bloques;
+    entero n = b.largo();
+    para (entero i = 0; i < n; i = i + 1) {
+        BloqueMemoria blk = b[i];
+        si blk.direccion_ptr == ptr && !blk.liberado {
+            blk.liberado = verdadero;
+            b[i] = blk;
+            aud.bloques = b;
+            aud.bytes_vivos_actuales = aud.bytes_vivos_actuales - blk.tamano_bytes;
+            retornar aud;
+        }
+    }
+    retornar aud;
+}
+funcion SanitizerAuditor sanitizer_track_free(SanitizerAuditor a, entero p) {
+    retornar sanitizer_registrar_liberacion(a, p);
+}
+
+// ── 3. Verificación de Límites de Acceso (ASan Bounds Check) ───
+
+/// Valida si un índice está dentro del rango seguro antes del acceso a memoria
+funcion booleano sanitizer_verificar_limites(SanitizerAuditor aud, entero indice, entero tamano_total, entero linea = 0) {
+    si indice < 0 || indice >= tamano_total {
+        aud.accesos_fuera_de_limite = aud.accesos_fuera_de_limite + 1;
+        retornar falso;
+    }
+    retornar verdadero;
+}
+funcion booleano sanitizer_check_bounds(SanitizerAuditor a, entero idx, entero size, entero line) {
+    retornar sanitizer_verificar_limites(a, idx, size, line);
+}
+
+// ── 4. Auditoría de Fugas de Memoria (LeakSanitizer Check) ─────
+
+/// Analiza el estado de la memoria y detecta fugas vivas no liberadas
+funcion SanitizerAuditor sanitizer_auditar_fugas(SanitizerAuditor aud) {
+    entero fugas = 0;
+    para blk en aud.bloques {
+        si !blk.liberado {
+            fugas = fugas + 1;
+        }
+    }
+    aud.fugas_detectadas = fugas;
+    retornar aud;
+}
+funcion SanitizerAuditor sanitizer_audit_leaks(SanitizerAuditor a) { retornar sanitizer_auditar_fugas(a); }
+
+/// Genera el reporte visual del análisis AddressSanitizer y LeakSanitizer
+funcion texto sanitizer_generar_reporte(SanitizerAuditor aud) {
+    texto estado_salud = aud.fugas_detectadas == 0 && aud.accesos_fuera_de_limite == 0 ? "100% LIMPIO (0 FUGAS / 0 CORRUPCIONES)" : "ADVERTENCIA: FUGAS DETECTADAS";
+    
+    texto rep = "Reporte de Sanitización de Memoria (ASan + LSan):\n" +
+                "• Estado de Salud        : " + estado_salud + "\n" +
+                "• Bloques Asignados      : " + a_texto(aud.total_bloques_asignados) + " asignaciones\n" +
+                "• Memoria Total Acumulada: " + a_texto(aud.bytes_asignados_acumulados) + " bytes\n" +
+                "• Memoria Viva Residual  : " + a_texto(aud.bytes_vivos_actuales) + " bytes\n" +
+                "• Fugas de Memoria (LSan): " + a_texto(aud.fugas_detectadas) + " fugas\n" +
+                "• Accesos Inválidos (ASan): " + a_texto(aud.accesos_fuera_de_limite) + " violaciones de límites";
+    retornar rep;
+}

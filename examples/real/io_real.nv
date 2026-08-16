@@ -3,15 +3,17 @@
 // Uso: lumen run -L stdlib/ examples/real/io_real.nv
 // ==========================================
 
+importar "io.nv";
+
 imprimir("=== IO REAL: File Copier, Log Processor & Stream Filter ===");
 
 // ── Example 1: File Copier ──
 imprimir("--- Ej 1: File Copier ---");
 funcion texto copiar_archivo(texto origen, texto destino) {
-    sea lineas = __lector_buffer(origen);
+    cualquiera lineas = io_leer_lineas(origen);
     texto contenido = "";
     entero i = 0;
-    mientras i < lineas.largo() {
+    mientras i < largo(lineas) {
         si i > 0 {
             contenido = contenido + "\n";
         }
@@ -25,7 +27,7 @@ __escritor_buffer("source_real.txt", "Nombre: LUMEN\nVersion: 1.6.0\nLenguaje: E
 sea copy_res = copiar_archivo("source_real.txt", "destino_real.txt");
 imprimir("Copy result: ", copy_res);
 
-sea dest_lines = __lector_buffer("destino_real.txt");
+cualquiera dest_lines = io_leer_lineas("destino_real.txt");
 imprimir("Destino [0]: ", dest_lines[0]);
 imprimir("Destino [1]: ", dest_lines[1]);
 
@@ -34,27 +36,24 @@ imprimir("--- Ej 2: Log Processor ---");
 texto logs = "INFO: Servidor iniciado\nERROR: Conexion fallida\nINFO: Reintentando\nWARN: Memoria alta\nERROR: Timeout";
 __escritor_buffer("app_real.log", logs);
 
-funcion texto filtrar_errores(texto archivo_log) {
-    sea lineas = __lector_buffer(archivo_log);
-    entero count = 0;
+funcion entero contar_errores(texto ruta_log) {
+    cualquiera lineas = io_leer_lineas(ruta_log);
+    entero errores = 0;
     entero i = 0;
-    mientras i < lineas.largo() {
-        sea linea = lineas[i];
-        si linea.largo() >= 5 {
-            si linea[0] == "E" {
-                count = count + 1;
-            }
+    mientras i < largo(lineas) {
+        si __str_starts_with(lineas[i], "ERROR") {
+            errores = errores + 1;
         }
         i = i + 1;
     }
-    retornar "Total errores: " + count;
+    retornar errores;
 }
 
-sea error_report = filtrar_errores("app_real.log");
-imprimir(error_report);
+entero err_count = contar_errores("app_real.log");
+imprimir("Errores en log: ", err_count);
 
-// ── Example 3: Stream Filter (Chunk-based processing) ──
-imprimir("--- Ej 3: Stream Filter ---");
+// ── Example 3: Stream Processing Simulation ──
+imprimir("--- Ej 3: Stream Chunk Processor ---");
 texto datos = "";
 entero k = 0;
 mientras k < 100 {
@@ -63,24 +62,24 @@ mientras k < 100 {
 }
 __escritor_buffer("stream_data_real.txt", datos);
 
-sea stream_chunks = __stream_trozos("stream_data_real.txt", 30);
-imprimir("Stream: ", stream_chunks.largo(), " chunks of 30 bytes");
+cualquiera stream_chunks = io_leer_trozos("stream_data_real.txt", 30);
+imprimir("Stream: ", largo(stream_chunks), " chunks of 30 bytes");
 
 // Pipeline: sum chunk sizes
 entero total_bytes = 0;
 entero c = 0;
-mientras c < stream_chunks.largo() {
-    sea chunk = stream_chunks[c];
-    total_bytes = total_bytes + chunk.largo();
+mientras c < largo(stream_chunks) {
+    texto chunk = stream_chunks[c];
+    total_bytes = total_bytes + largo(chunk);
     c = c + 1;
 }
 imprimir("Total bytes processed: ", total_bytes);
 
 // File statistics
 funcion texto estadisticas_archivo(texto ruta) {
-    sea lineas = __lector_buffer(ruta);
-    sea trozos = __stream_trozos(ruta, 1024);
-    retornar "Archivo: " + ruta + " | Lineas: " + lineas.largo() + " | Chunks: " + trozos.largo();
+    cualquiera lineas = io_leer_lineas(ruta);
+    cualquiera trozos = io_leer_trozos(ruta, 1024);
+    retornar "Archivo: " + ruta + " | Lineas: " + a_texto(largo(lineas)) + " | Chunks: " + a_texto(largo(trozos));
 }
 
 imprimir(estadisticas_archivo("source_real.txt"));

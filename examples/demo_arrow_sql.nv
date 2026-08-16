@@ -1,0 +1,50 @@
+// ============================================================================
+// LÚMEN — Demostración de Motor SQL en Memoria & Formato Columnar Apache Arrow
+// ============================================================================
+
+importar "arrow.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   📊 LÚMEN APACHE ARROW COLUMNAR & IN-MEMORY SQL ENGINE (v2.4.6)     ║");
+imprimir("║   Estructura Columnar Contigua, Agregaciones Vectoriales & SQL       ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Crear una tabla en memoria con formato Apache Arrow
+imprimir("1. Creando Tabla Columnar Apache Arrow ('empleados_tech')...");
+arrow_TablaArrow tabla = arrow_crear_tabla("empleados_tech");
+
+// 2. Cargar vectores de columnas tipadas
+imprimir("");
+imprimir("2. Añadiendo Columnas Tipadas (Float64 & Utf8 String Vectors)...");
+tabla = arrow_agregar_columna_texto(tabla, "nombre", ["Omar", "Elena", "Carlos", "Sofia", "Mateo"]);
+tabla = arrow_agregar_columna_texto(tabla, "departamento", ["IA/ML", "Cloud", "Compiladores", "IA/ML", "Sistemas"]);
+tabla = arrow_agregar_columna_decimal(tabla, "salario", [7500.0, 6800.0, 8200.0, 7900.0, 6400.0]);
+
+imprimir("   ✓ Columnas registradas : ", tabla.columnas.largo());
+imprimir("   ✓ Total de registros   : ", tabla.total_filas, " filas");
+
+// 3. Ejecutar funciones de agregación vectorial ultrarrápidas
+imprimir("");
+imprimir("3. Calculando Métricas y Agregaciones en Memoria...");
+decimal suma_salarios = arrow_agregacion_suma(tabla, "salario");
+decimal promedio_salarios = arrow_agregacion_promedio(tabla, "salario");
+decimal max_salario = arrow_agregacion_maximo(tabla, "salario");
+
+imprimir("   • Suma Total Salarios : $", suma_salarios);
+imprimir("   • Salario Promedio    : $", promedio_salarios);
+imprimir("   • Salario Máximo      : $", max_salario);
+
+// 4. Ejecutar consulta SQL en memoria
+imprimir("");
+imprimir("4. Ejecutando Consulta SQL:");
+texto sql_res = arrow_sql_consulta(tabla, "SELECCIONAR nombre, salario DESDE empleados_tech DONDE salario > 7000");
+imprimir(sql_res);
+
+// 5. Exportar a formato CSV plano
+imprimir("");
+imprimir("5. Exportando Tabla a CSV Plano:");
+texto csv = arrow_exportar_csv(tabla);
+imprimir(csv);
+
+imprimir("✨ ¡Motor SQL en memoria y formato Apache Arrow ejecutados con éxito en LÚMEN!");

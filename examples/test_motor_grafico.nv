@@ -1,0 +1,63 @@
+// ============================================================================
+// Prueba del Motor de Videojuegos 2D/3D, Cámaras y Física SAT en LÚMEN
+// ============================================================================
+
+importar "motor_grafico.nv";
+
+funcion vacio principal() {
+    imprimir("── TEST: MOTOR DE JUEGOS 2D/3D & FÍSICA SAT EN LÚMEN ──\n");
+
+    // 1. Vectores y Operaciones Espaciales
+    imprimir("1. VECTORES 3D Y PRODUCTO CRUZ:");
+    motor_grafico_Vector3D v1 = motor_grafico_vec3(1.0, 0.0, 0.0);
+    motor_grafico_Vector3D v2 = motor_grafico_vec3(0.0, 1.0, 0.0);
+    motor_grafico_Vector3D cruz = motor_grafico_vec3_cruz(v1, v2);
+    imprimir("   • [1, 0, 0] x [0, 1, 0] = [", cruz.x, ",", cruz.y, ",", cruz.z, "] (Eje Z)");
+
+    // 2. Cámara 3D y Matriz de Vista LookAt
+    imprimir("\n2. CÁMARA 3D & MATRIZ DE VISTA (LOOKAT):");
+    motor_grafico_Vector3D pos_ojo = motor_grafico_vec3(0.0, 5.0, -10.0);
+    motor_grafico_Vector3D objetivo = motor_grafico_vec3(0.0, 0.0, 0.0);
+    motor_grafico_Camara3D camara = motor_grafico_camara3d_crear(pos_ojo, objetivo, 60.0, 1.777);
+    motor_grafico_Matriz4x4 vista = motor_grafico_camara3d_matriz_vista(camara);
+    imprimir("   • Matriz de Vista 4x4 generada (16 floats): OK (Dim:", largo(vista.elementos), ")");
+
+    // 3. Sprite Batcher para GPU
+    imprimir("\n3. SPRITE BATCHER AUTOMÁTICO GPU:");
+    motor_grafico_SpriteBatcher batch = motor_grafico_batcher_crear(5000);
+    
+    // Dibujar 500 sprites en el buffer de lote
+    para (entero i = 0; i < 500; i = i + 1) {
+        batch = motor_grafico_batcher_dibujar(batch, 1, i * 2.0, 50.0, 32.0, 32.0, 1.0, 0.5, 0.2);
+    }
+    imprimir("   • Sprites encolados en buffer:", largo(batch.sprites));
+    batch = motor_grafico_batcher_flush(batch);
+    imprimir("   • Batcher Flush ejecutado -> Draw Calls emitidos a GPU:", batch.draw_calls_emitidos);
+
+    // 4. Sistema de Física y Colisiones (AABB & Raycasting 3D)
+    imprimir("\n4. FÍSICA & DETECCIÓN DE COLISIONES (AABB / SAT / RAYCAST):");
+    motor_grafico_CajaAABB jugador = motor_grafico_CajaAABB { min_x: 10.0, min_y: 10.0, max_x: 30.0, max_y: 30.0 };
+    motor_grafico_CajaAABB enemigo = motor_grafico_CajaAABB { min_x: 25.0, min_y: 20.0, max_x: 45.0, max_y: 40.0 };
+    motor_grafico_CajaAABB obstaculo_lejos = motor_grafico_CajaAABB { min_x: 100.0, min_y: 100.0, max_x: 120.0, max_y: 120.0 };
+
+    booleano choca_enemigo = motor_grafico_colision_aabb(jugador, enemigo);
+    booleano choca_lejos = motor_grafico_colision_aabb(jugador, obstaculo_lejos);
+    imprimir("   • Colisión Jugador-Enemigo (Solapamiento AABB):", choca_enemigo);
+    imprimir("   • Colisión Jugador-Obstáculo lejano:", choca_lejos);
+
+    // Raycast 3D contra Esfera
+    motor_grafico_Rayo3D rayo = motor_grafico_Rayo3D {
+        origen: motor_grafico_vec3(0.0, 0.0, -10.0),
+        direccion: motor_grafico_vec3(0.0, 0.0, 1.0)
+    };
+    motor_grafico_Esfera3D esfera = motor_grafico_Esfera3D {
+        centro: motor_grafico_vec3(0.0, 0.0, 0.0),
+        radio: 2.0
+    };
+    decimal impacto_t = motor_grafico_raycast_impacto_esfera(rayo, esfera);
+    imprimir("   • Raycast 3D Impacto en Esfera (Distancia t):", impacto_t);
+
+    imprimir("\n✓ Motor Gráfico 2D/3D verificado exitosamente.");
+}
+
+principal();

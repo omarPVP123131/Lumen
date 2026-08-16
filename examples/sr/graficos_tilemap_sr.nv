@@ -34,10 +34,10 @@ mientras pi < largo(pruebas) {
     numero wx = pruebas[pi][0];
     numero wy = pruebas[pi][1];
     entero tile = tile_en_posicion(mapa, 5, 5, 32, 32, wx, wy);
-    texto resultado = "libre";
-    si tile > 0 { resultado = "COLISION (tile=" + tile + ")"; }
-    si tile < 0 { resultado = "FUERA DEL MAPA"; }
-    imprimir("  Pos(", wx, ",", wy, ") -> ", resultado);
+    texto res_tile = "libre";
+    si tile > 0 { res_tile = "COLISION (tile=" + tile + ")"; }
+    si tile < 0 { res_tile = "FUERA DEL MAPA"; }
+    imprimir("  Pos(", wx, ",", wy, ") -> ", res_tile);
     pi = pi + 1;
 }
 

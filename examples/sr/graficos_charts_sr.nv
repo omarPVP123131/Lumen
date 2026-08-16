@@ -20,7 +20,7 @@ funcion lista<lista<numero>> interpolar_linea(lista<numero> datos, entero pasos_
             numero t = (s como numero) / ((pasos_extra + 1) como numero);
             numero x = (i como numero) + t;
             numero y = y1 + (y2 - y1) * t;
-            pts.agregar([x, y)];
+            pts.agregar([x, y]);
             s = s + 1;
         }
         i = i + 1;
@@ -90,7 +90,7 @@ funcion lista<lista<entero>> generar_paleta(entero n) {
             g = (h3 * 3);
             b = 255 - (h3 * 3);
         }
-        paleta.agregar([r, g, b)];
+        paleta.agregar([r, g, b]);
         i = i + 1;
     }
     retornar paleta;

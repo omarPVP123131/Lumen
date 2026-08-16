@@ -1,0 +1,95 @@
+// ============================================================================
+// LÚMEN v2.4.6 — DEMO: AGENTE IA AUTÓNOMO CON RAG & TOOL-CALLING
+// Combina: vector_db.nv + ia.nv + postgres.nv + redis.nv
+// ============================================================================
+
+importar "vector_db.nv";
+importar "ia.nv";
+importar "postgres.nv";
+importar "redis.nv";
+
+// Estructura de Memoria y Estado del Agente
+estructura EstadoAgente {
+    nombre: texto,
+    objetivo: texto,
+    pasos_completados: entero,
+    memoria_episodica: vector_db_BaseVectores,
+    cache_respuestas: redis_RedisCliente,
+    conexion_db: postgres_PostgresConexion
+}
+
+// Inicialización del Agente Inteligente
+funcion EstadoAgente agente_inicializar(texto nombre, texto objetivo) {
+    imprimir("🤖 [Agente IA] Inicializando agente autónomo:", nombre);
+    imprimir("   • Objetivo principal:", objetivo);
+    
+    vector_db_BaseVectores memoria = vector_db_crear(3, "memoria_agente");
+    // Indexar conocimiento previo en la base vectorial RAG
+    memoria = vector_db_insertar(memoria, "kb_1", "Los servidores PostgreSQL operan en el puerto 5432", [0.9, 0.2, 0.1], "infra");
+    memoria = vector_db_insertar(memoria, "kb_2", "Redis almacena sesiones de usuario en cache ultra-rápida", [0.8, 0.4, 0.2], "infra");
+    memoria = vector_db_insertar(memoria, "kb_3", "LÚMEN compila a C99, Cranelift y binarios nativos ELF64", [0.95, 0.1, 0.1], "lenguaje");
+
+    redis_RedisCliente cache = redis_conectar("cache.internal", 6379, 0);
+    postgres_PostgresConexion db = postgres_conectar("db.internal", 5432, "admin", "prod_db");
+
+    retornar EstadoAgente {
+        nombre: nombre,
+        objetivo: objetivo,
+        pasos_completados: 0,
+        memoria_episodica: memoria,
+        cache_respuestas: cache,
+        conexion_db: db
+    };
+}
+
+// Bucle de Razonamiento ReAct (Reasoning + Action)
+funcion EstadoAgente agente_ejecutar_paso_react(EstadoAgente ag, texto observacion) {
+    ag.pasos_completados = ag.pasos_completados + 1;
+    imprimir("\n📍 [Paso ReAct #" + a_texto(ag.pasos_completados) + "] Observación recibida:", observacion);
+
+    // 1. Fase de Razonamiento (Pensamiento + Búsqueda RAG en Base Vectorial)
+    imprimir("   🤔 [Pensamiento] Consultando memoria episódica vectorial (RAG)...");
+    lista<decimal> embedding_consulta = [0.88, 0.25, 0.12];
+    lista<vector_db_ResultadoBusqueda> resultados_rag = vector_db_buscar(ag.memoria_episodica, embedding_consulta, 1, "coseno");
+    
+    imprimir("   📖 [Contexto RAG Recuperado]:", resultados_rag[0].contenido, "(Score:", resultados_rag[0].similitud, ")");
+
+    // 2. Fase de Inferencia INT8 con Matmul Cuantizado y RoPE
+    imprimir("   ⚡ [Inferencia IA] Ejecutando capa Transformer INT8 W8A16...");
+    lista<lista<decimal>> pesos_atencion = [
+        [0.85, -0.30, 0.15, 0.90],
+        [0.20, 0.75, -0.40, 0.60]
+    ];
+    ia_TensorCuantizadoInt8 w_q = ia_cuantizar_int8(pesos_atencion);
+    lista<decimal> activaciones = ia_matmul_cuantizado(w_q, [1.0, 0.5, -0.2, 0.8]);
+    lista<decimal> q_rot = ia_aplicar_rope(activaciones, 1, 2);
+    imprimir("   🧠 [Atención RoPE]: Vector resultante dim=" + a_texto(largo(q_rot)));
+
+    // 3. Fase de Acción (Tool-Calling Dinámico a PostgreSQL y Redis)
+    imprimir("   🛠️  [Tool-Calling] El agente invoca herramientas nativas:");
+    
+    // Herramienta A: Consulta a PostgreSQL
+    postgres_PostgresResultado usuarios_db = postgres_ejecutar(ag.conexion_db, "SELECT id, nombre, email, activo FROM usuarios");
+    imprimir("      • Tool 1 [PostgreSQL]: Consultadas", largo(usuarios_db.filas), "filas de usuarios.");
+
+    // Herramienta B: Cacheo en Redis
+    redis_set(ag.cache_respuestas, "agente:resultado_paso_" + a_texto(ag.pasos_completados), "OK_PROCESADO", 1800);
+    imprimir("      • Tool 2 [Redis RESP3]: Respuesta guardada en cache (TTL: 1800s).");
+
+    retornar ag;
+}
+
+funcion vacio principal() {
+    imprimir("╔══════════════════════════════════════════════════════════════════╗");
+    imprimir("║   LÚMEN v2.4.6 — DEMO: AGENTE IA AUTÓNOMO CON RAG & TOOLS        ║");
+    imprimir("╚══════════════════════════════════════════════════════════════════╝\n");
+
+    EstadoAgente agente = agente_inicializar("LumenAgent-Alpha", "Optimizar infraestructura y consultar estado del clúster");
+    
+    agente = agente_ejecutar_paso_react(agente, "El usuario solicita verificar la base de datos de usuarios y almacenar sesión");
+    agente = agente_ejecutar_paso_react(agente, "Actualizar métricas del sistema en la caché distribuida");
+
+    imprimir("\n🎉 [Agente IA] Tarea autónoma completada con éxito. Pasos totales:", agente.pasos_completados);
+}
+
+principal();

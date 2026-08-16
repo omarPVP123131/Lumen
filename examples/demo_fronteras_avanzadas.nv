@@ -1,0 +1,77 @@
+// ============================================================================
+// LÚMEN — Demostración de las 5 Grandes Fronteras Tecnológicas
+// examples/demo_fronteras_avanzadas.nv
+// ============================================================================
+
+importar ingles;
+importar "tensor.nv";
+importar "nn.nv";
+importar "ui_declarativa.nv";
+importar "servidor.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   LÚMEN — DEMOSTRACIÓN DE LAS 5 GRANDES FRONTERAS TECNOLÓGICAS       ║");
+imprimir("║   Pattern Matching Estructural • Transformers • UI Declarativa       ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝\n");
+
+// ── FRONTERA 2: Pattern Matching Estructural en Structs y Tuplas ─────
+imprimir("── [FRONTERA 2] Pattern Matching Estructural en Objetos ──");
+
+estructura Vector2D {
+    x: entero,
+    y: entero
+}
+
+Vector2D v1 = Vector2D { x: 0, y: 15 };
+elegir (v1) {
+    caso Vector2D { x: 0, y: 0 }: imprimir("  • Origen (0, 0)");
+    caso Vector2D { x: 0, y: val_y }: imprimir("  ✓ Eje Y detectado estructuralmente en y = ", val_y);
+    caso Vector2D { x: val_x, y: 0 }: imprimir("  • Eje X en x = ", val_x);
+    defecto: imprimir("  • Punto general");
+}
+
+(entero, texto) tupla_datos = (100, "CONFIRMADO");
+elegir (tupla_datos) {
+    caso (100, msg): imprimir("  ✓ Tupla desestructurada en match: código 100, mensaje = ", msg);
+    defecto: imprimir("  • Otra tupla");
+}
+
+
+// ── FRONTERA 4: Multi-Head Attention & Transformer Blocks (AI/ML) ────
+imprimir("\n── [FRONTERA 4] Multi-Head Self-Attention & Bloque Transformer ──");
+
+nn_BloqueTransformer modelo_transformer = nn_transformer_crear(8, 2);
+lista<decimal> embeddings_entrada = [0.1, 0.5, 0.9, -0.2, 0.4, 0.8, -0.6, 0.3];
+
+imprimir("  • Embeddings de entrada (dim=8): ", embeddings_entrada);
+lista<decimal> salida_transformer = modelo_transformer.procesar(embeddings_entrada);
+imprimir("  ✓ Salida Transformer (Self-Attention + LayerNorm + FFN): ", salida_transformer);
+
+
+// ── FRONTERA 5: UI Declarativa y Reactiva (SwiftUI / Flutter Style) ──
+imprimir("\n── [FRONTERA 5] Framework de UI Declarativa ──");
+
+ui_declarativa_ElementoUI btn1 = ui_declarativa_ui_boton("Entrenar Modelo", "btn_train");
+ui_declarativa_ElementoUI btn2 = ui_declarativa_ui_boton("Desplegar API", "btn_deploy");
+ui_declarativa_ElementoUI fila_botones = ui_declarativa_ui_fila([btn1, btn2]);
+ui_declarativa_ElementoUI txt_titulo = ui_declarativa_ui_texto("Panel de Control LÚMEN v2.4.4", "font-weight: bold; font-size: 18px;");
+ui_declarativa_ElementoUI txt_estado = ui_declarativa_ui_texto("Estado: 100% Operacional y Sincronizado");
+
+ui_declarativa_ElementoUI mi_vista = ui_declarativa_ui_columna([
+    txt_titulo,
+    fila_botones,
+    txt_estado
+]);
+
+imprimir("  • Renderizado Terminal TUI:");
+imprimir(ui_declarativa_ui_renderizar_tui(mi_vista));
+
+texto html_salida = ui_declarativa_ui_renderizar_html(mi_vista);
+imprimir("  ✓ Virtual DOM / HTML generado:");
+imprimir("    ", html_salida);
+
+posponer {
+    imprimir("\n✓ Limpieza y finalización de sesión ejecutada.");
+}
+
+imprimir("\n🎉 ¡Las 5 Grandes Fronteras de LÚMEN implementadas y verificadas!");

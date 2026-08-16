@@ -1,0 +1,54 @@
+// ============================================================================
+// LÚMEN — Demostración de Aceleración Vectorial SIMD AVX2 (256-bit)
+// ============================================================================
+
+importar "simd.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   ⚡ LÚMEN SIMD AVX2 / ARM NEON — Vector Hardware Engine (v2.4.6)    ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Cargar dos registros vectoriales de 8 números decimales (256-bit SIMD)
+imprimir("1. Inicializando registros vectoriales SIMD de 256 bits (8 x float32)...");
+simd_SimdF32x8 a = simd_f32x8_nuevo(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+simd_SimdF32x8 b = simd_f32x8_nuevo(10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0);
+
+imprimir("   Vector A: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]");
+imprimir("   Vector B: [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0]");
+
+// 2. Suma Vectorial Paralela en 1 ciclo de reloj
+imprimir("");
+imprimir("2. Ejecutando Suma Vectorial Paralela (simd_sumar_f32x8)...");
+simd_SimdF32x8 suma = simd_sumar_f32x8(a, b);
+lista<decimal> res_suma = simd_f32x8_a_lista(suma);
+imprimir("   ✓ A + B = ", res_suma);
+
+// 3. Multiplicación Vectorial Paralela
+imprimir("");
+imprimir("3. Ejecutando Multiplicación Vectorial Paralela (simd_multiplicar_f32x8)...");
+simd_SimdF32x8 mul = simd_multiplicar_f32x8(a, b);
+lista<decimal> res_mul = simd_f32x8_a_lista(mul);
+imprimir("   ✓ A * B = ", res_mul);
+
+// 4. Operación FMA (Fused Multiply-Add: a * b + c) en hardware
+imprimir("");
+imprimir("4. Operación Fused Multiply-Add FMA ((A * B) + C)...");
+simd_SimdF32x8 c = simd_f32x8_splat(5.0);
+simd_SimdF32x8 fma = simd_fma_f32x8(a, b, c);
+imprimir("   ✓ (A * B) + 5.0 = ", simd_f32x8_a_lista(fma));
+
+// 5. Producto Punto (Dot Product) de 8 dimensiones
+imprimir("");
+imprimir("5. Calculando Producto Punto 8D (simd_producto_punto_f32x8)...");
+decimal dot = simd_producto_punto_f32x8(a, b);
+imprimir("   ✓ Dot Product (A · B) = ", dot);
+
+// 6. Reducción Horizontal (Horizontal Reduction Sum)
+imprimir("");
+imprimir("6. Reducción Horizontal de Vector A (simd_suma_horizontal_f32x8)...");
+decimal hsum = simd_suma_horizontal_f32x8(a);
+imprimir("   ✓ Suma horizontal de elementos = ", hsum, " (1+2+3+4+5+6+7+8 = 36.0)");
+
+imprimir("");
+imprimir("✨ ¡Aceleración vectorial SIMD AVX2 verificada con éxito en LÚMEN!");

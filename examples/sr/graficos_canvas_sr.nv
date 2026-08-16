@@ -39,8 +39,8 @@ imprimir("--- Ej 2: Interpolacion de Gradiente ---");
 funcion entero interpolar_color(entero c1, entero c2, numero t) {
     // c1 + (c2 - c1) * t
     numero diff = (c2 - c1) como numero;
-    numero result = (c1 como numero) + diff * t;
-    retornar result como entero;
+    numero res_calc = (c1 como numero) + diff * t;
+    retornar res_calc como entero;
 }
 // Gradient from blue (0,0,255) to red (255,0,0)
 entero steps = 5;

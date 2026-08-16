@@ -1,0 +1,55 @@
+// ============================================================================
+// LÚMEN — Demostración de Audio Espacial 3D, Sintetizador & Procesamiento DSP
+// ============================================================================
+
+importar "audio_dsp.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🔊 LÚMEN 3D SPATIAL AUDIO & REAL-TIME DSP ENGINE (v2.4.6)          ║");
+imprimir("║   Sintetizador de Ondas, Filtros Digitales & Paneo Binaural 3D       ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Sintetizador de Formas de Onda (Seno, Cuadrada, Triangular, Sierra, Ruido)
+imprimir("1. Generando Osciladores de Audio DSP...");
+audio_dsp_BufferAudioMono onda_seno = audio_dsp_oscilador_seno(440.0, 1.0, 44100);
+audio_dsp_BufferAudioMono onda_cuadrada = audio_dsp_oscilador_cuadrada(220.0, 1.0);
+audio_dsp_BufferAudioMono onda_sierra = audio_dsp_oscilador_sierra(330.0, 1.0);
+audio_dsp_BufferAudioMono onda_ruido = audio_dsp_oscilador_ruido(1.0);
+
+imprimir("   ✓ Onda Senoidal (440 Hz La)     : ", onda_seno.muestras.largo(), " muestras");
+imprimir("   ✓ Onda Cuadrada (220 Hz La)     : ", onda_cuadrada.muestras.largo(), " muestras");
+imprimir("   ✓ Onda Diente de Sierra (330 Hz): ", onda_sierra.muestras.largo(), " muestras");
+imprimir("   ✓ Generador de Ruido Acústico   : ", onda_ruido.muestras.largo(), " muestras");
+
+// 2. Aplicar Filtros DSP en Tiempo Real (Low-Pass, High-Pass, Band-Pass)
+imprimir("");
+imprimir("2. Aplicando Filtros DSP en Cascada...");
+audio_dsp_BufferAudioMono filtrado_lp = audio_dsp_filtro_lowpass(onda_seno, 0.25);
+audio_dsp_BufferAudioMono filtrado_hp = audio_dsp_filtro_highpass(onda_sierra, 0.30);
+imprimir("   ✓ Filtro Pasa-Bajas (Low-Pass) aplicado con corte alpha=0.25");
+imprimir("   ✓ Filtro Pasa-Altas (High-Pass) aplicado con corte alpha=0.30");
+
+// 3. Efectos Espaciales de Tiempo: Reverb Delay & Compresión Dinámica
+imprimir("");
+imprimir("3. Procesamiento de Dinámica Acústica & Reverberación...");
+audio_dsp_BufferAudioMono con_reverb = audio_dsp_reverb_eco(filtrado_lp, 4, 0.4);
+audio_dsp_BufferAudioMono master_compresor = audio_dsp_compresor_dinamico(con_reverb, 0.75, 0.5);
+imprimir("   ✓ Reverb Delay acústico aplicado (retraso 4 muestras, decay 0.4)");
+imprimir("   ✓ Compresor Dinámico anti-clipping activo (umbral 0.75, ratio 2:1)");
+
+// 4. Posicionar sonido en el espacio 3D (Audio Espacial Estéreo Binaural)
+imprimir("");
+imprimir("4. Calculando Posicionamiento Espacial 3D Binaural...");
+// Oyente en el origen (0, 0, 0) y fuente de sonido a la derecha (8.0, 0.0, 6.0)
+audio_dsp_BufferAudioEstereo estereo_3d = audio_dsp_posicionar_3d(master_compresor, 0.0, 0.0, 0.0, 8.0, 0.0, 6.0);
+
+imprimir("   • Posición del Oyente  : (0.0, 0.0, 0.0)");
+imprimir("   • Posición del Emisor  : (8.0, 0.0, 6.0)");
+imprimir("   • Atenuación de Distancia: ", estereo_3d.volumen_atenuado);
+imprimir("   • Paneo Estéreo (L/R)    : ", estereo_3d.balance_paneo, " (Hacia la derecha)");
+imprimir("   ✓ Muestras Canal Izquierdo: ", estereo_3d.canal_izquierdo.largo());
+imprimir("   ✓ Muestras Canal Derecho  : ", estereo_3d.canal_derecho.largo());
+
+imprimir("");
+imprimir("✨ ¡Motor de Audio Espacial 3D y procesamiento DSP ejecutados con éxito en LÚMEN!");

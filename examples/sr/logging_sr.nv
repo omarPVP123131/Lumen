@@ -27,7 +27,7 @@ funcion lista<texto> filtrar_mensajes(lista<lista<texto>> mensajes, entero umbra
     mientras i < largo(mensajes) {
         entero nivel = mensajes[i][0].largo();  // use length as proxy for level
         // Simplified: just show all for demo
-        visibles.agregar(mensajes[i)[1]];
+        visibles.agregar(mensajes[i][1]);
         i = i + 1;
     }
     retornar visibles;

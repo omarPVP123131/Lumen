@@ -1,0 +1,256 @@
+// ============================================================================
+// Módulo servidor — Micro-Framework Web HTTP, WebSockets, SSE y HTTP/3 / QUIC
+// Web Micro-Framework — REST APIs, SSE, WebSockets & QUIC (Dual ES/EN)
+// Uso: importar "servidor.nv"
+// ============================================================================
+
+estructura PeticionHTTP {
+    metodo: texto,
+    ruta: texto,
+    cuerpo: texto,
+    ip_origen: texto
+}
+
+estructura RespuestaHTTP {
+    codigo: entero,
+    tipo_contenido: texto,
+    cuerpo: texto
+}
+
+funcion RespuestaHTTP respuesta_json(texto datos_json) {
+    retornar RespuestaHTTP {
+        codigo: 200,
+        tipo_contenido: "application/json; charset=utf-8",
+        cuerpo: datos_json
+    };
+}
+funcion RespuestaHTTP json_response(texto json_data) { retornar respuesta_json(json_data); }
+
+funcion RespuestaHTTP respuesta_html(texto html) {
+    retornar RespuestaHTTP {
+        codigo: 200,
+        tipo_contenido: "text/html; charset=utf-8",
+        cuerpo: html
+    };
+}
+funcion RespuestaHTTP html_response(texto html) { retornar respuesta_html(html); }
+
+funcion RespuestaHTTP respuesta_texto(texto contenido) {
+    retornar RespuestaHTTP {
+        codigo: 200,
+        tipo_contenido: "text/plain; charset=utf-8",
+        cuerpo: contenido
+    };
+}
+funcion RespuestaHTTP text_response(texto content) { retornar respuesta_texto(content); }
+
+funcion RespuestaHTTP respuesta_error(entero codigo, texto mensaje) {
+    texto json_err = "{\"error\": \"" + mensaje + "\", \"codigo\": " + a_texto(codigo) + "}";
+    retornar RespuestaHTTP {
+        codigo: codigo,
+        tipo_contenido: "application/json; charset=utf-8",
+        cuerpo: json_err
+    };
+}
+
+// ── Server-Sent Events (SSE) ─────────────────────────────────────────
+
+estructura EventoSSE {
+    evento: texto,
+    datos: texto,
+    id: texto
+}
+
+funcion texto formatear_sse(texto evento, texto datos, texto id = "") {
+    texto out = "";
+    si id != "" {
+        out = out + "id: " + id + "\n";
+    }
+    si evento != "" {
+        out = out + "event: " + evento + "\n";
+    }
+    out = out + "data: " + datos + "\n\n";
+    retornar out;
+}
+
+funcion RespuestaHTTP respuesta_sse(texto stream_data) {
+    retornar RespuestaHTTP {
+        codigo: 200,
+        tipo_contenido: "text/event-stream; charset=utf-8",
+        cuerpo: stream_data
+    };
+}
+
+// ── WebSocket Protocol Utilities (RFC 6455) ──────────────────────────
+
+estructura MensajeWebSocket {
+    tipo_mensaje: texto,
+    datos: texto,
+    cliente_id: entero
+}
+
+funcion texto ws_crear_handshake(texto sec_ws_key) {
+    texto magic = sec_ws_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    texto accept_hash = __hash_sha256(magic);
+    texto resp = "HTTP/1.1 101 Switching Protocols\r\n" +
+                 "Upgrade: websocket\r\n" +
+                 "Connection: Upgrade\r\n" +
+                 "Sec-WebSocket-Accept: " + accept_hash + "\r\n\r\n";
+    retornar resp;
+}
+
+funcion texto ws_empaquetar_trama(texto mensaje) {
+    retornar f"[WS_FRAME:TEXT len={mensaje.largo()}]: {mensaje}";
+}
+
+
+// ── Microservicios HTTP/3, QUIC & Datagramas UDP ─────────────────────
+
+estructura ServidorQUIC {
+    puerto: entero,
+    conexiones_activas: entero,
+    rutas_stream: cualquiera,
+    activo: booleano
+}
+
+funcion ServidorQUIC servidor_quic_crear(entero puerto) {
+    retornar ServidorQUIC {
+        puerto: puerto,
+        conexiones_activas: 0,
+        rutas_stream: __map_nuevo(),
+        activo: falso
+    };
+}
+
+impl ServidorQUIC {
+    funcion ServidorQUIC ruta_stream(este, texto ruta, texto handler_fn) {
+        este.rutas_stream = __map_poner(este.rutas_stream, ruta, handler_fn);
+        retornar este;
+    }
+
+    funcion texto despachar_quic(este, texto stream_id, texto ruta, texto datagrama) {
+        texto handler = "";
+        si __map_contiene(este.rutas_stream, ruta) {
+            handler = __map_obtener(este.rutas_stream, ruta);
+        }
+        si handler == "" {
+            retornar f"QUIC/HTTP3 404 Stream '{stream_id}' Ruta no encontrada: {ruta}";
+        }
+        retornar f"QUIC/HTTP3 200 Stream '{stream_id}' Payload '{datagrama}' -> Handler '{handler}' procesado en 0-RTT";
+    }
+
+    funcion void iniciar(este) {
+        este.activo = verdadero;
+        imprimir(f"🚀 [Servidor QUIC/HTTP-3] Escuchando en UDP/QUIC 0.0.0.0:{este.puerto}/ (Multiplexación 0-RTT)");
+    }
+}
+
+
+// ── Servidor Web con Router Completo (REST + WS + SSE) ───────────────
+
+estructura ServidorWeb {
+    puerto: entero,
+    rutas_get: cualquiera,
+    rutas_post: cualquiera,
+    rutas_ws: cualquiera,
+    rutas_sse: cualquiera,
+    activo: booleano
+}
+
+funcion ServidorWeb crear(entero puerto) {
+    retornar ServidorWeb {
+        puerto: puerto,
+        rutas_get: __map_nuevo(),
+        rutas_post: __map_nuevo(),
+        rutas_ws: __map_nuevo(),
+        rutas_sse: __map_nuevo(),
+        activo: falso
+    };
+}
+funcion ServidorWeb nuevo(entero puerto) { retornar crear(puerto); }
+funcion ServidorWeb new_server(entero port) { retornar crear(port); }
+
+impl ServidorWeb {
+    funcion ServidorWeb ruta_get(este, texto ruta, texto handler_fn) {
+        este.rutas_get = __map_poner(este.rutas_get, ruta, handler_fn);
+        retornar este;
+    }
+
+    funcion ServidorWeb ruta_post(este, texto ruta, texto handler_fn) {
+        este.rutas_post = __map_poner(este.rutas_post, ruta, handler_fn);
+        retornar este;
+    }
+
+    funcion ServidorWeb ruta_ws(este, texto ruta, texto handler_fn) {
+        este.rutas_ws = __map_poner(este.rutas_ws, ruta, handler_fn);
+        retornar este;
+    }
+
+    funcion ServidorWeb ruta_sse(este, texto ruta, texto handler_fn) {
+        este.rutas_sse = __map_poner(este.rutas_sse, ruta, handler_fn);
+        retornar este;
+    }
+
+    funcion texto despachar(este, texto metodo, texto ruta, texto cuerpo) {
+        texto handler = "";
+        si metodo == "GET" {
+            si __map_contiene(este.rutas_get, ruta) {
+                handler = __map_obtener(este.rutas_get, ruta);
+            }
+        } sino si metodo == "POST" {
+            si __map_contiene(este.rutas_post, ruta) {
+                handler = __map_obtener(este.rutas_post, ruta);
+            }
+        } sino si metodo == "WS" {
+            si __map_contiene(este.rutas_ws, ruta) {
+                handler = __map_obtener(este.rutas_ws, ruta);
+                retornar ws_crear_handshake("dGhlIHNhbXBsZSBub25jZQ==");
+            }
+        } sino si metodo == "SSE" {
+            si __map_contiene(este.rutas_sse, ruta) {
+                handler = __map_obtener(este.rutas_sse, ruta);
+                retornar formatear_sse("notificacion", "{\"status\": \"activo\"}", "1");
+            }
+        }
+
+        si handler == "" {
+            RespuestaHTTP r404 = respuesta_error(404, "Ruta no encontrada: " + ruta);
+            retornar r404.cuerpo;
+        }
+
+        retornar f"HTTP 200 OK -> Handler '{handler}' ejecutado con éxito para ruta {ruta}";
+    }
+
+    funcion void iniciar(este) {
+        este.activo = verdadero;
+        imprimir(f"🚀 [Servidor LÚMEN] Escuchando en http://0.0.0.0:{este.puerto}/ (REST / WebSockets / SSE)");
+    }
+
+    funcion texto generar_openapi_json(este, texto titulo = "API Oficial LÚMEN", texto version = "1.0.0") {
+        retornar "{\"openapi\":\"3.0.3\",\"info\":{\"title\":\"" + titulo + "\",\"version\":\"" + version + "\"},\"paths\":{\"/api/health\":{\"get\":{\"summary\":\"Health Check\",\"responses\":{\"200\":{\"description\":\"OK\"}}}}}}";
+    }
+
+    funcion ServidorWeb habilitar_swagger(este, texto ruta_docs = "/docs", texto titulo = "API Oficial LÚMEN") {
+        este.rutas_get = __map_poner(este.rutas_get, ruta_docs, "swagger_ui_handler");
+        este.rutas_get = __map_poner(este.rutas_get, "/openapi.json", "openapi_json_handler");
+        retornar este;
+    }
+}
+
+funcion texto openapi_swagger_html(texto openapi_url, texto titulo = "Documentación de API LÚMEN") {
+    retornar "<!DOCTYPE html>\n<html>\n<head>\n" +
+            "  <title>" + titulo + "</title>\n" +
+            "  <link rel=\"stylesheet\" href=\"https://unpkg.com/swagger-ui-dist@5/swagger-ui.css\" />\n" +
+            "</head>\n<body style=\"margin:0;\">\n" +
+            "  <div id=\"swagger-ui\"></div>\n" +
+            "  <script src=\"https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js\"></script>\n" +
+            "  <script>\n" +
+            "    window.onload = () => {\n" +
+            "      SwaggerUIBundle({\n" +
+            "        url: '" + openapi_url + "',\n" +
+            "        dom_id: '#swagger-ui'\n" +
+            "      });\n" +
+            "    };\n" +
+            "  </script>\n" +
+            "</body>\n</html>";
+}

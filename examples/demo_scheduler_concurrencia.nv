@@ -1,0 +1,62 @@
+// ============================================================================
+// LÚMEN — Demostración de Scheduler de Concurrencia M:N y Work-Stealing
+// ============================================================================
+
+importar "scheduler.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   ⚡ LÚMEN M:N SCHEDULER & WORK-STEALING ENGINE (v2.4.6)              ║");
+imprimir("║   Concurrencia Masiva de Micro-Tareas (Green Threads) y Canales MPSC ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Crear un pool asíncrono M:N con 4 hilos nativos
+imprimir("1. Inicializando Scheduler Pool M:N (4 workers nativos)...");
+scheduler_SchedulerPool pool = scheduler_crear_pool(4);
+imprimir("   ✓ ", scheduler_estadisticas(pool));
+
+// 2. Despachar múltiples tareas concurrentes (Green Threads)
+imprimir("");
+imprimir("2. Despachando micro-tareas concurrentes al pool...");
+pool = scheduler_spawn(pool, "Calculo_Fisica_Particulas", "10000_particulas");
+pool = scheduler_spawn(pool, "Inferencia_IA_Embedding", "vector_512d");
+pool = scheduler_spawn(pool, "Indexacion_Vector_HNSW", "nodo_hnsw_42");
+pool = scheduler_spawn(pool, "Compresion_Payload_GGUF", "bloque_q4_0");
+pool = scheduler_spawn(pool, "Render_Shader_WebGPU", "frame_60fps");
+
+imprimir("   ✓ Tareas encoladas en el Pool: ", pool.tareas.largo());
+
+// 3. Ejecutar todas las tareas con Work-Stealing
+imprimir("");
+imprimir("3. Ejecutando balanceo de carga Work-Stealing...");
+pool = scheduler_ejecutar_todos(pool);
+
+para t en pool.tareas {
+    imprimir("   • [Worker #", t.worker_id, "] Tarea: ", t.nombre, " -> ", t.resultado);
+}
+imprimir("   ✓ ", scheduler_estadisticas(pool));
+
+// 4. Canales Asíncronos MPSC (Multi-Producer Single-Consumer)
+imprimir("");
+imprimir("4. Demostración de Canales Asíncronos Lock-Free (MPSC)...");
+scheduler_SchedulerCanal canal = scheduler_canal_crear(10);
+imprimir("   ✓ Canal creado con capacidad: ", canal.capacidad);
+
+canal = scheduler_canal_enviar(canal, "MSG_01: Evento de login de usuario");
+canal = scheduler_canal_enviar(canal, "MSG_02: Transacción PostgreSQL Wire completada");
+canal = scheduler_canal_enviar(canal, "MSG_03: Alerta de telemetría en tiempo real");
+
+imprimir("   ✓ Mensajes en el canal: ", canal.mensajes.largo());
+
+// Extraer mensajes del canal
+texto m1 = scheduler_canal_mirar(canal);
+canal = scheduler_canal_desencolar(canal);
+texto m2 = scheduler_canal_mirar(canal);
+canal = scheduler_canal_desencolar(canal);
+
+imprimir("   [Mensaje 1 Extraído]: ", m1);
+imprimir("   [Mensaje 2 Extraído]: ", m2);
+imprimir("   [Mensajes restantes en canal]: ", canal.mensajes.largo());
+
+imprimir("");
+imprimir("✨ ¡Scheduler de concurrencia M:N y canales ejecutados con éxito en LÚMEN!");

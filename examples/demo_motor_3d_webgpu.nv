@@ -1,0 +1,41 @@
+// ============================================================================
+// LÚMEN — Demostración de Motor Gráfico 3D y Shaders WebGPU
+// ============================================================================
+
+importar "motor_3d_gpu.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🎮 LÚMEN 3D ENGINE & WEBGPU SHADER PIPELINE (v2.4.6)               ║");
+imprimir("║   Mallas Poligonales, Transformación MVP y Render a 144 FPS          ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Crear malla poligonal 3D de un Cubo
+imprimir("1. Generando malla 3D (Cubo indexado)...");
+motor_3d_gpu_Malla3D cubo = motor_3d_gpu_motor_3d_crear_cubo(2.5);
+imprimir("   ✓ Malla generada: '", cubo.nombre, "'");
+imprimir("   • Vértices : ", cubo.vertices.largo());
+imprimir("   • Índices  : ", cubo.indices.largo());
+imprimir("   • Triángulos: ", cubo.total_triangulos);
+
+// 2. Inicializar Cámara 3D y Luz
+imprimir("");
+imprimir("2. Configurando Cámara 3D (LookAt) y Luz Direccional...");
+motor_3d_gpu_Camara3D cam = motor_3d_gpu_motor_3d_crear_camara(0.0, 4.0, -8.0);
+imprimir("   ✓ Cámara posicionada en (", cam.pos_x, ", ", cam.pos_y, ", ", cam.pos_z, ") con FOV de ", cam.fov_grados, "°");
+
+// 3. Generar Pipeline de Shaders WGSL para WebGPU
+imprimir("");
+imprimir("3. Compilando Pipeline de Shaders WebGPU (Vertex + Fragment)...");
+texto shader_wgsl = motor_3d_gpu_motor_3d_generar_wgsl_render(cubo);
+imprimir("   [Primeras líneas del Shader WGSL]:");
+imprimir("   " + __str_subcadena(shader_wgsl, 0, 95) + "...");
+
+// 4. Renderizar frames a 144 FPS
+imprimir("");
+imprimir("4. Ejecutando Loop de Renderizado 3D a 144 FPS...");
+texto frame1 = motor_3d_gpu_motor_3d_renderizar_cuadro(cubo, cam, 6.94);
+imprimir("   • ", frame1);
+
+imprimir("");
+imprimir("✨ ¡Motor 3D y Pipeline WebGPU ejecutados con éxito en LÚMEN!");

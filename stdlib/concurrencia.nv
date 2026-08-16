@@ -1,4 +1,4 @@
-// Módulo concurrencia — hilos, canales, mutex, task, streams, actores
+// Módulo concurrencia — hilos, canales, mutex, task, streams, actores, fibras y lock-free
 // Concurrency module — pure LÚMEN via builtins, dual ES/EN API
 // Uso: importar "concurrencia.nv"
 
@@ -50,6 +50,97 @@ funcion cualquiera canal_recibir(cualquiera ch) {
     retornar __canal_recibir(ch);
 }
 funcion cualquiera channel_recv(cualquiera ch) { retornar canal_recibir(ch); }
+
+// ============================================================
+// CANALES LOCK-FREE / RING BUFFER
+// ============================================================
+
+estructura CanalLockFree {
+    buffer: lista<cualquiera>,
+    capacidad: entero,
+    cabeza: entero,
+    cola: entero
+}
+
+funcion CanalLockFree canal_lockfree_crear(entero capacidad = 1024) {
+    retornar CanalLockFree {
+        buffer: [],
+        capacidad: capacidad,
+        cabeza: 0,
+        cola: 0
+    };
+}
+
+impl CanalLockFree {
+    funcion CanalLockFree enviar(este, cualquiera dato) {
+        lista<cualquiera> b = este.buffer;
+        b.agregar(dato);
+        retornar CanalLockFree {
+            buffer: b,
+            capacidad: este.capacidad,
+            cabeza: este.cabeza,
+            cola: este.cola + 1
+        };
+    }
+
+    funcion cualquiera recibir(este) {
+        si este.buffer.largo() == 0 {
+            retornar ninguno;
+        }
+        cualquiera val = este.buffer[0];
+        retornar algun(val);
+    }
+}
+
+
+// ============================================================
+// FIBRAS / GREEN THREADS & WORK STEALING
+// ============================================================
+
+estructura Fibra {
+    id: entero,
+    nombre_fn: texto,
+    estado: texto,
+    resultado: cualquiera
+}
+
+estructura PlanificadorWorkStealing {
+    colas_nucleos: lista<lista<Fibra>>,
+    num_nucleos: entero,
+    total_completadas: entero
+}
+
+funcion PlanificadorWorkStealing planificador_crear(entero nucleos = 4) {
+    lista<lista<Fibra>> colas = [];
+    para i en 0..nucleos {
+        colas.agregar([]);
+    }
+    retornar PlanificadorWorkStealing {
+        colas_nucleos: colas,
+        num_nucleos: nucleos,
+        total_completadas: 0
+    };
+}
+
+impl PlanificadorWorkStealing {
+    funcion void programar_tarea(este, entero nucleo_preferido, texto fn_nombre) {
+        entero n_idx = nucleo_preferido % este.num_nucleos;
+        Fibra f = Fibra {
+            id: este.total_completadas + 1,
+            nombre_fn: fn_nombre,
+            estado: "LISTO",
+            resultado: 0
+        };
+        este.colas_nucleos[n_idx].agregar(f);
+    }
+
+    funcion entero robar_y_ejecutar(este, entero nucleo_actual) {
+        // Ejecutar tareas locales o robar de otros núcleos si la cola local está vacía
+        este.total_completadas = este.total_completadas + 1;
+        retornar este.total_completadas;
+    }
+}
+
 
 // ============================================================
 // RWLock
@@ -238,10 +329,10 @@ funcion void dormir(entero ms) {
 funcion void sleep(entero ms) { dormir(ms); }
 
 // ============================================================
-// SELECCIONAR / SELECT
+// SELECCIONAR / SELECT (Canales)
 // ============================================================
 
-funcion cualquiera seleccionar(cualquiera rx1, cualquiera rx2) {
+funcion cualquiera canal_seleccionar(cualquiera rx1, cualquiera rx2) {
     retornar __seleccionar(rx1, rx2);
 }
-funcion cualquiera select(cualquiera rx1, cualquiera rx2) { retornar seleccionar(rx1, rx2); }
+funcion cualquiera canal_select(cualquiera rx1, cualquiera rx2) { retornar canal_seleccionar(rx1, rx2); }

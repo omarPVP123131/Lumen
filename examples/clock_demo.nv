@@ -27,7 +27,7 @@ imprimir("Reloj iniciado. Actualizando cada segundo...");
 imprimir("Presiona Ctrl+C en consola para detener (en servidor).");
 
 // Bucle del reloj
-entero running = 1;
+booleano running = verdadero;
 mientras running {
   // Obtener hora actual via JS
   texto timeStr = __js_call("eval", "

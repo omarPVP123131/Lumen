@@ -36,7 +36,7 @@ funcion texto tabla_simple(lista<texto> headers, lista<lista<texto>> filas) {
     lista<entero> widths = [];
     entero i = 0;
     mientras i < largo(headers) {
-        widths.agregar(headers[i).largo()];
+        widths.agregar(headers[i].largo());
         i = i + 1;
     }
     entero r = 0;

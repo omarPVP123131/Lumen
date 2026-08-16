@@ -1,6 +1,8 @@
 // Ejemplo interactivo: Canvas drawing con JS bridges
 // Requiere modo Servidor (VM Rust) o WASM con bridges JS habilitados
 
+importar "matematicas.nv";
+
 imprimir("=== Canvas Demo ===");
 imprimir("Dibuja en el canvas con clic/arrastre");
 
@@ -56,9 +58,9 @@ entero i = 0;
 mientras i < 720 {
   decimal ang = i * 3.14159 / 180.0;
   decimal r = i * 0.2;
-  entero cx = 200 + entero(r * cos(ang));
-  entero cy = 150 + entero(r * sin(ang));
-  __js_call("eval", "window.lumenDrawLine(" + cx + ", " + cy + ");");
+  decimal cx = 200.0 + (r * matematicas_coseno(ang));
+  decimal cy = 150.0 + (r * matematicas_seno(ang));
+  __js_call("eval", "window.lumenDrawLine(" + a_texto(cx) + ", " + a_texto(cy) + ");");
   i = i + 2;
 }
 imprimir("¡Espiral completada!");

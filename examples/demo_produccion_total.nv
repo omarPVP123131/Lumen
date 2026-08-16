@@ -1,0 +1,82 @@
+// ============================================================================
+// LÚMEN — Demostración de Producción Total v2.4.4
+// LINQ Query, OpenAPI 3.0, Fibras Work-Stealing, Lock-Free & SIMD
+// examples/demo_produccion_total.nv
+// ============================================================================
+
+importar ingles;
+importar "tensor.nv";
+importar "nn.nv";
+importar "servidor.nv";
+importar "concurrencia.nv";
+importar "pipeline.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   LÚMEN v2.4.4 — SUITE DE PRODUCCIÓN TOTAL                           ║");
+imprimir("║   Consultas LINQ • OpenAPI 3.0 • Fibras Work-Stealing • Lock-Free    ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝\n");
+
+// ── 1. Consultas Integradas de Datos (LINQ/SQL Style) ────────────────
+imprimir("── [1] Consultas Integradas de Datos (LINQ/SQL) ──");
+
+lista<entero> transacciones = [120, 45, 890, 15, 340, 75, 1200, 50];
+
+// Consulta declarativa con filtrado y proyección matemática
+lista<entero> aprobadas = consultar t en transacciones
+                          donde t >= 100
+                          seleccionar t * 2;
+
+imprimir("  • Transacciones originales : ", transacciones);
+imprimir("  ✓ Consulta LINQ [t >= 100 → t * 2]: ", aprobadas);
+
+
+// ── 2. Canales Lock-Free & Planificador de Fibras (Work-Stealing) ────
+imprimir("\n── [2] Concurrencia Lock-Free & Fibras Work-Stealing ──");
+
+// 1. Canal Lock-Free basado en Ring Buffer
+concurrencia_CanalLockFree canal = concurrencia_canal_lockfree_crear(512);
+canal = canal.enviar("Evento_Telemetria_01");
+canal = canal.enviar("Evento_Telemetria_02");
+imprimir("  ✓ Eventos enviados al canal Lock-Free: 2 mensajes almacenados");
+
+cualquiera msg_recibido = canal.recibir();
+elegir (msg_recibido) {
+    caso algun(val): imprimir("  ✓ Mensaje recibido sin bloqueos atómicos: ", val);
+    defecto: imprimir("  ✗ Canal vacío");
+}
+
+// 2. Planificador de Fibras M:N con Robo de Trabajo (Work-Stealing)
+concurrencia_PlanificadorWorkStealing scheduler = concurrencia_planificador_crear(4);
+scheduler.programar_tarea(0, "tarea_inferencia_red");
+scheduler.programar_tarea(1, "tarea_streaming_quic");
+entero completadas = scheduler.robar_y_ejecutar(0);
+imprimir("  ✓ Tareas ejecutadas vía scheduler M:N: ", completadas);
+
+
+// ── 3. Generación Automática de OpenAPI 3.0 y Swagger ────────────────
+imprimir("\n── [3] OpenAPI 3.0 & Swagger UI Automático en Servidor ──");
+
+servidor_ServidorWeb app = servidor_crear(8080);
+app = app.ruta_get("/api/usuarios", "handle_obtener_usuarios");
+app = app.ruta_post("/api/login", "handle_autenticar");
+app = app.habilitar_swagger("/docs", "Microservicio Financiero LÚMEN");
+
+texto openapi_spec = app.generar_openapi_json("Microservicio Financiero LÚMEN", "2.4.4");
+imprimir("  ✓ Especificación OpenAPI 3.0 generada en /openapi.json:");
+imprimir("    ", openapi_spec);
+imprimir("  ✓ Swagger UI interactivo habilitado en http://0.0.0.0:8080/docs");
+
+
+// ── 4. Deep Learning: Transformer Multi-Head Self-Attention ──────────
+imprimir("\n── [4] Inferencia Transformer & Attention ──");
+
+nn_BloqueTransformer transformer = nn_transformer_crear(8, 2);
+lista<decimal> input_vector = [0.2, 0.4, 0.6, 0.8, -0.2, -0.4, -0.6, -0.8];
+lista<decimal> res_atencion = transformer.procesar(input_vector);
+imprimir("  ✓ Inferencia Transformer completada (dim=8): ", res_atencion);
+
+posponer {
+    imprimir("\n✓ Limpieza garantizada de recursos (RAII / posponer).");
+}
+
+imprimir("\n🎉 ¡LÚMEN v2.4.4 consolidado al 100% como lenguaje de producción!");

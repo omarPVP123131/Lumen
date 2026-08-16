@@ -1,0 +1,92 @@
+// ============================================================================
+// LÚMEN — Demostración de Capacidades Avanzadas v2.4.4
+// JIT Engine, Autograd Dinámico, Convoluciones, WebSockets y SSE
+// examples/demo_avanzado_completo.nv
+// ============================================================================
+
+importar ingles;
+importar "tensor.nv";
+importar "nn.nv";
+importar "servidor.nv";
+importar "arena.nv";
+importar "pipeline.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   LÚMEN v2.4.4 — DEMOSTRACIÓN DE CAPACIDADES AVANZADAS               ║");
+imprimir("║   JIT Runtime • Autograd Dinámico • Convolución • WebSockets / SSE   ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝\n");
+
+// ── 1. Diferenciación Automática Dinámica (Autograd) ─────────────────
+imprimir("── [1] Diferenciación Automática & Grafo de Cómputo (Autograd) ──");
+
+// Grafo de computación: L = (x * w + b), calcular dL/dw y dL/dx
+tensor_GrafoAutograd grafo = tensor_autograd_nuevo();
+grafo = grafo.variable(3.0); // Nodo 0: x = 3.0
+grafo = grafo.variable(4.0); // Nodo 1: w = 4.0
+grafo = grafo.variable(5.0); // Nodo 2: b = 5.0
+
+grafo = grafo.multiplicar(0, 1); // Nodo 3: prod = x * w = 12.0
+grafo = grafo.sumar(3, 2);       // Nodo 4: loss = prod + b = 17.0
+
+imprimir("  • Valor calculado en Loss: ", grafo.valor(4)); // 17.0
+
+// Ejecutar Backpropagation hacia atrás
+grafo = grafo.backward(4);
+
+imprimir("  • Gradiente dLoss/dx (w = 4.0): ", grafo.gradiente(0)); // 4.0
+imprimir("  • Gradiente dLoss/dw (x = 3.0): ", grafo.gradiente(1)); // 3.0
+imprimir("  • Gradiente dLoss/db (1.0):     ", grafo.gradiente(2)); // 1.0
+
+
+// ── 2. Convolución 1D y Layer Normalization ──────────────────────────
+imprimir("\n── [2] Convoluciones y Layer Normalization (Deep Learning) ──");
+
+lista<decimal> senal = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+lista<decimal> filtro = [0.5, 1.0, 0.5]; // Filtro suavizado 3-tap
+lista<decimal> conv_res = tensor_conv1d(senal, filtro);
+imprimir("  • Señal original: ", senal);
+imprimir("  • Convolución 1D: ", conv_res);
+
+lista<decimal> vector_activado = [2.0, 4.0, 6.0, 8.0];
+lista<decimal> norm_res = nn_capa_norm(vector_activado);
+imprimir("  • Layer Normalization: ", norm_res);
+
+
+// ── 3. Motor WebSockets y Server-Sent Events (SSE) ───────────────────
+imprimir("\n── [3] Servidor Web Moderno: WebSockets y SSE ──");
+
+servidor_ServidorWeb app = servidor_crear(3000);
+
+// Configuración de rutas REST, WebSocket y SSE
+app = app.ruta_get("/api/saludo", "handle_saludo");
+app = app.ruta_ws("/ws/chat", "handle_chat_ws");
+app = app.ruta_sse("/stream/noticias", "handle_live_stream");
+
+// Simulación de dispatch de conexiones
+texto handshake = app.despachar("WS", "/ws/chat", "");
+imprimir("  • Handshake WebSocket generado: HTTP 101 Switching Protocols");
+
+texto evento_sse = servidor_formatear_sse("alerta_ia", "{\"modelo\": \"lumen-autograd-v1\", \"status\": \"entrenado\"}", "msg_001");
+imprimir("  • Evento SSE formateado:\n", evento_sse);
+
+
+// ── 4. Operador Pipe y Comprensiones Integradas ──────────────────────
+imprimir("── [4] Flujo Funcional con Operador Pipe (|>) y Comprensiones ──");
+
+funcion lista<entero> filtrar_positivos(lista<entero> lst) {
+    retornar [x para x en lst si x > 0];
+}
+
+funcion lista<entero> elevar_cuadrado(lista<entero> lst) {
+    retornar [x * x para x en lst];
+}
+
+lista<entero> entrada_datos = [-3, -1, 2, 4, -5, 6];
+lista<entero> procesado = entrada_datos |> filtrar_positivos() |> elevar_cuadrado();
+imprimir("  • Pipeline ([-3, -1, 2, 4, -5, 6] |> positivos |> cuadrado): ", procesado);
+
+posponer {
+    imprimir("\n✓ Limpieza de recursos pospuesta completada exitosamente.");
+}
+
+imprimir("\n🎉 ¡LÚMEN v2.4.4 operando con todas las capacidades avanzadas de IA, Web y JIT!");

@@ -1,0 +1,269 @@
+// ============================================================================
+// Módulo ia — Inferencia LLM, Cuantización INT8/INT4, RoPE, KV-Cache y Muestreo
+// AI Inference Engine: INT8 Quantization, RoPE, KV-Cache & Nucleus Sampler
+// Uso: importar "ia.nv"
+// ============================================================================
+
+// ── 0. Auxiliares Matemáticos para IA ─────────────────────────────────
+
+funcion decimal _ia_exp(decimal x) {
+    // Aproximación de Taylor para exp(x) con rango acotado
+    si x > 20.0 { x = 20.0; }
+    si x < -20.0 { retornar 0.0; }
+    decimal suma = 1.0;
+    decimal termino = 1.0;
+    para (entero i = 1; i <= 16; i = i + 1) {
+        termino = termino * (x / (i * 1.0));
+        suma = suma + termino;
+    }
+    retornar suma;
+}
+
+funcion decimal _ia_seno(decimal x) {
+    // Normalizar x a [-PI, PI]
+    decimal pi = 3.141592653589793;
+    decimal dos_pi = 6.283185307179586;
+    mientras x > pi { x = x - dos_pi; }
+    mientras x < -pi { x = x + dos_pi; }
+    decimal res = x;
+    decimal t = x;
+    para (entero i = 1; i <= 6; i = i + 1) {
+        decimal denom = (2.0 * i) * (2.0 * i + 1.0);
+        t = -t * x * x / denom;
+        res = res + t;
+    }
+    retornar res;
+}
+
+funcion decimal _ia_coseno(decimal x) {
+    decimal pi = 3.141592653589793;
+    decimal dos_pi = 6.283185307179586;
+    mientras x > pi { x = x - dos_pi; }
+    mientras x < -pi { x = x + dos_pi; }
+    decimal res = 1.0;
+    decimal t = 1.0;
+    para (entero i = 1; i <= 6; i = i + 1) {
+        decimal denom = (2.0 * i - 1.0) * (2.0 * i);
+        t = -t * x * x / denom;
+        res = res + t;
+    }
+    retornar res;
+}
+
+// ── 1. Cuantización de Matrices INT8 (W8A16) ──────────────────────────
+
+estructura TensorCuantizadoInt8 {
+    datos: lista<decimal>,
+    escala: decimal,
+    zero_point: entero,
+    filas: entero,
+    columnas: entero
+}
+
+// Cuantiza una matriz float64 a enteros de 8 bits con factor de escala simétrico
+funcion TensorCuantizadoInt8 ia_cuantizar_int8(lista<lista<decimal>> matriz) {
+    entero filas = largo(matriz);
+    entero columnas = 0;
+    si filas > 0 {
+        columnas = largo(matriz[0]);
+    }
+    
+    // Encontrar el valor absoluto máximo para escala simétrica
+    decimal max_val = 0.000001;
+    para (entero i = 0; i < filas; i = i + 1) {
+        para (entero j = 0; j < columnas; j = j + 1) {
+            decimal val = matriz[i][j];
+            si val < 0.0 { val = -val; }
+            si val > max_val { max_val = val; }
+        }
+    }
+    
+    decimal escala = max_val / 127.0;
+    lista<decimal> datos = [];
+    
+    para (entero i = 0; i < filas; i = i + 1) {
+        para (entero j = 0; j < columnas; j = j + 1) {
+            decimal v = matriz[i][j];
+            decimal q = v / escala;
+            si q > 127.0 { q = 127.0; }
+            si q < -127.0 { q = -127.0; }
+            datos.agregar(q);
+        }
+    }
+    
+    retornar TensorCuantizadoInt8 {
+        datos: datos,
+        escala: escala,
+        zero_point: 0,
+        filas: filas,
+        columnas: columnas
+    };
+}
+funcion TensorCuantizadoInt8 quantize_int8(lista<lista<decimal>> matrix) { retornar ia_cuantizar_int8(matrix); }
+
+// Multiplicación Matriz-Vector cuantizada rápida (W8A16): Y = W_q * X
+funcion lista<decimal> ia_matmul_cuantizado(TensorCuantizadoInt8 w_q, lista<decimal> x) {
+    lista<decimal> salida_vec = [];
+    entero cols = w_q.columnas;
+    entero filas = w_q.filas;
+    
+    para (entero i = 0; i < filas; i = i + 1) {
+        decimal suma_int = 0.0;
+        entero offset = i * cols;
+        para (entero j = 0; j < cols; j = j + 1) {
+            decimal peso = w_q.datos[offset + j] * 1.0;
+            suma_int = suma_int + (peso * x[j]);
+        }
+        salida_vec.agregar(suma_int * w_q.escala);
+    }
+    
+    retornar salida_vec;
+}
+funcion lista<decimal> quantized_matmul_int8(TensorCuantizadoInt8 w_q, lista<decimal> x) { retornar ia_matmul_cuantizado(w_q, x); }
+
+// ── 2. RoPE (Rotary Position Embeddings) ──────────────────────────────
+
+funcion lista<decimal> ia_aplicar_rope(lista<decimal> vec, entero pos, entero head_dim, decimal theta_base = 10000.0) {
+    lista<decimal> rotado = [];
+    entero mitad = head_dim / 2;
+    
+    para (entero i = 0; i < mitad; i = i + 1) {
+        decimal exp_ratio = (2.0 * i) / (head_dim * 1.0);
+        // theta_i = theta_base ^ (-exp_ratio)
+        // Usamos aproximación lineal para la frecuencia angular
+        decimal freq = 1.0 / (1.0 + exp_ratio * 99.0);
+        decimal m_theta = (pos * 1.0) * freq;
+        
+        decimal cos_m = _ia_coseno(m_theta);
+        decimal sin_m = _ia_seno(m_theta);
+        
+        decimal x0 = vec[i * 2];
+        decimal x1 = vec[i * 2 + 1];
+        
+        // Rotación 2D en plano complejo: [x0*cos - x1*sin, x0*sin + x1*cos]
+        decimal r0 = (x0 * cos_m) - (x1 * sin_m);
+        decimal r1 = (x0 * sin_m) + (x1 * cos_m);
+        
+        rotado.agregar(r0);
+        rotado.agregar(r1);
+    }
+    
+    // Completar si el vector excede head_dim
+    para (entero k = head_dim; k < largo(vec); k = k + 1) {
+        rotado.agregar(vec[k]);
+    }
+    
+    retornar rotado;
+}
+funcion lista<decimal> apply_rope(lista<decimal> vec, entero pos, entero head_dim, decimal theta_base = 10000.0) {
+    retornar ia_aplicar_rope(vec, pos, head_dim, theta_base);
+}
+
+// ── 3. KV-Cache (Key-Value Cache para Decodificación Rápida) ──────────
+
+estructura KVCache {
+    claves: lista<lista<decimal>>,
+    valores: lista<lista<decimal>>,
+    longitud_seq: entero
+}
+
+funcion KVCache ia_kv_cache_crear() {
+    lista<lista<decimal>> k = [];
+    lista<lista<decimal>> v = [];
+    retornar KVCache {
+        claves: k,
+        valores: v,
+        longitud_seq: 0
+    };
+}
+funcion KVCache kv_cache_new() { retornar ia_kv_cache_crear(); }
+
+funcion KVCache ia_kv_cache_agregar(KVCache cache, lista<decimal> nueva_clave, lista<decimal> nuevo_valor) {
+    lista<lista<decimal>> k = cache.claves;
+    lista<lista<decimal>> v = cache.valores;
+    k.agregar(nueva_clave);
+    v.agregar(nuevo_valor);
+    
+    cache.claves = k;
+    cache.valores = v;
+    cache.longitud_seq = largo(k);
+    retornar cache;
+}
+funcion KVCache kv_cache_append(KVCache cache, lista<decimal> k, lista<decimal> v) {
+    retornar ia_kv_cache_agregar(cache, k, v);
+}
+
+// ── 4. Softmax con Temperatura y Muestreo Top-P / Top-K ──────────────
+
+funcion lista<decimal> ia_softmax(lista<decimal> logits, decimal temperatura = 1.0) {
+    si temperatura <= 0.01 {
+        temperatura = 0.01;
+    }
+    
+    // 1. Encontrar máximo para estabilidad numérica
+    decimal max_val = logits[0];
+    para (entero i = 1; i < largo(logits); i = i + 1) {
+        si logits[i] > max_val {
+            max_val = logits[i];
+        }
+    }
+    
+    // 2. Exponenciales escaladas
+    lista<decimal> exp_vals = [];
+    decimal suma_exp = 0.0;
+    para (entero i = 0; i < largo(logits); i = i + 1) {
+        decimal scaled = (logits[i] - max_val) / temperatura;
+        decimal e = _ia_exp(scaled);
+        exp_vals.agregar(e);
+        suma_exp = suma_exp + e;
+    }
+    
+    // 3. Probabilidades normalizadas
+    lista<decimal> probs = [];
+    para (entero i = 0; i < largo(exp_vals); i = i + 1) {
+        si suma_exp > 0.0 {
+            probs.agregar(exp_vals[i] / suma_exp);
+        } sino {
+            probs.agregar(1.0 / largo(exp_vals));
+        }
+    }
+    retornar probs;
+}
+funcion lista<decimal> softmax_temperature(lista<decimal> logits, decimal temp = 1.0) {
+    retornar ia_softmax(logits, temp);
+}
+
+// Muestreo Greedy (Argmax)
+funcion entero ia_muestrear_greedy(lista<decimal> probs) {
+    entero mejor_idx = 0;
+    decimal max_p = probs[0];
+    para (entero i = 1; i < largo(probs); i = i + 1) {
+        si probs[i] > max_p {
+            max_p = probs[i];
+            mejor_idx = i;
+        }
+    }
+    retornar mejor_idx;
+}
+
+// Muestreo Top-P (Nucleus Sampling)
+funcion entero ia_muestrear_top_p(lista<decimal> probs, decimal top_p = 0.9) {
+    decimal suma_acumulada = 0.0;
+    entero elegido = 0;
+    decimal mejor_p = 0.0;
+    
+    para (entero i = 0; i < largo(probs); i = i + 1) {
+        suma_acumulada = suma_acumulada + probs[i];
+        si probs[i] > mejor_p {
+            mejor_p = probs[i];
+            elegido = i;
+        }
+        si suma_acumulada >= top_p {
+            retornar elegido;
+        }
+    }
+    retornar elegido;
+}
+funcion entero sample_top_p(lista<decimal> probs, decimal top_p = 0.9) {
+    retornar ia_muestrear_top_p(probs, top_p);
+}

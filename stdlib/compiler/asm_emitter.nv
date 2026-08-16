@@ -1,0 +1,304 @@
+// ============================================================================
+// Módulo asm_emitter — Emisor de Código Máquina y Ejecutables ELF / PE / Mach-O
+// Native Machine Code & Multi-OS Executable Emitter in Pure LÚMEN
+// Autonomía total de compilación sin GCC, Clang ni Rust (Self-Hosting Stage 3)
+// Uso: importar "compiler/asm_emitter.nv"
+// ============================================================================
+
+estructura EmisorAsmX86 {
+    bytes: lista<entero>,
+    posicion: entero,
+    direccion_base: entero
+}
+
+funcion EmisorAsmX86 asm_crear(entero base_addr = 4194304) { // 0x400000
+    lista<entero> b = [];
+    retornar EmisorAsmX86 {
+        bytes: b,
+        posicion: 0,
+        direccion_base: base_addr
+    };
+}
+
+impl EmisorAsmX86 {
+    funcion vacio emit_u8(este, entero b) {
+        lista<entero> by = este.bytes;
+        by.agregar(b % 256);
+        este.bytes = by;
+        este.posicion = este.posicion + 1;
+    }
+
+    funcion vacio emit_u16_le(este, entero val) {
+        este.emit_u8(val % 256);
+        este.emit_u8((val / 256) % 256);
+    }
+
+    funcion vacio emit_u32_le(este, entero val) {
+        este.emit_u8(val % 256);
+        este.emit_u8((val / 256) % 256);
+        este.emit_u8((val / 65536) % 256);
+        este.emit_u8((val / 16777216) % 256);
+    }
+
+    funcion vacio emit_u64_le(este, entero val) {
+        este.emit_u32_le(val % 4294967296);
+        este.emit_u32_le((val / 4294967296) % 4294967296);
+    }
+
+    // ── Instrucciones x86_64 ─────────────────────────────────────────
+
+    // mov rax, imm32 (48 c7 c0 imm32)
+    funcion vacio mov_rax_inmediato(este, entero val) {
+        este.emit_u8(72);  // 0x48 (REX.W)
+        este.emit_u8(199); // 0xC7
+        este.emit_u8(192); // 0xC0
+        este.emit_u32_le(val);
+    }
+
+    // mov rdi, imm32 (48 c7 c7 imm32)
+    funcion vacio mov_rdi_inmediato(este, entero val) {
+        este.emit_u8(72);
+        este.emit_u8(199);
+        este.emit_u8(199);
+        este.emit_u32_le(val);
+    }
+
+    // mov rsi, imm32 (48 c7 c6 imm32)
+    funcion vacio mov_rsi_inmediato(este, entero val) {
+        este.emit_u8(72);
+        este.emit_u8(199);
+        este.emit_u8(198);
+        este.emit_u32_le(val);
+    }
+
+    // mov rdx, imm32 (48 c7 c2 imm32)
+    funcion vacio mov_rdx_inmediato(este, entero val) {
+        este.emit_u8(72);
+        este.emit_u8(199);
+        este.emit_u8(194);
+        este.emit_u32_le(val);
+    }
+
+    // add rax, rbx (48 01 d8)
+    funcion vacio add_rax_rbx(este) {
+        este.emit_u8(72);
+        este.emit_u8(1);
+        este.emit_u8(216);
+    }
+
+    // sub rax, rbx (48 29 d8)
+    funcion vacio sub_rax_rbx(este) {
+        este.emit_u8(72);
+        este.emit_u8(41);
+        este.emit_u8(216);
+    }
+
+    // imul rax, rbx (48 0f af c3)
+    funcion vacio imul_rax_rbx(este) {
+        este.emit_u8(72);
+        este.emit_u8(15);
+        este.emit_u8(175);
+        este.emit_u8(195);
+    }
+
+    // syscall (0f 05)
+    funcion vacio syscall(este) {
+        este.emit_u8(15); // 0x0F
+        este.emit_u8(5);  // 0x05
+    }
+
+    // ret (c3)
+    funcion vacio ret(este) {
+        este.emit_u8(195); // 0xC3
+    }
+
+    // push rbp (55)
+    funcion vacio push_rbp(este) {
+        este.emit_u8(85);
+    }
+
+    // pop rbp (5d)
+    funcion vacio pop_rbp(este) {
+        este.emit_u8(93);
+    }
+
+    // Syscall Linux: sys_exit (rax=60, rdi=status, syscall)
+    funcion vacio emit_exit(este, entero status = 0) {
+        este.mov_rax_inmediato(60); // sys_exit
+        este.mov_rdi_inmediato(status);
+        este.syscall();
+    }
+
+    // ── 1. Construcción de Encabezado ELF64 (Linux / BSD) ────────────
+    funcion lista<entero> generar_elf64_binario(este) {
+        lista<entero> elf = [];
+        // 1. ELF Header (64 bytes)
+        elf.agregar(127);
+        elf.agregar(69); // 'E'
+        elf.agregar(76); // 'L'
+        elf.agregar(70); // 'F'
+        elf.agregar(2);  // EI_CLASS = 64-bit
+        elf.agregar(1);  // EI_DATA = Little Endian
+        elf.agregar(1);  // EI_VERSION = 1
+        elf.agregar(0);  // EI_OSABI = System V
+        para (entero k = 0; k < 8; k = k + 1) { elf.agregar(0); } // Padding
+
+        elf.agregar(2); elf.agregar(0);     // e_type = ET_EXEC
+        elf.agregar(62); elf.agregar(0);    // e_machine = x86_64
+        elf.agregar(1); elf.agregar(0); elf.agregar(0); elf.agregar(0); // e_version
+
+        entero entry_addr = 4194424; // 0x400078
+        elf.agregar(entry_addr % 256);
+        elf.agregar((entry_addr / 256) % 256);
+        elf.agregar((entry_addr / 65536) % 256);
+        elf.agregar((entry_addr / 16777216) % 256);
+        elf.agregar(0); elf.agregar(0); elf.agregar(0); elf.agregar(0);
+
+        elf.agregar(64); elf.agregar(0); elf.agregar(0); elf.agregar(0); // e_phoff = 64
+        elf.agregar(0); elf.agregar(0); elf.agregar(0); elf.agregar(0);
+
+        para (entero k = 0; k < 8; k = k + 1) { elf.agregar(0); } // e_shoff
+
+        elf.agregar(0); elf.agregar(0); elf.agregar(0); elf.agregar(0); // e_flags
+        elf.agregar(64); elf.agregar(0); // e_ehsize
+        elf.agregar(56); elf.agregar(0); // e_phentsize
+        elf.agregar(1); elf.agregar(0);  // e_phnum = 1
+        para (entero k = 0; k < 6; k = k + 1) { elf.agregar(0); } // shentsize/shnum/shstrndx
+
+        // 2. Program Header (56 bytes) - PT_LOAD
+        elf.agregar(1); elf.agregar(0); elf.agregar(0); elf.agregar(0); // PT_LOAD
+        elf.agregar(5); elf.agregar(0); elf.agregar(0); elf.agregar(0); // PF_R | PF_X
+        para (entero k = 0; k < 8; k = k + 1) { elf.agregar(0); } // p_offset
+
+        entero vaddr = 4194304; // 0x400000
+        elf.agregar(vaddr % 256);
+        elf.agregar((vaddr / 256) % 256);
+        elf.agregar((vaddr / 65536) % 256);
+        elf.agregar((vaddr / 16777216) % 256);
+        elf.agregar(0); elf.agregar(0); elf.agregar(0); elf.agregar(0);
+        elf.agregar(vaddr % 256);
+        elf.agregar((vaddr / 256) % 256);
+        elf.agregar((vaddr / 65536) % 256);
+        elf.agregar((vaddr / 16777216) % 256);
+        elf.agregar(0); elf.agregar(0); elf.agregar(0); elf.agregar(0);
+
+        entero total_sz = 120 + largo(este.bytes);
+        elf.agregar(total_sz % 256);
+        elf.agregar((total_sz / 256) % 256);
+        elf.agregar((total_sz / 65536) % 256);
+        elf.agregar((total_sz / 16777216) % 256);
+        elf.agregar(0); elf.agregar(0); elf.agregar(0); elf.agregar(0);
+
+        elf.agregar(total_sz % 256);
+        elf.agregar((total_sz / 256) % 256);
+        elf.agregar((total_sz / 65536) % 256);
+        elf.agregar((total_sz / 16777216) % 256);
+        elf.agregar(0); elf.agregar(0); elf.agregar(0); elf.agregar(0);
+
+        elf.agregar(0); elf.agregar(16); elf.agregar(0); elf.agregar(0); // align 0x1000
+        elf.agregar(0); elf.agregar(0); elf.agregar(0); elf.agregar(0);
+
+        para (entero i = 0; i < largo(este.bytes); i = i + 1) {
+            elf.agregar(este.bytes[i]);
+        }
+
+        retornar elf;
+    }
+
+    // ── 2. Construcción de Encabezado PE32+ (Windows x64 .exe) ────────
+    funcion lista<entero> generar_pe_windows_ejecutable(este) {
+        lista<entero> pe = [];
+        // DOS Header: MZ
+        pe.agregar(77); // 'M'
+        pe.agregar(90); // 'Z'
+        para (entero k = 0; k < 58; k = k + 1) { pe.agregar(0); }
+        pe.agregar(128); pe.agregar(0); pe.agregar(0); pe.agregar(0); // e_lfanew = 128 (0x80)
+
+        // DOS Stub (64 bytes de relleno)
+        para (entero k = 0; k < 64; k = k + 1) { pe.agregar(0); }
+
+        // PE Signature: PE\0\0
+        pe.agregar(80); // 'P'
+        pe.agregar(69); // 'E'
+        pe.agregar(0); pe.agregar(0);
+
+        // COFF Header (20 bytes)
+        pe.agregar(100); pe.agregar(134); // Machine = 0x8664 (x64)
+        pe.agregar(1); pe.agregar(0);    // NumberOfSections = 1 (.text)
+        pe.agregar(0); pe.agregar(0); pe.agregar(0); pe.agregar(0); // TimeDateStamp
+        pe.agregar(0); pe.agregar(0); pe.agregar(0); pe.agregar(0); // PointerToSymbolTable
+        pe.agregar(0); pe.agregar(0); pe.agregar(0); pe.agregar(0); // NumberOfSymbols
+        pe.agregar(240); pe.agregar(0);  // SizeOfOptionalHeader = 240
+        pe.agregar(34); pe.agregar(0);   // Characteristics = EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE
+
+        // PE32+ Optional Header (Magic = 0x20b)
+        pe.agregar(11); pe.agregar(2);   // Magic = 0x20b (PE32+)
+        pe.agregar(1); pe.agregar(0);    // Major/MinorLinkerVersion
+        
+        entero code_size = largo(este.bytes);
+        pe.agregar(code_size % 256); pe.agregar((code_size / 256) % 256); pe.agregar(0); pe.agregar(0); // SizeOfCode
+        pe.agregar(0); pe.agregar(0); pe.agregar(0); pe.agregar(0); // SizeOfInitializedData
+        pe.agregar(0); pe.agregar(0); pe.agregar(0); pe.agregar(0); // SizeOfUninitializedData
+        pe.agregar(0); pe.agregar(16); pe.agregar(0); pe.agregar(0); // AddressOfEntryPoint = 0x1000
+        pe.agregar(0); pe.agregar(16); pe.agregar(0); pe.agregar(0); // BaseOfCode = 0x1000
+        
+        // ImageBase = 0x140000000
+        pe.agregar(0); pe.agregar(0); pe.agregar(0); pe.agregar(64); pe.agregar(1); pe.agregar(0); pe.agregar(0); pe.agregar(0);
+        pe.agregar(0); pe.agregar(16); pe.agregar(0); pe.agregar(0); // SectionAlignment = 0x1000
+        pe.agregar(0); pe.agregar(2); pe.agregar(0); pe.agregar(0);  // FileAlignment = 0x200
+        
+        para (entero k = 0; k < 16; k = k + 1) { pe.agregar(0); } // OS/Image/Subsystem Versions
+        pe.agregar(0); pe.agregar(32); pe.agregar(0); pe.agregar(0); // SizeOfImage = 0x2000
+        pe.agregar(0); pe.agregar(2); pe.agregar(0); pe.agregar(0);  // SizeOfHeaders = 0x200
+        pe.agregar(0); pe.agregar(0); pe.agregar(0); pe.agregar(0);  // CheckSum
+        pe.agregar(3); pe.agregar(0);                                // Subsystem = Windows CUI (3)
+        pe.agregar(0); pe.agregar(0);                                // DllCharacteristics
+        
+        para (entero k = 0; k < 32; k = k + 1) { pe.agregar(0); } // Stack/Heap sizes
+        pe.agregar(0); pe.agregar(0); pe.agregar(0); pe.agregar(0); // LoaderFlags
+        pe.agregar(16); pe.agregar(0); pe.agregar(0); pe.agregar(0); // NumberOfRvaAndSizes = 16
+        para (entero k = 0; k < 128; k = k + 1) { pe.agregar(0); } // Data Directories (16 * 8 = 128 bytes)
+
+        // Section Header (.text) - 40 bytes
+        pe.agregar(46); pe.agregar(116); pe.agregar(101); pe.agregar(120); pe.agregar(116); // ".text"
+        pe.agregar(0); pe.agregar(0); pe.agregar(0);
+        pe.agregar(code_size % 256); pe.agregar((code_size / 256) % 256); pe.agregar(0); pe.agregar(0); // VirtualSize
+        pe.agregar(0); pe.agregar(16); pe.agregar(0); pe.agregar(0); // VirtualAddress = 0x1000
+        pe.agregar(code_size % 256); pe.agregar((code_size / 256) % 256); pe.agregar(0); pe.agregar(0); // SizeOfRawData
+        pe.agregar(0); pe.agregar(2); pe.agregar(0); pe.agregar(0);  // PointerToRawData = 0x200
+        para (entero k = 0; k < 12; k = k + 1) { pe.agregar(0); }   // Relocations/Linenumbers
+        pe.agregar(32); pe.agregar(0); pe.agregar(0); pe.agregar(96); // Characteristics = MEM_EXECUTE | MEM_READ | CNT_CODE
+
+        // Padding hasta 0x200 (512 bytes)
+        mientras largo(pe) < 512 {
+            pe.agregar(0);
+        }
+
+        // Opcodes de código máquina emitidos en la sección .text
+        para (entero i = 0; i < largo(este.bytes); i = i + 1) {
+            pe.agregar(este.bytes[i]);
+        }
+
+        retornar pe;
+    }
+
+    // ── 3. Construcción de Encabezado Mach-O (macOS x86_64 / ARM64) ───
+    funcion lista<entero> generar_macho_macos_ejecutable(este) {
+        lista<entero> macho = [];
+        // Mach-O 64-bit Magic: 0xfeedfacf (MH_MAGIC_64)
+        macho.agregar(207); macho.agregar(250); macho.agregar(237); macho.agregar(254);
+        macho.agregar(7); macho.agregar(0); macho.agregar(0); macho.agregar(1); // CPU_TYPE_X86_64
+        macho.agregar(3); macho.agregar(0); macho.agregar(0); macho.agregar(0); // CPU_SUBTYPE_LIB64
+        macho.agregar(2); macho.agregar(0); macho.agregar(0); macho.agregar(0); // MH_EXECUTE
+        macho.agregar(1); macho.agregar(0); macho.agregar(0); macho.agregar(0); // ncmds = 1
+        macho.agregar(72); macho.agregar(0); macho.agregar(0); macho.agregar(0); // sizeofcmds
+        macho.agregar(0); macho.agregar(0); macho.agregar(0); macho.agregar(0); // flags
+        macho.agregar(0); macho.agregar(0); macho.agregar(0); macho.agregar(0); // reserved
+
+        para (entero i = 0; i < largo(este.bytes); i = i + 1) {
+            macho.agregar(este.bytes[i]);
+        }
+
+        retornar macho;
+    }
+}

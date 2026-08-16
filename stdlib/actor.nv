@@ -1,0 +1,156 @@
+// ============================================================================
+// Módulo actor — Modelo de Actores, Paso de Mensajes y Árboles de Supervisión
+// Actor Model, Mailbox Message Passing & Supervision Trees for Fault Tolerance
+// Uso: importar "actor.nv"
+// ============================================================================
+
+// ── 1. Estructuras del Sistema de Actores ────────────────────────────
+
+estructura MensajeActor {
+    tipo_msg: texto,
+    payload: texto,
+    remitente: texto
+}
+
+estructura Actor {
+    id: texto,
+    tipo_actor: texto,
+    estado: texto,
+    buzon: lista<MensajeActor>,
+    activo: booleano,
+    fallos: entero
+}
+
+estructura ArbolSupervision {
+    nombre: texto,
+    estrategia: texto,
+    max_reinicios: entero,
+    actores: lista<Actor>
+}
+
+// ── 2. Creación y Manejo de Actores ──────────────────────────────────
+
+funcion Actor actor_crear(texto id, texto tipo_actor = "generico", texto estado_inicial = "{}") {
+    lista<MensajeActor> buzon_vacio = [];
+    retornar Actor {
+        id: id,
+        tipo_actor: tipo_actor,
+        estado: estado_inicial,
+        buzon: buzon_vacio,
+        activo: verdadero,
+        fallos: 0
+    };
+}
+funcion Actor actor_new(texto id, texto actor_type = "generic", texto initial_state = "{}") {
+    retornar actor_crear(id, actor_type, initial_state);
+}
+
+// Enviar un mensaje al buzón del actor
+funcion Actor actor_enviar(Actor receptor, texto tipo_msg, texto payload, texto remitente = "sistema") {
+    si receptor.activo == falso {
+        retornar receptor;
+    }
+    
+    MensajeActor msg = MensajeActor {
+        tipo_msg: tipo_msg,
+        payload: payload,
+        remitente: remitente
+    };
+    
+    lista<MensajeActor> nuevo_buzon = receptor.buzon;
+    nuevo_buzon.agregar(msg);
+    receptor.buzon = nuevo_buzon;
+    retornar receptor;
+}
+funcion Actor actor_send(Actor receptor, texto tipo_msg, texto payload, texto remitente = "system") {
+    retornar actor_enviar(receptor, tipo_msg, payload, remitente);
+}
+
+// Procesar todos los mensajes pendientes en el buzón del actor
+funcion Actor actor_procesar(Actor a) {
+    si a.activo == falso {
+        retornar a;
+    }
+    
+    lista<MensajeActor> pendientes = a.buzon;
+    entero n = largo(pendientes);
+    
+    para (entero i = 0; i < n; i = i + 1) {
+        MensajeActor msg = pendientes[i];
+        
+        // Manejador de mensaje según tipo
+        si msg.tipo_msg == "PING" {
+            a.estado = "PONG_RESPUESTA";
+        } sino si msg.tipo_msg == "INCREMENTAR" {
+            a.estado = "INCREMENTADO:" + msg.payload;
+        } sino si msg.tipo_msg == "FALLAR" {
+            a.activo = falso;
+            a.fallos = a.fallos + 1;
+            a.estado = "ERROR_CRITICO";
+        } sino {
+            a.estado = "PROCESADO:" + msg.tipo_msg + ":" + msg.payload;
+        }
+    }
+    
+    lista<MensajeActor> vacio_msgs = [];
+    a.buzon = vacio_msgs;
+    retornar a;
+}
+funcion Actor actor_process(Actor a) { retornar actor_procesar(a); }
+
+// ── 3. Árboles de Supervisión (Erlang/OTP Fault Tolerance) ───────────
+
+funcion ArbolSupervision supervision_crear(texto nombre, texto estrategia = "uno_para_uno", entero max_reinicios = 3) {
+    lista<Actor> lista_actores = [];
+    retornar ArbolSupervision {
+        nombre: nombre,
+        estrategia: estrategia,
+        max_reinicios: max_reinicios,
+        actores: lista_actores
+    };
+}
+funcion ArbolSupervision supervision_new(texto name, texto strategy = "one_for_one", entero max_restarts = 3) {
+    retornar supervision_crear(name, strategy, max_restarts);
+}
+funcion ArbolSupervision actor_supervision_crear(texto nombre, texto estrategia = "uno_para_uno", entero max_reinicios = 3) {
+    retornar supervision_crear(nombre, estrategia, max_reinicios);
+}
+
+funcion ArbolSupervision supervision_agregar(ArbolSupervision arbol, Actor a) {
+    lista<Actor> acts = arbol.actores;
+    acts.agregar(a);
+    arbol.actores = acts;
+    retornar arbol;
+}
+funcion ArbolSupervision supervision_add_actor(ArbolSupervision arbol, Actor a) {
+    retornar supervision_agregar(arbol, a);
+}
+funcion ArbolSupervision actor_supervision_agregar(ArbolSupervision arbol, Actor a) {
+    retornar supervision_agregar(arbol, a);
+}
+
+// Recupera y reinicia automáticamente actores caídos según la estrategia
+funcion ArbolSupervision supervision_sanar(ArbolSupervision arbol) {
+    lista<Actor> acts = arbol.actores;
+    entero n = largo(acts);
+    
+    para (entero i = 0; i < n; i = i + 1) {
+        si acts[i].activo == falso {
+            si acts[i].fallos <= arbol.max_reinicios {
+                // Reiniciar actor con estado limpio
+                Actor resucitado = actor_crear(acts[i].id, acts[i].tipo_actor, "REINICIADO");
+                resucitado.fallos = acts[i].fallos;
+                acts[i] = resucitado;
+            }
+        }
+    }
+    
+    arbol.actores = acts;
+    retornar arbol;
+}
+funcion ArbolSupervision supervision_heal(ArbolSupervision arbol) {
+    retornar supervision_sanar(arbol);
+}
+funcion ArbolSupervision actor_supervision_sanar(ArbolSupervision arbol) {
+    retornar supervision_sanar(arbol);
+}

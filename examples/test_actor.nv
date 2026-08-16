@@ -1,0 +1,54 @@
+// ============================================================================
+// Prueba del Sistema de Actores y Árboles de Supervisión en LÚMEN
+// ============================================================================
+importar "actor.nv";
+
+funcion vacio principal() {
+    imprimir("── TEST: SISTEMA DE ACTORES Y SUPERVISIÓN (OTP-STYLE) ──");
+    
+    // 1. Creación de actores
+    actor_Actor worker1 = actor_crear("worker-1", "calculador", "LISTO");
+    actor_Actor worker2 = actor_crear("worker-2", "logger", "LISTO");
+    
+    // 2. Enviar mensajes a los actores
+    worker1 = actor_enviar(worker1, "INCREMENTAR", "42", "main");
+    worker2 = actor_enviar(worker2, "PING", "hola", "main");
+    
+    imprimir("• Worker-1 mensajes pendientes:", largo(worker1.buzon));
+    imprimir("• Worker-2 mensajes pendientes:", largo(worker2.buzon));
+    
+    // 3. Procesar buzones
+    worker1 = actor_procesar(worker1);
+    worker2 = actor_procesar(worker2);
+    
+    imprimir("• Worker-1 Estado tras procesar:", worker1.estado);
+    imprimir("• Worker-2 Estado tras procesar:", worker2.estado);
+    
+    // 4. Árbol de supervisión y recuperación ante fallos
+    actor_ArbolSupervision arbol = actor_supervision_crear("supervisor-principal", "uno_para_uno", 3);
+    arbol = actor_supervision_agregar(arbol, worker1);
+    arbol = actor_supervision_agregar(arbol, worker2);
+    
+    // Provocar fallo en Worker-1
+    worker1 = actor_enviar(worker1, "FALLAR", "panic", "test");
+    worker1 = actor_procesar(worker1);
+    
+    imprimir("\n• Worker-1 tras fallo crítico:");
+    imprimir("  Activo:", worker1.activo);
+    imprimir("  Fallos registrados:", worker1.fallos);
+    imprimir("  Estado:", worker1.estado);
+    
+    // El supervisor detecta y sana el árbol
+    lista<actor_Actor> acts = arbol.actores;
+    acts[0] = worker1;
+    arbol.actores = acts;
+    arbol = actor_supervision_sanar(arbol);
+    
+    imprimir("\n• Árbol de Supervisión tras auto-recuperación (Heal):");
+    imprimir("  Worker-1 recuperado Activo:", arbol.actores[0].activo);
+    imprimir("  Worker-1 recuperado Estado:", arbol.actores[0].estado);
+    
+    imprimir("\n✓ Sistema de Actores verificado con éxito.");
+}
+
+principal();

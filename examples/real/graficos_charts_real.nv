@@ -105,7 +105,7 @@ funcion lista<lista<entero>> posiciones_barras(entero num_cats, entero num_serie
         entero s = 0;
         mientras s < num_series {
             entero bx = cx + s * ancho_barra + 1;
-            pos.agregar([bx, ancho_barra - 2)];
+            pos.agregar([bx, ancho_barra - 2]);
             s = s + 1;
         }
         c = c + 1;

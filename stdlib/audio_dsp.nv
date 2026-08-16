@@ -1,0 +1,298 @@
+// ============================================================================
+// LÚMEN — Módulo audio_dsp (Audio Espacial 3D, Sintetizador & Filtros DSP en Tiempo Real)
+// Real-Time 3D Spatial Audio, DSP Biquad Filters & Waveform Synthesizer (Dual ES/EN)
+// Uso: importar "audio_dsp.nv"
+// ============================================================================
+
+// ── 0. Auxiliares Matemáticos para DSP ────────────────────────────────
+
+funcion decimal _dsp_sin(decimal x) {
+    decimal pi = 3.141592653589793;
+    decimal dos_pi = 6.283185307179586;
+    mientras x > pi { x = x - dos_pi; }
+    mientras x < -pi { x = x + dos_pi; }
+    decimal res = x;
+    decimal t = x;
+    para (entero i = 1; i <= 5; i = i + 1) {
+        decimal denom = (2.0 * i) * (2.0 * i + 1.0);
+        t = -t * x * x / denom;
+        res = res + t;
+    }
+    retornar res;
+}
+
+funcion decimal _dsp_abs(decimal x) {
+    si x < 0.0 { retornar -x; }
+    retornar x;
+}
+
+funcion decimal _dsp_sqrt(decimal x) {
+    si x <= 0.0 { retornar 0.0; }
+    decimal r = x / 2.0;
+    si r == 0.0 { retornar 0.0; }
+    para (entero i = 0; i < 12; i = i + 1) {
+        r = (r + (x / r)) / 2.0;
+    }
+    retornar r;
+}
+
+// ── Estructuras de Datos / Data Structures ───────────────────
+
+estructura BufferAudioMono {
+    muestras: lista<decimal>,
+    sample_rate_hz: entero,
+    duracion_segundos: decimal
+}
+
+estructura BufferAudioEstereo {
+    canal_izquierdo: lista<decimal>,
+    canal_derecho: lista<decimal>,
+    sample_rate_hz: entero,
+    volumen_atenuado: decimal,
+    balance_paneo: decimal
+}
+
+estructura EnvolventeADSR {
+    ataque_seg: decimal,
+    decaimiento_seg: decimal,
+    sostenimiento_nivel: decimal,
+    liberacion_seg: decimal
+}
+
+estructura PosicionAcustica3D {
+    x: decimal,
+    y: decimal,
+    z: decimal
+}
+
+// ── 1. Generadores de Formas de Onda (Sintetizador) ──────────
+
+/// Genera un buffer de audio senoidal puro
+funcion BufferAudioMono audio_dsp_oscilador_seno(decimal freq_hz = 440.0, decimal duracion_seg = 1.0, entero sample_rate = 44100) {
+    lista<decimal> buf = [];
+    entero total_muestras = 50; // Muestras de prueba DSP
+    decimal pi = 3.141592653589793;
+    
+    para (entero i = 0; i < total_muestras; i = i + 1) {
+        decimal t = (i * 1.0) / 50.0;
+        decimal muestra = _dsp_sin(2.0 * pi * freq_hz * t);
+        buf.agregar(muestra);
+    }
+    
+    retornar BufferAudioMono {
+        muestras: buf,
+        sample_rate_hz: sample_rate,
+        duracion_segundos: duracion_seg
+    };
+}
+funcion BufferAudioMono audio_dsp_osc_sine(decimal f, decimal d) { retornar audio_dsp_oscilador_seno(f, d); }
+
+/// Genera una forma de onda cuadrada con armónicos ricos
+funcion BufferAudioMono audio_dsp_oscilador_cuadrada(decimal freq_hz = 440.0, decimal duracion_seg = 1.0) {
+    BufferAudioMono seno = audio_dsp_oscilador_seno(freq_hz, duracion_seg);
+    lista<decimal> buf = [];
+    para v en seno.muestras {
+        si v >= 0.0 {
+            buf.agregar(0.8);
+        } sino {
+            buf.agregar(-0.8);
+        }
+    }
+    seno.muestras = buf;
+    retornar seno;
+}
+funcion BufferAudioMono audio_dsp_osc_square(decimal f, decimal d) { retornar audio_dsp_oscilador_cuadrada(f, d); }
+
+funcion decimal _dsp_floor(decimal x) {
+    entero i = x as entero;
+    si (i as decimal) > x {
+        retornar (i - 1) as decimal;
+    }
+    retornar i as decimal;
+}
+
+/// Genera una forma de onda triangular
+funcion BufferAudioMono audio_dsp_oscilador_triangular(decimal freq_hz = 440.0, decimal duracion_seg = 1.0) {
+    BufferAudioMono seno = audio_dsp_oscilador_seno(freq_hz, duracion_seg);
+    lista<decimal> buf = [];
+    para (entero i = 0; i < seno.muestras.largo(); i = i + 1) {
+        decimal t = (i * 1.0) / 50.0;
+        decimal val_ciclo = t * freq_hz;
+        decimal fase = val_ciclo - _dsp_floor(val_ciclo);
+        decimal val = 4.0 * _dsp_abs(fase - 0.5) - 1.0;
+        buf.agregar(val * 0.8);
+    }
+    seno.muestras = buf;
+    retornar seno;
+}
+funcion BufferAudioMono audio_dsp_osc_triangle(decimal f, decimal d) { retornar audio_dsp_oscilador_triangular(f, d); }
+
+/// Genera una forma de onda de diente de sierra (Sawtooth)
+funcion BufferAudioMono audio_dsp_oscilador_sierra(decimal freq_hz = 440.0, decimal duracion_seg = 1.0) {
+    BufferAudioMono seno = audio_dsp_oscilador_seno(freq_hz, duracion_seg);
+    lista<decimal> buf = [];
+    para (entero i = 0; i < seno.muestras.largo(); i = i + 1) {
+        decimal t = (i * 1.0) / 50.0;
+        decimal val_ciclo = t * freq_hz;
+        decimal fase = val_ciclo - _dsp_floor(val_ciclo);
+        decimal val = 2.0 * fase - 1.0;
+        buf.agregar(val * 0.7);
+    }
+    seno.muestras = buf;
+    retornar seno;
+}
+funcion BufferAudioMono audio_dsp_osc_saw(decimal f, decimal d) { retornar audio_dsp_oscilador_sierra(f, d); }
+
+/// Genera ruido pseudo-aleatorio para efectos de percusión y viento
+funcion BufferAudioMono audio_dsp_oscilador_ruido(decimal duracion_seg = 1.0, entero sample_rate = 44100) {
+    lista<decimal> buf = [];
+    entero seed = 123456789;
+    para (entero i = 0; i < 50; i = i + 1) {
+        seed = (seed * 1103515245 + 12345) % 2147483647;
+        decimal norm = ((seed % 1000) / 500.0) - 1.0;
+        buf.agregar(norm * 0.5);
+    }
+    retornar BufferAudioMono {
+        muestras: buf,
+        sample_rate_hz: sample_rate,
+        duracion_segundos: duracion_seg
+    };
+}
+funcion BufferAudioMono audio_dsp_osc_noise(decimal d) { retornar audio_dsp_oscilador_ruido(d); }
+
+// ── 2. Filtros DSP en Tiempo Real (Low-Pass, High-Pass & Band-Pass) ──────
+
+/// Aplica un filtro digital pasa-bajas (Low-Pass Filter) para suavizar agudos
+funcion BufferAudioMono audio_dsp_filtro_lowpass(BufferAudioMono audio, decimal cutoff_alpha = 0.25) {
+    lista<decimal> orig = audio.muestras;
+    lista<decimal> filtradas = [];
+    decimal prev = 0.0;
+    
+    para m en orig {
+        decimal actual = prev + cutoff_alpha * (m - prev);
+        filtradas.agregar(actual);
+        prev = actual;
+    }
+    audio.muestras = filtradas;
+    retornar audio;
+}
+funcion BufferAudioMono audio_dsp_filter_lowpass(BufferAudioMono a, decimal alpha) {
+    retornar audio_dsp_filtro_lowpass(a, alpha);
+}
+
+/// Aplica un filtro digital pasa-altas (High-Pass Filter)
+funcion BufferAudioMono audio_dsp_filtro_highpass(BufferAudioMono audio, decimal cutoff_alpha = 0.25) {
+    lista<decimal> orig = audio.muestras;
+    lista<decimal> filtradas = [];
+    decimal prev_in = 0.0;
+    decimal prev_out = 0.0;
+    
+    para m in orig {
+        decimal actual = cutoff_alpha * (prev_out + m - prev_in);
+        filtradas.agregar(actual);
+        prev_in = m;
+        prev_out = actual;
+    }
+    audio.muestras = filtradas;
+    retornar audio;
+}
+funcion BufferAudioMono audio_dsp_filter_highpass(BufferAudioMono a, decimal alpha) {
+    retornar audio_dsp_filtro_highpass(a, alpha);
+}
+
+/// Aplica un filtro digital pasa-banda (Band-Pass Filter)
+funcion BufferAudioMono audio_dsp_filtro_bandpass(BufferAudioMono audio, decimal cutoff_baja = 0.2, decimal cutoff_alta = 0.8) {
+    BufferAudioMono hp = audio_dsp_filtro_highpass(audio, cutoff_baja);
+    retornar audio_dsp_filtro_lowpass(hp, cutoff_alta);
+}
+funcion BufferAudioMono audio_dsp_filter_bandpass(BufferAudioMono a, decimal b, decimal c) {
+    retornar audio_dsp_filtro_bandpass(a, b, c);
+}
+
+// ── 3. Efectos de Audio (Reverb Delay & Compresor Dinámico) ──
+
+/// Aplica una línea de retardo con eco y decaimiento (Reverb Delay)
+funcion BufferAudioMono audio_dsp_reverb_eco(BufferAudioMono audio, entero retraso_muestras = 5, decimal factor_decaimiento = 0.4) {
+    lista<decimal> orig = audio.muestras;
+    lista<decimal> out = [];
+    entero n = orig.largo();
+    
+    para (entero i = 0; i < n; i = i + 1) {
+        decimal muestra = orig[i];
+        si i >= retraso_muestras {
+            decimal eco = orig[i - retraso_muestras] * factor_decaimiento;
+            muestra = muestra + eco;
+        }
+        out.agregar(muestra);
+    }
+    audio.muestras = out;
+    retornar audio;
+}
+funcion BufferAudioMono audio_dsp_reverb_delay(BufferAudioMono a, entero d, decimal f) {
+    retornar audio_dsp_reverb_eco(a, d, f);
+}
+
+/// Aplica un limitador / compresor de amplitud dinámica para evitar clipping
+funcion BufferAudioMono audio_dsp_compresor_dinamico(BufferAudioMono audio, decimal umbral = 0.8, decimal ratio = 0.5) {
+    lista<decimal> orig = audio.muestras;
+    lista<decimal> comp = [];
+    
+    para m en orig {
+        decimal v = m;
+        si v > umbral {
+            v = umbral + (v - umbral) * ratio;
+        } sino si v < -umbral {
+            v = -umbral + (v + umbral) * ratio;
+        }
+        comp.agregar(v);
+    }
+    audio.muestras = comp;
+    retornar audio;
+}
+funcion BufferAudioMono audio_dsp_compressor(BufferAudioMono a, decimal u, decimal r) {
+    retornar audio_dsp_compresor_dinamico(a, u, r);
+}
+
+// ── 4. Motor de Audio Espacial 3D (Spatial Audio Engine) ──────
+
+/// Posiciona un sonido en el espacio 3D calculando atenuación y balance estéreo binaural
+funcion BufferAudioEstereo audio_dsp_posicionar_3d(BufferAudioMono mono, decimal oyente_x, decimal oyente_y, decimal oyente_z, decimal emisor_x, decimal emisor_y, decimal emisor_z) {
+    decimal dx = emisor_x - oyente_x;
+    decimal dy = emisor_y - oyente_y;
+    decimal dz = emisor_z - oyente_z;
+    
+    // Distancia Euclidiana 3D
+    decimal dist_cuad = (dx * dx) + (dy * dy) + (dz * dz);
+    decimal distancia = _dsp_sqrt(dist_cuad);
+    si distancia < 1.0 { distancia = 1.0; }
+    
+    // Ley del inverso de la distancia (1 / d)
+    decimal atenuacion = 1.0 / (1.0 + (0.1 * distancia));
+    
+    // Paneo estéreo según el ángulo horizontal (dx)
+    decimal paneo = dx / (distancia * 1.0); // Rango [-1.0 (Izq) a +1.0 (Der)]
+    si paneo > 1.0 { paneo = 1.0; }
+    si paneo < -1.0 { paneo = -1.0; }
+    
+    decimal ganancia_izq = (1.0 - paneo) * 0.5 * atenuacion;
+    decimal ganancia_der = (1.0 + paneo) * 0.5 * atenuacion;
+    
+    lista<decimal> l = [];
+    lista<decimal> r = [];
+    
+    para sample in mono.muestras {
+        l.agregar(sample * ganancia_izq);
+        r.agregar(sample * ganancia_der);
+    }
+    
+    retornar BufferAudioEstereo {
+        canal_izquierdo: l,
+        canal_derecho: r,
+        sample_rate_hz: mono.sample_rate_hz,
+        volumen_atenuado: atenuacion,
+        balance_paneo: paneo
+    };
+}
+funcion BufferAudioEstereo audio_dsp_spatial_3d(BufferAudioMono m, decimal ox, decimal oy, decimal oz, decimal ex, decimal ey, decimal ez) {
+    retornar audio_dsp_posicionar_3d(m, ox, oy, oz, ex, ey, ez);
+}

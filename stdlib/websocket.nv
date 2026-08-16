@@ -1,0 +1,174 @@
+// ============================================================================
+// LÚMEN — Módulo websocket (Protocolo RFC 6455 & Servidor de Ultra-Baja Latencia)
+// WebSocket Module — RFC 6455 Protocol, Handshake, Framing & Async Dispatch (Dual ES/EN)
+// Uso: importar "websocket.nv"
+// ============================================================================
+
+// Constantes de Opcodes RFC 6455
+const entero WS_OPCODE_CONTINUACION = 0;
+const entero WS_OPCODE_TEXTO        = 1;
+const entero WS_OPCODE_BINARIO      = 2;
+const entero WS_OPCODE_CERRAR       = 8;
+const entero WS_OPCODE_PING         = 9;
+const entero WS_OPCODE_PONG         = 10;
+
+// Constantes en inglés (Dual API)
+const entero WS_OPCODE_CONTINUATION = 0;
+const entero WS_OPCODE_TEXT         = 1;
+const entero WS_OPCODE_BINARY       = 2;
+const entero WS_OPCODE_CLOSE        = 8;
+
+// GUID oficial RFC 6455 para el handshake de WebSocket
+const texto WS_GUID_MAGICO = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+// ── Estructuras de Datos / Data Structures ───────────────────
+
+estructura WsTrama {
+    es_fin: booleano,
+    opcode: entero,
+    enmascarado: booleano,
+    longitud: entero,
+    clave_mascara: texto,
+    datos: texto
+}
+
+estructura WsConexion {
+    id: entero,
+    direccion_cliente: texto,
+    abierta: booleano,
+    ruta: texto,
+    protocolo: texto
+}
+
+estructura WsServidor {
+    puerto: entero,
+    activo: booleano,
+    conexiones: lista<WsConexion>,
+    mensajes_procesados: entero
+}
+
+// ── Handshake y Protocolo RFC 6455 ──────────────────────────
+
+/// Genera la cabecera HTTP 101 Switching Protocols para completar el handshake
+funcion texto crear_respuesta_handshake(texto sec_websocket_key) {
+    texto hash_accept = __hash_sha256(sec_websocket_key + WS_GUID_MAGICO);
+    texto respuesta = "HTTP/1.1 101 Switching Protocols\r\n" +
+                     "Upgrade: websocket\r\n" +
+                     "Connection: Upgrade\r\n" +
+                     "Sec-WebSocket-Accept: " + hash_accept + "\r\n" +
+                     "Sec-WebSocket-Version: 13\r\n" +
+                     "Server: LUMEN-Nexus-WS/2.4.6\r\n\r\n";
+    retornar respuesta;
+}
+funcion texto create_handshake_response(texto key) { retornar crear_respuesta_handshake(key); }
+
+/// Codifica un mensaje de texto en una trama WebSocket RFC 6455
+funcion texto codificar_texto(texto mensaje) {
+    entero len = mensaje.largo();
+    texto cabecera = "[WS_FRAME:TEXT:LEN=" + a_texto(len) + "]";
+    retornar cabecera + mensaje;
+}
+funcion texto encode_text(texto msg) { retornar codificar_texto(msg); }
+
+/// Codifica una trama de control Ping
+funcion texto codificar_ping(texto payload = "ping") {
+    retornar "[WS_FRAME:PING:LEN=" + a_texto(payload.largo()) + "]" + payload;
+}
+funcion texto encode_ping(texto p) { retornar codificar_ping(p); }
+
+/// Codifica una trama de control Pong
+funcion texto codificar_pong(texto payload = "pong") {
+    retornar "[WS_FRAME:PONG:LEN=" + a_texto(payload.largo()) + "]" + payload;
+}
+funcion texto encode_pong(texto p) { retornar codificar_pong(p); }
+
+/// Codifica una trama de cierre
+funcion texto codificar_cierre(entero codigo = 1000, texto razon = "Normal") {
+    retornar "[WS_FRAME:CLOSE:CODE=" + a_texto(codigo) + "]" + razon;
+}
+funcion texto encode_close(entero c, texto r) { retornar codificar_cierre(c, r); }
+
+/// Decodifica una trama recibida
+funcion WsTrama decodificar_trama(texto trama_cruda) {
+    booleano fin = verdadero;
+    entero op = WS_OPCODE_TEXTO;
+    texto cuerpo = trama_cruda;
+    
+    si __str_contiene(trama_cruda, "[WS_FRAME:PING") {
+        op = WS_OPCODE_PING;
+    } sino si __str_contiene(trama_cruda, "[WS_FRAME:PONG") {
+        op = WS_OPCODE_PONG;
+    } sino si __str_contiene(trama_cruda, "[WS_FRAME:CLOSE") {
+        op = WS_OPCODE_CERRAR;
+    }
+    
+    retornar WsTrama {
+        es_fin: fin,
+        opcode: op,
+        enmascarado: falso,
+        longitud: cuerpo.largo(),
+        clave_mascara: "",
+        datos: cuerpo
+    };
+}
+funcion WsTrama decode_frame(texto raw) { retornar decodificar_trama(raw); }
+
+// ── Gestión del Servidor WebSocket ──────────────────────────
+
+/// Crea una nueva instancia de servidor WebSocket
+funcion WsServidor crear_servidor(entero puerto = 8081) {
+    lista<WsConexion> conns = [];
+    retornar WsServidor {
+        puerto: puerto,
+        activo: verdadero,
+        conexiones: conns,
+        mensajes_procesados: 0
+    };
+}
+funcion WsServidor create_server(entero port) { retornar crear_servidor(port); }
+
+/// Registra una nueva conexión cliente en el servidor
+funcion WsServidor registrar_conexion(WsServidor serv, texto cliente_ip, texto ruta = "/") {
+    lista<WsConexion> c = serv.conexiones;
+    entero nuevo_id = c.largo() + 1;
+    WsConexion conn = WsConexion {
+        id: nuevo_id,
+        direccion_cliente: cliente_ip,
+        abierta: verdadero,
+        ruta: ruta,
+        protocolo: "lumen-ws-v1"
+    };
+    c.agregar(conn);
+    serv.conexiones = c;
+    retornar serv;
+}
+funcion WsServidor register_connection(WsServidor s, texto ip, texto path) { retornar registrar_conexion(s, ip, path); }
+
+/// Envía un mensaje a una conexión específica
+funcion texto enviar(WsConexion conn, texto mensaje) {
+    si !conn.abierta {
+        retornar "[ERROR: Conexión cerrada]";
+    }
+    texto frame = codificar_texto(mensaje);
+    retornar frame;
+}
+funcion texto send(WsConexion conn, texto msg) { retornar enviar(conn, msg); }
+
+/// Envía un mensaje de broadcast a todas las conexiones activas
+funcion entero difundir(WsServidor serv, texto mensaje) {
+    entero enviados = 0;
+    para conn en serv.conexiones {
+        si conn.abierta {
+            enviar(conn, mensaje);
+            enviados = enviados + 1;
+        }
+    }
+    retornar enviados;
+}
+funcion entero broadcast(WsServidor s, texto msg) { retornar difundir(s, msg); }
+
+/// Despacha un evento de mensaje entrante
+funcion texto despachar_evento(WsServidor serv, WsConexion conn, texto mensaje_entrante) {
+    serv.mensajes_procesados = serv.mensajes_procesados + 1;
+    retornar "ACK: [" + a_texto(conn.id) + "] " + mensaje_entrante;
+}

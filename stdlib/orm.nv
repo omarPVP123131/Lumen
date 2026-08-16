@@ -1,0 +1,90 @@
+// ============================================================================
+// Módulo orm — Mapeo Objeto-Relacional (ORM) sobre SQLite para LÚMEN (Fase 116)
+// SQLite ORM — Object-Relational Mapping (Dual ES/EN API)
+// Uso: importar "orm.nv"
+// ============================================================================
+
+importar "sql.nv";
+
+// Crear tabla a partir de lista de columnas
+funcion booleano crear_tabla(entero db, texto tabla, lista<texto> columnas) {
+    texto cols_str = "";
+    entero n = largo(columnas);
+    entero i = 0;
+    mientras i < n {
+        cols_str = cols_str + columnas[i];
+        si i < n - 1 { cols_str = cols_str + ", "; }
+        i = i + 1;
+    }
+    texto sql_cmd = "CREATE TABLE IF NOT EXISTS " + tabla + " (id INTEGER PRIMARY KEY AUTOINCREMENT, " + cols_str + ");";
+    entero rc = sql_ejecutar(db, sql_cmd);
+    retornar rc >= 0;
+}
+funcion booleano create_table(entero db, texto table, lista<texto> columns) {
+    retornar crear_tabla(db, table, columns);
+}
+
+// Insertar registro
+funcion entero insertar(entero db, texto tabla, lista<texto> campos, lista<texto> valores) {
+    texto campos_str = "";
+    texto vals_str = "";
+    entero n = largo(campos);
+    entero i = 0;
+    mientras i < n {
+        campos_str = campos_str + campos[i];
+        vals_str = vals_str + valores[i];
+        si i < n - 1 {
+            campos_str = campos_str + ", ";
+            vals_str = vals_str + ", ";
+        }
+        i = i + 1;
+    }
+    texto sql_cmd = "INSERT INTO " + tabla + " (" + campos_str + ") VALUES (" + vals_str + ");";
+    retornar sql_ejecutar(db, sql_cmd);
+}
+funcion entero insert(entero db, texto table, lista<texto> fields, lista<texto> values) {
+    retornar insertar(db, table, fields, values);
+}
+
+// Buscar por ID
+funcion cualquiera buscar_por_id(entero db, texto tabla, entero id) {
+    texto sql_cmd = "SELECT * FROM " + tabla + " WHERE id = " + a_texto(id) + " LIMIT 1;";
+    retornar sql_consultar(db, sql_cmd);
+}
+funcion cualquiera find_by_id(entero db, texto table, entero id) {
+    retornar buscar_por_id(db, table, id);
+}
+
+// Listar todos los registros
+funcion cualquiera listar(entero db, texto tabla) {
+    texto sql_cmd = "SELECT * FROM " + tabla + ";";
+    retornar sql_consultar(db, sql_cmd);
+}
+funcion cualquiera list_all(entero db, texto table) {
+    retornar listar(db, table);
+}
+
+// Contar registros
+funcion entero contar(entero db, texto tabla) {
+    texto sql_cmd = "SELECT COUNT(*) FROM " + tabla + ";";
+    cualquiera rows = sql_consultar(db, sql_cmd);
+    si rows != ninguno && __map_contiene(rows, 0) {
+        cualquiera fila0 = __map_obtener(rows, 0);
+        si __map_contiene(fila0, 0) {
+            retornar __map_obtener(fila0, 0);
+        }
+    }
+    retornar 0;
+}
+funcion entero count(entero db, texto table) {
+    retornar contar(db, table);
+}
+
+// Eliminar por ID
+funcion entero eliminar(entero db, texto tabla, entero id) {
+    texto sql_cmd = "DELETE FROM " + tabla + " WHERE id = " + a_texto(id) + ";";
+    retornar sql_ejecutar(db, sql_cmd);
+}
+funcion entero delete(entero db, texto table, entero id) {
+    retornar eliminar(db, table, id);
+}

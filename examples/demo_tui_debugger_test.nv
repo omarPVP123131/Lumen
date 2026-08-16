@@ -1,0 +1,22 @@
+// ============================================================================
+// LÚMEN — Programa de prueba para el Depurador TUI y Time-Travel Debugger
+// ============================================================================
+
+funcion entero fibonacci(entero n) {
+    si n <= 1 {
+        retornar n;
+    }
+    retornar fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+entero acumulador = 0;
+entero i = 1;
+
+mientras i <= 5 {
+    entero fib = fibonacci(i);
+    acumulador = acumulador + fib;
+    imprimir("Paso ", i, " -> fib(", i, ") = ", fib, " (acumulado: ", acumulador, ")");
+    i = i + 1;
+}
+
+imprimir("Resultado final acumulado: ", acumulador);

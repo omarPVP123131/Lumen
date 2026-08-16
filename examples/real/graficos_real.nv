@@ -56,13 +56,13 @@ entero EVT_MOUSEMOTION = 1024;
 entero EVT_MOUSEBUTTONDOWN = 1025;
 entero EVT_MOUSEBUTTONUP = 1026;
 
-funcion texto nombre_evento(entero tipo) {
-    si tipo == 256 { retornar "QUIT"; }
-    si tipo == 768 { retornar "KEYDOWN"; }
-    si tipo == 769 { retornar "KEYUP"; }
-    si tipo == 1024 { retornar "MOUSEMOTION"; }
-    si tipo == 1025 { retornar "MOUSEBTNDOWN"; }
-    si tipo == 1026 { retornar "MOUSEBTNUP"; }
+funcion texto nombre_evento(entero evt_tipo) {
+    si evt_tipo == 256 { retornar "QUIT"; }
+    si evt_tipo == 768 { retornar "KEYDOWN"; }
+    si evt_tipo == 769 { retornar "KEYUP"; }
+    si evt_tipo == 1024 { retornar "MOUSEMOTION"; }
+    si evt_tipo == 1025 { retornar "MOUSEBTNDOWN"; }
+    si evt_tipo == 1026 { retornar "MOUSEBTNUP"; }
     retornar "DESCONOCIDO";
 }
 // Test all event types

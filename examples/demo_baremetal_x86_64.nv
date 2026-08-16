@@ -1,0 +1,47 @@
+// ============================================================================
+// LÚMEN — Demostración de Unikernel y Bootloader Bare-Metal x86_64 (<3 ms Boot)
+// ============================================================================
+
+importar "baremetal.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🛡️ LÚMEN BARE-METAL UNIKERNEL & BOOTLOADER x86_64 (v2.4.6)         ║");
+imprimir("║   Arranque Directo en Hardware, Drivers VGA 0xB8000 & UART 0x3F8     ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Simulación de arranque autónomo Multiboot2
+imprimir("1. Ejecutando protocolo de arranque Bare-Metal (_start)...");
+baremetal_UnikernelConfig unikernel = baremetal_arrancar_unikernel("LUMEN-Freestanding-OS");
+imprimir("   ✓ Cabecera Multiboot2 validada: Magic=0x1BADB002");
+imprimir("   ✓ Tiempo de arranque medido: ", unikernel.tiempo_arranque_ms, " ms");
+
+// 2. Control de pantalla VGA Text Mode (0xB8000)
+imprimir("");
+imprimir("2. Escribiendo en Buffer de Video VGA Text Mode (Memoria 0xB8000)...");
+baremetal_VgaBuffer vga = unikernel.vga;
+vga = baremetal_vga_imprimir(vga, "¡Hola desde LÚMEN Bare-Metal Unikernel!");
+vga = baremetal_vga_imprimir(vga, "Sistema 100% operativo sin Windows ni Linux.");
+imprimir("   ✓ Total de caracteres emitidos a 0xB8000: ", vga.caracteres_escritos);
+
+// 3. Telemetría de bajo nivel UART COM1 (0x3F8)
+imprimir("");
+imprimir("3. Transmitiendo telemetría por puerto serial UART COM1 (115200 baud)...");
+baremetal_UartPuertoSerial uart = unikernel.uart;
+uart = baremetal_uart_enviar(uart, "[TELEMETRIA]: CPU 64-bit Long Mode Activo | GDT & IDT Listas\n");
+imprimir("   ✓ Bytes transmitidos por UART COM1: ", uart.bytes_transmitidos);
+
+// 4. Asignación de páginas físicas de memoria de 4KB
+imprimir("");
+imprimir("4. Gestor de Páginas Físicas de Memoria (4 KB Page Allocator)...");
+baremetal_GestorMemoriaFisica mem = unikernel.memoria;
+mem = baremetal_asignar_pagina_4k(mem);
+mem = baremetal_asignar_pagina_4k(mem);
+imprimir("   ✓ Páginas de 4KB asignadas en RAM. Páginas libres: ", mem.paginas_libres);
+
+imprimir("");
+imprimir("5. Resumen del Sistema Bare-Metal:");
+imprimir(baremetal_resumen(unikernel));
+
+imprimir("");
+imprimir("✨ ¡Unikernel y Bootloader Bare-Metal verificados con éxito en LÚMEN!");

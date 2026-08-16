@@ -67,9 +67,9 @@ lista<lista<entero>> m2 = [[0, -1], [1, 0]];  // rotate 90 degrees
 lista<lista<entero>> m3 = [[1, 1], [0, 1]];   // shear
 imprimir("Matrices: Escala(2) * Rotacion(90) * Shear");
 lista<lista<lista<entero>> > cadena_ms = [m1, m2, m3];
-lista<lista<entero>> resultado = cadena(cadena_ms);
+lista<lista<entero>> res_comb = cadena(cadena_ms);
 imprimir("Resultado combinado:");
-imprimir_matriz(resultado);
+imprimir_matriz(res_comb);
 
 // ── Ej 2: 2D Rotation Matrix ──
 // Ej 2: Create rotation matrix for integer angles

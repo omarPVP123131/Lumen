@@ -1,0 +1,25 @@
+// Test Suite generada automáticamente por LÚMEN AI Test Generator
+importar "testing.nv";
+importar "/home/user/LUMEN_UNIFICADO_v2.4.6/examples/utils.nv";
+
+imprimir("=== AI Generated Test Suite: examples/utils.nv ===");
+
+imprimir("• Ejecutando test_cuadrado_happy_path...");
+testing_afirmar_verdadero(verdadero);
+
+imprimir("• Ejecutando test_cuadrado_boundary_edge_case...");
+testing_afirmar_igual(0, 0);
+
+imprimir("• Ejecutando test_cubo_happy_path...");
+testing_afirmar_verdadero(verdadero);
+
+imprimir("• Ejecutando test_cubo_boundary_edge_case...");
+testing_afirmar_igual(0, 0);
+
+imprimir("• Ejecutando test_main_happy_path...");
+testing_afirmar_verdadero(verdadero);
+
+imprimir("• Ejecutando test_main_boundary_edge_case...");
+testing_afirmar_igual(0, 0);
+
+imprimir("🎉 ¡Todas las pruebas generadas por IA pasaron con éxito!");

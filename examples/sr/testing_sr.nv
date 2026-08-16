@@ -66,8 +66,8 @@ si args[1] - 20 == 0 {
 imprimir("--- Ej 3: Test Runner Mini ---");
 entero tests_pass = 0;
 entero tests_fail = 0;
-funcion void ejecutar_test(texto nombre, booleano resultado) {
-    si resultado {
+funcion void ejecutar_test(texto nombre, booleano paso_ok) {
+    si paso_ok {
         imprimir("  [PASS] ", nombre);
         tests_pass = tests_pass + 1;
     } sino {
