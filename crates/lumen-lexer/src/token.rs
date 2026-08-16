@@ -90,6 +90,23 @@ pub enum TokenKind {
     Async,
     Esperar,
     Sea,
+    Posponer,
+    Consultar,
+    Donde,
+    OrdenarPor,
+    Seleccionar,
+    Descendente,
+    Ascendente,
+    Atrapar,
+    Prestado,
+    Dueno,
+    Mut,
+    EnTiempoCompilacion,
+    Ensamblador,
+    BloqueC,
+    BloqueRust,
+    Puro,
+    GrupoTareas,
 
     // English equivalents
     If,
@@ -127,11 +144,29 @@ pub enum TokenKind {
     Trait,
     Await,
     Let,
+    Defer,
+    Query,
+    Where,
+    OrderBy,
+    Select,
+    Descending,
+    Ascending,
+    Catch,
+    Borrowed,
+    Owner,
+    Mutable,
+    Comptime,
+    Asm,
+    CBlock,
+    RustBlock,
+    Pure,
+    TaskGroup,
 
     // Identifiers & Literals
     Ident(String),
     NumLiteral(String),
     StrLiteral(String),
+    FStrLiteral(String),
 
     // Operators
     Plus,         // +
@@ -151,10 +186,15 @@ pub enum TokenKind {
     AndAnd,       // &&
     OrOr,         // ||
     Pipe,         // |
+    PipeGreater,  // |>
     Ampersand,    // &
+    Caret,        // ^
+    Tilde,        // ~
     ShiftLeft,    // <<
     ShiftRight,   // >>
     Question,     // ?
+    QuestionDot,  // ?.
+    QuestionColon,// ?:
 
     // Range operators
     DotDot,      // ..
@@ -256,6 +296,40 @@ impl TokenKind {
             "esperar" => Some(TokenKind::Esperar),
             "sea" => Some(TokenKind::Sea),
             "let" => Some(TokenKind::Let),
+            "posponer" => Some(TokenKind::Posponer),
+            "defer" => Some(TokenKind::Defer),
+            "consultar" => Some(TokenKind::Consultar),
+            "query" => Some(TokenKind::Query),
+            "donde" => Some(TokenKind::Donde),
+            "where" => Some(TokenKind::Where),
+            "ordenar_por" => Some(TokenKind::OrdenarPor),
+            "order_by" => Some(TokenKind::OrderBy),
+            "seleccionar" => Some(TokenKind::Seleccionar),
+            "select" => Some(TokenKind::Select),
+            "descendente" => Some(TokenKind::Descendente),
+            "descending" => Some(TokenKind::Descending),
+            "ascendente" => Some(TokenKind::Ascendente),
+            "ascending" => Some(TokenKind::Ascending),
+            "atrapar" => Some(TokenKind::Atrapar),
+            "catch" => Some(TokenKind::Catch),
+            "prestado" => Some(TokenKind::Prestado),
+            "borrowed" | "ref" => Some(TokenKind::Borrowed),
+            "dueno" => Some(TokenKind::Dueno),
+            "owner" => Some(TokenKind::Owner),
+            "mut" => Some(TokenKind::Mut),
+            "mutable" => Some(TokenKind::Mutable),
+            "en_tiempo_compilacion" => Some(TokenKind::EnTiempoCompilacion),
+            "comptime" => Some(TokenKind::Comptime),
+            "ensamblador" => Some(TokenKind::Ensamblador),
+            "asm" => Some(TokenKind::Asm),
+            "bloque_c" | "codigo_c" => Some(TokenKind::BloqueC),
+            "c_block" | "c_code" => Some(TokenKind::CBlock),
+            "bloque_rust" | "codigo_rust" => Some(TokenKind::BloqueRust),
+            "rust_block" | "rust_code" => Some(TokenKind::RustBlock),
+            "puro" => Some(TokenKind::Puro),
+            "pure" => Some(TokenKind::Pure),
+            "grupo_tareas" => Some(TokenKind::GrupoTareas),
+            "task_group" => Some(TokenKind::TaskGroup),
             _ => None,
         }
     }
@@ -297,6 +371,7 @@ impl TokenKind {
             TokenKind::Ninguno | TokenKind::None => "ninguno",
             TokenKind::Rasgo | TokenKind::Trait => "rasgo",
             TokenKind::Impl => "impl",
+            TokenKind::Posponer | TokenKind::Defer => "posponer",
             _ => "",
         }
     }

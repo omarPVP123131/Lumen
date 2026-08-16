@@ -1,2 +1,0 @@
-examples/demo_completo.nv
-stdlib/compiler/compile.nvc

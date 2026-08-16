@@ -28,6 +28,8 @@ pub enum Op {
     Or,
     BitOr,
     BitAnd,
+    BitXor,
+    BitNot,
     ShiftLeft,
     ShiftRight,
     Negate,

@@ -57,6 +57,8 @@ pub enum Opcode {
     Concat = 51,
     MatchType = 52,
     MatchPayload = 53,
+    BitXor = 54,
+    BitNot = 55,
 }
 
 impl Opcode {
@@ -116,6 +118,8 @@ impl Opcode {
             51 => Some(Opcode::Concat),
             52 => Some(Opcode::MatchType),
             53 => Some(Opcode::MatchPayload),
+            54 => Some(Opcode::BitXor),
+            55 => Some(Opcode::BitNot),
             _ => None,
         }
     }

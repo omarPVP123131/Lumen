@@ -3,6 +3,90 @@ use std::fmt;
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::sync::Arc;
 
+// ── NaN-Boxing Representation (64-bit compact values) ────────────────
+// IEEE 754 Quiet NaN: 0x7ff8_0000_0000_0000
+// Bits [63:48]: 0x7ff8 (Quiet NaN base) + 3 bits tag [47:45] + 45 bits payload / pointer
+pub const QNAN_MASK: u64 = 0x7ff8_0000_0000_0000;
+pub const TAG_INT: u64 = 0x7ff9_0000_0000_0000;
+pub const TAG_BOOL: u64 = 0x7ffa_0000_0000_0000;
+pub const TAG_VOID: u64 = 0x7ffb_0000_0000_0000;
+pub const TAG_PTR: u64 = 0x7ffc_0000_0000_0000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NanVal(pub u64);
+
+impl NanVal {
+    #[inline(always)]
+    pub fn from_f64(f: f64) -> Self {
+        let bits = f.to_bits();
+        // Canonicalize NaNs to prevent accidental collision with tagged values
+        if (bits & QNAN_MASK) == QNAN_MASK {
+            Self(QNAN_MASK)
+        } else {
+            Self(bits)
+        }
+    }
+
+    #[inline(always)]
+    pub fn from_i64(i: i64) -> Self {
+        Self(TAG_INT | ((i as u64) & 0x0000_ffff_ffff_ffff))
+    }
+
+    #[inline(always)]
+    pub fn from_bool(b: bool) -> Self {
+        Self(TAG_BOOL | (if b { 1 } else { 0 }))
+    }
+
+    #[inline(always)]
+    pub fn void() -> Self {
+        Self(TAG_VOID)
+    }
+
+    #[inline(always)]
+    pub fn from_ptr(ptr: *const u8) -> Self {
+        Self(TAG_PTR | ((ptr as usize as u64) & 0x0000_ffff_ffff_ffff))
+    }
+
+    #[inline(always)]
+    pub fn is_f64(&self) -> bool {
+        (self.0 & QNAN_MASK) != QNAN_MASK || self.0 == QNAN_MASK
+    }
+
+    #[inline(always)]
+    pub fn is_int(&self) -> bool {
+        (self.0 & 0xffff_0000_0000_0000) == TAG_INT
+    }
+
+    #[inline(always)]
+    pub fn is_bool(&self) -> bool {
+        (self.0 & 0xffff_0000_0000_0000) == TAG_BOOL
+    }
+
+    #[inline(always)]
+    pub fn is_void(&self) -> bool {
+        self.0 == TAG_VOID
+    }
+
+    #[inline(always)]
+    pub fn to_f64(&self) -> f64 {
+        f64::from_bits(self.0)
+    }
+
+    #[inline(always)]
+    pub fn to_i64(&self) -> i64 {
+        let mut v = (self.0 & 0x0000_ffff_ffff_ffff) as i64;
+        if (v & 0x0000_8000_0000_0000) != 0 {
+            v |= !0x0000_ffff_ffff_ffff;
+        }
+        v
+    }
+
+    #[inline(always)]
+    pub fn to_bool(&self) -> bool {
+        (self.0 & 1) != 0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FixHasher {
     hash: u64,
@@ -229,6 +313,14 @@ impl Value {
         }
     }
 
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            Value::Int(n) => Some(*n),
+            Value::Float(n) => Some(*n as i64),
+            _ => None,
+        }
+    }
+
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             Value::Bool(b) => Some(*b),
@@ -388,5 +480,37 @@ mod tests {
     fn test_as_bool() {
         assert_eq!(Value::Bool(true).as_bool(), Some(true));
         assert_eq!(Value::Int(0).as_bool(), None);
+    }
+
+    #[test]
+    fn test_nanbox_f64_roundtrip() {
+        let v = NanVal::from_f64(3.14159);
+        assert!(v.is_f64());
+        assert!((v.to_f64() - 3.14159).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_nanbox_i64_roundtrip() {
+        let v = NanVal::from_i64(42);
+        assert!(v.is_int());
+        assert_eq!(v.to_i64(), 42);
+
+        let v_neg = NanVal::from_i64(-100);
+        assert!(v_neg.is_int());
+        assert_eq!(v_neg.to_i64(), -100);
+    }
+
+    #[test]
+    fn test_nanbox_bool_and_void() {
+        let v_true = NanVal::from_bool(true);
+        assert!(v_true.is_bool());
+        assert_eq!(v_true.to_bool(), true);
+
+        let v_false = NanVal::from_bool(false);
+        assert!(v_false.is_bool());
+        assert_eq!(v_false.to_bool(), false);
+
+        let v_void = NanVal::void();
+        assert!(v_void.is_void());
     }
 }

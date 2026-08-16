@@ -58,5 +58,5 @@ funcion numero _codegen_mini(texto src) {
 
 imprimir("");
 imprimir("=== CODEGEN ===");
-numero r = _codegen_mini("entero x = 42;");
+r = _codegen_mini("entero x = 42;");
 imprimir("=== DONE ===");

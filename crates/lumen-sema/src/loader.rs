@@ -183,6 +183,50 @@ impl ModuleLoader {
         Ok(result)
     }
 
+    fn check_package_dir(&self, dir: &Path) -> Option<PathBuf> {
+        if !dir.is_dir() {
+            return None;
+        }
+        let manifest = dir.join("lumen.toml");
+        if manifest.is_file() {
+            if let Ok(content) = fs::read_to_string(&manifest) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("principal =") || trimmed.starts_with("main =") {
+                        if let Some(val) = trimmed.split('=').nth(1) {
+                            let entry_file = val.trim().trim_matches('"').trim();
+                            let target = dir.join(entry_file);
+                            if target.is_file() {
+                                return fs::canonicalize(&target).ok().or(Some(target));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let candidates = [
+            "src/main.nv",
+            "src/lib.nv",
+            "main.nv",
+            "mod.nv",
+            "lib.nv",
+            "index.nv",
+        ];
+        for c in &candidates {
+            let p = dir.join(c);
+            if p.is_file() {
+                return fs::canonicalize(&p).ok().or(Some(p));
+            }
+        }
+        if let Some(stem) = dir.file_name().and_then(|s| s.to_str()) {
+            let p = dir.join(format!("{}.nv", stem));
+            if p.is_file() {
+                return fs::canonicalize(&p).ok().or(Some(p));
+            }
+        }
+        None
+    }
+
     fn resolve_path(
         &self,
         path: &str,
@@ -211,6 +255,27 @@ impl ModuleLoader {
             }
             fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()) == current_path
         };
+
+        // Check if path is a package directory
+        let cur_dir = current_dir.join(path);
+        if cur_dir.is_dir() {
+            if let Some(entry) = self.check_package_dir(&cur_dir) {
+                if !is_self(&entry) {
+                    return Ok(entry);
+                }
+            }
+        }
+        for sp in &self.search_paths {
+            let sp_cand = sp.join(path);
+            if sp_cand.is_dir() {
+                if let Some(entry) = self.check_package_dir(&sp_cand) {
+                    if !is_self(&entry) {
+                        return Ok(entry);
+                    }
+                }
+            }
+        }
+
         if path.contains('.') || path.contains('/') || path.contains('\\') {
             // Try as-is (full path with extension)
             let p = current_dir.join(path);
@@ -219,8 +284,22 @@ impl ModuleLoader {
             }
             for sp in &self.search_paths {
                 let p = sp.join(path);
-                if p.exists() {
+                if p.exists() && !is_self(&p) {
                     return Ok(fs::canonicalize(&p).unwrap_or(p));
+                }
+            }
+            // Check subdirectories of search_paths (e.g. stdlib/compiler/)
+            for sp in &self.search_paths {
+                if let Ok(entries) = fs::read_dir(sp) {
+                    for entry in entries.flatten() {
+                        let sub = entry.path();
+                        if sub.is_dir() {
+                            let p = sub.join(path);
+                            if p.exists() && !is_self(&p) {
+                                return Ok(fs::canonicalize(&p).unwrap_or(p));
+                            }
+                        }
+                    }
                 }
             }
             // Try with extensions
@@ -233,8 +312,23 @@ impl ModuleLoader {
             for sp in &self.search_paths {
                 for ext in &extensions {
                     let p = sp.join(format!("{}{}", path, ext));
-                    if p.exists() {
+                    if p.exists() && !is_self(&p) {
                         return Ok(fs::canonicalize(&p).unwrap_or(p));
+                    }
+                }
+            }
+            for sp in &self.search_paths {
+                if let Ok(entries) = fs::read_dir(sp) {
+                    for entry in entries.flatten() {
+                        let sub = entry.path();
+                        if sub.is_dir() {
+                            for ext in &extensions {
+                                let p = sub.join(format!("{}{}", path, ext));
+                                if p.exists() && !is_self(&p) {
+                                    return Ok(fs::canonicalize(&p).unwrap_or(p));
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -255,8 +349,23 @@ impl ModuleLoader {
             for sp in &self.search_paths {
                 for ext in &extensions {
                     let p = sp.join(format!("{}{}", path, ext));
-                    if p.exists() {
+                    if p.exists() && !is_self(&p) {
                         return Ok(fs::canonicalize(&p).unwrap_or(p));
+                    }
+                }
+            }
+            for sp in &self.search_paths {
+                if let Ok(entries) = fs::read_dir(sp) {
+                    for entry in entries.flatten() {
+                        let sub = entry.path();
+                        if sub.is_dir() {
+                            for ext in &extensions {
+                                let p = sub.join(format!("{}{}", path, ext));
+                                if p.exists() && !is_self(&p) {
+                                    return Ok(fs::canonicalize(&p).unwrap_or(p));
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -330,22 +439,71 @@ fn parse_source(source: &str, path: &Path) -> Result<Program, ModuleError> {
     Ok(program)
 }
 
+fn collect_module_declarations(program: &Program) -> HashSet<String> {
+    let mut names = HashSet::new();
+    for item in program {
+        match item {
+            DeclOrStmt::Decl(decl) => match decl {
+                Decl::Variable { name, .. } => {
+                    names.insert(name.clone());
+                }
+                Decl::Const { name, .. } => {
+                    names.insert(name.clone());
+                }
+                Decl::Function { name, .. } => {
+                    names.insert(name.clone());
+                }
+                Decl::Struct { name, .. } => {
+                    names.insert(name.clone());
+                }
+                Decl::Enum { name, variants, .. } => {
+                    names.insert(name.clone());
+                    for v in variants {
+                        names.insert(v.name.clone());
+                    }
+                }
+                Decl::Rasgo { name, .. } => {
+                    names.insert(name.clone());
+                }
+                Decl::Destructure { targets, .. } => {
+                    for t in targets {
+                        if t.name != "_" {
+                            names.insert(t.name.clone());
+                        }
+                    }
+                }
+                Decl::ImplRasgo { .. } => {}
+            },
+            DeclOrStmt::Stmt(stmt) => match stmt {
+                Stmt::Assignment { name, .. } => {
+                    names.insert(name.clone());
+                }
+                _ => {}
+            },
+        }
+    }
+    names
+}
+
 fn prefix_program(program: &mut Program, prefix: &str, known: &HashSet<String>) {
+    let module_decls = collect_module_declarations(program);
     let mut locals = HashSet::new();
     for node in program.iter_mut() {
-        prefix_node(node, prefix, &mut locals, true, known);
+        prefix_node(node, prefix, &mut locals, true, known, &module_decls);
     }
 }
+
 fn prefix_node(
     node: &mut DeclOrStmt,
     prefix: &str,
     locals: &mut HashSet<String>,
     top_level: bool,
     known: &HashSet<String>,
+    module_decls: &HashSet<String>,
 ) {
     match node {
-        DeclOrStmt::Decl(d) => prefix_decl(d, prefix, locals, top_level, known),
-        DeclOrStmt::Stmt(s) => prefix_stmt(s, prefix, locals, top_level, known),
+        DeclOrStmt::Decl(d) => prefix_decl(d, prefix, locals, top_level, known, module_decls),
+        DeclOrStmt::Stmt(s) => prefix_stmt(s, prefix, locals, top_level, known, module_decls),
     }
 }
 
@@ -355,6 +513,7 @@ fn prefix_decl(
     locals: &mut HashSet<String>,
     top_level: bool,
     known: &HashSet<String>,
+    module_decls: &HashSet<String>,
 ) {
     match decl {
         Decl::Variable {
@@ -372,7 +531,7 @@ fn prefix_decl(
                 locals.insert(name.clone());
             }
             if let Some(expr) = init {
-                prefix_expr(expr, prefix, locals, known);
+                prefix_expr(expr, prefix, locals, known, module_decls);
             }
         }
         Decl::Const {
@@ -389,7 +548,7 @@ fn prefix_decl(
             } else {
                 locals.insert(name.clone());
             }
-            prefix_expr(value, prefix, locals, known);
+            prefix_expr(value, prefix, locals, known, module_decls);
         }
         Decl::Destructure { targets, init, .. } => {
             for target in targets.iter_mut() {
@@ -406,7 +565,7 @@ fn prefix_decl(
                     }
                 }
             }
-            prefix_expr(init, prefix, locals, known);
+            prefix_expr(init, prefix, locals, known, module_decls);
         }
         Decl::Function {
             return_type,
@@ -424,7 +583,7 @@ fn prefix_decl(
             for p in params.iter_mut() {
                 prefix_type_with_params(&mut p.param_type, prefix, &type_params_set, known);
                 if let Some(default) = &mut p.default {
-                    prefix_expr(default, prefix, locals, known);
+                    prefix_expr(default, prefix, locals, known, module_decls);
                 }
             }
             let mut func_locals = locals.clone();
@@ -432,7 +591,7 @@ fn prefix_decl(
                 func_locals.insert(p.name.clone());
             }
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut func_locals, false, known);
+                prefix_node(node, prefix, &mut func_locals, false, known, module_decls);
             }
         }
         Decl::Struct {
@@ -482,7 +641,7 @@ fn prefix_decl(
                 prefix_type(&mut assoc.target_type, prefix, known);
             }
             for method_decl in methods.iter_mut() {
-                prefix_decl(method_decl, prefix, locals, top_level, known);
+                prefix_decl(method_decl, prefix, locals, false, known, module_decls);
             }
         }
     }
@@ -494,13 +653,17 @@ fn prefix_stmt(
     locals: &mut HashSet<String>,
     _top_level: bool,
     known: &HashSet<String>,
+    module_decls: &HashSet<String>,
 ) {
     match stmt {
         Stmt::Assignment { name, value, .. } => {
-            if !locals.contains(name.as_str()) && !is_known_prefixed(name, known) {
+            if !locals.contains(name.as_str())
+                && !is_known_prefixed(name, known)
+                && (module_decls.contains(name.as_str()) || !is_builtin(name))
+            {
                 *name = format!("{}_{}", prefix, name);
             }
-            prefix_expr(value, prefix, locals, known);
+            prefix_expr(value, prefix, locals, known, module_decls);
         }
         Stmt::If {
             condition,
@@ -508,25 +671,25 @@ fn prefix_stmt(
             else_body,
             ..
         } => {
-            prefix_expr(condition, prefix, locals, known);
+            prefix_expr(condition, prefix, locals, known, module_decls);
             let mut if_locals = locals.clone();
             for node in then_body.iter_mut() {
-                prefix_node(node, prefix, &mut if_locals, false, known);
+                prefix_node(node, prefix, &mut if_locals, false, known, module_decls);
             }
             if let Some(body) = else_body {
                 let mut else_locals = locals.clone();
                 for node in body.iter_mut() {
-                    prefix_node(node, prefix, &mut else_locals, false, known);
+                    prefix_node(node, prefix, &mut else_locals, false, known, module_decls);
                 }
             }
         }
         Stmt::While {
             condition, body, ..
         } => {
-            prefix_expr(condition, prefix, locals, known);
+            prefix_expr(condition, prefix, locals, known, module_decls);
             let mut while_locals = locals.clone();
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut while_locals, false, known);
+                prefix_node(node, prefix, &mut while_locals, false, known, module_decls);
             }
         }
         Stmt::For {
@@ -540,15 +703,15 @@ fn prefix_stmt(
             if let Decl::Variable { name, .. } = init.as_mut() {
                 for_locals.insert(name.clone());
             }
-            prefix_expr(condition, prefix, &for_locals, known);
-            prefix_stmt(update, prefix, &mut for_locals, false, known);
+            prefix_expr(condition, prefix, &for_locals, known, module_decls);
+            prefix_stmt(update, prefix, &mut for_locals, false, known, module_decls);
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut for_locals, false, known);
+                prefix_node(node, prefix, &mut for_locals, false, known, module_decls);
             }
         }
         Stmt::Return { value, .. } => {
             if let Some(expr) = value {
-                prefix_expr(expr, prefix, locals, known);
+                prefix_expr(expr, prefix, locals, known, module_decls);
             }
         }
         Stmt::ForEach {
@@ -559,19 +722,19 @@ fn prefix_stmt(
         } => {
             let mut foreach_locals = locals.clone();
             foreach_locals.insert(var_name.clone());
-            prefix_expr(expr, prefix, &foreach_locals, known);
+            prefix_expr(expr, prefix, &foreach_locals, known, module_decls);
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut foreach_locals, false, known);
+                prefix_node(node, prefix, &mut foreach_locals, false, known, module_decls);
             }
         }
         Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
         Stmt::GuardLet {
             value, else_body, ..
         } => {
-            prefix_expr(value, prefix, locals, known);
+            prefix_expr(value, prefix, locals, known, module_decls);
             let mut guard_locals = locals.clone();
             for node in else_body.iter_mut() {
-                prefix_node(node, prefix, &mut guard_locals, false, known);
+                prefix_node(node, prefix, &mut guard_locals, false, known, module_decls);
             }
         }
         Stmt::Match {
@@ -580,42 +743,42 @@ fn prefix_stmt(
             default,
             ..
         } => {
-            prefix_expr(expr, prefix, locals, known);
+            prefix_expr(expr, prefix, locals, known, module_decls);
             for arm in arms.iter_mut() {
-                prefix_expr(&mut arm.value, prefix, locals, known);
+                prefix_expr(&mut arm.value, prefix, locals, known, module_decls);
                 if let Some(ref mut guard) = arm.guard {
-                    prefix_expr(guard, prefix, locals, known);
+                    prefix_expr(guard, prefix, locals, known, module_decls);
                 }
                 let mut arm_locals = locals.clone();
                 for node in arm.body.iter_mut() {
-                    prefix_node(node, prefix, &mut arm_locals, false, known);
+                    prefix_node(node, prefix, &mut arm_locals, false, known, module_decls);
                 }
             }
             if let Some(body) = default {
                 let mut def_locals = locals.clone();
                 for node in body.iter_mut() {
-                    prefix_node(node, prefix, &mut def_locals, false, known);
+                    prefix_node(node, prefix, &mut def_locals, false, known, module_decls);
                 }
             }
         }
         Stmt::Expr { expr, .. } => {
-            prefix_expr(expr, prefix, locals, known);
+            prefix_expr(expr, prefix, locals, known, module_decls);
         }
         Stmt::FieldAssign { expr, value, .. } => {
-            prefix_expr(expr, prefix, locals, known);
-            prefix_expr(value, prefix, locals, known);
+            prefix_expr(expr, prefix, locals, known, module_decls);
+            prefix_expr(value, prefix, locals, known, module_decls);
         }
         Stmt::ArraySet {
             arr, index, value, ..
         } => {
-            prefix_expr(arr, prefix, locals, known);
-            prefix_expr(index, prefix, locals, known);
-            prefix_expr(value, prefix, locals, known);
+            prefix_expr(arr, prefix, locals, known, module_decls);
+            prefix_expr(index, prefix, locals, known, module_decls);
+            prefix_expr(value, prefix, locals, known, module_decls);
         }
         Stmt::Block { stmts, .. } => {
             let mut block_locals = locals.clone();
             for node in stmts.iter_mut() {
-                prefix_node(node, prefix, &mut block_locals, false, known);
+                prefix_node(node, prefix, &mut block_locals, false, known, module_decls);
             }
         }
         Stmt::Destructure { targets, value, .. } => {
@@ -624,7 +787,7 @@ fn prefix_stmt(
                     target.name = format!("{}_{}", prefix, target.name);
                 }
             }
-            prefix_expr(value, prefix, locals, known);
+            prefix_expr(value, prefix, locals, known, module_decls);
         }
         Stmt::IfLet {
             value,
@@ -632,36 +795,67 @@ fn prefix_stmt(
             else_body,
             ..
         } => {
-            prefix_expr(value, prefix, locals, known);
+            prefix_expr(value, prefix, locals, known, module_decls);
+            let mut then_locals = locals.clone();
             for node in then_body.iter_mut() {
-                prefix_node(node, prefix, locals, false, known);
+                prefix_node(node, prefix, &mut then_locals, false, known, module_decls);
             }
-            if let Some(eb) = else_body {
-                for node in eb.iter_mut() {
-                    prefix_node(node, prefix, locals, false, known);
+            if let Some(body) = else_body {
+                let mut else_locals = locals.clone();
+                for node in body.iter_mut() {
+                    prefix_node(node, prefix, &mut else_locals, false, known, module_decls);
                 }
             }
         }
+        Stmt::Posponer { body, .. } => {
+            let mut posp_locals = locals.clone();
+            for node in body.iter_mut() {
+                prefix_node(node, prefix, &mut posp_locals, false, known, module_decls);
+            }
+        }
+        Stmt::TryCatch {
+            try_body,
+            err_var,
+            catch_body,
+            ..
+        } => {
+            let mut try_locals = locals.clone();
+            for node in try_body.iter_mut() {
+                prefix_node(node, prefix, &mut try_locals, false, known, module_decls);
+            }
+            let mut catch_locals = locals.clone();
+            catch_locals.insert(err_var.clone());
+            for node in catch_body.iter_mut() {
+                prefix_node(node, prefix, &mut catch_locals, false, known, module_decls);
+            }
+        }
+        Stmt::InlineAsm { .. } | Stmt::InlineC { .. } | Stmt::InlineRust { .. } => {}
     }
 }
 
-fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &HashSet<String>) {
+fn prefix_expr(
+    expr: &mut Expr,
+    prefix: &str,
+    locals: &HashSet<String>,
+    known: &HashSet<String>,
+    module_decls: &HashSet<String>,
+) {
     match expr {
         Expr::Int { .. } | Expr::Float { .. } | Expr::Str { .. } | Expr::Bool { .. } => {}
         Expr::Ident { name, .. } => {
             if !locals.contains(name.as_str())
-                && !is_builtin(name)
                 && !is_known_prefixed(name, known)
+                && (module_decls.contains(name.as_str()) || !is_builtin(name))
             {
                 *name = format!("{}_{}", prefix, name);
             }
         }
         Expr::Binary { left, right, .. } => {
-            prefix_expr(left, prefix, locals, known);
-            prefix_expr(right, prefix, locals, known);
+            prefix_expr(left, prefix, locals, known, module_decls);
+            prefix_expr(right, prefix, locals, known, module_decls);
         }
         Expr::Unary { operand, .. } => {
-            prefix_expr(operand, prefix, locals, known);
+            prefix_expr(operand, prefix, locals, known, module_decls);
         }
         Expr::Call {
             callee,
@@ -669,32 +863,32 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &
             type_args,
             ..
         } => {
-            prefix_expr(callee, prefix, locals, known);
+            prefix_expr(callee, prefix, locals, known, module_decls);
             for arg in args.iter_mut() {
-                prefix_expr(arg, prefix, locals, known);
+                prefix_expr(arg, prefix, locals, known, module_decls);
             }
             for ta in type_args.iter_mut() {
                 prefix_type(ta, prefix, known);
             }
         }
         Expr::Grouping { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals, known);
+            prefix_expr(inner, prefix, locals, known, module_decls);
         }
         Expr::Cast {
             expr: inner,
             cast_type,
             ..
         } => {
-            prefix_expr(inner, prefix, locals, known);
+            prefix_expr(inner, prefix, locals, known, module_decls);
             if let Type::Struct(name) = cast_type {
                 if !name.is_empty() && name != "Infer" && !is_known_prefixed(name, known) {
-                    let prefixed = format!("{}{}", prefix, name);
+                    let prefixed = format!("{}_{}", prefix, name);
                     *name = prefixed;
                 }
             } else if let Type::Lista(inner_t) = cast_type {
                 if let Type::Struct(name) = inner_t.as_mut() {
                     if !name.is_empty() && name != "Infer" && !is_known_prefixed(name, known) {
-                        let prefixed = format!("{}{}", prefix, name);
+                        let prefixed = format!("{}_{}", prefix, name);
                         *name = prefixed;
                     }
                 }
@@ -702,27 +896,27 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &
         }
         Expr::List { items, .. } => {
             for item in items.iter_mut() {
-                prefix_expr(item, prefix, locals, known);
+                prefix_expr(item, prefix, locals, known, module_decls);
             }
         }
         Expr::Range { start, end, .. } => {
-            prefix_expr(start, prefix, locals, known);
-            prefix_expr(end, prefix, locals, known);
+            prefix_expr(start, prefix, locals, known, module_decls);
+            prefix_expr(end, prefix, locals, known, module_decls);
         }
         Expr::Index {
             expr: target,
             index,
             ..
         } => {
-            prefix_expr(target, prefix, locals, known);
-            prefix_expr(index, prefix, locals, known);
+            prefix_expr(target, prefix, locals, known, module_decls);
+            prefix_expr(index, prefix, locals, known, module_decls);
         }
         Expr::MethodCall {
             expr: target, args, ..
         } => {
-            prefix_expr(target, prefix, locals, known);
+            prefix_expr(target, prefix, locals, known, module_decls);
             for arg in args.iter_mut() {
-                prefix_expr(arg, prefix, locals, known);
+                prefix_expr(arg, prefix, locals, known, module_decls);
             }
         }
         Expr::Lambda { params, body, .. } => {
@@ -732,7 +926,7 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &
                 lambda_locals.insert(p.name.clone());
             }
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut lambda_locals, false, known);
+                prefix_node(node, prefix, &mut lambda_locals, false, known, module_decls);
             }
         }
         Expr::StructInit {
@@ -743,44 +937,47 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &
         } => {
             *struct_name = format!("{}_{}", prefix, struct_name);
             for (_, value) in fields.iter_mut() {
-                prefix_expr(value, prefix, locals, known);
+                prefix_expr(value, prefix, locals, known, module_decls);
             }
             for ta in type_args.iter_mut() {
                 prefix_type(ta, prefix, known);
             }
         }
         Expr::FieldAccess { expr: target, .. } => {
-            prefix_expr(target, prefix, locals, known);
+            prefix_expr(target, prefix, locals, known, module_decls);
         }
         Expr::Exito { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals, known);
+            prefix_expr(inner, prefix, locals, known, module_decls);
         }
         Expr::Error { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals, known);
+            prefix_expr(inner, prefix, locals, known, module_decls);
         }
         Expr::Intentar { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals, known);
+            prefix_expr(inner, prefix, locals, known, module_decls);
         }
         Expr::Algun { expr: inner, .. } => {
-            prefix_expr(inner, prefix, locals, known);
+            prefix_expr(inner, prefix, locals, known, module_decls);
         }
         Expr::Ninguno { .. } => {}
         Expr::Tuple { items, .. } => {
             for item in items.iter_mut() {
-                prefix_expr(item, prefix, locals, known);
+                prefix_expr(item, prefix, locals, known, module_decls);
             }
         }
         Expr::TupleAccess { expr: target, .. } => {
-            prefix_expr(target, prefix, locals, known);
+            prefix_expr(target, prefix, locals, known, module_decls);
         }
         Expr::EnumCtor {
             enum_name, args, ..
         } => {
-            if !locals.contains(enum_name.as_str()) && !is_builtin(enum_name) {
+            if !locals.contains(enum_name.as_str())
+                && !is_known_prefixed(enum_name, known)
+                && (module_decls.contains(enum_name.as_str()) || !is_builtin(enum_name))
+            {
                 *enum_name = format!("{}_{}", prefix, enum_name);
             }
             for arg in args.iter_mut() {
-                prefix_expr(arg, prefix, locals, known);
+                prefix_expr(arg, prefix, locals, known, module_decls);
             }
         }
         Expr::Ternary {
@@ -789,12 +986,56 @@ fn prefix_expr(expr: &mut Expr, prefix: &str, locals: &HashSet<String>, known: &
             false_branch,
             ..
         } => {
-            prefix_expr(condition, prefix, locals, known);
-            prefix_expr(true_branch, prefix, locals, known);
-            prefix_expr(false_branch, prefix, locals, known);
+            prefix_expr(condition, prefix, locals, known, module_decls);
+            prefix_expr(true_branch, prefix, locals, known, module_decls);
+            prefix_expr(false_branch, prefix, locals, known, module_decls);
+        }
+        Expr::SafeFieldAccess { expr: target, .. } => {
+            prefix_expr(target, prefix, locals, known, module_decls);
+        }
+        Expr::Elvis { expr: target, default, .. } => {
+            prefix_expr(target, prefix, locals, known, module_decls);
+            prefix_expr(default, prefix, locals, known, module_decls);
+        }
+        Expr::Comprehension {
+            expr: inner,
+            var_name,
+            iter,
+            condition,
+            ..
+        } => {
+            prefix_expr(iter, prefix, locals, known, module_decls);
+            let mut comp_locals = locals.clone();
+            comp_locals.insert(var_name.clone());
+            prefix_expr(inner, prefix, &comp_locals, known, module_decls);
+            if let Some(cond) = condition {
+                prefix_expr(cond, prefix, &comp_locals, known, module_decls);
+            }
+        }
+        Expr::Query {
+            var_name,
+            source,
+            where_clause,
+            order_by,
+            select_expr,
+            ..
+        } => {
+            prefix_expr(source, prefix, locals, known, module_decls);
+            let mut q_locals = locals.clone();
+            q_locals.insert(var_name.clone());
+            if let Some(w) = where_clause {
+                prefix_expr(w, prefix, &q_locals, known, module_decls);
+            }
+            if let Some(o) = order_by {
+                prefix_expr(o, prefix, &q_locals, known, module_decls);
+            }
+            prefix_expr(select_expr, prefix, &q_locals, known, module_decls);
         }
         Expr::Esperar { expr, .. } => {
-            prefix_expr(expr, prefix, locals, known);
+            prefix_expr(expr, prefix, locals, known, module_decls);
+        }
+        Expr::Comptime { expr, .. } => {
+            prefix_expr(expr, prefix, locals, known, module_decls);
         }
     }
 }
@@ -827,6 +1068,7 @@ fn prefix_type_with_params(
             }
             prefix_type_with_params(return_type, prefix, type_params, known);
         }
+        Type::Struct(name) if name == "Self" || name == "self" || name == "este" => {}
         Type::Struct(name) if name != "Infer" && !is_known_prefixed(name, known) => {
             *name = format!("{}_{}", prefix, name);
         }
@@ -842,6 +1084,12 @@ fn prefix_type_with_params(
                 prefix_type_with_params(t, prefix, type_params, known);
             }
         }
+        Type::Prestado { inner, .. } => {
+            prefix_type_with_params(inner, prefix, type_params, known);
+        }
+        Type::Dueno(inner) => {
+            prefix_type_with_params(inner, prefix, type_params, known);
+        }
         _ => {}
     }
 }
@@ -849,6 +1097,8 @@ fn prefix_type_with_params(
 fn prefix_type(t: &mut Type, prefix: &str, known: &HashSet<String>) {
     match t {
         Type::Lista(inner) => prefix_type(inner, prefix, known),
+        Type::Prestado { inner, .. } => prefix_type(inner, prefix, known),
+        Type::Dueno(inner) => prefix_type(inner, prefix, known),
         Type::GenericStruct { name, args } => {
             if !is_known_prefixed(name, known) {
                 *name = format!("{}_{}", prefix, name);
@@ -867,7 +1117,7 @@ fn prefix_type(t: &mut Type, prefix: &str, known: &HashSet<String>) {
             prefix_type(return_type, prefix, known);
         }
         Type::Struct(name) => {
-            if name != "Infer" && !is_known_prefixed(name, known) {
+            if name != "Infer" && name != "Self" && name != "self" && name != "este" && !is_known_prefixed(name, known) {
                 *name = format!("{}_{}", prefix, name);
             }
         }
@@ -894,6 +1144,9 @@ fn is_known_prefixed(name: &str, known: &HashSet<String>) -> bool {
 }
 
 fn is_builtin(name: &str) -> bool {
+    if name.starts_with("__") {
+        return true;
+    }
     matches!(
         name,
         "imprimir"
@@ -904,307 +1157,24 @@ fn is_builtin(name: &str) -> bool {
             | "push"
             | "leer"
             | "read"
+            | "exito"
+            | "ok"
+            | "error"
+            | "err"
+            | "algun"
+            | "some"
+            | "ninguno"
+            | "none"
             | "a_texto"
             | "to_texto"
-            | "__str_from"
-            | "__str_len"
-            | "__str_longitud"
-            | "__str_ord"
-            | "__str_codigo"
-            | "__str_chr"
-            | "__str_caracter"
-            | "__str_slice"
-            | "__str_subcadena"
-            | "__str_concat_list"
-            | "__str_concatenar_lista"
-            | "__str_starts_with"
-            | "__str_empieza_con"
-            | "__str_to_chars"
-            | "__str_a_caracteres"
-            | "__str_upper"
-            | "__str_mayusculas"
-            | "__str_lower"
-            | "__str_minusculas"
-            | "__str_trim"
-            | "__str_recortar"
-            | "__str_contains"
-            | "__str_contiene"
-            | "__str_split"
-            | "__str_dividir"
-            | "__file_read"
-            | "__leer_archivo"
-            | "__file_write"
-            | "__escribir_archivo"
-            | "__file_append"
-            | "__agregar_archivo"
-            | "__file_write_binary"
-            | "__escribir_archivo_bin"
-            | "__num_a_f64_bytes"
-            | "__numero_a_bytes_f64"
-            | "__file_bytes"
-            | "__leer_bytes"
-            | "__a_f64_bytes"
-            | "__bytes_a_f64"
-            | "__codegen_a_nvc"
-            | "__compile_nv"
-            | "__compilar_nv"
-            | "__file_exists"
-            | "__existe_archivo"
-            | "__time_now"
-            | "__tiempo_ahora"
-            | "__list_reverse"
-            | "__lista_invertir"
-            | "__list_sort"
-            | "__lista_ordenar"
-            | "__json_parse"
-            | "__json_parsear"
-            | "__json_stringify"
-            | "__json_texto"
-            | "__js_call"
-            | "__js_llamar"
-            | "__js_eval"
-            | "__js_evaluar"
-            | "__map_new"
-            | "__map_nuevo"
-            | "__map_set"
-            | "__map_poner"
-            | "__map_get"
-            | "__map_obtener"
-            | "__map_len"
-            | "__map_longitud"
-            | "__map_keys"
-            | "__map_claves"
-            | "__map_contains"
-            | "__map_contiene"
-            | "__set_new"
-            | "__conjunto_nuevo"
-            | "__set_add"
-            | "__conjunto_agregar"
-            | "__set_has"
-            | "__conjunto_tiene"
-            | "__set_union"
-            | "__conjunto_unir"
-            | "__set_inter"
-            | "__conjunto_interseccion"
-            | "__set_diff"
-            | "__conjunto_diferencia"
-            | "__deque_new"
-            | "__deque_nuevo"
-            | "__deque_push_front"
-            | "__deque_agregar_frente"
-            | "__deque_push_back"
-            | "__deque_agregar_final"
-            | "__deque_pop_front"
-            | "__deque_quitar_frente"
-            | "__deque_pop_back"
-            | "__deque_quitar_final"
-            | "__deque_len"
-            | "__deque_longitud"
-            | "__heap_new"
-            | "__monticulo_nuevo"
-            | "__heap_push"
-            | "__monticulo_agregar"
-            | "__heap_pop"
-            | "__monticulo_quitar"
-            | "__heap_peek"
-            | "__monticulo_ver"
-            | "__heap_len"
-            | "__monticulo_longitud"
-            | "__linked_new"
-            | "__enlazada_nuevo"
-            | "__linked_push_front"
-            | "__enlazada_agregar_frente"
-            | "__linked_push_back"
-            | "__enlazada_agregar_final"
-            | "__linked_pop_front"
-            | "__enlazada_quitar_frente"
-            | "__linked_pop_back"
-            | "__enlazada_quitar_final"
-            | "__linked_len"
-            | "__enlazada_longitud"
-            | "__regex_new"
-            | "__regex_nuevo"
-            | "__regex_is_match"
-            | "__regex_coincide"
-            | "__regex_captures"
-            | "__regex_capturar"
-            | "__regex_replace"
-            | "__regex_reemplazar"
-            | "__unicode_normalize"
-            | "__unicode_normalizar"
-            | "__str_pad_start"
-            | "__str_padding_inicio"
-            | "__str_pad_end"
-            | "__str_padding_fin"
-            | "__str_replace"
-            | "__str_reemplazar"
-            | "__encoding_utf8"
-            | "__codificacion_utf8"
-            | "__encoding_from_utf8"
-            | "__desde_utf8"
-            | "__buf_reader"
-            | "__lector_buffer"
-            | "__buf_writer"
-            | "__escritor_buffer"
-            | "__stream_chunks"
-            | "__stream_trozos"
-            | "__tcp_connect"
-            | "__tcp_conectar"
-            | "__tcp_listen"
-            | "__tcp_escuchar"
-            | "__tcp_accept"
-            | "__tcp_aceptar"
-            | "__http_get"
-            | "__http_obtener"
-            | "__http_post"
-            | "__http_enviar"
-            | "__http_server"
-            | "__http_servidor"
-            | "__serial_open"
-            | "__serial_abrir"
-            | "__actor_enviar"
-            | "__actor_new"
-            | "__actor_nuevo"
-            | "__actor_recibir"
-            | "__actor_recv"
-            | "__actor_send"
-            | "__aes_decrypt"
-            | "__aes_desencriptar"
-            | "__aes_encriptar"
-            | "__aes_encrypt"
-            | "__arc_asignar"
-            | "__arc_get"
-            | "__arc_new"
-            | "__arc_nuevo"
-            | "__arc_obtener"
-            | "__arc_set"
-            | "__canal_enviar"
-            | "__canal_nuevo"
-            | "__canal_recibir"
-            | "__channel_new"
-            | "__channel_recv"
-            | "__channel_send"
-            | "__cluster_conectar"
-            | "__cluster_connect"
-            | "__cluster_enviar"
-            | "__cluster_send"
-            | "__coro_ceder"
-            | "__coro_crear"
-            | "__coro_create"
-            | "__coro_reanudar"
-            | "__coro_resume"
-            | "__coro_yield"
-            | "__dormir"
-            | "__env_list"
-            | "__env_listar"
-            | "__ffi_alloc"
-            | "__ffi_asignar"
-            | "__ffi_call"
-            | "__ffi_cargar"
-            | "__ffi_escribir"
-            | "__ffi_free"
-            | "__ffi_leer"
-            | "__ffi_liberar"
-            | "__ffi_llamar"
-            | "__ffi_llamar_nv"
-            | "__ffi_load"
-            | "__ffi_peek"
-            | "__ffi_poke"
-            | "__ffi_read"
-            | "__ffi_write"
-            | "__fs_listar"
-            | "__fs_listdir"
-            | "__generador_nuevo"
-            | "__generador_siguiente"
-            | "__generator_new"
-            | "__generator_next"
-            | "__gui_cerrar"
-            | "__gui_close"
-            | "__gui_esperar"
-            | "__gui_hwnd"
-            | "__gui_id"
-            | "__gui_mostrar"
-            | "__gui_poll"
-            | "__gui_show"
-            | "__gui_ventana"
-            | "__gui_window"
-            | "__hash_sha256"
-            | "__hash_sha512"
-            | "__hilo_esperar"
-            | "__hilo_lanzar"
-            | "__jwt_codificar"
-            | "__jwt_decode"
-            | "__jwt_decodificar"
-            | "__jwt_encode"
-            | "__mutex_bloquear"
-            | "__mutex_lock"
-            | "__mutex_new"
-            | "__mutex_nuevo"
-            | "__par_join"
-            | "__par_map"
-            | "__par_mapear"
-            | "__par_unir"
-            | "__rwlock_escribir"
-            | "__rwlock_leer"
-            | "__rwlock_new"
-            | "__rwlock_nuevo"
-            | "__rwlock_read"
-            | "__rwlock_write"
-            | "__scope_cancel"
-            | "__scope_cancelar"
-            | "__scope_lanzar"
-            | "__scope_new"
-            | "__scope_nuevo"
-            | "__scope_spawn"
-            | "__seleccionar"
-            | "__select"
-            | "__sleep"
-            | "__stream_colectar"
-            | "__stream_collect"
-            | "__stream_desde"
-            | "__stream_filter"
-            | "__stream_filtrar"
-            | "__stream_from"
-            | "__stream_map"
-            | "__stream_mapear"
-            | "__supervisor_add"
-            | "__supervisor_agregar"
-            | "__supervisor_iniciar"
-            | "__supervisor_new"
-            | "__supervisor_nuevo"
-            | "__supervisor_start"
-            | "__tarea_esperar"
-            | "__tarea_lanzar"
-            | "__task_await"
-            | "__task_spawn"
-            | "__thread_join"
-            | "__thread_spawn"
-            | "__tiempo_diferencia"
-            | "__tiempo_formatear"
-            | "__tiempo_parsear"
-            | "__time_diff"
-            | "__time_format"
-            | "__time_parse"
-            | "__tipo_de"
-            | "__typeof"
-            | "__timezone_info"
-            | "__zona_info"
-            | "__duration_new"
-            | "__duracion_nueva"
-            | "__duration_secs"
-            | "__duracion_segundos"
-            | "__calendar_hijri"
-            | "__calendario_hijri"
-            | "__calendar_persian"
-            | "__calendario_persa"
-            | "__leer_archivo_async"
-            | "__file_read_async"
-            | "__escribir_archivo_async"
-            | "__file_write_async"
-            | "__timer_delay"
-            | "__temporizador_esperar"
-            | "__tcp_connect_async"
-            | "__tcp_conectar_async"
+            | "a_entero"
+            | "to_int"
+            | "a_decimal"
+            | "to_float"
+            | "a_numero"
+            | "to_number"
+            | "intentar"
+            | "try"
     )
 }
 

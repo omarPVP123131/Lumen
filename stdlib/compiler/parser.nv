@@ -1,4 +1,5 @@
 // stdlib/compiler/parser.nv — Recursive Descent Parser for LÚMEN
+importar "lexer.nv";
 // ═══════════════════════════════════════════════════════════════
 // Takes a token map from the lexer (format: {t, v}) and produces AST.
 // Token types: 1=Ident, 2=Numero, 3=String, 4=Oper, 5=Punt, 6=Kw, 99=EOF
@@ -161,9 +162,6 @@ funcion numero _res(numero st, numero nodo) {
 }
 
 // ── Forward ────────────────────────────────────────────────────
-funcion numero _parse_expr(numero st);
-funcion numero _parse_stmt(numero st);
-funcion numero _parse_blk(numero st);
 
 // ═══════════════════════════════════════════════════════════════
 // ── Expression ─────────────────────────────────────────────────

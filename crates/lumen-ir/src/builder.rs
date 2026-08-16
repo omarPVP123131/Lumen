@@ -90,7 +90,11 @@ impl IRBuilder {
                         name, ref params, ..
                     } = method_decl
                     {
-                        let mangled = format!("{}_{}_{}", type_name, trait_name, name);
+                        let mangled = if trait_name.is_empty() {
+                            format!("{}_{}", type_name, name)
+                        } else {
+                            format!("{}_{}_{}", type_name, trait_name, name)
+                        };
                         let mut param_names: Vec<String> =
                             params.iter().map(|p| p.name.clone()).collect();
                         // Trait methods always have an implicit receiver (self)
@@ -271,7 +275,11 @@ impl IRBuilder {
 
                 for method_decl in methods {
                     if let Decl::Function { name, ref body, .. } = method_decl {
-                        let mangled = format!("{}_{}_{}", type_name, trait_name, name);
+                        let mangled = if trait_name.is_empty() {
+                            format!("{}_{}", type_name, name)
+                        } else {
+                            format!("{}_{}_{}", type_name, trait_name, name)
+                        };
                         self.current_func = Some(mangled.clone());
                         // Cargar instrucciones si este método ya existía
                         self.current_instrs = self
@@ -429,6 +437,25 @@ impl IRBuilder {
                     if let Expr::Ident { name, .. } = base.as_ref() {
                         self.emit(Instr::Store(name.clone()));
                     }
+                } else if let Expr::FieldAccess {
+                    expr: base,
+                    field: outer_field,
+                    ..
+                } = expr.as_ref()
+                {
+                    // `r.origen.x = v` — nested struct field mutation with write-back
+                    self.gen_expr(base);
+                    self.emit(Instr::ConstStr(outer_field.clone()));
+                    self.gen_expr(base);
+                    self.emit(Instr::ConstStr(outer_field.clone()));
+                    self.emit(Instr::StructGet);
+                    self.emit(Instr::ConstStr(field.clone()));
+                    self.gen_expr(value);
+                    self.emit(Instr::StructSet);
+                    self.emit(Instr::StructSet);
+                    if let Expr::Ident { name, .. } = base.as_ref() {
+                        self.emit(Instr::Store(name.clone()));
+                    }
                 } else {
                     let var_name = match expr.as_ref() {
                         Expr::Ident { name, .. } => Some(name.clone()),
@@ -446,27 +473,82 @@ impl IRBuilder {
             Stmt::ArraySet {
                 arr, index, value, ..
             } => {
-                // `x.campo[i] = v` o `a[i] = v` — ArrayGet (base/campo) + ArraySet
-                self.gen_expr(arr);
-                self.gen_expr(index);
-                self.gen_expr(value);
-                self.emit(Instr::ArraySet);
-                if let Expr::Ident { name, .. } = arr.as_ref() {
-                    self.emit(Instr::Store(name.clone()));
-                } else if let Expr::FieldAccess {
-                    expr: base, field, ..
+                // `m[i][j] = v`, `x.campo[i] = v` o `a[i] = v`
+                if let Expr::Index {
+                    expr: base,
+                    index: outer_idx,
+                    ..
                 } = arr.as_ref()
                 {
+                    // `m[i][j] = v` — 2D array mutation with write-back
+                    self.gen_expr(base);
+                    self.gen_expr(outer_idx);
+                    self.gen_expr(base);
+                    self.gen_expr(outer_idx);
+                    self.emit(Instr::ArrayGet);
+                    self.gen_expr(index);
+                    self.gen_expr(value);
+                    self.emit(Instr::ArraySet);
+                    self.emit(Instr::ArraySet);
                     if let Expr::Ident { name, .. } = base.as_ref() {
-                        self.gen_expr(base);
-                        self.emit(Instr::ConstStr(field.clone()));
-                        self.emit(Instr::ArrayGet);
+                        self.emit(Instr::Store(name.clone()));
+                    }
+                } else if let Expr::FieldAccess {
+                    expr: base,
+                    field: struct_field,
+                    ..
+                } = arr.as_ref()
+                {
+                    // `x.campo[i] = v` — struct field array element mutation with write-back
+                    self.gen_expr(base);
+                    self.emit(Instr::ConstStr(struct_field.clone()));
+                    self.gen_expr(base);
+                    self.emit(Instr::ConstStr(struct_field.clone()));
+                    self.emit(Instr::StructGet);
+                    self.gen_expr(index);
+                    self.gen_expr(value);
+                    self.emit(Instr::ArraySet);
+                    self.emit(Instr::StructSet);
+                    if let Expr::Ident { name, .. } = base.as_ref() {
+                        self.emit(Instr::Store(name.clone()));
+                    }
+                } else {
+                    self.gen_expr(arr);
+                    self.gen_expr(index);
+                    self.gen_expr(value);
+                    self.emit(Instr::ArraySet);
+                    if let Expr::Ident { name, .. } = arr.as_ref() {
                         self.emit(Instr::Store(name.clone()));
                     }
                 }
             }
             Stmt::Expr { expr, .. } => {
                 self.gen_expr(expr);
+            }
+            Stmt::Posponer { body, .. } => {
+                for node in body {
+                    self.gen_decl_or_stmt(node);
+                }
+            }
+            Stmt::TryCatch {
+                try_body,
+                err_var: _,
+                catch_body,
+                ..
+            } => {
+                let catch_label = self.new_label();
+                let end_label = self.new_label();
+
+                for node in try_body {
+                    self.gen_decl_or_stmt(node);
+                }
+                self.emit(Instr::Jmp(end_label));
+
+                self.emit(Instr::Label(catch_label));
+                for node in catch_body {
+                    self.gen_decl_or_stmt(node);
+                }
+                self.emit(Instr::Label(end_label));
             }
             Stmt::Break { label, .. } => {
                 let target = if let Some(ref lbl) = label {
@@ -640,6 +722,18 @@ impl IRBuilder {
                     self.emit(Instr::Store(target.name.clone()));
                 }
             }
+            Stmt::InlineAsm { code, .. } => {
+                self.emit(Instr::ConstStr(code.clone()));
+                self.emit(Instr::Call("__ffi_asm".to_string(), 1));
+            }
+            Stmt::InlineC { code, .. } => {
+                self.emit(Instr::ConstStr(code.clone()));
+                self.emit(Instr::Call("__ffi_c_eval".to_string(), 1));
+            }
+            Stmt::InlineRust { code, .. } => {
+                self.emit(Instr::ConstStr(code.clone()));
+                self.emit(Instr::Call("__ffi_rust_eval".to_string(), 1));
+            }
         }
     }
 
@@ -726,6 +820,7 @@ impl IRBuilder {
                                 BinOp::GreaterEqual => Op::GreaterEqual,
                                 BinOp::BitOr => Op::BitOr,
                                 BinOp::BitAnd => Op::BitAnd,
+                                BinOp::BitXor => Op::BitXor,
                                 BinOp::ShiftLeft => Op::ShiftLeft,
                                 BinOp::ShiftRight => Op::ShiftRight,
                                 _ => unreachable!(),
@@ -739,6 +834,7 @@ impl IRBuilder {
                 self.emit(Instr::Unary(match op {
                     UnOp::Negate => Op::Negate,
                     UnOp::Not => Op::Not,
+                    UnOp::BitNot => Op::BitNot,
                 }));
             }
             Expr::Call { callee, args, .. } => {
@@ -750,6 +846,7 @@ impl IRBuilder {
                 match callee_inner {
                     Expr::Ident { name, .. } => {
                         if self.fn_names.contains(name)
+                            || name.starts_with("__")
                             || matches!(
                                 name.as_str(),
                                 "imprimir"
@@ -1285,6 +1382,151 @@ impl IRBuilder {
                 self.gen_expr(expr);
                 self.emit(Instr::Call("__tarea_esperar".to_string(), 1));
             }
+            Expr::SafeFieldAccess { expr, field, .. } => {
+                self.gen_expr(expr);
+                self.emit(Instr::ConstStr(field.clone()));
+                self.emit(Instr::StructGet);
+            }
+            Expr::Elvis { expr, default, .. } => {
+                let else_label = self.new_label();
+                let end_label = self.new_label();
+                self.gen_expr(expr);
+                self.emit(Instr::JmpIf(else_label));
+                self.gen_expr(expr);
+                self.emit(Instr::Jmp(end_label));
+                self.emit(Instr::Label(else_label));
+                self.gen_expr(default);
+                self.emit(Instr::Label(end_label));
+            }
+            Expr::Comprehension {
+                expr: inner_expr,
+                var_name,
+                iter,
+                condition,
+                ..
+            } => {
+                let out_arr = format!("__comp_out_{}", self.temp_counter);
+                let i_temp = format!("__comp_i_{}", self.temp_counter);
+                let len_temp = format!("__comp_len_{}", self.temp_counter);
+                let iter_temp = format!("__comp_iter_{}", self.temp_counter);
+                self.temp_counter += 1;
+
+                self.gen_expr(iter);
+                self.emit(Instr::Store(iter_temp.clone()));
+
+                self.emit(Instr::Load(iter_temp.clone()));
+                self.emit(Instr::ArrayLen);
+                self.emit(Instr::Store(len_temp.clone()));
+
+                self.emit(Instr::ArrayNew(0));
+                self.emit(Instr::Store(out_arr.clone()));
+
+                self.emit(Instr::ConstInt(0));
+                self.emit(Instr::Store(i_temp.clone()));
+
+                let loop_start = self.new_label();
+                let loop_end = self.new_label();
+                let skip_label = self.new_label();
+
+                self.emit(Instr::Label(loop_start));
+                self.emit(Instr::Load(i_temp.clone()));
+                self.emit(Instr::Load(len_temp.clone()));
+                self.emit(Instr::Binary(Op::Less));
+                self.emit(Instr::JmpIf(loop_end));
+
+                self.emit(Instr::Load(iter_temp.clone()));
+                self.emit(Instr::Load(i_temp.clone()));
+                self.emit(Instr::ArrayGet);
+                self.emit(Instr::Store(var_name.clone()));
+
+                if let Some(cond) = condition {
+                    self.gen_expr(cond);
+                    self.emit(Instr::JmpIf(skip_label));
+                }
+
+                self.emit(Instr::Load(out_arr.clone()));
+                self.gen_expr(inner_expr);
+                self.emit(Instr::ArrayPush);
+                self.emit(Instr::Store(out_arr.clone()));
+
+                self.emit(Instr::Label(skip_label));
+                self.emit(Instr::Load(i_temp.clone()));
+                self.emit(Instr::ConstInt(1));
+                self.emit(Instr::Binary(Op::Add));
+                self.emit(Instr::Store(i_temp.clone()));
+
+                self.emit(Instr::Jmp(loop_start));
+                self.emit(Instr::Label(loop_end));
+
+                self.emit(Instr::Load(out_arr.clone()));
+            }
+            Expr::Query {
+                var_name,
+                source,
+                where_clause,
+                order_by: _,
+                descending: _,
+                select_expr,
+                ..
+            } => {
+                let out_arr = format!("__q_out_{}", self.temp_counter);
+                let i_temp = format!("__q_i_{}", self.temp_counter);
+                let len_temp = format!("__q_len_{}", self.temp_counter);
+                let src_temp = format!("__q_src_{}", self.temp_counter);
+                self.temp_counter += 1;
+
+                self.gen_expr(source);
+                self.emit(Instr::Store(src_temp.clone()));
+
+                self.emit(Instr::Load(src_temp.clone()));
+                self.emit(Instr::ArrayLen);
+                self.emit(Instr::Store(len_temp.clone()));
+
+                self.emit(Instr::ArrayNew(0));
+                self.emit(Instr::Store(out_arr.clone()));
+
+                self.emit(Instr::ConstInt(0));
+                self.emit(Instr::Store(i_temp.clone()));
+
+                let loop_start = self.new_label();
+                let loop_end = self.new_label();
+                let skip_label = self.new_label();
+
+                self.emit(Instr::Label(loop_start));
+                self.emit(Instr::Load(i_temp.clone()));
+                self.emit(Instr::Load(len_temp.clone()));
+                self.emit(Instr::Binary(Op::Less));
+                self.emit(Instr::JmpIf(loop_end));
+
+                self.emit(Instr::Load(src_temp.clone()));
+                self.emit(Instr::Load(i_temp.clone()));
+                self.emit(Instr::ArrayGet);
+                self.emit(Instr::Store(var_name.clone()));
+
+                if let Some(cond) = where_clause {
+                    self.gen_expr(cond);
+                    self.emit(Instr::JmpIf(skip_label));
+                }
+
+                self.emit(Instr::Load(out_arr.clone()));
+                self.gen_expr(select_expr);
+                self.emit(Instr::ArrayPush);
+                self.emit(Instr::Store(out_arr.clone()));
+
+                self.emit(Instr::Label(skip_label));
+                self.emit(Instr::Load(i_temp.clone()));
+                self.emit(Instr::ConstInt(1));
+                self.emit(Instr::Binary(Op::Add));
+                self.emit(Instr::Store(i_temp.clone()));
+
+                self.emit(Instr::Jmp(loop_start));
+                self.emit(Instr::Label(loop_end));
+
+                self.emit(Instr::Load(out_arr.clone()));
+            }
+            Expr::Comptime { expr, .. } => {
+                self.gen_expr(expr);
+            }
         }
     }
 
@@ -1398,6 +1640,11 @@ impl IRBuilder {
                 }
             }
             Stmt::Block { stmts, .. } => self.collect_variable_refs(stmts, params, out),
+            Stmt::Posponer { body, .. } => self.collect_variable_refs(body, params, out),
+            Stmt::TryCatch { try_body, catch_body, .. } => {
+                self.collect_variable_refs(try_body, params, out);
+                self.collect_variable_refs(catch_body, params, out);
+            }
             _ => {}
         }
     }
@@ -1464,6 +1711,28 @@ impl IRBuilder {
                 }
             }
             Expr::FieldAccess { expr, .. } => self.collect_expr_refs(expr, params, out),
+            Expr::SafeFieldAccess { expr, .. } => self.collect_expr_refs(expr, params, out),
+            Expr::Elvis { expr, default, .. } => {
+                self.collect_expr_refs(expr, params, out);
+                self.collect_expr_refs(default, params, out);
+            }
+            Expr::Comprehension { expr, iter, condition, .. } => {
+                self.collect_expr_refs(expr, params, out);
+                self.collect_expr_refs(iter, params, out);
+                if let Some(cond) = condition {
+                    self.collect_expr_refs(cond, params, out);
+                }
+            }
+            Expr::Query { source, where_clause, order_by, select_expr, .. } => {
+                self.collect_expr_refs(source, params, out);
+                if let Some(w) = where_clause {
+                    self.collect_expr_refs(w, params, out);
+                }
+                if let Some(o) = order_by {
+                    self.collect_expr_refs(o, params, out);
+                }
+                self.collect_expr_refs(select_expr, params, out);
+            }
             Expr::Tuple { items, .. } => {
                 for i in items {
                     self.collect_expr_refs(i, params, out);
@@ -1583,6 +1852,56 @@ impl IRBuilder {
                 self.gen_expr(expr);
                 self.emit(Instr::Store(temp.clone()));
                 self.emit_if_let_pattern(&temp, pattern, fail_label);
+                self.emit(Instr::Jmp(body_label));
+            }
+            Expr::Tuple { items, .. } => {
+                let temp = format!("__mt_tup_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.gen_expr(expr);
+                self.emit(Instr::Store(temp.clone()));
+                for (idx, item) in items.iter().enumerate() {
+                    match item {
+                        Expr::Ident { name, .. } if name != "_" => {
+                            self.emit(Instr::Load(temp.clone()));
+                            self.emit(Instr::TupleAccess(idx));
+                            self.emit(Instr::Store(name.clone()));
+                        }
+                        Expr::Ident { name, .. } if name == "_" => {}
+                        _ => {
+                            self.emit(Instr::Load(temp.clone()));
+                            self.emit(Instr::TupleAccess(idx));
+                            self.gen_expr(item);
+                            self.emit(Instr::Binary(Op::Equal));
+                            self.emit(Instr::JmpIf(fail_label));
+                        }
+                    }
+                }
+                self.emit(Instr::Jmp(body_label));
+            }
+            Expr::StructInit { fields, .. } => {
+                let temp = format!("__mt_st_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.gen_expr(expr);
+                self.emit(Instr::Store(temp.clone()));
+                for (field_name, field_val) in fields {
+                    match field_val {
+                        Expr::Ident { name, .. } if name != "_" => {
+                            self.emit(Instr::Load(temp.clone()));
+                            self.emit(Instr::ConstStr(field_name.clone()));
+                            self.emit(Instr::StructGet);
+                            self.emit(Instr::Store(name.clone()));
+                        }
+                        Expr::Ident { name, .. } if name == "_" => {}
+                        _ => {
+                            self.emit(Instr::Load(temp.clone()));
+                            self.emit(Instr::ConstStr(field_name.clone()));
+                            self.emit(Instr::StructGet);
+                            self.gen_expr(field_val);
+                            self.emit(Instr::Binary(Op::Equal));
+                            self.emit(Instr::JmpIf(fail_label));
+                        }
+                    }
+                }
                 self.emit(Instr::Jmp(body_label));
             }
             _ => {
@@ -1816,6 +2135,15 @@ impl IRBuilder {
             current = new;
         }
 
+        // Run neuro-symbolic superoptimization passes (strength reduction, identities, FMA)
+        for _ in 0..3 {
+            let new = Self::neuro_symbolic_pass(&current);
+            if new == current {
+                break;
+            }
+            current = new;
+        }
+
         // Remove consecutive Nops (keep at most one)
         let mut optimized = Vec::with_capacity(current.len());
         let mut prev_nop = false;
@@ -1835,6 +2163,40 @@ impl IRBuilder {
         }
         func.instrs = optimized;
     }
+
+    pub fn neuro_symbolic_pass(instrs: &[Instr]) -> Vec<Instr> {
+        let mut result = Vec::with_capacity(instrs.len());
+        let mut i = 0;
+        while i < instrs.len() {
+            // Strength Reduction on constant powers of 2 for multiplication:
+            // e.g. ConstInt(2), Binary(Mul) -> ConstInt(1), Binary(ShiftLeft)
+            // e.g. ConstInt(4), Binary(Mul) -> ConstInt(2), Binary(ShiftLeft)
+            // e.g. ConstInt(8), Binary(Mul) -> ConstInt(3), Binary(ShiftLeft)
+            if i + 1 < instrs.len() {
+                if let (Instr::ConstInt(k), Instr::Binary(Op::Mul)) = (&instrs[i], &instrs[i + 1]) {
+                    if *k == 2 {
+                        result.push(Instr::ConstInt(1));
+                        result.push(Instr::Binary(Op::ShiftLeft));
+                        i += 2;
+                        continue;
+                    } else if *k == 4 {
+                        result.push(Instr::ConstInt(2));
+                        result.push(Instr::Binary(Op::ShiftLeft));
+                        i += 2;
+                        continue;
+                    } else if *k == 8 {
+                        result.push(Instr::ConstInt(3));
+                        result.push(Instr::Binary(Op::ShiftLeft));
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+            result.push(instrs[i].clone());
+            i += 1;
+        }
+        result
+    }
 }
 
 fn type_to_impl_name(t: &Type) -> Option<String> {
@@ -1850,6 +2212,8 @@ fn type_to_impl_name(t: &Type) -> Option<String> {
         Type::Resultado { .. } => Some("resultado".to_string()),
         Type::Opcion(_) => Some("opcion".to_string()),
         Type::Tuple(_) => Some("tupla".to_string()),
+        Type::Prestado { inner, .. } => type_to_impl_name(inner),
+        Type::Dueno(inner) => type_to_impl_name(inner),
         Type::Func { .. } | Type::ImplTrait(_) => None,
     }
 }

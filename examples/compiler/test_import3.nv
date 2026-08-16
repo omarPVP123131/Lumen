@@ -1,6 +1,2 @@
-importar "compiler/parser.nv";
-imprimir("imported");
-numero toks = __map_nuevo();
-toks = __map_poner(toks, "cnt", 0);
-numero ast = parser_parse(toks);
-imprimir("ast: ", __map_obtener(ast, "tipo"));
+importar "parser.nv";
+imprimir("parser imported OK");

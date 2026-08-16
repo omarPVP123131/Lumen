@@ -178,6 +178,7 @@ impl Codegen {
                     Op::Or => Opcode::Or,
                     Op::BitOr => Opcode::BitOr,
                     Op::BitAnd => Opcode::BitAnd,
+                    Op::BitXor => Opcode::BitXor,
                     Op::ShiftLeft => Opcode::ShiftLeft,
                     Op::ShiftRight => Opcode::ShiftRight,
                     _ => Opcode::Nop,
@@ -188,6 +189,7 @@ impl Codegen {
                 let opcode = match op {
                     Op::Negate => Opcode::Neg,
                     Op::Not => Opcode::Not,
+                    Op::BitNot => Opcode::BitNot,
                     _ => Opcode::Nop,
                 };
                 self.bytecode.instructions.push(Instruction::Simple(opcode));

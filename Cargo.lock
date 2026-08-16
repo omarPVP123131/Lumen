@@ -1210,6 +1210,7 @@ dependencies = [
 name = "lumen-cli"
 version = "1.6.0"
 dependencies = [
+ "chrono",
  "lumen-aot",
  "lumen-codegen",
  "lumen-doc",
@@ -1297,6 +1298,7 @@ dependencies = [
 name = "lumen-pkg"
 version = "1.6.0"
 dependencies = [
+ "serde",
  "serde_json",
 ]
 
@@ -1354,6 +1356,7 @@ dependencies = [
  "hmac",
  "im",
  "libloading",
+ "lumen-aot",
  "lumen-codegen",
  "lumen-ir",
  "lumen-lexer",

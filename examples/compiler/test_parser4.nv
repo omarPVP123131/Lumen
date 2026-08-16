@@ -126,6 +126,7 @@ funcion numero _nd(texto tp) { numero n = __map_nuevo(); n = __map_poner(n, "tip
 funcion numero _n1(texto tp, texto k, numero v) { numero n = _nd(tp); n = __map_poner(n, k, v); retornar n; }
 funcion numero _n2(texto tp, texto k1, numero v1, texto k2, numero v2) { numero n = _n1(tp, k1, v1); n = __map_poner(n, k2, v2); retornar n; }
 funcion numero _n3(texto tp, texto k1, numero v1, texto k2, numero v2, texto k3, numero v3) { numero n = _n2(tp, k1, v1, k2, v2); n = __map_poner(n, k3, v3); retornar n; }
+funcion numero _n4(texto tp, texto k1, numero v1, texto k2, numero v2, texto k3, numero v3, texto k4, numero v4) { numero n = _n3(tp, k1, v1, k2, v2, k3, v3); n = __map_poner(n, k4, v4); retornar n; }
 funcion numero _ls(numero items, numero cnt) { items = __map_poner(items, "cnt", cnt); retornar items; }
 
 // Fwd decls
@@ -284,7 +285,7 @@ funcion numero parse_decl() {
         }
         _av(); // )
         numero bd = parse_blk();
-        retornar _n3("Func", "nombre", nm, "tipo_ret", tr, "params", _ls(prms, pc), "cuerpo", bd);
+        retornar _n4("Func", "nombre", nm, "tipo_ret", tr, "params", _ls(prms, pc), "cuerpo", bd);
     }
     retornar parse_stmt();
 }

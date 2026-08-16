@@ -28,6 +28,11 @@ pub enum TypeInfo {
     Enum(String),
     Tuple(Vec<TypeInfo>),
     TypeVar(String),
+    Prestado {
+        inner: Box<TypeInfo>,
+        mutable: bool,
+    },
+    Dueno(Box<TypeInfo>),
 }
 
 #[derive(Clone)]
@@ -193,6 +198,11 @@ impl SemanticAnalyzer {
         match stmt {
             Stmt::Block { stmts, .. } => {
                 for s in stmts {
+                    Self::collect_var_types_in_block(s, var_types);
+                }
+            }
+            Stmt::Posponer { body, .. } => {
+                for s in body {
                     Self::collect_var_types_in_block(s, var_types);
                 }
             }
@@ -391,6 +401,11 @@ impl SemanticAnalyzer {
                     self.resolve_op_decl_or_stmt_var(n, var_types);
                 }
             }
+            Stmt::Posponer { body, .. } => {
+                for n in body.iter_mut() {
+                    self.resolve_op_decl_or_stmt_var(n, var_types);
+                }
+            }
             Stmt::Destructure { value, .. } => self.resolve_op_expr_var(value, var_types),
             Stmt::Assignment { name, value, .. } => {
                 self.resolve_op_expr_var(value, var_types);
@@ -567,6 +582,7 @@ impl SemanticAnalyzer {
             | BinOp::Or
             | BinOp::BitOr
             | BinOp::BitAnd
+            | BinOp::BitXor
             | BinOp::ShiftLeft
             | BinOp::ShiftRight
             | BinOp::Concat => None,
@@ -664,26 +680,36 @@ impl SemanticAnalyzer {
                     Some(n) => n,
                     None => continue,
                 };
-                let _trait_sig = match self.traits.get(trait_name) {
-                    Some(s) => s.clone(),
-                    None => continue,
-                };
+                if !trait_name.is_empty() && !self.traits.contains_key(trait_name) {
+                    continue;
+                }
                 for method_decl in methods {
                     if let Decl::Function {
                         return_type,
                         name,
-                        params,
+                        mut params,
                         type_params,
                         ..
-                    } = method_decl
+                    } = method_decl.clone()
                     {
-                        let ret = self.resolve_type(return_type.clone(), type_params);
+                        for p in params.iter_mut() {
+                            if let Type::Struct(s) = &p.param_type {
+                                if s == "Self" || s == "self" || s == "este" || s.ends_with("_Self") || s.ends_with("_self") || s.ends_with("_este") {
+                                    p.param_type = target_type.clone();
+                                }
+                            }
+                        }
+                        let ret = self.resolve_type(return_type.clone(), &type_params);
                         let params_t: Vec<TypeInfo> = params
                             .iter()
-                            .map(|p| self.resolve_type(p.param_type.clone(), type_params))
+                            .map(|p| self.resolve_type(p.param_type.clone(), &type_params))
                             .collect();
                         let default_count = params.iter().filter(|p| p.default.is_some()).count();
-                        let mangled = format!("{}_{}_{}", type_name, trait_name, name);
+                        let mangled = if trait_name.is_empty() {
+                            format!("{}_{}", type_name, name)
+                        } else {
+                            format!("{}_{}_{}", type_name, trait_name, name)
+                        };
                         self.impls
                             .entry((type_name.clone(), trait_name.clone()))
                             .or_default()
@@ -973,15 +999,31 @@ impl SemanticAnalyzer {
                         self.errors.push(SemError {
                             code: "E074".to_string(),
                             message: format!(
-                                "No se puede implementar un rasgo para el tipo '{:?}'",
+                                "No se puede implementar para el tipo '{:?}'",
                                 target_type
                             ),
                             span: *span,
-                            suggestion: "Este tipo no soporta implementación de rasgos".to_string(),
+                            suggestion: "Este tipo no soporta implementación de métodos".to_string(),
                         });
                         return TypeInfo::Void;
                     }
                 };
+                if trait_name.is_empty() {
+                    for method in methods {
+                        let mut m = method.clone();
+                        if let Decl::Function { params, .. } = &mut m {
+                            for p in params.iter_mut() {
+                                if let Type::Struct(s) = &p.param_type {
+                                    if s == "Self" || s == "self" || s == "este" || s.ends_with("_Self") || s.ends_with("_self") || s.ends_with("_este") {
+                                        p.param_type = target_type.clone();
+                                    }
+                                }
+                            }
+                        }
+                        self.analyze_decl(&m);
+                    }
+                    return TypeInfo::Void;
+                }
                 if !self.traits.contains_key(trait_name) {
                     self.errors.push(SemError {
                         code: "E075".to_string(),
@@ -1431,6 +1473,36 @@ impl SemanticAnalyzer {
                 TypeInfo::Void
             }
             Stmt::Expr { expr, .. } => self.analyze_expr(expr),
+            Stmt::Posponer { body, .. } => {
+                self.scopes.push(Scope::new());
+                for node in body {
+                    self.analyze_decl_or_stmt(node);
+                }
+                self.scopes.pop();
+                TypeInfo::Void
+            }
+            Stmt::TryCatch {
+                try_body,
+                err_var,
+                catch_body,
+                span,
+            } => {
+                self.scopes.push(Scope::new());
+                for node in try_body {
+                    self.analyze_decl_or_stmt(node);
+                }
+                self.scopes.pop();
+
+                self.scopes.push(Scope::new());
+                if let Err(e) = self.current_scope().define(err_var, TypeInfo::Texto, *span) {
+                    self.errors.push(e);
+                }
+                for node in catch_body {
+                    self.analyze_decl_or_stmt(node);
+                }
+                self.scopes.pop();
+                TypeInfo::Void
+            }
             Stmt::Block { stmts, .. } => {
                 self.scopes.push(Scope::new());
                 for node in stmts {
@@ -1528,6 +1600,9 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Void
             }
+            Stmt::InlineAsm { .. } => TypeInfo::Void,
+            Stmt::InlineC { .. } => TypeInfo::Void,
+            Stmt::InlineRust { .. } => TypeInfo::Void,
         }
     }
 
@@ -1575,6 +1650,7 @@ impl SemanticAnalyzer {
                         | BinOp::Or
                         | BinOp::BitOr
                         | BinOp::BitAnd
+                        | BinOp::BitXor
                         | BinOp::ShiftLeft
                         | BinOp::ShiftRight
                         | BinOp::Concat => "",
@@ -1648,6 +1724,7 @@ impl SemanticAnalyzer {
                     | BinOp::Mod
                     | BinOp::BitOr
                     | BinOp::BitAnd
+                    | BinOp::BitXor
                     | BinOp::ShiftLeft
                     | BinOp::ShiftRight => {
                         if matches!(op, BinOp::Add)
@@ -1767,6 +1844,17 @@ impl SemanticAnalyzer {
                             });
                         }
                         TypeInfo::Booleano
+                    }
+                    UnOp::BitNot => {
+                        if !is_numeric(&ot) {
+                            self.errors.push(SemError {
+                                code: "E038".to_string(),
+                                message: format!("No puedes aplicar '~' a un valor de tipo '{:?}'", ot),
+                                span: *span,
+                                suggestion: "El operador '~' solo aplica a números".to_string(),
+                            });
+                        }
+                        TypeInfo::Entero
                     }
                 }
             }
@@ -2318,7 +2406,11 @@ impl SemanticAnalyzer {
                                         });
                                     }
                                     if let Some(got) = arg_types.first() {
-                                        match got {
+                                        let base_got = match got {
+                                            TypeInfo::Prestado { inner, .. } | TypeInfo::Dueno(inner) => inner.as_ref(),
+                                            other => other,
+                                        };
+                                        match base_got {
                                             TypeInfo::Lista(_)
                                             | TypeInfo::Texto
                                             | TypeInfo::Numero => {}
@@ -2397,8 +2489,20 @@ impl SemanticAnalyzer {
                                     TypeInfo::Entero
                                 } else if callee == "__ffi_leer" || callee == "__ffi_read" {
                                     TypeInfo::Texto
-                                } else if callee == "__ffi_peek" {
+                                } else if callee == "__ffi_peek"
+                                    || callee == "__ffi_peek_u32"
+                                    || callee == "__ffi_peek64"
+                                    || callee == "__ffi_peek_ptr"
+                                    || callee == "__ffi_peek_byte"
+                                    || callee == "__ffi_peek_u8"
+                                {
                                     TypeInfo::Entero
+                                } else if callee == "__ffi_poke"
+                                    || callee == "__ffi_poke_u32"
+                                    || callee == "__ffi_poke_byte"
+                                    || callee == "__ffi_poke_u8"
+                                {
+                                    TypeInfo::Void
                                 } else if callee == "__aes_encriptar"
                                     || callee == "__aes_encrypt"
                                     || callee == "__aes_desencriptar"
@@ -2683,6 +2787,8 @@ impl SemanticAnalyzer {
                                     || callee == "__env_list"
                                     || callee == "__lector_buffer"
                                     || callee == "__buf_reader"
+                                    || callee == "__stream_trozos"
+                                    || callee == "__stream_chunks"
                                     || callee == "__regex_capturar"
                                     || callee == "__regex_captures"
                                 {
@@ -2864,30 +2970,39 @@ impl SemanticAnalyzer {
             Expr::Index { expr, index, span } => {
                 let expr_type = self.analyze_expr(expr);
                 let index_type = self.analyze_expr(index);
-                if index_type != TypeInfo::Entero {
+                let is_range_slice = matches!(index.as_ref(), Expr::Range { .. }) || matches!(index_type, TypeInfo::Lista(_));
+                if !is_range_slice && index_type != TypeInfo::Entero && index_type != TypeInfo::Numero {
                     self.errors.push(SemError {
                         code: "E043".to_string(),
-                        message: format!("El índice debe ser entero, no '{:?}'", index_type),
+                        message: format!("El índice debe ser entero o rango, no '{:?}'", index_type),
                         span: *span,
-                        suggestion: "Usa un valor de tipo 'entero' como índice".to_string(),
+                        suggestion: "Usa un valor de tipo 'entero' o un rango como índice".to_string(),
                     });
                 }
-                match expr_type {
-                    TypeInfo::Lista(inner) => *inner,
-                    TypeInfo::Texto => TypeInfo::Texto,
-                    TypeInfo::Numero => TypeInfo::Numero,
-                    _ => {
-                        self.errors.push(SemError {
-                            code: "E044".to_string(),
-                            message: format!(
-                                "No puedes indexar un valor de tipo '{:?}'",
-                                expr_type
-                            ),
-                            span: *span,
-                            suggestion: "La indexación solo funciona con listas y texto"
-                                .to_string(),
-                        });
-                        TypeInfo::Decimal
+                if is_range_slice {
+                    match expr_type {
+                        TypeInfo::Lista(inner) => TypeInfo::Lista(inner),
+                        TypeInfo::Texto => TypeInfo::Texto,
+                        _ => expr_type,
+                    }
+                } else {
+                    match expr_type {
+                        TypeInfo::Lista(inner) => *inner,
+                        TypeInfo::Texto => TypeInfo::Texto,
+                        TypeInfo::Numero => TypeInfo::Numero,
+                        _ => {
+                            self.errors.push(SemError {
+                                code: "E044".to_string(),
+                                message: format!(
+                                    "No puedes indexar un valor de tipo '{:?}'",
+                                    expr_type
+                                ),
+                                span: *span,
+                                suggestion: "La indexación solo funciona con listas y texto"
+                                    .to_string(),
+                            });
+                            TypeInfo::Decimal
+                        }
                     }
                 }
             }
@@ -2952,24 +3067,30 @@ impl SemanticAnalyzer {
                             TypeInfo::Void
                         }
                     },
-                    "largo" | "len" | "length" => match expr_type {
-                        TypeInfo::Lista(_) => TypeInfo::Entero,
-                        TypeInfo::Texto => TypeInfo::Entero,
-                        TypeInfo::Numero => TypeInfo::Numero,
-                        _ => {
-                            self.errors.push(SemError {
-                                code: "E047".to_string(),
-                                message: format!(
-                                    "No puedes llamar '{}' en un valor de tipo '{:?}'",
-                                    method, expr_type
-                                ),
-                                span: *span,
-                                suggestion: "'largo' solo se puede llamar en listas y texto"
-                                    .to_string(),
-                            });
-                            TypeInfo::Entero
+                    "largo" | "len" | "length" => {
+                        let base_t = match &expr_type {
+                            TypeInfo::Prestado { inner, .. } | TypeInfo::Dueno(inner) => inner.as_ref(),
+                            other => other,
+                        };
+                        match base_t {
+                            TypeInfo::Lista(_) => TypeInfo::Entero,
+                            TypeInfo::Texto => TypeInfo::Entero,
+                            TypeInfo::Numero => TypeInfo::Numero,
+                            _ => {
+                                self.errors.push(SemError {
+                                    code: "E047".to_string(),
+                                    message: format!(
+                                        "No puedes llamar '{}' en un valor de tipo '{:?}'",
+                                        method, expr_type
+                                    ),
+                                    span: *span,
+                                    suggestion: "'largo' solo se puede llamar en listas y texto"
+                                        .to_string(),
+                                });
+                                TypeInfo::Entero
+                            }
                         }
-                    },
+                    }
                     _ => {
                         // Try trait method resolution
                         let resolved =
@@ -3382,6 +3503,88 @@ impl SemanticAnalyzer {
                 true_type
             }
             Expr::Esperar { expr, .. } => self.analyze_expr(expr),
+            Expr::SafeFieldAccess { expr, field, span } => {
+                let expr_type = self.analyze_expr(expr);
+                match expr_type {
+                    TypeInfo::Struct { ref fields, .. } => {
+                        if let Some((_, ft)) = fields.iter().find(|(name, _)| name == field) {
+                            ft.clone()
+                        } else {
+                            self.errors.push(SemError {
+                                code: "E059".to_string(),
+                                message: format!("El struct no tiene un campo llamado '{}'", field),
+                                span: *span,
+                                suggestion: format!("Revisa los campos del struct, '{}' no existe", field),
+                            });
+                            TypeInfo::Decimal
+                        }
+                    }
+                    _ => TypeInfo::Numero,
+                }
+            }
+            Expr::Elvis { expr, default, .. } => {
+                let expr_type = self.analyze_expr(expr);
+                let default_type = self.analyze_expr(default);
+                if can_assign(&default_type, &expr_type) {
+                    default_type
+                } else {
+                    expr_type
+                }
+            }
+            Expr::Comprehension {
+                expr: inner_expr,
+                var_name,
+                iter,
+                condition,
+                span,
+            } => {
+                let iter_type = self.analyze_expr(iter);
+                let elem_type = match iter_type {
+                    TypeInfo::Lista(inner) => *inner,
+                    _ => TypeInfo::Entero,
+                };
+                self.scopes.push(Scope::new());
+                if let Err(e) = self.current_scope().define(var_name, elem_type, *span) {
+                    self.errors.push(e);
+                }
+                if let Some(cond) = condition {
+                    self.analyze_expr(cond);
+                }
+                let item_type = self.analyze_expr(inner_expr);
+                self.scopes.pop();
+                TypeInfo::Lista(Box::new(item_type))
+            }
+            Expr::Query {
+                var_name,
+                source,
+                where_clause,
+                order_by,
+                select_expr,
+                span,
+                ..
+            } => {
+                let src_type = self.analyze_expr(source);
+                let elem_type = match src_type {
+                    TypeInfo::Lista(inner) => *inner,
+                    _ => TypeInfo::Numero,
+                };
+                self.scopes.push(Scope::new());
+                if let Err(e) = self.current_scope().define(var_name, elem_type, *span) {
+                    self.errors.push(e);
+                }
+                if let Some(w) = where_clause {
+                    self.analyze_expr(w);
+                }
+                if let Some(o) = order_by {
+                    self.analyze_expr(o);
+                }
+                let res_type = self.analyze_expr(select_expr);
+                self.scopes.pop();
+                TypeInfo::Lista(Box::new(res_type))
+            }
+            Expr::Comptime { expr, span: _ } => {
+                self.analyze_expr(expr)
+            }
         }
     }
 
@@ -3446,7 +3649,11 @@ impl SemanticAnalyzer {
             if impl_type != &type_name {
                 continue;
             }
-            let mangled = format!("{}_{}_{}", impl_type, trait_name, method);
+            let mangled = if trait_name.is_empty() {
+                format!("{}_{}", impl_type, method)
+            } else {
+                format!("{}_{}_{}", impl_type, trait_name, method)
+            };
             if let Some((ret, _, _, _)) = self.functions.get(&mangled) {
                 return Some((ret.clone(), mangled));
             }
@@ -3491,6 +3698,16 @@ impl SemanticAnalyzer {
                 self.bind_pattern_vars(expr, span);
             }
             Expr::Ninguno { .. } | Expr::EnumCtor { .. } => {}
+            Expr::Tuple { items, .. } => {
+                for it in items.iter() {
+                    self.bind_pattern_vars(it, span);
+                }
+            }
+            Expr::StructInit { fields, .. } => {
+                for (_name, val) in fields.iter() {
+                    self.bind_pattern_vars(val, span);
+                }
+            }
             Expr::List { items, .. } => {
                 for it in items.iter() {
                     self.bind_pattern_vars(it, span);
@@ -3599,6 +3816,11 @@ impl SemanticAnalyzer {
                 TypeInfo::Tuple(types.into_iter().map(|t| self.type_to_info(t)).collect())
             }
             Type::ImplTrait(name) => TypeInfo::TypeVar(name), // opaque; resolved at call site
+            Type::Prestado { inner, mutable } => TypeInfo::Prestado {
+                inner: Box::new(self.type_to_info(*inner)),
+                mutable,
+            },
+            Type::Dueno(inner) => TypeInfo::Dueno(Box::new(self.type_to_info(*inner))),
         }
     }
 }
@@ -3616,6 +3838,8 @@ fn type_to_impl_name(t: &Type) -> Option<String> {
         Type::Resultado { .. } => Some("resultado".to_string()),
         Type::Opcion(_) => Some("opcion".to_string()),
         Type::Tuple(_) => Some("tupla".to_string()),
+        Type::Prestado { inner, .. } => type_to_impl_name(inner),
+        Type::Dueno(inner) => type_to_impl_name(inner),
         Type::Func { .. } | Type::ImplTrait(_) => None,
     }
 }
@@ -3633,6 +3857,8 @@ fn type_info_to_impl_name(t: &TypeInfo) -> Option<String> {
         TypeInfo::Resultado { .. } => Some("resultado".to_string()),
         TypeInfo::Opcion(_) => Some("opcion".to_string()),
         TypeInfo::Tuple(_) => Some("tupla".to_string()),
+        TypeInfo::Prestado { inner, .. } => type_info_to_impl_name(inner),
+        TypeInfo::Dueno(inner) => type_info_to_impl_name(inner),
         TypeInfo::Void | TypeInfo::Func { .. } | TypeInfo::TypeVar(_) => None,
     }
 }
@@ -3754,6 +3980,24 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
             }
         }
         return true;
+    }
+    if let (TypeInfo::Prestado { inner: t_inner, .. }, TypeInfo::Prestado { inner: v_inner, .. }) = (target, value) {
+        return can_assign(t_inner, v_inner);
+    }
+    if let TypeInfo::Prestado { inner: t_inner, .. } = target {
+        return can_assign(t_inner, value);
+    }
+    if let TypeInfo::Prestado { inner: v_inner, .. } = value {
+        return can_assign(target, v_inner);
+    }
+    if let (TypeInfo::Dueno(t_inner), TypeInfo::Dueno(v_inner)) = (target, value) {
+        return can_assign(t_inner, v_inner);
+    }
+    if let TypeInfo::Dueno(t_inner) = target {
+        return can_assign(t_inner, value);
+    }
+    if let TypeInfo::Dueno(v_inner) = value {
+        return can_assign(target, v_inner);
     }
     false
 }

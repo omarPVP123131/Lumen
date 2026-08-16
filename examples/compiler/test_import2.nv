@@ -1,2 +1,2 @@
-importar "compiler/parser.nv";
+importar "parser.nv";
 imprimir("parser imported OK");

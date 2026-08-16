@@ -1,5 +1,5 @@
 // test_codegen.nv — Test codegen con AST manual
-importar "compiler/codegen.nv";
+importar "codegen.nv";
 
 // ── Construir AST manualmente ─────────────────────────────
 // VarDecl: entero x = 42;
@@ -18,8 +18,8 @@ funcion numero _test_var_decl() {
 // ── Main test ─────────────────────────────────────────────
 imprimir("=== Codegen Test: VarDecl ===");
 numero vd = _test_var_decl();
-numero cg = codegen_codegen_generar(vd);
-codegen_codegen_imprimir(cg);
+numero cg = codegen_generar(vd);
+codegen_imprimir(cg);
 
 imprimir("");
 imprimir("=== Codegen Test: AST manual OK ===");

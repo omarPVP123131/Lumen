@@ -153,6 +153,16 @@ impl Parser {
             self.parse_rasgo().map(DeclOrStmt::Decl)
         } else if self.check(&[TokenKind::Impl]) {
             self.parse_impl_rasgo().map(DeclOrStmt::Decl)
+        } else if self.check(&[TokenKind::Posponer, TokenKind::Defer]) {
+            self.parse_posponer().map(DeclOrStmt::Stmt)
+        } else if self.check(&[TokenKind::Intentar, TokenKind::Try]) && self.check_next_is_brace() {
+            self.parse_try_catch().map(DeclOrStmt::Stmt)
+        } else if self.check(&[TokenKind::Ensamblador, TokenKind::Asm]) {
+            self.parse_inline_asm().map(DeclOrStmt::Stmt)
+        } else if self.check(&[TokenKind::BloqueC, TokenKind::CBlock]) {
+            self.parse_inline_c().map(DeclOrStmt::Stmt)
+        } else if self.check(&[TokenKind::BloqueRust, TokenKind::RustBlock]) {
+            self.parse_inline_rust().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::Importar, TokenKind::Import]) {
             self.parse_import().map(DeclOrStmt::Stmt)
         } else if self.check(&[TokenKind::LeftBrace]) {
@@ -681,6 +691,150 @@ impl Parser {
         })
     }
 
+    fn parse_posponer(&mut self) -> Option<Stmt> {
+        let start = self.peek().span;
+        self.advance(); // consume posponer/defer
+        let body = if self.check(&[TokenKind::LeftBrace]) {
+            self.parse_block()?
+        } else {
+            let stmt = self.parse_decl_or_stmt()?;
+            vec![stmt]
+        };
+        Some(Stmt::Posponer {
+            body,
+            span: Span::merge(&start, &self.previous().span),
+        })
+    }
+
+    fn check_next_is_brace(&self) -> bool {
+        if self.pos + 1 >= self.tokens.len() {
+            return false;
+        }
+        matches!(self.tokens[self.pos + 1].kind, TokenKind::LeftBrace)
+    }
+
+    fn parse_try_catch(&mut self) -> Option<Stmt> {
+        let start = self.peek().span;
+        self.advance(); // consume intentar/try
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error(
+                "E017",
+                "Se esperaba '{' después de 'intentar'",
+                start,
+                "Usa: intentar { ... } atrapar (e) { ... }",
+            );
+            return None;
+        }
+        let try_body = self.parse_block()?;
+        if !self.check(&[TokenKind::Atrapar, TokenKind::Catch]) {
+            self.error(
+                "E012",
+                "Se esperaba 'atrapar' / 'catch' después del bloque intentar",
+                start,
+                "Agrega 'atrapar (e) { ... }'",
+            );
+            return None;
+        }
+        self.advance(); // consume atrapar/catch
+        let err_var = if self.check(&[TokenKind::LeftParen]) {
+            self.advance();
+            let v = self.expect_ident()?;
+            if !self.check(&[TokenKind::RightParen]) {
+                self.error(
+                    "E015",
+                    "Se esperaba ')' después del nombre de error",
+                    start,
+                    "Agrega ')'",
+                );
+                return None;
+            }
+            self.advance();
+            v
+        } else {
+            "e".to_string()
+        };
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error(
+                "E017",
+                "Se esperaba '{' para el bloque atrapar",
+                start,
+                "Agrega '{ ... }'",
+            );
+            return None;
+        }
+        let catch_body = self.parse_block()?;
+        let end = self.previous().span;
+        Some(Stmt::TryCatch {
+            try_body,
+            err_var,
+            catch_body,
+            span: Span::merge(&start, &end),
+        })
+    }
+
+    fn parse_inline_asm(&mut self) -> Option<Stmt> {
+        let start = self.peek().span;
+        self.advance();
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error("E015", "Se esperaba '{' después de 'ensamblador' / 'asm'", start, "Agrega '{'");
+            return None;
+        }
+        self.advance();
+        let _expr = self.parse_expression()?;
+        let code = match &_expr {
+            Expr::Str { value, .. } => value.clone(),
+            _ => "/* inline asm */".to_string(),
+        };
+        if !self.check(&[TokenKind::RightBrace]) {
+            self.error("E015", "Se esperaba '}' para cerrar el bloque de ensamblador", start, "Agrega '}'");
+            return None;
+        }
+        self.advance();
+        Some(Stmt::InlineAsm { code, span: Span::merge(&start, &self.previous().span) })
+    }
+
+    fn parse_inline_c(&mut self) -> Option<Stmt> {
+        let start = self.peek().span;
+        self.advance();
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error("E015", "Se esperaba '{' después de 'bloque_c'", start, "Agrega '{'");
+            return None;
+        }
+        self.advance();
+        let _expr = self.parse_expression()?;
+        let code = match &_expr {
+            Expr::Str { value, .. } => value.clone(),
+            _ => "/* inline c */".to_string(),
+        };
+        if !self.check(&[TokenKind::RightBrace]) {
+            self.error("E015", "Se esperaba '}' para cerrar el bloque C", start, "Agrega '}'");
+            return None;
+        }
+        self.advance();
+        Some(Stmt::InlineC { code, span: Span::merge(&start, &self.previous().span) })
+    }
+
+    fn parse_inline_rust(&mut self) -> Option<Stmt> {
+        let start = self.peek().span;
+        self.advance();
+        if !self.check(&[TokenKind::LeftBrace]) {
+            self.error("E015", "Se esperaba '{' después de 'bloque_rust'", start, "Agrega '{'");
+            return None;
+        }
+        self.advance();
+        let _expr = self.parse_expression()?;
+        let code = match &_expr {
+            Expr::Str { value, .. } => value.clone(),
+            _ => "/* inline rust */".to_string(),
+        };
+        if !self.check(&[TokenKind::RightBrace]) {
+            self.error("E015", "Se esperaba '}' para cerrar el bloque Rust", start, "Agrega '}'");
+            return None;
+        }
+        self.advance();
+        Some(Stmt::InlineRust { code, span: Span::merge(&start, &self.previous().span) })
+    }
+
     fn is_type_keyword(&self, kind: &TokenKind) -> bool {
         matches!(
             kind,
@@ -706,18 +860,22 @@ impl Parser {
     fn parse_impl_rasgo(&mut self) -> Option<Decl> {
         let start = self.peek().span;
         self.advance(); // consume impl
-        let trait_name = self.expect_ident()?;
-        if !self.check(&[TokenKind::Para, TokenKind::For]) {
+        let ident_name = self.expect_ident()?;
+        let (trait_name, target_type) = if self.check(&[TokenKind::Para, TokenKind::For]) {
+            self.advance(); // consume para/for
+            let target_type = self.parse_type()?;
+            (ident_name, target_type)
+        } else if self.check(&[TokenKind::LeftBrace]) {
+            (String::new(), Type::Struct(ident_name))
+        } else {
             self.error(
                 "E073",
-                "Se esperaba 'para'/'for' después del nombre del rasgo",
+                "Se esperaba 'para'/'for' después del nombre del rasgo o '{' para métodos",
                 self.peek().span,
-                "Agrega 'para <tipo>' para implementar el rasgo",
+                "Agrega 'para <tipo>' o '{' directamente",
             );
             return None;
-        }
-        self.advance(); // consume para/for
-        let target_type = self.parse_type()?;
+        };
         if !self.check(&[TokenKind::LeftBrace]) {
             self.error(
                 "E017",
@@ -1501,12 +1659,22 @@ impl Parser {
                         value,
                         span: Span::merge(&start, &self.previous().span),
                     }),
+                    Expr::Index {
+                        expr: target,
+                        index,
+                        ..
+                    } => Some(Stmt::ArraySet {
+                        arr: target,
+                        index,
+                        value,
+                        span: Span::merge(&start, &self.previous().span),
+                    }),
                     _ => {
                         self.error(
                             "E024",
                             "No se puede asignar a esta expresión",
                             start,
-                            "Solo se puede asignar a campos de struct",
+                            "Solo se puede asignar a variables, índices y campos de struct",
                         );
                         None
                     }
@@ -1568,11 +1736,80 @@ impl Parser {
     // --- Pratt Parser for Expressions ---
 
     fn parse_expression(&mut self) -> Option<Expr> {
-        self.parse_ternary()
+        self.parse_pipe()
+    }
+
+    fn parse_pipe(&mut self) -> Option<Expr> {
+        let mut left = self.parse_ternary()?;
+        while self.check(&[TokenKind::PipeGreater]) {
+            self.advance();
+            let right = self.parse_ternary()?;
+            let span = Span::merge(&left.span(), &right.span());
+            match right {
+                Expr::Call {
+                    callee,
+                    mut args,
+                    type_args,
+                    span: _,
+                } => {
+                    args.insert(0, left);
+                    left = Expr::Call {
+                        callee,
+                        args,
+                        type_args,
+                        span,
+                    };
+                }
+                Expr::Ident { name, span: id_span } => {
+                    left = Expr::Call {
+                        callee: Box::new(Expr::Ident { name, span: id_span }),
+                        args: vec![left],
+                        type_args: Vec::new(),
+                        span,
+                    };
+                }
+                Expr::MethodCall {
+                    expr: target,
+                    method,
+                    mut args,
+                    resolved_func,
+                    span: _,
+                } => {
+                    args.insert(0, left);
+                    left = Expr::MethodCall {
+                        expr: target,
+                        method,
+                        args,
+                        resolved_func,
+                        span,
+                    };
+                }
+                other => {
+                    left = Expr::Call {
+                        callee: Box::new(other),
+                        args: vec![left],
+                        type_args: Vec::new(),
+                        span,
+                    };
+                }
+            }
+        }
+        Some(left)
     }
 
     fn parse_ternary(&mut self) -> Option<Expr> {
         let condition = self.parse_logical_or()?;
+        if self.check(&[TokenKind::QuestionColon]) {
+            let start = condition.span();
+            self.advance();
+            let default_branch = self.parse_expression()?;
+            let span = Span::merge(&start, &default_branch.span());
+            return Some(Expr::Elvis {
+                expr: Box::new(condition),
+                default: Box::new(default_branch),
+                span,
+            });
+        }
         if !self.check(&[TokenKind::Question]) {
             return Some(condition);
         }
@@ -1684,14 +1921,19 @@ impl Parser {
 
     fn parse_addition(&mut self) -> Option<Expr> {
         let mut left = self.parse_shift()?;
-        while self.check(&[TokenKind::Plus, TokenKind::PlusPlus, TokenKind::Minus])
-            || (self.check(&[TokenKind::Pipe]) && !self.match_arm_pipe)
+        while self.check(&[
+            TokenKind::Plus,
+            TokenKind::PlusPlus,
+            TokenKind::Minus,
+            TokenKind::Caret,
+        ]) || (self.check(&[TokenKind::Pipe]) && !self.match_arm_pipe)
         {
             let op = match self.peek().kind {
                 TokenKind::Plus => BinOp::Add,
                 TokenKind::PlusPlus => BinOp::Concat,
                 TokenKind::Minus => BinOp::Sub,
                 TokenKind::Pipe => BinOp::BitOr,
+                TokenKind::Caret => BinOp::BitXor,
                 _ => unreachable!(),
             };
             self.advance();
@@ -1763,10 +2005,11 @@ impl Parser {
                 expr: Box::new(expr),
                 span,
             })
-        } else if self.check(&[TokenKind::Minus, TokenKind::Bang]) {
+        } else if self.check(&[TokenKind::Minus, TokenKind::Bang, TokenKind::Tilde]) {
             let op = match self.peek().kind {
                 TokenKind::Minus => UnOp::Negate,
                 TokenKind::Bang => UnOp::Not,
+                TokenKind::Tilde => UnOp::BitNot,
                 _ => unreachable!(),
             };
             let op_span = self.peek().span;
@@ -1894,6 +2137,16 @@ impl Parser {
                     },
                     None => return Some(expr),
                 }
+            } else if self.check(&[TokenKind::QuestionDot]) {
+                let start = expr.span();
+                self.advance();
+                let field = self.expect_ident()?;
+                let span = Span::merge(&start, &self.previous().span);
+                expr = Expr::SafeFieldAccess {
+                    expr: Box::new(expr),
+                    field,
+                    span,
+                };
             } else if self.check(&[TokenKind::LeftParen]) {
                 let start = expr.span();
                 self.advance();
@@ -1958,6 +2211,7 @@ impl Parser {
                 value: s.clone(),
                 span,
             }),
+            TokenKind::FStrLiteral(s) => self.parse_fstring(s, span),
             TokenKind::Verdadero | TokenKind::True => Some(Expr::Bool { value: true, span }),
             TokenKind::Falso | TokenKind::False => Some(Expr::Bool { value: false, span }),
             TokenKind::Ident(name) => {
@@ -2103,16 +2357,60 @@ impl Parser {
                 }
             }
             TokenKind::LeftBracket => {
-                let mut items = Vec::new();
-                if !self.check(&[TokenKind::RightBracket]) {
-                    items.push(self.parse_expression()?);
-                    while self.check(&[TokenKind::Comma]) {
-                        self.advance();
-                        if self.check(&[TokenKind::RightBracket]) {
-                            break;
-                        }
-                        items.push(self.parse_expression()?);
+                if self.check(&[TokenKind::RightBracket]) {
+                    self.advance();
+                    return Some(Expr::List {
+                        items: Vec::new(),
+                        span: Span::merge(&span, &self.previous().span),
+                    });
+                }
+                let first_expr = self.parse_expression()?;
+                // Comprensión de lista: `[expr para x en iter]` o `[expr para x en iter si cond]`
+                if self.check(&[TokenKind::Para, TokenKind::For]) {
+                    self.advance();
+                    let var_name = self.expect_ident()?;
+                    if !self.check(&[TokenKind::En, TokenKind::In]) {
+                        self.error(
+                            "E012",
+                            "Se esperaba 'en' / 'in' en la comprensión de lista",
+                            span,
+                            "Usa: [expr para variable en coleccion]",
+                        );
+                        return None;
                     }
+                    self.advance();
+                    let iter_expr = self.parse_expression()?;
+                    let condition = if self.check(&[TokenKind::Si, TokenKind::If]) {
+                        self.advance();
+                        Some(Box::new(self.parse_expression()?))
+                    } else {
+                        None
+                    };
+                    if !self.check(&[TokenKind::RightBracket]) {
+                        self.error(
+                            "E022",
+                            "Se esperaba ']' para cerrar la comprensión de lista",
+                            span,
+                            "Agrega ']' al final de la comprensión",
+                        );
+                        return None;
+                    }
+                    self.advance();
+                    return Some(Expr::Comprehension {
+                        expr: Box::new(first_expr),
+                        var_name,
+                        iter: Box::new(iter_expr),
+                        condition,
+                        span: Span::merge(&span, &self.previous().span),
+                    });
+                }
+                let mut items = vec![first_expr];
+                while self.check(&[TokenKind::Comma]) {
+                    self.advance();
+                    if self.check(&[TokenKind::RightBracket]) {
+                        break;
+                    }
+                    items.push(self.parse_expression()?);
                 }
                 if !self.check(&[TokenKind::RightBracket]) {
                     self.error(
@@ -2126,6 +2424,91 @@ impl Parser {
                 self.advance();
                 Some(Expr::List {
                     items,
+                    span: Span::merge(&span, &self.previous().span),
+                })
+            }
+            TokenKind::Consultar | TokenKind::Query => {
+                let start = span;
+                let var_name = self.expect_ident()?;
+                if !self.check(&[TokenKind::En, TokenKind::In]) {
+                    self.error(
+                        "E012",
+                        "Se esperaba 'en' / 'in' en la consulta",
+                        start,
+                        "Usa: consultar <variable> en <origen>",
+                    );
+                    return None;
+                }
+                self.advance();
+                let source = self.parse_expression()?;
+                let where_clause = if self.check(&[TokenKind::Donde, TokenKind::Where]) {
+                    self.advance();
+                    Some(Box::new(self.parse_expression()?))
+                } else {
+                    None
+                };
+                let (order_by, descending) = if self.check(&[TokenKind::OrdenarPor, TokenKind::OrderBy]) {
+                    self.advance();
+                    let ord_expr = self.parse_expression()?;
+                    let desc = if self.check(&[TokenKind::Descendente, TokenKind::Descending]) {
+                        self.advance();
+                        true
+                    } else if self.check(&[TokenKind::Ascendente, TokenKind::Ascending]) {
+                        self.advance();
+                        false
+                    } else {
+                        false
+                    };
+                    (Some(Box::new(ord_expr)), desc)
+                } else {
+                    (None, false)
+                };
+                if !self.check(&[TokenKind::Seleccionar, TokenKind::Select]) {
+                    self.error(
+                        "E012",
+                        "Se esperaba 'seleccionar' / 'select' en la consulta",
+                        start,
+                        "Usa: seleccionar <expresion>",
+                    );
+                    return None;
+                }
+                self.advance();
+                let select_expr = self.parse_expression()?;
+                let end = select_expr.span();
+                Some(Expr::Query {
+                    var_name,
+                    source: Box::new(source),
+                    where_clause,
+                    order_by,
+                    descending,
+                    select_expr: Box::new(select_expr),
+                    span: Span::merge(&start, &end),
+                })
+            }
+            TokenKind::EnTiempoCompilacion | TokenKind::Comptime => {
+                if !self.check(&[TokenKind::LeftBrace]) {
+                    self.error(
+                        "E015",
+                        "Se esperaba '{' después de 'comptime' / 'en_tiempo_compilacion'",
+                        span,
+                        "Usa: comptime { expr } o en_tiempo_compilacion { expr }",
+                    );
+                    return None;
+                }
+                self.advance();
+                let inner = self.parse_expression()?;
+                if !self.check(&[TokenKind::RightBrace]) {
+                    self.error(
+                        "E015",
+                        "Se esperaba '}' para cerrar el bloque comptime",
+                        span,
+                        "Agrega '}' al final de la expresión comptime",
+                    );
+                    return None;
+                }
+                self.advance();
+                Some(Expr::Comptime {
+                    expr: Box::new(inner),
                     span: Span::merge(&span, &self.previous().span),
                 })
             }
@@ -2180,6 +2563,94 @@ impl Parser {
             body,
             span: Span::merge(&span, &self.previous().span),
         })
+    }
+
+    fn parse_fstring(&mut self, s: &str, span: Span) -> Option<Expr> {
+        let mut parts: Vec<Expr> = Vec::new();
+        let mut current_lit = String::new();
+        let chars: Vec<char> = s.chars().collect();
+        let mut idx = 0;
+
+        while idx < chars.len() {
+            if chars[idx] == '{' {
+                if idx + 1 < chars.len() && chars[idx + 1] == '{' {
+                    current_lit.push('{');
+                    idx += 2;
+                    continue;
+                }
+                if !current_lit.is_empty() {
+                    parts.push(Expr::Str {
+                        value: current_lit.clone(),
+                        span,
+                    });
+                    current_lit.clear();
+                }
+                idx += 1; // consume '{'
+                let mut expr_str = String::new();
+                let mut brace_depth = 1;
+                while idx < chars.len() && brace_depth > 0 {
+                    if chars[idx] == '{' {
+                        brace_depth += 1;
+                        expr_str.push('{');
+                    } else if chars[idx] == '}' {
+                        brace_depth -= 1;
+                        if brace_depth > 0 {
+                            expr_str.push('}');
+                        }
+                    } else {
+                        expr_str.push(chars[idx]);
+                    }
+                    idx += 1;
+                }
+
+                let expr_trimmed = expr_str.trim();
+                if !expr_trimmed.is_empty() {
+                    let lexer = lumen_lexer::Lexer::new(expr_trimmed);
+                    let (tokens, errors) = lexer.tokenize();
+                    if errors.is_empty() {
+                        let mut sub_parser = Parser::new(tokens);
+                        if let Some(parsed_expr) = sub_parser.parse_expression() {
+                            let to_str_call = Expr::Call {
+                                callee: Box::new(Expr::Ident {
+                                    name: "a_texto".to_string(),
+                                    span,
+                                }),
+                                args: vec![parsed_expr],
+                                type_args: Vec::new(),
+                                span,
+                            };
+                            parts.push(to_str_call);
+                        }
+                    }
+                }
+            } else if chars[idx] == '}' && idx + 1 < chars.len() && chars[idx + 1] == '}' {
+                current_lit.push('}');
+                idx += 2;
+            } else {
+                current_lit.push(chars[idx]);
+                idx += 1;
+            }
+        }
+
+        if !current_lit.is_empty() || parts.is_empty() {
+            parts.push(Expr::Str {
+                value: current_lit,
+                span,
+            });
+        }
+
+        let mut iter = parts.into_iter();
+        let mut result = iter.next()?;
+        for p in iter {
+            result = Expr::Binary {
+                op: BinOp::Add,
+                left: Box::new(result),
+                right: Box::new(p),
+                resolved_method: None,
+                span,
+            };
+        }
+        Some(result)
     }
 
     fn parse_call_or_ident(&mut self, name: String, span: Span) -> Option<Expr> {
@@ -2602,13 +3073,13 @@ impl Parser {
 
     fn parse_type(&mut self) -> Option<Type> {
         let token = self.advance()?;
-        match token.kind {
-            TokenKind::Numero | TokenKind::Number => Some(Type::Numero),
-            TokenKind::Sea | TokenKind::Let => Some(Type::Struct("Infer".to_string())),
-            TokenKind::Entero | TokenKind::Integer => Some(Type::Entero),
-            TokenKind::Decimal | TokenKind::Float => Some(Type::Decimal),
-            TokenKind::Texto | TokenKind::String => Some(Type::Texto),
-            TokenKind::Booleano | TokenKind::Boolean => Some(Type::Booleano),
+        let mut base_type = match token.kind {
+            TokenKind::Numero | TokenKind::Number => Type::Numero,
+            TokenKind::Sea | TokenKind::Let => Type::Struct("Infer".to_string()),
+            TokenKind::Entero | TokenKind::Integer => Type::Entero,
+            TokenKind::Decimal | TokenKind::Float => Type::Decimal,
+            TokenKind::Texto | TokenKind::String => Type::Texto,
+            TokenKind::Booleano | TokenKind::Boolean => Type::Booleano,
             TokenKind::Lista | TokenKind::Array => {
                 if self.check(&[TokenKind::Less]) {
                     self.advance();
@@ -2622,9 +3093,9 @@ impl Parser {
                         );
                         return None;
                     }
-                    Some(Type::Lista(Box::new(inner)))
+                    Type::Lista(Box::new(inner))
                 } else {
-                    Some(Type::Lista(Box::new(Type::Entero)))
+                    Type::Lista(Box::new(Type::Entero))
                 }
             }
             TokenKind::Ident(name) => {
@@ -2641,19 +3112,19 @@ impl Parser {
                             );
                             return None;
                         }
-                        Some(Type::Lista(Box::new(inner)))
+                        Type::Lista(Box::new(inner))
                     } else {
-                        Some(Type::Lista(Box::new(Type::Entero)))
+                        Type::Lista(Box::new(Type::Entero))
                     }
                 } else if name == "string" {
-                    Some(Type::Texto)
+                    Type::Texto
                 } else if self.check(&[TokenKind::Less]) && self.is_next_type_in_type_context() {
                     let args = self.parse_type_args()?;
-                    Some(Type::GenericStruct { name, args })
+                    Type::GenericStruct { name, args }
                 } else if name == "cualquiera" || name == "any" {
-                    Some(Type::Numero)
+                    Type::Numero
                 } else {
-                    Some(Type::Struct(name))
+                    Type::Struct(name)
                 }
             }
             TokenKind::Resultado | TokenKind::Result => {
@@ -2688,10 +3159,10 @@ impl Parser {
                     );
                     return None;
                 }
-                Some(Type::Resultado {
+                Type::Resultado {
                     ok: Box::new(ok),
                     err: Box::new(err),
-                })
+                }
             }
             TokenKind::LeftParen => {
                 let start = token.span;
@@ -2717,9 +3188,9 @@ impl Parser {
                 }
                 self.advance();
                 if types.len() == 1 {
-                    Some(types.into_iter().next().unwrap())
+                    types.into_iter().next().unwrap()
                 } else {
-                    Some(Type::Tuple(types))
+                    Type::Tuple(types)
                 }
             }
             TokenKind::Opcion | TokenKind::Option => {
@@ -2743,12 +3214,12 @@ impl Parser {
                     );
                     return None;
                 }
-                Some(Type::Opcion(Box::new(inner)))
+                Type::Opcion(Box::new(inner))
             }
             TokenKind::Impl => {
                 if self.check_ident() {
                     let trait_name = self.expect_ident()?;
-                    Some(Type::ImplTrait(trait_name))
+                    Type::ImplTrait(trait_name)
                 } else {
                     self.error(
                         "E011",
@@ -2756,11 +3227,34 @@ impl Parser {
                         token.span,
                         "Escribe el nombre del rasgo, ej: 'impl Comparable'",
                     );
-                    None
+                    return None;
                 }
             }
-            _ => None,
+            TokenKind::Prestado | TokenKind::Borrowed => {
+                let mutable = if self.check(&[TokenKind::Mut, TokenKind::Mutable]) {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+                let inner = self.parse_type()?;
+                Type::Prestado {
+                    inner: Box::new(inner),
+                    mutable,
+                }
+            }
+            TokenKind::Dueno | TokenKind::Owner => {
+                let inner = self.parse_type()?;
+                Type::Dueno(Box::new(inner))
+            }
+            _ => return None,
+        };
+        // Azúcar sintáctico para tipos opcionales: `texto?`, `entero?`, `Punto?` → `opcion<texto>`
+        while self.check(&[TokenKind::Question]) {
+            self.advance();
+            base_type = Type::Opcion(Box::new(base_type));
         }
+        Some(base_type)
     }
 
     fn check_next_is_tuple_type(&self) -> bool {
@@ -3365,6 +3859,38 @@ fn token_matches(kind: &TokenKind, expected: &TokenKind) -> bool {
                 | (TokenKind::In, TokenKind::En)
                 | (TokenKind::Rasgo, TokenKind::Trait)
                 | (TokenKind::Trait, TokenKind::Rasgo)
+                | (TokenKind::Consultar, TokenKind::Query)
+                | (TokenKind::Query, TokenKind::Consultar)
+                | (TokenKind::Donde, TokenKind::Where)
+                | (TokenKind::Where, TokenKind::Donde)
+                | (TokenKind::OrdenarPor, TokenKind::OrderBy)
+                | (TokenKind::OrderBy, TokenKind::OrdenarPor)
+                | (TokenKind::Seleccionar, TokenKind::Select)
+                | (TokenKind::Select, TokenKind::Seleccionar)
+                | (TokenKind::Descendente, TokenKind::Descending)
+                | (TokenKind::Descending, TokenKind::Descendente)
+                | (TokenKind::Ascendente, TokenKind::Ascending)
+                | (TokenKind::Ascending, TokenKind::Ascendente)
+                | (TokenKind::Atrapar, TokenKind::Catch)
+                | (TokenKind::Catch, TokenKind::Atrapar)
+                | (TokenKind::Prestado, TokenKind::Borrowed)
+                | (TokenKind::Borrowed, TokenKind::Prestado)
+                | (TokenKind::Dueno, TokenKind::Owner)
+                | (TokenKind::Owner, TokenKind::Dueno)
+                | (TokenKind::Mut, TokenKind::Mutable)
+                | (TokenKind::Mutable, TokenKind::Mut)
+                | (TokenKind::EnTiempoCompilacion, TokenKind::Comptime)
+                | (TokenKind::Comptime, TokenKind::EnTiempoCompilacion)
+                | (TokenKind::Ensamblador, TokenKind::Asm)
+                | (TokenKind::Asm, TokenKind::Ensamblador)
+                | (TokenKind::BloqueC, TokenKind::CBlock)
+                | (TokenKind::CBlock, TokenKind::BloqueC)
+                | (TokenKind::BloqueRust, TokenKind::RustBlock)
+                | (TokenKind::RustBlock, TokenKind::BloqueRust)
+                | (TokenKind::Puro, TokenKind::Pure)
+                | (TokenKind::Pure, TokenKind::Puro)
+                | (TokenKind::GrupoTareas, TokenKind::TaskGroup)
+                | (TokenKind::TaskGroup, TokenKind::GrupoTareas)
         )
 }
 
@@ -3402,6 +3928,11 @@ impl Spannable for Expr {
             | Expr::EnumCtor { span, .. }
             | Expr::Tuple { span, .. }
             | Expr::TupleAccess { span, .. }
+            | Expr::SafeFieldAccess { span, .. }
+            | Expr::Elvis { span, .. }
+            | Expr::Comprehension { span, .. }
+            | Expr::Query { span, .. }
+            | Expr::Comptime { span, .. }
             | Expr::Ternary { span, .. } => *span,
             Expr::Esperar { span, .. } => *span,
         }
@@ -3921,6 +4452,62 @@ para a en nums {
             ));
         } else {
             panic!("Expected Expr statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_pipe_operator() {
+        let source = "entero r = 10 |> duplicar() |> sumar(5);";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_optional_type_sugar() {
+        let source = "texto? nombre = algun(\"LUMEN\");";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { var_type, .. }) = &program[0] {
+            assert!(matches!(var_type, Type::Opcion(_)));
+        } else {
+            panic!("Expected Variable declaration");
+        }
+    }
+
+    #[test]
+    fn test_parse_list_comprehension() {
+        let source = "lista<entero> pares = [x * 2 para x en nums si x % 2 == 0];";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+            assert!(matches!(init.as_ref(), Expr::Comprehension { .. }));
+        } else {
+            panic!("Expected Variable declaration with comprehension init");
+        }
+    }
+
+    #[test]
+    fn test_parse_linq_query_spanish() {
+        let source = "lista<entero> r = consultar x en nums donde x > 5 seleccionar x * 2;";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+            assert!(matches!(init.as_ref(), Expr::Query { .. }));
+        } else {
+            panic!("Expected Variable declaration with Query init");
+        }
+    }
+
+    #[test]
+    fn test_parse_linq_query_english() {
+        let source = "array<integer> r = query x in nums where x > 5 select x * 2;";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+            assert!(matches!(init.as_ref(), Expr::Query { .. }));
+        } else {
+            panic!("Expected Variable declaration with Query init");
         }
     }
 }

@@ -19,7 +19,6 @@
 #endif
 
 #ifdef _WIN32
-extern char** environ;
 #include <windows.h>
 #include <process.h>
 #else
@@ -102,16 +101,10 @@ static int _parcnt(const char* fn) {
   return 0;
 }
 
-static Val _v_int(int64_t x) {
-  Val v;
-  memset(&v, 0, sizeof(v));
-  v.t = T_INT;
-  v.i = x;
-  return v;
-}
-static Val _v_flt(double x) { Val v = _v_int(0); v.t = T_FLT; v.f = x; return v; }
-static Val _v_bool(int x) { Val v = _v_int(0); v.t = T_BOL; v.i = x ? 1 : 0; return v; }
-static Val _v_void(void) { Val v = _v_int(0); v.t = T_VOD; return v; }
+static inline Val _v_int(int64_t x) { return (Val){.i = x, .t = T_INT}; }
+static inline Val _v_flt(double x) { return (Val){.f = x, .t = T_FLT}; }
+static inline Val _v_bool(int x) { return (Val){.i = x ? 1 : 0, .t = T_BOL}; }
+static inline Val _v_void(void) { return (Val){.t = T_VOD}; }
 static Val _v_str(const char* s) {
   size_t n = strlen(s);
   char* m = (char*)malloc(n + 1);
@@ -136,7 +129,8 @@ static Val _fref_call(Val v) {
 static int _isnum(Val v) { return v.t == T_INT || v.t == T_FLT || v.t == T_BOL; }
 static double _asf(Val v) { return v.t == T_FLT ? v.f : (double)v.i; }
 
-static int _eq(Val a, Val b) {
+static inline int _eq(Val a, Val b) {
+  if (__builtin_expect(a.t == T_INT && b.t == T_INT, 1)) return a.i == b.i;
   if (_isnum(a) && _isnum(b)) return _asf(a) == _asf(b);
   if (a.t == T_STR && b.t == T_STR) return strcmp(a.s, b.s) == 0;
   if (a.t != b.t) return 0;
@@ -160,7 +154,8 @@ static int _eq(Val a, Val b) {
   }
 }
 
-static int _lts(Val a, Val b) {
+static inline int _lts(Val a, Val b) {
+  if (__builtin_expect(a.t == T_INT && b.t == T_INT, 1)) return a.i < b.i;
   if (_isnum(a) && _isnum(b)) return _asf(a) < _asf(b);
   if (a.t == T_STR && b.t == T_STR) return strcmp(a.s, b.s) < 0;
   return a.t < b.t;
@@ -214,7 +209,30 @@ static Val _arith(int op, Val a, Val b) {
 
 static char* _fmt(Val v);
 
-static Val _bin(int op, Val a, Val b) {
+static inline Val _bin(int op, Val a, Val b) {
+  if (__builtin_expect(a.t == T_INT && b.t == T_INT, 1)) {
+    int64_t x = a.i, y = b.i;
+    switch (op) {
+      case 1:  return (Val){.i = x + y, .t = T_INT};
+      case 3:  return (Val){.i = x - y, .t = T_INT};
+      case 4:  return (Val){.i = x * y, .t = T_INT};
+      case 5:  if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return (Val){.i = x / y, .t = T_INT};
+      case 6:  if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return (Val){.i = x % y, .t = T_INT};
+      case 7:  return (Val){.i = (x == y), .t = T_BOL};
+      case 8:  return (Val){.i = (x != y), .t = T_BOL};
+      case 9:  return (Val){.i = (x < y), .t = T_BOL};
+      case 10: return (Val){.i = (x <= y), .t = T_BOL};
+      case 11: return (Val){.i = (x > y), .t = T_BOL};
+      case 12: return (Val){.i = (x >= y), .t = T_BOL};
+      case 13: return (Val){.i = (x != 0 && y != 0), .t = T_BOL};
+      case 14: return (Val){.i = (x != 0 || y != 0), .t = T_BOL};
+      case 15: return (Val){.i = x | y, .t = T_INT};
+      case 16: return (Val){.i = x & y, .t = T_INT};
+      case 17: return (Val){.i = x << y, .t = T_INT};
+      case 18: return (Val){.i = x >> y, .t = T_INT};
+      case 19: return (Val){.i = x ^ y, .t = T_INT};
+    }
+  }
   if (op == 1 && (a.t == T_STR || b.t == T_STR)) {
     char* as = _fmt(a);
     char* bs = _fmt(b);
@@ -239,6 +257,7 @@ static Val _bin(int op, Val a, Val b) {
     case 16: return _v_int((int64_t)_asf(a) & (int64_t)_asf(b));
     case 17: return _v_int((int64_t)_asf(a) << (int64_t)_asf(b));
     case 18: return _v_int((int64_t)_asf(a) >> (int64_t)_asf(b));
+    case 19: return _v_int((int64_t)_asf(a) ^ (int64_t)_asf(b));
   }
   return _v_int(0);
 }
@@ -248,8 +267,10 @@ static Val _neg(Val a) {
   return _v_int(-a.i);
 }
 static Val _not(Val a) { return _v_bool(!_truthy(a)); }
+static Val _bnot(Val a) { return _v_int(~(int64_t)_asf(a)); }
 
-static Val _dcp(Val v) {
+static inline Val _dcp(Val v) {
+  if (__builtin_expect(v.t <= T_BOL || v.t == T_STR || v.t == T_NON || v.t == T_VOD, 1)) return v;
   if (v.t == T_ARR || v.t == T_TUP || v.t == T_ENM) {
     Val nv = v;
     nv.items = (Val*)malloc(sizeof(Val) * (v.argc > 0 ? v.argc : 1));
@@ -643,7 +664,7 @@ static int _regex_m(const char* pat, const char* s) {
 }
 static char* _regex_rep(const char* pat, const char* s, const char* rep) {
   regex_t re;
-  if (regcomp(&re, pat, REG_EXTENDED) != 0) return _v_str(s).s;
+  if (regcomp(&re, pat, REG_EXTENDED) != 0) return (char*)s;
   size_t cap = strlen(s) + strlen(rep) * 8 + 64;
   char* out = (char*)malloc(cap);
   size_t oi = 0;
@@ -671,7 +692,7 @@ static char* _regex_rep(const char* pat, const char* s, const char* rep) {
 #else
 /* Stubs for Windows/macOS */
 static int _regex_m(const char* pat, const char* s) { (void)pat; (void)s; return 0; }
-static char* _regex_rep(const char* pat, const char* s, const char* rep) { (void)pat; (void)s; (void)rep; return _v_str(s).s; }
+static char* _regex_rep(const char* pat, const char* s, const char* rep) { (void)pat; (void)s; (void)rep; return (char*)s; }
 #endif
 
 static const uint32_t _dec_tab[][3] = {

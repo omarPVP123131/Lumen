@@ -1,5 +1,5 @@
 // test_parser_final2.nv — Test the stdlib parser
-importar "compiler/parser.nv";
+importar "parser.nv";
 
 // ═══════════════════════════════════════════════════════════════
 // ── Lexer (inline, self-contained) ─────────────────────────────
@@ -92,7 +92,7 @@ funcion void probar(texto nm, texto src) {
     imprimir("Source: ", src);
     numero toks = lexer_tokenizar(src);
     numero ast = parser_parse(toks);
-    texto sal = ast_a_texto(ast, 0);
+    texto sal = parser_ast_a_texto(ast, 0);
     imprimir(sal);
 }
 

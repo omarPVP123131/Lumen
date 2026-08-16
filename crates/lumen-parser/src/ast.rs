@@ -216,6 +216,28 @@ pub enum Stmt {
         value: Box<Expr>,
         span: Span,
     },
+    Posponer {
+        body: Vec<DeclOrStmt>,
+        span: Span,
+    },
+    TryCatch {
+        try_body: Vec<DeclOrStmt>,
+        err_var: String,
+        catch_body: Vec<DeclOrStmt>,
+        span: Span,
+    },
+    InlineAsm {
+        code: String,
+        span: Span,
+    },
+    InlineC {
+        code: String,
+        span: Span,
+    },
+    InlineRust {
+        code: String,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -349,6 +371,36 @@ pub enum Expr {
         expr: Box<Expr>,
         span: Span,
     },
+    SafeFieldAccess {
+        expr: Box<Expr>,
+        field: String,
+        span: Span,
+    },
+    Elvis {
+        expr: Box<Expr>,
+        default: Box<Expr>,
+        span: Span,
+    },
+    Comprehension {
+        expr: Box<Expr>,
+        var_name: String,
+        iter: Box<Expr>,
+        condition: Option<Box<Expr>>,
+        span: Span,
+    },
+    Query {
+        var_name: String,
+        source: Box<Expr>,
+        where_clause: Option<Box<Expr>>,
+        order_by: Option<Box<Expr>>,
+        descending: bool,
+        select_expr: Box<Expr>,
+        span: Span,
+    },
+    Comptime {
+        expr: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -369,6 +421,7 @@ pub enum BinOp {
     Or,
     BitOr,
     BitAnd,
+    BitXor,
     ShiftLeft,
     ShiftRight,
 }
@@ -377,6 +430,7 @@ pub enum BinOp {
 pub enum UnOp {
     Negate,
     Not,
+    BitNot,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -403,6 +457,11 @@ pub enum Type {
     Opcion(Box<Type>),
     Tuple(Vec<Type>),
     ImplTrait(String),
+    Prestado {
+        inner: Box<Type>,
+        mutable: bool,
+    },
+    Dueno(Box<Type>),
 }
 
 impl Expr {
@@ -433,6 +492,11 @@ impl Expr {
             | Expr::EnumCtor { span, .. }
             | Expr::Tuple { span, .. }
             | Expr::TupleAccess { span, .. }
+            | Expr::SafeFieldAccess { span, .. }
+            | Expr::Elvis { span, .. }
+            | Expr::Comprehension { span, .. }
+            | Expr::Query { span, .. }
+            | Expr::Comptime { span, .. }
             | Expr::Ternary { span, .. } => *span,
             Expr::Esperar { span, .. } => *span,
         }

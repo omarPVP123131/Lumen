@@ -1858,3 +1858,75 @@ imprimir("hecho");
     let result = run_source(src);
     assert!(result.is_ok());
 }
+
+#[test]
+fn test_pipe_operator_execution() {
+    let src = r#"
+funcion entero doble(entero x) { retornar x * 2; }
+funcion entero mas_uno(entero x) { retornar x + 1; }
+entero r = 10 |> doble() |> mas_uno();
+imprimir(r);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["21"]);
+}
+
+#[test]
+fn test_optional_sugar_execution() {
+    let src = r#"
+funcion texto? obtener(booleano b) {
+    si b { retornar algun("OK"); }
+    retornar ninguno;
+}
+texto? v = obtener(verdadero);
+elegir (v) {
+    caso algun(val): imprimir(val);
+    defecto: imprimir("NADA");
+}
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["OK"]);
+}
+
+#[test]
+fn test_list_comprehension_execution() {
+    let src = r#"
+lista<entero> nums = [1, 2, 3, 4, 5, 6];
+lista<entero> pares = [x * 10 para x en nums si x % 2 == 0];
+imprimir(pares);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["[20, 40, 60]"]);
+}
+
+#[test]
+fn test_list_comprehension_range_and_filter() {
+    let src = r#"
+lista<entero> cuadrados = [x * x para x en 1..=5 si x > 2];
+imprimir(cuadrados);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["[9, 16, 25]"]);
+}
+
+#[test]
+fn test_linq_query_spanish_execution() {
+    let src = r#"
+lista<entero> datos = [10, 15, 20, 25, 30];
+lista<entero> mayores = consultar x en datos donde x >= 20 seleccionar x * 2;
+imprimir(mayores);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["[40, 50, 60]"]);
+}
+
+#[test]
+fn test_linq_query_english_execution() {
+    let src = r#"
+array<integer> items = [1, 2, 3, 4, 5];
+array<integer> query_res = query x in items where x > 2 select x + 10;
+print(query_res);
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["[13, 14, 15]"]);
+}

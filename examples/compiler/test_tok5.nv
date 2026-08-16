@@ -122,6 +122,6 @@ funcion numero parser_parse(numero tokens) {
 }
 
 imprimir("Parsing...");
-numero toks = tokenizar("entero x = 42;");
+toks = tokenizar("entero x = 42;");
 numero ast = parser_parse(toks);
 imprimir("OK: ", __map_obtener(ast, "tipo"));

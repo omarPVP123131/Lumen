@@ -38,6 +38,7 @@ funcion numero lexer_tokenizar(texto s) {
     kw = __map_poner(kw, "rasgo", 1); kw = __map_poner(kw, "trait", 1);
     kw = __map_poner(kw, "impl", 1);
     kw = __map_poner(kw, "como", 1);
+    kw = __map_poner(kw, "posponer", 1); kw = __map_poner(kw, "defer", 1);
     
     // Normalize CRLF to LF and remove stray CR to avoid off-by-one tokenization
     texto s2 = __str_reemplazar(s, "\r\n", "\n");

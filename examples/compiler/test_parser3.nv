@@ -8,7 +8,7 @@ funcion booleano _al(entero cp) { retornar (cp >= 65 && cp <= 90) || (cp >= 97 &
 funcion booleano _dg(entero cp) { retornar cp >= 48 && cp <= 57; }
 funcion booleano _an(entero cp) { retornar _al(cp) || _dg(cp); }
 funcion texto _chr(entero cp) { retornar a_texto(cp); }
-funcion entero _ord(texto c) { entero r = 0; si (largo(c) > 0) { r = a_entero(__str_ord(c)[0]); } retornar r; }
+funcion entero _ord(texto c) { entero r = 0; si (largo(c) > 0) { r = __str_ord(c)[0]; } retornar r; }
 
 funcion numero tokenizar(texto src) {
     numero kw = __map_nuevo();
@@ -134,6 +134,9 @@ funcion numero _nd2(texto tp, texto k1, numero v1, texto k2, numero v2) {
 }
 funcion numero _nd3(texto tp, texto k1, numero v1, texto k2, numero v2, texto k3, numero v3) {
     numero n = _nd2(tp, k1, v1, k2, v2); n = __map_poner(n, k3, v3); retornar n;
+}
+funcion numero _nd4(texto tp, texto k1, numero v1, texto k2, numero v2, texto k3, numero v3, texto k4, numero v4) {
+    numero n = _nd3(tp, k1, v1, k2, v2, k3, v3); n = __map_poner(n, k4, v4); retornar n;
 }
 funcion numero _mkls(numero items, entero cnt) { items = __map_poner(items, "cnt", cnt); retornar items; }
 
@@ -333,7 +336,7 @@ funcion numero parse_decl() {
         }
         _pr_av(); // )
         numero bd = parse_blk();
-        retornar _nd3("Func", "nombre", nm, "tipo_ret", tr, "params", _mkls(prms, pc), "cuerpo", bd);
+        retornar _nd4("Func", "nombre", nm, "tipo_ret", tr, "params", _mkls(prms, pc), "cuerpo", bd);
     }
 
     retornar parse_stmt();
@@ -363,7 +366,7 @@ funcion numero parser_prog() {
 funcion numero parser_parse(numero tokens) {
     _pr_tokens = tokens;
     _pr_pos = 0;
-    _pr_cnt = a_entero(__map_obtener(tokens, "cnt"));
+    _pr_cnt = __map_obtener(tokens, "cnt");
     retornar parser_prog();
 }
 
@@ -379,7 +382,7 @@ funcion texto ast_prn(numero nodo, entero prof) {
     si (tp == "Programa") {
         texto r = pad + "Programa\n";
         numero stmts = __map_obtener(nodo, "cuerpo");
-        entero sc = a_entero(__map_obtener(stmts, "cnt")); i = 0;
+        entero sc = __map_obtener(stmts, "cnt"); i = 0;
         mientras (i < sc) {
             r = r + ast_prn(__map_obtener(stmts, a_texto(i)), prof + 1); i = i + 1;
         }
@@ -424,7 +427,7 @@ funcion texto ast_prn(numero nodo, entero prof) {
         texto tr = a_texto(__map_obtener(nodo, "tipo_ret"));
         texto r = pad + "Func(" + nm + " -> " + tr + ")\n";
         numero prms = __map_obtener(nodo, "params");
-        entero pc = a_entero(__map_obtener(prms, "cnt")); i = 0;
+        entero pc = __map_obtener(prms, "cnt"); i = 0;
         mientras (i < pc) {
             numero p = __map_obtener(prms, a_texto(i));
             r = r + pad + "  param: " + a_texto(__map_obtener(p, "tipo")) + " " + a_texto(__map_obtener(p, "nombre")) + "\n";
@@ -436,7 +439,7 @@ funcion texto ast_prn(numero nodo, entero prof) {
     si (tp == "Block") {
         texto r = pad + "Block\n";
         numero stmts = __map_obtener(nodo, "cuerpo");
-        entero sc = a_entero(__map_obtener(stmts, "cnt")); i = 0;
+        entero sc = __map_obtener(stmts, "cnt"); i = 0;
         mientras (i < sc) {
             r = r + ast_prn(__map_obtener(stmts, a_texto(i)), prof + 1); i = i + 1;
         }
@@ -445,7 +448,7 @@ funcion texto ast_prn(numero nodo, entero prof) {
     si (tp == "Call") {
         texto cl = a_texto(__map_obtener(nodo, "callee"));
         numero args = __map_obtener(nodo, "args");
-        entero ac = a_entero(__map_obtener(args, "cnt")); texto r = pad + "Call(" + cl; i = 0;
+        entero ac = __map_obtener(args, "cnt"); texto r = pad + "Call(" + cl; i = 0;
         mientras (i < ac) { r = r + " " + ast_prn(__map_obtener(args, a_texto(i)), 0); i = i + 1; }
         retornar r + ")\n";
     }

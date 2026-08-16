@@ -186,7 +186,19 @@ impl Lexer {
                         tokens.push(self.single_token(TokenKind::Greater));
                     }
                 }
-                Some('?') => tokens.push(self.single_token(TokenKind::Question)),
+                Some('?') => {
+                    if self.peek() == Some('.') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::QuestionDot));
+                    } else if self.peek() == Some(':') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::QuestionColon));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Question));
+                    }
+                }
+                Some('^') => tokens.push(self.single_token(TokenKind::Caret)),
+                Some('~') => tokens.push(self.single_token(TokenKind::Tilde)),
                 Some('&') => {
                     if self.peek() == Some('&') {
                         self.advance();
@@ -199,9 +211,53 @@ impl Lexer {
                     if self.peek() == Some('|') {
                         self.advance();
                         tokens.push(self.double_token(TokenKind::OrOr));
+                    } else if self.peek() == Some('>') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::PipeGreater));
                     } else {
                         tokens.push(self.single_token(TokenKind::Pipe));
                     }
+                }
+                Some('f') | Some('F') if self.peek() == Some('"') => {
+                    let start_pos = self.prev_pos();
+                    self.advance(); // consume '"'
+                    let mut s = String::new();
+                    loop {
+                        match self.advance() {
+                            Some('"') => break,
+                            Some('\\') => match self.advance() {
+                                Some('n') => s.push('\n'),
+                                Some('t') => s.push('\t'),
+                                Some('r') => s.push('\r'),
+                                Some('"') => s.push('"'),
+                                Some('\\') => s.push('\\'),
+                                Some(ch) => s.push(ch),
+                                None => {
+                                    self.errors.push(LexError {
+                                        code: "E004".to_string(),
+                                        message: "Secuencia de escape incompleta".to_string(),
+                                        pos: self.current_pos(),
+                                        suggestion: "Usa \\n, \\t, \\\" o \\\\".to_string(),
+                                    });
+                                    break;
+                                }
+                            },
+                            Some(ch) => s.push(ch),
+                            None => {
+                                self.errors.push(LexError {
+                                    code: "E002".to_string(),
+                                    message: "String interpolado f\"...\" sin cerrar".to_string(),
+                                    pos: start_pos,
+                                    suggestion: "Agrega una comilla doble '\"' al final del texto".to_string(),
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    tokens.push(Token::new(
+                        TokenKind::FStrLiteral(s),
+                        Span::new(start_pos, self.prev_pos()),
+                    ));
                 }
                 Some(ch) if ch.is_ascii_digit() => {
                     let start_pos = self.prev_pos();
@@ -630,8 +686,8 @@ mod tests {
 
     #[test]
     fn test_pipe_token() {
-        let tokens = tokenize("|");
-        assert_eq!(tokens, vec![TokenKind::Pipe, TokenKind::Eof]);
+        let tokens = tokenize("| |>");
+        assert_eq!(tokens, vec![TokenKind::Pipe, TokenKind::PipeGreater, TokenKind::Eof]);
     }
 
     #[test]

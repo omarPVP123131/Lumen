@@ -93,10 +93,6 @@ funcion numero tokenizar(texto src) {
 // ── Parser State: map-based (passed as param, no globals) ──────
 // ═══════════════════════════════════════════════════════════════
 
-funcion numero _st_mk(numero tokens) {
-    numero st = __map_nuevo();
-    st = __map_poner(st, "tokens", tokens);
-
 // Minimal parser
 funcion numero _st_mk(numero tokens) {
     numero st = __map_nuevo();

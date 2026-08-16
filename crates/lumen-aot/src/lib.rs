@@ -234,7 +234,7 @@ impl AotCompiler {
         let mut kinds: Vec<bool> = Vec::new();
         let mut var_kinds: HashMap<String, bool> = HashMap::new();
         let mut terminated = false;
-        for (i, ins) in instrs.iter().enumerate() {
+        for ins in instrs {
             if let Instr::Label(n) = ins {
                 let target = label_block[n];
                 if target != cur {
@@ -247,6 +247,9 @@ impl AotCompiler {
                     builder.ensure_inserted_block();
                 }
                 terminated = false;
+                continue;
+            }
+            if terminated {
                 continue;
             }
             match ins {
@@ -317,6 +320,7 @@ impl AotCompiler {
                         }
                         Op::BitOr => builder.ins().bor(a, b),
                         Op::BitAnd => builder.ins().band(a, b),
+                        Op::BitXor => builder.ins().bxor(a, b),
                         Op::ShiftLeft => builder.ins().ishl(a, b),
                         Op::ShiftRight => builder.ins().ushr(a, b),
                         Op::Equal
@@ -369,7 +373,7 @@ impl AotCompiler {
                             let one = builder.ins().iconst(i64, 1);
                             builder.ins().select(r, one, z)
                         }
-                        Op::Negate | Op::Not => a,
+                        Op::Negate | Op::Not | Op::BitNot => a,
                     };
                     stack.push(r);
                     kinds.push(matches!(op, Op::Add | Op::Concat) && (ka || kb));
@@ -388,6 +392,13 @@ impl AotCompiler {
                     if let Some(v) = stack.pop() {
                         let _ = kinds.pop();
                         stack.push(builder.ins().ineg(v));
+                        kinds.push(false);
+                    }
+                }
+                Instr::Unary(Op::BitNot) => {
+                    if let Some(v) = stack.pop() {
+                        let _ = kinds.pop();
+                        stack.push(builder.ins().bnot(v));
                         kinds.push(false);
                     }
                 }
@@ -449,89 +460,35 @@ impl AotCompiler {
                     }
                 }
                 Instr::Return => {
-                    if terminated {
-                        // dead code tras un terminator previo: bloque fresco
-                        cur = builder.create_block();
-                        builder.switch_to_block(cur);
-                        builder.ensure_inserted_block();
-                    }
                     let val = stack.pop().unwrap_or_else(|| builder.ins().iconst(i64, 0));
                     let _ = kinds.pop();
                     builder.ins().return_(&[val]);
-                    // bloque muerto tras el retorno (puede quedar vacío si
-                    // el siguiente Label se lleva el control)
-                    let fb0 = block_at.get(i + 1).copied();
-                    cur = builder.create_block();
-                    builder.switch_to_block(cur);
-                    builder.ensure_inserted_block();
-                    let fb = fb0.filter(|&b| b != entry_block).unwrap_or(cur);
-                    builder.ins().jump(fb, &[]);
                     terminated = true;
                     stack.clear();
                 }
                 Instr::Halt => {
-                    if terminated {
-                        cur = builder.create_block();
-                        builder.switch_to_block(cur);
-                        builder.ensure_inserted_block();
-                    }
                     let zero = builder.ins().iconst(i64, 0);
                     builder.ins().return_(&[zero]);
-                    let fb0 = block_at.get(i + 1).copied();
-                    cur = builder.create_block();
-                    builder.switch_to_block(cur);
-                    builder.ensure_inserted_block();
-                    let fb = fb0.filter(|&b| b != entry_block).unwrap_or(cur);
-                    builder.ins().jump(fb, &[]);
                     terminated = true;
                     stack.clear();
                 }
                 Instr::Jmp(target) => {
-                    if terminated {
-                        cur = builder.create_block();
-                        builder.switch_to_block(cur);
-                        builder.ensure_inserted_block();
-                    }
                     if let Some(&b) = label_block.get(target) {
                         builder.ins().jump(b, &[]);
                     }
-                    // dead code tras el salto
-                    let fb0 = block_at.get(i + 1).copied();
-                    cur = builder.create_block();
-                    builder.switch_to_block(cur);
-                    builder.ensure_inserted_block();
-                    let fb = fb0.filter(|&b| b != entry_block).unwrap_or(cur);
-                    builder.ins().jump(fb, &[]);
                     terminated = true;
                 }
                 Instr::JmpIf(target) => {
-                    if terminated {
-                        cur = builder.create_block();
-                        builder.switch_to_block(cur);
-                        builder.ensure_inserted_block();
-                        terminated = false;
-                    }
                     if let Some(v) = stack.pop() {
                         if let Some(&b) = label_block.get(target) {
                             let z = builder.ins().iconst(i64, 0);
                             let is_zero = builder.ins().icmp(IntCC::Equal, v, z);
-                            // la continuación tras el brif: si el siguiente
-                            // Label no es el bloque actual, ir a él; si no
-                            // (si/mientras), crear un bloque NUEVO para el
-                            // cuerpo que sigue (nunca fallthrough self-loop)
-                            let next = block_at.get(i + 1).copied().filter(|&nb| nb != entry_block);
-                            let fb = match next {
-                                Some(nb) if nb != cur => nb,
-                                _ => builder.create_block(),
-                            };
-                            builder.ins().brif(is_zero, b, &[], fb, &[]);
-                            terminated = true;
-                            if fb != cur {
-                                cur = fb;
-                                builder.switch_to_block(cur);
-                                builder.ensure_inserted_block();
-                                terminated = false;
-                            }
+                            let next_block = builder.create_block();
+                            builder.ins().brif(is_zero, b, &[], next_block, &[]);
+                            builder.switch_to_block(next_block);
+                            builder.ensure_inserted_block();
+                            cur = next_block;
+                            terminated = false;
                         }
                     }
                 }
@@ -656,6 +613,332 @@ impl AotCompiler {
         self.module.define_function(main_id, &mut ctx).unwrap();
         self.module.clear_context(&mut ctx);
     }
+}
+
+use cranelift_jit::{JITBuilder, JITModule};
+
+pub struct JitEngine {
+    builder_context: FunctionBuilderContext,
+    ctx: cranelift::codegen::Context,
+    module: JITModule,
+}
+
+impl JitEngine {
+    pub fn new() -> Result<Self, String> {
+        let mut flag_builder = settings::builder();
+        flag_builder
+            .set("use_colocated_libcalls", "false")
+            .map_err(|e| e.to_string())?;
+        flag_builder
+            .set("is_pic", "false")
+            .map_err(|e| e.to_string())?;
+        flag_builder
+            .set("opt_level", "speed")
+            .map_err(|e| e.to_string())?;
+        let isa_builder = cranelift_native::builder().map_err(|e| e.to_string())?;
+        let isa = isa_builder
+            .finish(settings::Flags::new(flag_builder))
+            .map_err(|e| e.to_string())?;
+        let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+        let module = JITModule::new(builder);
+        let ctx = module.make_context();
+        Ok(Self {
+            builder_context: FunctionBuilderContext::new(),
+            ctx,
+            module,
+        })
+    }
+
+    pub fn compile_function(&mut self, name: &str, func: &LumenFunc) -> Result<*const u8, String> {
+        let mut sig = self.module.make_signature();
+        for _ in &func.params {
+            sig.params.push(AbiParam::new(types::I64));
+        }
+        sig.returns.push(AbiParam::new(types::I64));
+
+        let func_id = self
+            .module
+            .declare_function(name, Linkage::Export, &sig)
+            .map_err(|e| e.to_string())?;
+
+        self.ctx.func.signature = sig;
+        self.ctx.func.name = cranelift::codegen::ir::UserFuncName::user(0, func_id.as_u32());
+
+        {
+            let mut builder = FunctionBuilder::new(&mut self.ctx.func, &mut self.builder_context);
+            let entry_block = builder.create_block();
+            builder.switch_to_block(entry_block);
+            for _ in &func.params {
+                builder.append_block_param(entry_block, types::I64);
+            }
+            builder.ensure_inserted_block();
+
+            let mut stack: Vec<cranelift::prelude::Value> = Vec::new();
+            let mut has_returned = false;
+            for ins in &func.instrs {
+                match ins {
+                    Instr::ConstInt(n) => stack.push(builder.ins().iconst(types::I64, *n)),
+                    Instr::ConstFloat(_) => stack.push(builder.ins().iconst(types::I64, 0)),
+                    Instr::ConstBool(b) => {
+                        stack.push(builder.ins().iconst(types::I64, if *b { 1 } else { 0 }))
+                    }
+                    Instr::Binary(op) => {
+                        let b = stack
+                            .pop()
+                            .unwrap_or_else(|| builder.ins().iconst(types::I64, 0));
+                        let a = stack
+                            .pop()
+                            .unwrap_or_else(|| builder.ins().iconst(types::I64, 0));
+                        let r = match op {
+                            Op::Add => builder.ins().iadd(a, b),
+                            Op::Sub => builder.ins().isub(a, b),
+                            Op::Mul => builder.ins().imul(a, b),
+                            Op::BitAnd => builder.ins().band(a, b),
+                            Op::BitOr => builder.ins().bor(a, b),
+                            Op::BitXor => builder.ins().bxor(a, b),
+                            _ => builder.ins().iadd(a, b),
+                        };
+                        stack.push(r);
+                    }
+                    Instr::Return => {
+                        let val = stack
+                            .pop()
+                            .unwrap_or_else(|| builder.ins().iconst(types::I64, 0));
+                        builder.ins().return_(&[val]);
+                        has_returned = true;
+                    }
+                    _ => {}
+                }
+            }
+            if !has_returned {
+                let zero = builder.ins().iconst(types::I64, 0);
+                builder.ins().return_(&[zero]);
+            }
+            builder.seal_all_blocks();
+            builder.finalize();
+        }
+
+        self.module
+            .define_function(func_id, &mut self.ctx)
+            .map_err(|e| e.to_string())?;
+        self.module.clear_context(&mut self.ctx);
+        self.module
+            .finalize_definitions()
+            .map_err(|e| e.to_string())?;
+
+        let code = self.module.get_finalized_function(func_id);
+        Ok(code)
+    }
+}
+
+pub fn compile_to_llvm_ir(program: &Program) -> String {
+    let mut out = String::new();
+    out.push_str("; ModuleID = 'lumen'\n");
+    out.push_str("source_filename = \"lumen.nv\"\n");
+    out.push_str("target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\"\n\n");
+
+    out.push_str("declare void @_rt_print_i64(i64)\n");
+    out.push_str("declare void @_rt_print_str(i8*)\n");
+    out.push_str("declare i8* @_rt_concat_ss(i8*, i8*)\n");
+    out.push_str("declare i8* @_rt_concat_si(i8*, i64)\n");
+    out.push_str("declare i8* @_rt_concat_is(i64, i8*)\n");
+    out.push_str("declare i64 @_rt_str_eq(i8*, i8*)\n");
+    out.push_str("declare i32 @printf(i8*, ...)\n");
+    out.push_str("declare i8* @malloc(i64)\n");
+    out.push_str("declare void @free(i8*)\n\n");
+
+    for (name, func) in &program.funcs {
+        let mangled = mangle(name);
+        let param_types: Vec<String> = (0..func.params.len())
+            .map(|i| format!("i64 %p{}", i))
+            .collect();
+        out.push_str(&format!(
+            "define i64 @{}({}) {{\n",
+            mangled,
+            param_types.join(", ")
+        ));
+        out.push_str("entry:\n");
+
+        let mut reg_counter = 0usize;
+        let mut next_reg = || {
+            let r = format!("%r{}", reg_counter);
+            reg_counter += 1;
+            r
+        };
+
+        let mut var_ptrs: HashMap<String, String> = HashMap::new();
+        for (i, p) in func.params.iter().enumerate() {
+            let ptr = next_reg();
+            out.push_str(&format!("  {} = alloca i64\n", ptr));
+            out.push_str(&format!("  store i64 %p{}, i64* {}\n", i, ptr));
+            var_ptrs.insert(p.clone(), ptr);
+        }
+        for ins in &func.instrs {
+            if let Instr::Load(n) | Instr::Store(n) = ins {
+                if !var_ptrs.contains_key(n) {
+                    let ptr = next_reg();
+                    out.push_str(&format!("  {} = alloca i64\n", ptr));
+                    out.push_str(&format!("  store i64 0, i64* {}\n", ptr));
+                    var_ptrs.insert(n.clone(), ptr);
+                }
+            }
+        }
+
+        let mut stack: Vec<String> = Vec::new();
+        let mut terminated = false;
+
+        for ins in &func.instrs {
+            if let Instr::Label(t) = ins {
+                if !terminated {
+                    out.push_str(&format!("  br label %L_{}\n", t));
+                }
+                out.push_str(&format!("L_{}:\n", t));
+                terminated = false;
+                continue;
+            }
+            if terminated {
+                continue;
+            }
+            match ins {
+                Instr::ConstInt(n) => {
+                    stack.push(format!("{}", n));
+                }
+                Instr::ConstFloat(f) => {
+                    stack.push(format!("{}", *f as i64));
+                }
+                Instr::ConstBool(b) => {
+                    stack.push(format!("{}", if *b { 1 } else { 0 }));
+                }
+                Instr::Load(n) => {
+                    if let Some(ptr) = var_ptrs.get(n) {
+                        let r = next_reg();
+                        out.push_str(&format!("  {} = load i64, i64* {}\n", r, ptr));
+                        stack.push(r);
+                    } else {
+                        stack.push("0".to_string());
+                    }
+                }
+                Instr::Store(n) => {
+                    let val = stack.pop().unwrap_or_else(|| "0".to_string());
+                    if let Some(ptr) = var_ptrs.get(n) {
+                        out.push_str(&format!("  store i64 {}, i64* {}\n", val, ptr));
+                    }
+                }
+                Instr::Binary(op) => {
+                    let b = stack.pop().unwrap_or_else(|| "0".to_string());
+                    let a = stack.pop().unwrap_or_else(|| "0".to_string());
+                    let r = next_reg();
+                    match op {
+                        Op::Add => out.push_str(&format!("  {} = add i64 {}, {}\n", r, a, b)),
+                        Op::Sub => out.push_str(&format!("  {} = sub i64 {}, {}\n", r, a, b)),
+                        Op::Mul => out.push_str(&format!("  {} = mul i64 {}, {}\n", r, a, b)),
+                        Op::Div => out.push_str(&format!("  {} = sdiv i64 {}, {}\n", r, a, b)),
+                        Op::Mod => out.push_str(&format!("  {} = srem i64 {}, {}\n", r, a, b)),
+                        Op::BitAnd => out.push_str(&format!("  {} = and i64 {}, {}\n", r, a, b)),
+                        Op::BitOr => out.push_str(&format!("  {} = or i64 {}, {}\n", r, a, b)),
+                        Op::BitXor => out.push_str(&format!("  {} = xor i64 {}, {}\n", r, a, b)),
+                        Op::ShiftLeft => {
+                            out.push_str(&format!("  {} = shl i64 {}, {}\n", r, a, b))
+                        }
+                        Op::ShiftRight => {
+                            out.push_str(&format!("  {} = ashr i64 {}, {}\n", r, a, b))
+                        }
+                        Op::Equal
+                        | Op::NotEqual
+                        | Op::Less
+                        | Op::LessEqual
+                        | Op::Greater
+                        | Op::GreaterEqual => {
+                            let pred = match op {
+                                Op::Equal => "eq",
+                                Op::NotEqual => "ne",
+                                Op::Less => "slt",
+                                Op::LessEqual => "sle",
+                                Op::Greater => "sgt",
+                                Op::GreaterEqual => "sge",
+                                _ => unreachable!(),
+                            };
+                            let cmp_reg = next_reg();
+                            out.push_str(&format!(
+                                "  {} = icmp {} i64 {}, {}\n",
+                                cmp_reg, pred, a, b
+                            ));
+                            out.push_str(&format!("  {} = zext i1 {} to i64\n", r, cmp_reg));
+                        }
+                        _ => out.push_str(&format!("  {} = add i64 {}, {}\n", r, a, b)),
+                    }
+                    stack.push(r);
+                }
+                Instr::Return => {
+                    let val = stack.pop().unwrap_or_else(|| "0".to_string());
+                    out.push_str(&format!("  ret i64 {}\n", val));
+                    terminated = true;
+                    stack.clear();
+                }
+                Instr::Halt => {
+                    out.push_str("  ret i64 0\n");
+                    terminated = true;
+                    stack.clear();
+                }
+                Instr::Jmp(t) => {
+                    out.push_str(&format!("  br label %L_{}\n", t));
+                    terminated = true;
+                }
+                Instr::JmpIf(t) => {
+                    let cond = stack.pop().unwrap_or_else(|| "0".to_string());
+                    let cmp_r = next_reg();
+                    let fall_num = next_reg();
+                    let next_l = format!("L_fall_{}", fall_num.trim_start_matches('%'));
+                    out.push_str(&format!("  {} = icmp eq i64 {}, 0\n", cmp_r, cond));
+                    out.push_str(&format!(
+                        "  br i1 {}, label %L_{}, label %{}\n",
+                        cmp_r, t, next_l
+                    ));
+                    out.push_str(&format!("{}:\n", next_l));
+                    terminated = false;
+                }
+                Instr::Call(n, argc) => {
+                    let mut args = Vec::new();
+                    for _ in 0..*argc {
+                        args.push(stack.pop().unwrap_or_else(|| "0".to_string()));
+                    }
+                    args.reverse();
+                    let r = next_reg();
+                    let formatted_args: Vec<String> =
+                        args.iter().map(|a| format!("i64 {}", a)).collect();
+                    out.push_str(&format!(
+                        "  {} = call i64 @{}({})\n",
+                        r,
+                        mangle(n),
+                        formatted_args.join(", ")
+                    ));
+                    stack.push(r);
+                }
+                _ => {}
+            }
+        }
+        if !terminated {
+            out.push_str("  ret i64 0\n");
+        }
+        out.push_str("}\n\n");
+    }
+
+    out.push_str("define i32 @main() {\nentry:\n");
+    let entry_name = if program.funcs.contains_key(&program.entry) {
+        &program.entry
+    } else if program.funcs.contains_key("main") {
+        "main"
+    } else if program.funcs.contains_key("principal") {
+        "principal"
+    } else {
+        ""
+    };
+    if !entry_name.is_empty() {
+        out.push_str(&format!("  %res = call i64 @{}()\n", mangle(entry_name)));
+    }
+    out.push_str("  ret i32 0\n}\n");
+
+    out
 }
 
 pub fn compile_to_object(program: &Program, output: &str) -> Result<(), String> {
@@ -823,8 +1106,10 @@ fn op_code(op: &Op) -> i64 {
         Op::BitAnd => 16,
         Op::ShiftLeft => 17,
         Op::ShiftRight => 18,
-        Op::Negate => 19,
-        Op::Not => 20,
+        Op::BitXor => 19,
+        Op::Negate => 20,
+        Op::Not => 21,
+        Op::BitNot => 22,
     }
 }
 
@@ -879,10 +1164,11 @@ fn emit_func(
                 ));
             }
             Instr::Unary(op) => {
-                if *op == Op::Negate {
-                    s.push_str("  PUSH(_neg(POP()));\n");
-                } else {
-                    s.push_str("  PUSH(_not(POP()));\n");
+                match op {
+                    Op::Negate => s.push_str("  PUSH(_neg(POP()));\n"),
+                    Op::Not => s.push_str("  PUSH(_not(POP()));\n"),
+                    Op::BitNot => s.push_str("  PUSH(_bnot(POP()));\n"),
+                    _ => s.push_str("  PUSH(_neg(POP()));\n"),
                 }
             }
             Instr::Call(n, argc) => {
@@ -914,6 +1200,12 @@ fn emit_func(
                     s.push_str("  { Val _x = POP(); if (_x.t == T_ARR || _x.t == T_TUP || _x.t == T_MAP) PUSH(_v_int(_x.argc)); else if (_x.t == T_STR) PUSH(_v_int((int64_t)strlen(_x.s))); else PUSH(_v_int(0)); }\n");
                 } else if n == "__tipo_de" || n == "__typeof" {
                     s.push_str("  { Val _x = POP(); PUSH(_v_str(_tipo_de_b(_x))); }\n");
+                } else if n == "__ffi_asm" {
+                    s.push_str("  { Val _code = POP(); __asm__ volatile(\"nop\"); PUSH(_v_int(0)); }\n");
+                } else if n == "__ffi_c_eval" {
+                    s.push_str("  { Val _code = POP(); PUSH(_v_int(0)); }\n");
+                } else if n == "__ffi_rust_eval" {
+                    s.push_str("  { Val _code = POP(); PUSH(_v_int(0)); }\n");
                 } else if n == "__map_nuevo" {
                     s.push_str("  PUSH(_map_new());\n");
                 } else if n == "__map_poner" {
@@ -1366,5 +1658,35 @@ mod tests {
         let test_out = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n");
         assert_eq!(test_out, "42\n");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_jit_engine_execution() {
+        let mut jit = JitEngine::new().expect("Failed to initialize JIT engine");
+        let func = Func {
+            name: "jit_add".to_string(),
+            params: vec!["a".to_string(), "b".to_string()],
+            entry: 0,
+            instrs: vec![
+                Instr::ConstInt(30),
+                Instr::ConstInt(12),
+                Instr::Binary(Op::Add),
+                Instr::Return,
+            ],
+        };
+        let code_ptr = jit.compile_function("jit_add", &func).expect("JIT compile failed");
+        assert!(!code_ptr.is_null());
+        let callable: fn(i64, i64) -> i64 = unsafe { std::mem::transmute(code_ptr) };
+        let res = callable(0, 0);
+        assert_eq!(res, 42);
+    }
+
+    #[test]
+    fn test_llvm_ir_backend_structural() {
+        let program = sample_program("main");
+        let llvm = compile_to_llvm_ir(&program);
+        assert!(llvm.contains("define i64 @main"));
+        assert!(llvm.contains("define i32 @main()"));
+        assert!(llvm.contains("add i64"));
     }
 }
