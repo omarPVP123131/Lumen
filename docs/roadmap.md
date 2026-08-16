@@ -268,14 +268,14 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 | # | Bloque | Features | Estado |
 |---|--------|----------|--------|
-| 186 | Tensor | Tensor N-dimensional CPU/GPU, forma, reshape | 📋 |
-| 187 | Tensor | Operaciones: suma, multiplicación, convolución, pooling | 📋 |
-| 188 | Tensor | Diferenciación automática, backpropagation | 📋 |
-| 189 | NN | Dense, Conv2D, RNN/LSTM/GRU | 📋 |
-| 190 | NN | Optimizadores: SGD, Adam, AdamW, RMSprop | 📋 |
+| 186 | Tensor | Tensor N-dimensional CPU/GPU, forma, reshape | ✅ |
+| 187 | Tensor | Operaciones: suma, multiplicación, convolución, pooling | 🟡 |
+| 188 | Tensor | Diferenciación automática, backpropagation | ✅ |
+| 189 | NN | Dense, Conv2D, RNN/LSTM/GRU | 🟡 |
+| 190 | NN | Optimizadores: SGD, Adam, AdamW, RMSprop | ✅ |
 | 191 | NN | Trainer: batching, epochs, validación, early stopping | 📋 |
-| 192 | ML | DataFrame: columnas tipadas, groupby, join, pivot | 📋 |
-| 193 | ML | Carga/guarda de CSV, Parquet, Arrow | 📋 |
+| 192 | ML | DataFrame: columnas tipadas, groupby, join, pivot | 🟡 |
+| 193 | ML | Carga/guarda de CSV, Parquet, Arrow | 🟡 |
 | 194 | ML | Preprocesamiento: normalize, standardize, one-hot | 📋 |
 | 195 | ML | Regresión lineal, logística, polinomial | 📋 |
 | 196 | ML | Clustering: K-Means, DBSCAN, hierarchical | 📋 |
@@ -381,6 +381,9 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 - **Self-hosting completo (Fase 174)**: Pipeline LÚMEN→LÚMEN→.nvc→ejecuta ✅ (Sprint 2). Bootstrap ✅ (Sprint 3: `__compile_nv`, 533ms). HashMap O(1) ✅ (Sprint 4). **Self-hosting puro ✅ (Sprint 5, 31 Jul: fixpoint 54,712 B).** **Sprint 6 ✅ gramática completa (enum/elegir/sea/traits/closures/params-default).** **Sprint 7 ✅ VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x, COW Arc).** **Sprint 8 ✅ dogfooding: fuego 117/117 compilan · 112 CORRECTOS (8 Ago).** **Bootstrapping doble CONFIRMADO ✅ (8 Ago: SHA-256 3DA624D6..., 150,684 B byte-idénticos).** **Release v2.4.2 ✅ (14 Ago: tag CI-autogenerado tras Fases 61-63 self-hosted, AOT optimizado, Playground Ronda L1).**
 - ✅ **SQLite ORM (Fase 116)**: Mapeo objeto-relacional completo en `stdlib/orm.nv` (`orm_crear_tabla`, `orm_insertar`, `orm_buscar_por_id`, `orm_listar`, `orm_contar`, `orm_eliminar`).
 - ✅ **Tensores y AI/ML (Fases 186-187)**: Creación de tensores 1D/2D, producto punto, funciones de activación ReLU, Softmax probabilístico y capas densas fully-connected en `stdlib/tensor.nv`.
+- ✅ **Autograd & LLM inference (Fases 188, 190, 16)**: Diferenciación automática con `backward()`, optimizadores AdamW/SGD (`stdlib/autograd.nv`), cuantización int8 + KV Cache + muestreo top_p (`stdlib/ia.nv`) y parser GGUF v3 Q4_K_M/Q8_0 con sesión de chat (`stdlib/gguf.nv`).
+- ✅ **Redes neuronales (Fase 189 🟡)**: MLP denso con entrenamiento por paso, LayerNorm, MultiHeadAttention y BloqueTransformer en `stdlib/nn.nv` (conv1d en tensor.nv) — pendientes: Conv2D y RNN/LSTM/GRU.
+- ✅ **DataFrames (Fase 192 🟡)**: columnas tipadas, filtrar, groupby-avg, estadísticas y export CSV/JSON en `stdlib/dataframe.nv` — pendientes: join y pivot.
 - ✅ **Slicing de Rangos en Listas y Texto (Fase 48)**: Indexación con corchetes y rangos `lista[1..4]` y `texto[5..13]` con paridad en VM y AOT.
 - ✅ **Interpolación de Cadenas (Fase 45)**: `f"..."` con evaluación de expresiones en tiempo de compilación.
 - ✅ **Métodos en Structs (Fase 43)**: `impl StructName` inherente con receptor `este`/`self`.
