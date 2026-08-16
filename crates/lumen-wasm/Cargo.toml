@@ -3,6 +3,8 @@ name = "lumen-wasm"
 version.workspace = true
 edition.workspace = true
 description = "LÚMEN WebAssembly runtime — ejecuta LÚMEN en el navegador"
+license = "MIT"
+repository = "https://github.com/omarPVP123131/Lumen"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

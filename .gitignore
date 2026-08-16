@@ -1,28 +1,225 @@
-# Rust
-target/
-**/*.rs.bk
+# ============================================================================
+# LÚMEN — MASTER .gitignore (Ecosistema de Distribución Multiplataforma v2.4.6)
+# Configuración Completa para Desarrollo, CI/CD, Empaquetado y Distribución
+# Plataformas: Windows (MSVC/MinGW), Linux (glibc/musl), Android (Termux/NDK),
+#              macOS (Apple Silicon/Intel), iOS, WebAssembly, Docker y Nube
+# ============================================================================
 
-# IDE
-.vscode/
+# ── 1. RUST & CARGO BUILD SYSTEM ─────────────────────────────────────────
+/target/
+target/
+**/target/
+**/*.rs.bk
+Cargo.lock.bak
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+
+# ── 2. LÚMEN COMPILATION & BYTECODE ARTIFACTS ────────────────────────────
+# Bytecode LÚMEN portátil
+*.nvc
+*.nva
+
+# Paquetes y distribuciones comprimidas
+*.lmp
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+*.zip
+*.7z
+*.rar
+*.pkg
+*.dmg
+
+# Artefactos de paquetes Debian / RedHat / Arch / Termux
+*.deb
+*.rpm
+*.pkg.tar.zst
+*.apk
+*.aab
+*.dex
+
+# ── 3. BINARIOS Y BIBLIOTECAS NATIVAS (C / C++ / Assembler) ──────────────
+# Windows Executables & Debug Symbols
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.msi
+*.msix
+*.appx
+
+# Linux & Unix Binaries / Shared Libraries
+*.elf
+*.bin
+*.out
+*.so
+*.so.*
+*.a
+*.o
+*.obj
+*.appimage
+*.snap
+*.flatpak
+
+# Binarios compilados SIN extensión (AOT/C/standalone/baremetal — se regeneran)
+examples/hello
+examples/demo_fases_completas
+examples/demo_fronteras_totales
+examples/demo_matriz_simd_ia
+examples/demo_scheduler_concurrencia
+examples/test_cross_compile
+examples/test_neuro_self_healing
+stdlib/compiler/bench_fib
+
+# C transpilado por el backend AOT (fuentes generados, no se versionan)
+examples/demo_mobile_compilation.c
+examples/test_cross_compile.c
+*.temp.c
+
+# macOS / iOS Dynamic Libraries & Frameworks
+*.dylib
+*.framework/
+*.dSYM/
+*.ipa
+
+# ── 4. RUNTIME LOCAL, CACHÉ Y REGISTRO DE PAQUETES ───────────────────────
+.lumen/
+lumen_cache/
+.lumen_cache/
+lumen_serve.log.json
+target/lumen_serve.log.json
+credentials.json
+.credentials.json
+.registry_cache/
+
+# Salida de `lumen pack` / empaquetado de distribución
+dist_test/
+dist_test2/
+dist_test3/
+
+# ── 5. WEBASSEMBLY, NODE.JS & WEB PLAYGROUND ─────────────────────────────
+crates/lumen-wasm/pkg/
+crates/lumen-wasm/web/pkg/
+crates/lumen-wasm/target/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.turbo/
+.vercel/
+.next/
+.nuxt/
+dist/
+build/
+out/
+
+# ── 6. ANDROID / TERMUX / MOBILE NDK ────────────────────────────────────
+.gradle/
+local.properties
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+captures/
+.cxx/
+android_build/
+bin/
+gen/
+
+# ── 7. APPLE (macOS / iOS / Xcode) ───────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+*.xcuserstate
+project.xcworkspace/
+xcuserdata/
+DerivedData/
+Pods/
+
+# ── 8. MICROSOFT WINDOWS OS ARTIFACTS ────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msm
+*.msp
+
+# ── 9. LINUX & UNIX SYSTEM ARTIFACTS ─────────────────────────────────────
+*~
+.directory
+.fuse_hidden*
+.nfs*
+core
+core.*
+vgcore.*
+
+# ── 10. IDES, EDITORES DE CÓDIGO Y HERRAMIENTAS ──────────────────────────
+# VS Code (Conserva extensiones y configuraciones compartidas del proyecto)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains (IntelliJ, CLion, RustRover)
 .idea/
+*.iml
+
+# Visual Studio / C++ MSVC
+.vs/
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.sln
+
+# Editores Modernos & Clásicos
+.zed/
+.fleet/
+.opencode/
 *.swp
 *.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
 
-# OpenCode
-.opencode/
-
-# Bytecode outputs
-*.nvc
-
-# Coverage
-coverage.json
+# ── 11. TESTING, COBERTURA, SCRATCH Y PERFILADO ──────────────────────────
 coverage/
+coverage.json
 lcov.info
-
-# OS
-.DS_Store
-Thumbs.db
-*.exe
+*.lcov
+*.log
+*.tmp
+tmp/
+temp/
+benchmarks_output/
 test_async.txt
 test_salida.txt
 test_ffi_io.txt
+fuego_tmp_err.txt
+fuego_tmp_out.txt
+test_salida_servidor.txt
+entrada_vm.txt
+target.txt
+*.tmp.nv
+*.temp.c
+
+# ── 12. VARIABLES DE ENTORNO Y SECRETOS ──────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.keystore
+id_rsa
+id_ed25519

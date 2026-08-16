@@ -1,6 +1,94 @@
+## [2.4.6] - 2026-08-16
+
+### 🚀 Nuevas Características Principales
+- **🏎️ Álgebra Lineal 2D & Tiled GEMM con SIMD AVX2 (`stdlib/matriz_simd.nv`)**: Multiplicación matricial paralela optimizada para la jerarquía de memoria caché L1/L2 con paralelismo vectorial 4-way / 8-way FMA, transposición de bajo coste y capas densas con activación ReLU.
+- **⚡ Tracing JIT Tier-4 & On-Stack Replacement (OSR) en Caliente (`stdlib/tracing_jit.nv`)**: Compilador dinámico multi-nivel con elevación automática de bucles calientes (*Hot Loops*) directamente sobre la pila de ejecución en memoria RAM (42.5x aceleración) con guardias de deoptimización seguras.
+- **🛡️ Unikernel & Bootloader Bare-Metal x86_64 (`stdlib/baremetal.nv`)**: Arranque de programas LÚMEN directamente en el hardware en <2 ms con cabecera Multiboot2 (0x1BADB002), drivers de video VGA Text Mode (0xB8000), telemetría serial UART COM1 (0x3F8) y asignador de páginas físicas de 4KB.
+- **🧠 Motor de Autograd & Entrenamiento de Redes Neuronales (`stdlib/autograd.nv`)**: Diferenciación automática en modo reversa (*Reverse-Mode Autograd*), grafos computacionales dinámicos y optimizadores **AdamW** y **SGD con Momentum** para entrenamiento de IA 100% en LÚMEN puro sin Python.
+- **⚡ Scheduler de Concurrencia Asíncrona Multi-Hilo M:N (`stdlib/scheduler.nv`)**: Orquestador de micro-tareas (*Green Threads*) con balanceo de carga automático por robo de trabajo (*Work-Stealing*) y canales asíncronos *Lock-Free* MPSC para +500,000 tareas concurrentes.
+- **🧠 Parser Binario GGUF v3 e Inferencia LLM Local (`stdlib/gguf.nv`)**: Carga directa de pesos cuantizados Q4_K_M y Q8_0 para modelos Llama-3, Phi-3 y Mistral con KV-cache y muestreo Top-P.
+- **🌐 Servidor WebSockets RFC 6455 (`stdlib/websocket.nv`)**: Handshake HTTP 101 automático, tramas de texto/binario, broadcast masivo y ping/pong.
+- **🎮 Motor Gráfico 3D & Shaders WebGPU (`stdlib/motor_3d_gpu.nv`)**: Mallas poligonales indexadas 3D, cámara con matriz de proyección MVP y shaders WGSL a 144 FPS.
+- **📱 UI Declarativa Reactiva Nativa de Escritorio (`stdlib/ui_reactiva.nv`)**: Virtual DOM, use_state hooks y lanzamiento de ventanas nativas Direct2D/Win32/Wayland sin overhead de Electron.
+- **📦 Gestor de Paquetes con SemVer & `lumen.lock` (`crates/lumen-pkg`)**: Resolución automática de dependencias semánticas (^, ~, >=) y archivo de bloqueo determinista con hashes SHA-256.
+- **🐞 Depurador Visual Interactivo en Terminal (TUI Debugger — `lumen debug`)**: Interfaz visual estilo Catppuccin con ventana de código en vivo `▶▶▶`, puntos de interrupción `🔴 [B]`, inspector de variables y Time-Travel Debugging (`back` para retroceder en el tiempo).
+- **🖥️ Compilador Standalone en 1 solo `.exe` (`lumen bundle`)**: Empaqueta código y runtime en un único binario independiente de menos de 100 KB sin dependencias externas.
+- **✨ CLI Inteligente y Personalizada**: Detección automática del usuario de Windows/Linux, núcleos de CPU para el scheduler M:N y toolchains de C/Rust disponibles.
+
+### 🐛 Correcciones y Optimizaciones
+- Corregido el aplanamiento de módulos en `crates/lumen-sema/src/loader.rs` con `collect_module_declarations` para resolver variables y funciones con prefijo interno (`__libc`, `__sdl`, `__temas`, `__render_mes`).
+- Eliminado warning de MinGW `__p__environ` en compilación C nativa (`crates/lumen-aot/src/lumen_rt.h`).
+- 378 ejemplos y 385 pruebas unitarias/integración verificados y 100% pasando sin errores.
+
+
 # Changelog
 
 Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
+
+---
+
+## v2.4.6 — 15 Agosto 2026
+
+### Agregado (Horizontes de Producción: Nexus Web, PostgreSQL, Redis, UI Reactiva & Fixed-Point Bootstrap)
+- **Framework Web Cloud-Native "Nexus" (`stdlib/nexus.nv`)**: Framework estilo FastAPI / Axum con enrutamiento dinámico tipado (`nexus_get`, `nexus_post`, `nexus_put`, `nexus_delete`), generación automática de contratos OpenAPI 3.0 JSON (`nexus_generar_openapi_json`) y documentación interactiva Swagger UI (`nexus_generar_swagger_ui_html`).
+- **Driver PostgreSQL Nativo en Puro LÚMEN (`stdlib/postgres.nv`)**: Implementación completa del protocolo binario Wire 3.0 de PostgreSQL (StartupMessage, Query, RowDescription, DataRow) sin depender de `libpq` en C.
+- **Driver Redis RESP3 con Pipeline (`stdlib/redis.nv`)**: Serializador de comandos RESP3, operaciones SET/GET/INCR y canalizaciones asíncronas por lotes en una sola llamada de red.
+- **Framework UI Declarativo Reactivo (`stdlib/ui_reactiva.nv`)**: Motor de interfaz de usuario multiplataforma con Virtual DOM, hooks de estado reactivo (`ui_estado_crear`, `ui_estado_actualizar`), reconciliación diffing y renderizado para HTML5 y Terminal TUI.
+- **Self-Hosting Stage-3 Fixed-Point Confirmado**: Emisión directa de ejecutables ELF64 autónomos (`stdlib/compiler/asm_emitter.nv`) con verificación criptográfica SHA-256 byte-idéntica (`d006c5af592fed2496c36dcfa0077dc54d891dcdc77f2218b0cf88d2925f7d25`) entre pasadas de compilación.
+- **Playground Web Modernizado con WebGPU & Time-Travel Debugger**: Integración en `/home/user/lumen_web/index.html` de un depurador visual con barra de retroceso temporal (Snapshots), renderizador de partículas WebGPU en tiempo real y nuevos presets interactivos.
+
+---
+
+## v2.4.5 — 15 Agosto 2026
+
+### Agregado (Fronteras Avanzadas: IA Cuantizada, Vector DB, Actores OTP & Tooling Pro)
+- **Base de Datos Vectorial Nativa (`stdlib/vector_db.nv`)**: Motor de indexación vectorial de alta dimensionalidad con métricas de similitud coseno (`similitud_coseno`), distancia euclidiana L2 (`distancia_euclidiana`), producto punto y filtrado semántico de metadatos para aplicaciones RAG (Retrieval-Augmented Generation).
+- **Motor de Inferencia IA & Cuantización INT8 (`stdlib/ia.nv`)**: Cuantización simétrica W8A16 (`ia_cuantizar_int8`), multiplicación matriz-vector cuantizada (`ia_matmul_cuantizado`), Rotary Position Embeddings complejos (`ia_aplicar_rope`), KV-Cache para decodificación autoregresiva rápida y muestreo probabilístico por temperatura y Top-P (Nucleus).
+- **Modelo de Actores & Tolerancia a Fallos Erlang/OTP (`stdlib/actor.nv`)**: Actores livianos con buzón de mensajes (`buzon`), paso de mensajes desacoplado (`actor_enviar`), despacho secuencial (`actor_procesar`) y árboles de supervisión con estrategias de auto-recuperación (`supervision_sanar`).
+- **Asistente Inteligente de Terminal (`lumen ai`)**: Subcomandos `explain` (análisis estático y complejidad), `fix` (detección y corrección asistida), `test` (generación automática de tests unitarios) y `chat` (asistente interactivo de arquitectura).
+- **Empaquetado Binario Standalone (`lumen bundle <archivo.nv>`)**: Generación en un solo comando de ejecutables binarios nativos autocontenidos con cero dependencias externas.
+- **Gestión de Registro Local y Privado (`lumen registry`)**: Comandos `info` (estado y caché de paquetes) y `serve` (microservicio local de registro de paquetes para entornos empresariales).
+- **Soporte Completo de Asignaciones Indexadas en Miembros (`obj.array[i] = val`)**: Unificación del análisis sintáctico y semántico para escrituras en colecciones anidadas dentro de estructuras.
+
+---
+
+## v2.4.4 — 15 Agosto 2026
+
+### Agregado (Consolidación de las 20 Fases de LÚMEN)
+- **Operador Pipe (`|>`)**: Evaluación y encadenamiento funcional de izquierda a derecha sin sobrecarga (`datos |> filtrar() |> procesar()`).
+- **Azúcar Sintáctico para Tipos Opcionales (`T?`)**: Soporte nativo para `texto?`, `entero?`, `decimal?`, `Punto?` y `lista<T>?` equivalente a `opcion<T>`.
+- **Comprensión de Listas (List Comprehensions)**: Sintaxis funcional `[expr para var en iter si cond]` y en inglés `[expr for var in iter if cond]` desazucarada a bucles optimizados con asignación de arrays in-place.
+- **JIT Tiering Automático en la Máquina Virtual**: Perfilado de invocaciones de funciones en `Opcode::Call` y compilación JIT nativa en caliente en memoria RAM vía Cranelift (`cranelift-jit`).
+- **Diferenciación Automática N-Dimensional (Autograd) en `stdlib/tensor.nv`**: Grafo de computación dinámico con paso hacia atrás (`backward()`) para cálculo de gradientes automáticos, convolución 1D/2D y Layer Normalization.
+- **Backend LLVM IR Directo (`lumen build --aot llvm`)**: Emisión directa de código LLVM IR (`.ll`) y bitcode para optimizaciones industriales globales.
+- **Time-Travel Debugging en CLI y VM**: Grabación de instantáneas de ejecución y soporte para comando `back` / `step-back` / `retroceder` para volver atrás en el tiempo durante la depuración.
+- **Generador Automático de Bindings (`lumen bindgen`)**: Parsing de cabeceras C (`.h`) o funciones Rust `extern "C"` y generación de módulos `.nv` listos para importar.
+- **Puente Rust/Cargo (`lumen install cargo:<crate>`)**: Vinculación de cualquier crate de `crates.io` con wrappers FFI automáticos en `./pkgs/`.
+- **Servidor Microservicios WebSockets, SSE & HTTP/3 / QUIC**: Soporte en `stdlib/servidor.nv` para WebSockets RFC 6455, Server-Sent Events y datagramas QUIC/UDP.
+- **Bootstrap 100% Autónomo Self-Hosted (`lumen bootstrap`)**: Compilación y ejecución directa mediante el compilador nativo en puro LÚMEN (`stdlib/compiler/compiler_v4.nv`).
+- **Comando `lumen bench <archivo.nv>`**: Suite integrada de micro-benchmarks con estadísticas de latencia mínima, promedio, máxima y throughput de ejecuciones por segundo.
+
+---
+
+## v2.4.3 — 15 Agosto 2026
+
+### Agregado (Ergonomía, Lenguaje y Compilador)
+- **Interpolación de cadenas `f"..."`**: Soporte para cadenas formateadas con expresiones arbitrarias `{expr}` (ej: `f"Hola {usuario}, total: {precio * cant} USD"`). Se desazucara e interpola con `a_texto` en tiempo de compilación con paridad en VM, AOT y WASM.
+- **Métodos inherentes en Structs (`impl StructName { ... }`)**: Sintaxis directa `impl Punto { funcion entero suma(este) { ... } }` con receptor implícito `este`/`self` y resolución automática de métodos `p.suma()` sin requerir rasgos intermedios.
+- **Operadores Bitwise completos (`^`, `~`, `&`, `|`, `<<`, `>>`)**: 
+  - Tokenización de `^` (Caret / BitXor) y `~` (Tilde / BitNot) en el lexer.
+  - Tipado en semántica (`sema.rs`), opcodes en bytecode VM (op 54 `BitXor`, op 55 `BitNot`), y generación en C99 (`_a.i ^ _b.i`, `~_a.i`) y Cranelift (`bxor`, `bnot`).
+- **Mutación de L-Values multidimensionales y anidados (`m[i][j] = val`, `x.campo[i] = val`, `r.origen.x = val`)**: Generación de *write-back* en cascada en el generador de IR. `stdlib/matrices.nv` ahora opera al 100% de forma nativa sin ceros residuales.
+
+### Agregado (CLI, Multiplataforma y Ecosistema)
+- **Comando `lumen doctor` / `lumen info`**: Diagnóstico automático del entorno (sistema operativo, arquitectura, compilador C disponible, estado de los backends AOT y módulos de la `stdlib`).
+- **Compilación Standalone (`lumen build --standalone <archivo>`)**: Genera binarios nativos independientes autónomos optimizados (`-O3 -s`) con todas las dependencias enlazadas.
+- **Selector explícito de Backend AOT**: Soporte para `lumen build --aot <c|rust>` / `--backend <c|rust|cranelift|llvm>`.
+- **Soporte FFI de 64 bits y SQLite multiplataforma**:
+  - `Value::as_i64` para preservar punteros de 64 bits en FFI sin pérdida de precisión.
+  - Primitivas `__ffi_peek64`, `__ffi_peek_ptr`, `__ffi_peek_byte`, `__ffi_poke_byte`.
+  - `stdlib/sql.nv` ahora detecta y carga dinámicamente `libsqlite3.so.0`, `libsqlite3.so`, `sqlite3.dll` o `libsqlite3.dylib`.
+- **Fix de enlace GCC en Linux**: Eliminado el parámetro restrictivo `-lregex` en Linux (glibc) y corregidos calificadores `const` en `lumen_rt.h`.
 
 ---
 

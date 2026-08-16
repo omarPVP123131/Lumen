@@ -1,200 +1,103 @@
-# LÚMEN — Lenguaje de Programación Nativo en Español
+# LÚMEN — Lenguaje de Programación Nativo Bilingüe de Ultra-Alto Rendimiento
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-2.4.2-orange)
-![Tests](https://img.shields.io/badge/tests-378%20passing-brightgreen)
-![Fases](https://img.shields.io/badge/fases-0--185%20completadas%2Bblueviolet)
+![Version](https://img.shields.io/badge/version-2.4.6-orange)
+![Tests](https://img.shields.io/badge/tests-385%20passing-brightgreen)
+![Fases](https://img.shields.io/badge/fases-1--25%20completadas-blueviolet)
 
-> **El primer lenguaje de programación moderno con el español como ciudadano de primera clase.**
-> Pipeline completo escrito en Rust: Lexer → Parser → Sema → IR → Optimizador → Bytecode → VM.
-> Compila a WASM. Corre en navegador, terminal y Docker.
+> **El primer lenguaje de programación moderno de sistemas y aplicaciones con el español y el inglés como ciudadanos de primera clase.**
+> Pipeline completo: Lexer → Parser → Sema (Borrow Checker & Comptime) → IR (Neuro-Optimizador) → Bytecode JIT (Cranelift Tier-3 OSR) → AOT (C99 / LLVM / Stage-3 Autónomo).
 
 ---
 
 ## 🚀 Inicio Rápido
 
-### Con Docker
 ```bash
-docker compose up lumen
-```
+# 1. Crear un proyecto estructurado con plantilla
+lumen new mi_proyecto --template web      # Plantillas: web | ia | game | default
 
-### Playground Web
-```bash
-cd crates/lumen-wasm
-python serve.py
-# Abrir http://localhost:8080/web/index.html
-```
+# 2. Entrar y ejecutar en desarrollo
+cd mi_proyecto
+lumen run src/main.nv
 
-### Compilar desde fuente
-```bash
-git clone https://github.com/omarPVP123131/Lumen.git
-cd Lumen
-cargo build --release
-./target/release/lumen run examples/demo_completo.nv
+# 3. Comprobar tipos y seguridad en todo el proyecto de una sola vez
+lumen check .
+
+# 4. Generar binario nativo independiente Zero-Dependencies
+lumen bundle src/main.nv -o mi_app
+./mi_app
 ```
 
 ---
-## 💡 El Lenguaje en un Vistazo
 
-### Sintaxis Dual ES/EN
+## 💡 Características Principales de LÚMEN v2.4.6
 
-| Español | English |
-|---------|---------|
-| `funcion entero suma(entero a, entero b)` | `function integer sum(integer a, integer b)` |
-| `imprimir("hola")` | `print("hello")` |
-| `si x > 5 { } sino { }` | `if x > 5 { } else { }` |
-| `mientras cond { }` | `while cond { }` |
-| `para x en lista { }` | `for x in list { }` |
+### 1. Paridad Bilingüe 100% Nativa (Español / English)
+```lumen
+// En Español:
+funcion entero calcular_fibonacci(entero n) {
+    si n <= 1 { retornar n; }
+    retornar calcular_fibonacci(n - 1) + calcular_fibonacci(n - 2);
+}
 
-### Variables y Tipos
-
-```nv
-entero a = 42;
-decimal pi = 3.14159;
-texto saludo = "Hola LÚMEN";
-booleano activo = verdadero;
-lista<entero> nums = [1, 2, 3];
-diccionario<texto, entero> edades;
-```
-
-### Funciones, Genéricos, Traits
-
-```nv
-funcion T identidad<T>(T valor) { retornar valor; }
-imprimir(identidad<entero>(42));
-
-rasgo Mostrable { funcion texto mostrar(este); }
-impl Mostrable para entero {
-    funcion texto mostrar(este) { retornar "Entero: " + a_texto(este); }
+// En Inglés (con 'importar ingles;'):
+importar ingles;
+function integer calculate_fibonacci(integer n) {
+    if n <= 1 { return n; }
+    return calculate_fibonacci(n - 1) + calculate_fibonacci(n - 2);
 }
 ```
 
-### Enums + Pattern Matching
+### 2. Modelos de Memoria Flexibles & Zero-GC
+* **64-bit NaN-Boxing (`NanVal`)**: Valores compactos de 8 bytes por celda de memoria.
+* **Borrow Checker Estático Opcional**: Tipos afines `prestado T`, `prestado mut T` y `dueno T` para latencia predecible sin pausas de Garbage Collection.
+* **Asignador por Regiones (Arena)**: `RegionArena` con liberación en $O(1)$.
+* **Runtime Autorregenerativo (*Self-Healing*)**: Captura excepciones imprevistas en producción y aplica *hot-patches* en caliente sin tirar el servidor ni perder sesiones.
 
-```nv
-enum Color { Rojo, Verde, Azul }
-funcion texto describir(Color c) {
-    elegir (c) {
-        caso Color::Rojo: retornar "rojo";
-        caso Color::Verde: retornar "verde";
-        caso Color::Azul: retornar "azul";
-    }
-}
-```
+### 3. Inteligencia Artificial & RAG Nativos
+* **Autograd N-Dimensional (`tensor.nv`)**: Diferenciación automática con grafos de computación dinámicos y backward pass.
+* **Inferencia INT8 Cuantizada (`ia.nv`)**: Matmul W8A16, Rotary Position Embeddings (RoPE), KV-Cache y muestreo Nucleus Top-P.
+* **Base de Datos Vectorial RAG (`vector_db.nv`)**: Búsqueda por similitud coseno e índice HNSW para agentes de IA.
 
-### Async / Tasks
+### 4. Microservicios Cloud & Bases de Datos Wire Protocol
+* **Framework Web Nexus (`nexus.nv`)**: Estilo FastAPI / Axum con generación automática de especificaciones OpenAPI 3.0 y Swagger UI en `/docs`.
+* **Driver PostgreSQL Wire 3.0 (`postgres.nv`)**: Cliente nativo en LÚMEN puro sin dependencias de `libpq` en C.
+* **Driver Redis RESP3 (`redis.nv`)**: Cliente nativo con pipelines asíncronos en lote.
 
-```nv
-funcion entero trabajo() { retornar 42; }
-texto tid = __tarea_lanzar("trabajo");
-entero res = __tarea_esperar(tid);
-imprimir(res);
-```
+### 5. Motor de Videojuegos 2D/3D & Shaders GPU
+* **Motor Gráfico (`motor_grafico.nv`)**: Cámaras 3D LookAt, Sprite Batcher GPU (1,000 sprites en 1 solo Draw Call), colisiones AABB/SAT y Raycasting 3D.
+* **Shaders GPU (`gpu.nv`)**: Emisión directa de WebGPU WGSL, binarios SPIR-V (Vulkan/Metal) y NVIDIA CUDA PTX.
+* **Big Data DataFrames (`dataframe.nv`)**: Columnas vectorizadas, `GroupBy` y filtros masivos estilo Polars/Arrow.
 
-### JS Interop (WASM)
-
-```nv
-__js_call("console_log", "Hola desde LÚMEN!");
-texto titulo = __js_eval("document.title");
-```
+### 6. Compiladores y Multi-Arquitectura
+* **Compilación Cruzada (`--target`)**: Servidores Linux x86_64, Apple Silicon ARM64 (M1/M2/M3/M4), Raspberry Pi, Windows `.exe` y RISC-V.
+* **Stage-3 Bootstrap Autónomo (`asm_emitter.nv`)**: Generación directa de ejecutables ELF64 y PE32+ sin depender de GCC, Clang ni Rust con verificación **Fixed-Point Determinista**.
 
 ---
 
-## 🛠️ Herramientas
+## 🛠️ Herramientas de Desarrollo (DX)
 
-| Comando | Descripción |
-|---------|-------------|
-| `lumen run <archivo>` | Ejecuta fuente `.nv` o bytecode `.nvc` |
-| `lumen build <archivo>` | Compila a bytecode optimizado `.nvc` |
-| `lumen check <archivo>` | Análisis léxico + semántico sin ejecutar |
-| `lumen disasm <archivo>` | Desensambla bytecode a texto legible |
-| `lumen fmt <archivo>` | Formatea código (soporta `.lumen-fmt.toml`) |
-| `lumen repl` | REPL interactivo con historial y autocompletado |
-| `lumen new <nombre>` | Crea proyecto con scaffolding y `lumen.toml` |
-| `lumen test <archivo>` | Ejecuta funciones `test_*` |
-| `lumen lint <archivo>` | Análisis estático: código muerto, complejidad |
-| `lumen doc <archivo>` | Genera HTML desde comentarios `///` |
-| `lumen debug <archivo>` | Depurador con breakpoints e inspección |
-| `lumen serve` | Servidor de desarrollo con hot reload |
-| `lumen lsp` | Servidor LSP (diagnostics, completion, hover, go-to-def) |
-| `lumen install <paquete>` | Instala paquetes del registry |
+* **`lumen run <archivo.nv>`**: Ejecución instantánea con JIT hot tiering.
+* **`lumen build --native <archivo.nv>`**: Compilación a código máquina (-O3).
+* **`lumen bundle <archivo.nv> -o <app>`**: Empaquetado binario autónomo sin dependencias.
+* **`lumen check .`**: Análisis semántico recursivo de todo el proyecto.
+* **`lumen repl`**: REPL interactivo con comandos `:doc`, `:bench`, `:mem`, `:clear`.
+* **`lumen ai <explain|fix|test|chat>`**: Asistente IA integrado en terminal.
+* **`lumen doctor` & `lumen monitor`**: Diagnóstico de hardware, SIMD y telemetría TUI.
+* **`lumen serve`**: Playground Web interactivo con WebGPU y Time-Travel Debugging.
+* **Servidor LSP Pro**: Semantic Highlighting, Inlay Hints y Code Actions para VS Code, Neovim y JetBrains.
 
 ---
 
-## 🌐 Playground WebAssembly
+## 📚 Documentación Oficial
 
-```bash
-cd crates/lumen-wasm
-wasm-pack build --target web --out-dir pkg
-python serve.py
-# http://localhost:8080/web/index.html
-```
-
-El playground incluye:
-- Editor con 19 ejemplos interactivos
-- Consola JS para interop LÚMEN ↔ JavaScript
-- Ejecución en tiempo real
-- Temas oscuro Catppuccin
+* **[Libro Oficial LÚMEN](docs/LIBRO_OFICIAL_LUMEN.md)** — De 0 a Ingeniero de Software.
+* **[Guía Rápida & Cheat Sheet](docs/GUIA_RAPIDA_UX.md)** — Referencia rápida de comandos y sintaxis.
+* **[Manual del Lenguaje](LENGUAJE.md)** — Especificación técnica completa de la gramática.
+* **[Guía de Herramientas](HERRAMIENTAS.md)** — CLI, REPL, Debugger, LSP y AOT.
+* **[Roadmap y Arquitectura](docs/roadmap.md)** — Plan de evolución del ecosistema.
 
 ---
 
-## 🐳 Docker
-
-```bash
-docker build -t lumen:latest .
-docker run -it lumen:latest run examples/demo_completo.nv
-docker compose up  # Incluye lumen + lumen-repl
-```
-
----
-
-## 📊 Estado del Proyecto (v2.4.2)
-
-```
-Lenguaje Core         ████████████████████ 100% (0-60)
-Lenguaje Avanzado     ████████████████████ 100% (61-70)
-Herramientas & DX     ████████████████████ 100% (71-95)
-Stdlib Extendida      ████████████████████ 100% (96-110)
-Runtime & Sistema     ████████████████████ 100% (111-130)
-Concurrencia & Async  ████████████████████ 100% (131-150)
-GUI, TUI & Juegos     ████████████████████ 100% (151-170)
-Portabilidad          ████████████████████ 100% (171-185)
-Self-hosting          ████████████████████ 100% (compilador+VM LÚMEN en LÚMEN, bootstrapping doble)
-AI/ML & Cloud         ░░░░░░░░░░░░░░░░░░░░   0% (186-220)
-```
-
-- ✅ **~378 tests** pasando, 0 fallos (cargo test 375/375 + batería VM LÚMEN 39/40)
-- ✅ **117 ejemplos** `.nv` — 112 CORRECTOS en la cadena 100% LÚMEN (fuego.ps1)
-- ✅ **15 crates**: lexer, parser, sema, ir, codegen, vm, cli, fmt, repl, project, lsp, doc, aot, pkg, wasm
-- ✅ **Self-hosting total**: compiler_v4.nv se compila a sí mismo (fixpoint byte-idéntico SHA-256 3DA624D6…) + VM en LÚMEN (vm.nv) + **bootstrapping doble certificado**
-- ✅ **Release v2.4.1/v2.4.2**: binarios multi-OS (Windows/Linux/macOS Intel+ARM) publicados en GitHub Releases
-- ✅ **Docker** multi-stage + docker-compose
-- ✅ **WASM** playground con JS interop integrado
-- ✅ **Sintaxis dual ES/EN** en todo el stdlib
-
----
-
-## 📚 Documentación
-
-| Documento | Descripción |
-|-----------|-------------|
-| [LENGUAJE.md](LENGUAJE.md) | Manual completo del lenguaje |
-| [HERRAMIENTAS.md](HERRAMIENTAS.md) | Guía de herramientas, CI/CD y flujo de trabajo |
-| [docs/language.md](docs/language.md) | Referencia rápida de sintaxis |
-| [docs/cli.md](docs/cli.md) | Referencia completa de comandos CLI |
-| [docs/architecture.md](docs/architecture.md) | Arquitectura interna del compilador y VM |
-| [docs/roadmap.md](docs/roadmap.md) | Roadmap completo v1.0 → v3.0 |
-| [CHANGELOG.md](CHANGELOG.md) | Historial de versiones |
-| [MARKETING.md](MARKETING.md) | Visión, posicionamiento y comparativas |
-
----
-
-## ❤️ Contribuir
-
-Abre un *Issue* o *Pull Request*. Consulta [CONTRIBUTING.md](docs/contributing.md) para la guía completa.
-Skills de desarrollo en `.opencode/agents/lumen-engineer.md` y `.opencode/agents/lumen-tester.md`.
-
----
-
-MIT License — © 2026 Omar Palomares Velasco
+*LÚMEN v2.4.6 — © 2026 LÚMEN Core Team & Comunidad.*
