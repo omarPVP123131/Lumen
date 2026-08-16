@@ -1,4 +1,11 @@
-fn record_server_log(method: &str, path: &str, status: u16, size: usize, duration_ms: f64, client_ip: &str) {
+fn record_server_log(
+    method: &str,
+    path: &str,
+    status: u16,
+    size: usize,
+    duration_ms: f64,
+    client_ip: &str,
+) {
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let now_iso = chrono::Utc::now().to_rfc3339();
 
@@ -10,9 +17,9 @@ fn record_server_log(method: &str, path: &str, status: u16, size: usize, duratio
         format!("{} B", size)
     };
 
-    let status_colored = if status >= 200 && status < 300 {
+    let status_colored = if (200..300).contains(&status) {
         format!("\x1b[1;32m{} OK\x1b[0m", status)
-    } else if status >= 300 && status < 400 {
+    } else if (300..400).contains(&status) {
         format!("\x1b[1;33m{} Redirect\x1b[0m", status)
     } else {
         format!("\x1b[1;31m{} Error\x1b[0m", status)
@@ -28,7 +35,12 @@ fn record_server_log(method: &str, path: &str, status: u16, size: usize, duratio
 
     println!(
         "  \x1b[90m[{}]\x1b[0m {} \x1b[1;37m{:<32}\x1b[0m {} \x1b[90m({:<8} {:>5.2} ms)\x1b[0m",
-        now, method_colored, if path.len() > 32 { &path[..32] } else { path }, status_colored, size_str, duration_ms
+        now,
+        method_colored,
+        if path.len() > 32 { &path[..32] } else { path },
+        status_colored,
+        size_str,
+        duration_ms
     );
 
     // Escribir entrada estructurada en target/lumen_serve.log.json
@@ -43,7 +55,11 @@ fn record_server_log(method: &str, path: &str, status: u16, size: usize, duratio
         let _ = fs::create_dir_all(log_dir);
     }
     use std::io::Write;
-    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(log_dir.join("lumen_serve.log.json")) {
+    if let Ok(mut f) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_dir.join("lumen_serve.log.json"))
+    {
         let _ = f.write_all(log_entry.as_bytes());
     }
 }
@@ -76,7 +92,9 @@ fn run_test_ai_gen(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
     let mut funcs = Vec::new();
     for line in source.lines() {
         let trimmed = line.trim();
-        if (trimmed.starts_with("funcion ") || trimmed.starts_with("function ")) && trimmed.contains('(') {
+        if (trimmed.starts_with("funcion ") || trimmed.starts_with("function "))
+            && trimmed.contains('(')
+        {
             let parts: Vec<_> = trimmed.split_whitespace().collect();
             if parts.len() >= 3 {
                 let name_part = parts[2].split('(').next().unwrap_or("");
@@ -87,7 +105,11 @@ fn run_test_ai_gen(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
         }
     }
 
-    println!("  ✓ Funciones detectadas para prueba: {} ({})", funcs.len(), funcs.join(", "));
+    println!(
+        "  ✓ Funciones detectadas para prueba: {} ({})",
+        funcs.len(),
+        funcs.join(", ")
+    );
     println!("  • Sintetizando casos de prueba unitarios, límites (Boundary) y aserciones...");
 
     let canonical_src = fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
@@ -102,7 +124,8 @@ fn run_test_ai_gen(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
             f_name, f_name
         ));
     }
-    test_content.push_str("imprimir(\"🎉 ¡Todas las pruebas generadas por IA pasaron con éxito!\");\n");
+    test_content
+        .push_str("imprimir(\"🎉 ¡Todas las pruebas generadas por IA pasaron con éxito!\");\n");
 
     if let Some(parent) = Path::new(&out_test_file).parent() {
         let _ = fs::create_dir_all(parent);
@@ -110,7 +133,10 @@ fn run_test_ai_gen(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
     let _ = fs::write(&out_test_file, &test_content);
 
     println!("  ✓ Archivo de pruebas generado: {}", out_test_file);
-    println!("  • Total de tests sintetizados: {} pruebas unitarias con aserciones", funcs.len() * 2);
+    println!(
+        "  • Total de tests sintetizados: {} pruebas unitarias con aserciones",
+        funcs.len() * 2
+    );
     println!("  • Ejecutando suite generada inmediatamente con el motor LÚMEN...");
     println!();
     run_source(&out_test_file, lib_dirs);
@@ -153,9 +179,14 @@ fn run_fuzz(path: &str, lib_dirs: &[PathBuf]) {
         process::exit(1);
     }
 
-    println!("  [1;36m[2/3] Ejecutando {} iteraciones de fuzzing con mutaciones en caliente...[0m", total_runs);
+    println!(
+        "  [1;36m[2/3] Ejecutando {} iteraciones de fuzzing con mutaciones en caliente...[0m",
+        total_runs
+    );
     println!("  ┌──────────────────────────────────────────────────────────────────────┐");
-    println!("  │  [1;32m[████████████████████████████████████████████████████████████] 100%[0m  │");
+    println!(
+        "  │  [1;32m[████████████████████████████████████████████████████████████] 100%[0m  │"
+    );
     println!("  └──────────────────────────────────────────────────────────────────────┘");
 
     let unique_branches = 48;
@@ -166,14 +197,26 @@ fn run_fuzz(path: &str, lib_dirs: &[PathBuf]) {
     println!("  [1;32m[3/3] REPORTE FINAL DE COBERTURA Y ROBUSTEZ:[0m");
     println!("  ══════════════════════════════════════════════════════════════════════");
     println!("  • Iteraciones Ejecutadas : {} ejecuciones", total_runs);
-    println!("  • Velocidad de Fuzzing   : ~{} ejecuciones / segundo", execs_per_sec);
-    println!("  • Caminos de Control (Corpus) : {} ramas únicas descubiertas", unique_branches);
-    println!("  • Cobertura de Ramas     : [1;32m{:.1}%[0m", coverage_pct);
+    println!(
+        "  • Velocidad de Fuzzing   : ~{} ejecuciones / segundo",
+        execs_per_sec
+    );
+    println!(
+        "  • Caminos de Control (Corpus) : {} ramas únicas descubiertas",
+        unique_branches
+    );
+    println!(
+        "  • Cobertura de Ramas     : [1;32m{:.1}%[0m",
+        coverage_pct
+    );
     println!("  • Fallos de Tipo / Crashes: [1;32m0 detectados[0m (Código 100% Blindado)");
     println!("  • Fugas de Memoria (Leaks) : 0 bytes");
     println!();
-    println!("  ✨ ¡Análisis de Fuzzing completado con éxito! El archivo {} es 100% seguro.
-", path);
+    println!(
+        "  ✨ ¡Análisis de Fuzzing completado con éxito! El archivo {} es 100% seguro.
+",
+        path
+    );
 }
 
 fn detect_user_environment() -> (String, String, usize, String) {
@@ -208,7 +251,11 @@ fn detect_user_environment() -> (String, String, usize, String) {
     {
         compilers.push("Clang");
     }
-    if std::process::Command::new("rustc").arg("--version").output().is_ok() {
+    if std::process::Command::new("rustc")
+        .arg("--version")
+        .output()
+        .is_ok()
+    {
         compilers.push("Rustc");
     }
 
@@ -268,9 +315,15 @@ fn print_doctor(lib_dirs: &[PathBuf]) {
     println!("  ══════════════════════════════════════════════════════════════════");
     let (user, os_info, cores, compilers) = detect_user_environment();
     println!("  • Usuario Activo      : {}", user);
-    println!("  • Versión LÚMEN       : v{} (Ecosistema Dual ES/EN)", VERSION);
+    println!(
+        "  • Versión LÚMEN       : v{} (Ecosistema Dual ES/EN)",
+        VERSION
+    );
     println!("  • Sistema Operativo   : {}", os_info);
-    println!("  • Hilos de CPU / Cores: {} núcleos disponibles para Scheduler M:N", cores);
+    println!(
+        "  • Hilos de CPU / Cores: {} núcleos disponibles para Scheduler M:N",
+        cores
+    );
     println!("  • Toolchain Compilador: {}", compilers);
 
     let cc_bin = if cfg!(windows) { "gcc" } else { "cc" };
@@ -329,11 +382,20 @@ fn print_help() {
     println!();
     println!("  [1;36m╔══════════════════════════════════════════════════════════════════════════════════════╗[0m");
     println!("  [1;36m║   ⚡ LÚMEN v{VERSION} — Lenguaje de Programación Nativo y Bilingüe (ES / EN)             ║[0m");
-    println!("  [1;36m║   Hola {} 👋  |  {}  |  {} Cores (SIMD)  |  {}        ║[0m",
+    println!(
+        "  [1;36m║   Hola {} 👋  |  {}  |  {} Cores (SIMD)  |  {}        ║[0m",
         if user.len() > 12 { &user[..12] } else { &user },
-        if os_info.len() > 22 { &os_info[..22] } else { &os_info },
+        if os_info.len() > 22 {
+            &os_info[..22]
+        } else {
+            &os_info
+        },
         cores,
-        if compilers.len() > 18 { &compilers[..18] } else { &compilers }
+        if compilers.len() > 18 {
+            &compilers[..18]
+        } else {
+            &compilers
+        }
     );
     println!("  [1;36m╚══════════════════════════════════════════════════════════════════════════════════════╝[0m");
     println!();
@@ -350,8 +412,12 @@ fn print_help() {
     println!("   build <archivo.nv>          Compilar a bytecode portátil (.nvc)");
     println!("   build --native <archivo.nv> Compilar a binario nativo súper rápido (C/GCC -O3)");
     println!("   build --standalone <arch>   Compilar a binario nativo independiente (Zero-Dependencies)");
-    println!("   build --aot <c|rust|llvm>   Compilar AOT eligiendo backend (C, Rust/Cranelift, LLVM)");
-    println!("   bootstrap [archivo.nv]      Compilar usando el compilador self-hosted en LÚMEN puro");
+    println!(
+        "   build --aot <c|rust|llvm>   Compilar AOT eligiendo backend (C, Rust/Cranelift, LLVM)"
+    );
+    println!(
+        "   bootstrap [archivo.nv]      Compilar usando el compilador self-hosted en LÚMEN puro"
+    );
     println!("   bindgen <header.h | lib.rs> Generar bindings automáticos FFI de C / Rust");
     println!("   pack [directorio]           Empaquetar proyecto para distribución (.lmp)");
     println!("   unpack <archivo.lmp>        Desempaquetar un archivo de proyecto (.lmp)");
@@ -359,9 +425,13 @@ fn print_help() {
     println!();
     println!("  🧪 CALIDAD & DOCUMENTACIÓN / TESTING & DOCS:");
     println!();
-    println!("   test <archivo.nv>           Ejecutar suite de pruebas unitarias / Run tests
-   fuzz <archivo.nv>           Fuzzing guiado por cobertura y detección de edge cases");
-    println!("   bench <archivo.nv>          Ejecutar benchmark de rendimiento / Benchmark performance");
+    println!(
+        "   test <archivo.nv>           Ejecutar suite de pruebas unitarias / Run tests
+   fuzz <archivo.nv>           Fuzzing guiado por cobertura y detección de edge cases"
+    );
+    println!(
+        "   bench <archivo.nv>          Ejecutar benchmark de rendimiento / Benchmark performance"
+    );
     println!("   lint <archivo.nv>           Análisis estático y advertencias de código");
     println!("   debug <archivo.nv>          Depurador interactivo paso a paso / Debugger");
     println!("   doc <archivo.nv>            Generar documentación HTML interactiva");
@@ -374,7 +444,9 @@ fn print_help() {
     println!();
     println!("  🛠️  HERRAMIENTAS & REGISTRO / TOOLS & REGISTRY:");
     println!();
-    println!("   config [list|profile|set]   Configuración global de memoria, optimizadores y perfiles");
+    println!(
+        "   config [list|profile|set]   Configuración global de memoria, optimizadores y perfiles"
+    );
     println!("   ai <explain|fix|test|chat>  Asistente IA integrado para código y tests");
     println!("   bundle <archivo.nv> [salida] Empaquetar en binario nativo independiente");
     println!("   login [usuario] [--token k] Iniciar sesión en el registro con firma Ed25519");
@@ -390,12 +462,18 @@ fn print_help() {
     println!();
     println!("   -L, --lib-dir <dir>         Ruta personalizada de módulos stdlib");
     println!("   --native                    Activa compilación nativa AOT");
-    println!("   --aot <c|rust|llvm|stage3>  Selecciona backend AOT (C -O3, Cranelift, LLVM, Stage-3)");
-    println!("   --memory-model <modelo>     Selecciona modelo: nanbox | borrow-checker | arena | auto");
+    println!(
+        "   --aot <c|rust|llvm|stage3>  Selecciona backend AOT (C -O3, Cranelift, LLVM, Stage-3)"
+    );
+    println!(
+        "   --memory-model <modelo>     Selecciona modelo: nanbox | borrow-checker | arena | auto"
+    );
     println!("   --zero-gc                   Activa modo estricto Borrow Checker Zero-GC");
     println!("   --self-healing              Activa runtime autorregenerativo con hot-patching");
     println!("   --neuro-opt                 Activa optimizador neuro-simbólico en IR");
-    println!("   --profile <perfil>          Perfil predefinido: dev | release | hpc | mcu | cloud");
+    println!(
+        "   --profile <perfil>          Perfil predefinido: dev | release | hpc | mcu | cloud"
+    );
     println!("   --target <triple>           Compilación cruzada: x86_64-linux-gnu, aarch64-apple-darwin, etc.");
     println!("   -O, --opt-level <0|1|2|3>   Nivel de optimización");
     println!("   --port <puerto>             Puerto para el servidor web (por defecto: 8080)");
@@ -1070,7 +1148,11 @@ fn real_main(args: Vec<String>) {
             }
         }
         "check" => {
-            let target = if config.file.is_empty() { "." } else { &config.file };
+            let target = if config.file.is_empty() {
+                "."
+            } else {
+                &config.file
+            };
             if Path::new(target).is_dir() || target == "." {
                 check_project(target, &config.lib_dirs);
             } else {
@@ -1114,21 +1196,29 @@ fn real_main(args: Vec<String>) {
                     );
                     println!("  ═════════════════════════════════════════════════════════════");
                     println!("  📁 Estructura creada en: {}", dir.display());
-                    println!("     ├── lumen.toml         (Configuración del proyecto y manifiesto)");
+                    println!(
+                        "     ├── lumen.toml         (Configuración del proyecto y manifiesto)"
+                    );
                     println!("     ├── README.md          (Guía rápida y comandos)");
                     println!("     ├── .gitignore         (Archivos ignorados)");
                     println!("     ├── src/");
                     println!("     │   └── main.nv        (Código inicial estructurado)");
                     println!("     ├── tests/");
-                    println!("     │   └── test_main.nv   (Suite de pruebas unitarias automáticas)");
+                    println!(
+                        "     │   └── test_main.nv   (Suite de pruebas unitarias automáticas)"
+                    );
                     println!("     ├── stdlib/            (Módulos locales del proyecto)");
                     println!("     └── pkgs/              (Paquetes y dependencias)");
                     println!();
                     println!("  🚀 Próximos pasos para empezar:");
                     println!("     1. cd {}", config.file);
                     println!("     2. lumen run src/main.nv             # Ejecutar en desarrollo");
-                    println!("     3. lumen test tests/test_main.nv     # Correr pruebas unitarias");
-                    println!("     4. lumen check .                     # Comprobar todo el proyecto");
+                    println!(
+                        "     3. lumen test tests/test_main.nv     # Correr pruebas unitarias"
+                    );
+                    println!(
+                        "     4. lumen check .                     # Comprobar todo el proyecto"
+                    );
                     println!("     5. lumen build --native src/main.nv  # Compilar a binario nativo ultra-rápido\n");
                 }
                 Err(e) => {
@@ -1138,11 +1228,18 @@ fn real_main(args: Vec<String>) {
             }
         }
         "publish" | "publicar" => {
-            let proj_path = if config.file.is_empty() { "." } else { &config.file };
+            let proj_path = if config.file.is_empty() {
+                "."
+            } else {
+                &config.file
+            };
             let proj_dir = PathBuf::from(proj_path);
             let manifest_path = proj_dir.join("lumen.toml");
             if !manifest_path.exists() {
-                eprintln!("Error: no se encontró 'lumen.toml' en {}", proj_dir.display());
+                eprintln!(
+                    "Error: no se encontró 'lumen.toml' en {}",
+                    proj_dir.display()
+                );
                 eprintln!("Usa 'lumen new <nombre>' para crear un proyecto estructurado.");
                 process::exit(1);
             }
@@ -1182,35 +1279,56 @@ fn real_main(args: Vec<String>) {
                 ])
                 .status();
 
-            println!("  2. Empaquetando artefacto distribuible: {}", out_pkg_path.display());
+            println!(
+                "  2. Empaquetando artefacto distribuible: {}",
+                out_pkg_path.display()
+            );
             let pkg_bytes = fs::read(&out_pkg_path).unwrap_or_default();
             use std::hash::{Hash, Hasher};
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             pkg_bytes.hash(&mut hasher);
             let checksum = format!("{:016x}", hasher.finish());
 
-            let creds = lumen_pkg::load_credentials().unwrap_or_else(|| {
-                lumen_pkg::UserCredentials {
+            let creds =
+                lumen_pkg::load_credentials().unwrap_or_else(|| lumen_pkg::UserCredentials {
                     username: "omar_dev".to_string(),
                     token: "lmp_token_auto".to_string(),
                     public_key: "ed25519:pk_author_omar".to_string(),
                     registry_url: "https://registry.lumen-lang.org".to_string(),
                     created_at: "2026-08-16T04:00:00Z".to_string(),
-                }
-            });
+                });
 
-            println!("  3. Firma criptográfica Ed25519: {} ({})", creds.username, creds.public_key);
+            println!(
+                "  3. Firma criptográfica Ed25519: {} ({})",
+                creds.username, creds.public_key
+            );
             println!("     Checksum SHA-256: [{}]", checksum);
-            println!("  4. Subiendo paquete a {}/api/v1/packages/publish...", creds.registry_url);
-            println!("  ✨ ¡Paquete '{}' v{} publicado con éxito en el registro público!", name, version);
-            println!("  • Ya está disponible globalmente para instalar con: lumen install {}\n", name);
+            println!(
+                "  4. Subiendo paquete a {}/api/v1/packages/publish...",
+                creds.registry_url
+            );
+            println!(
+                "  ✨ ¡Paquete '{}' v{} publicado con éxito en el registro público!",
+                name, version
+            );
+            println!(
+                "  • Ya está disponible globalmente para instalar con: lumen install {}\n",
+                name
+            );
         }
         "pack" | "empaquetar" => {
-            let proj_path = if config.file.is_empty() { "." } else { &config.file };
+            let proj_path = if config.file.is_empty() {
+                "."
+            } else {
+                &config.file
+            };
             let proj_dir = PathBuf::from(proj_path);
             let manifest_path = proj_dir.join("lumen.toml");
             if !manifest_path.exists() {
-                eprintln!("Error: no se encontró 'lumen.toml' en {}", proj_dir.display());
+                eprintln!(
+                    "Error: no se encontró 'lumen.toml' en {}",
+                    proj_dir.display()
+                );
                 eprintln!("Usa 'lumen new <nombre>' para crear un proyecto estructurado.");
                 process::exit(1);
             }
@@ -1248,8 +1366,14 @@ fn real_main(args: Vec<String>) {
                 .status();
             match status {
                 Ok(st) if st.success() => {
-                    println!("  ✓ Paquete distribuible generado: {}", out_pkg_path.display());
-                    println!("  • Listo para compartir o instalar con 'lumen install {}'.", out_pkg_path.display());
+                    println!(
+                        "  ✓ Paquete distribuible generado: {}",
+                        out_pkg_path.display()
+                    );
+                    println!(
+                        "  • Listo para compartir o instalar con 'lumen install {}'.",
+                        out_pkg_path.display()
+                    );
                     println!();
                 }
                 _ => {
@@ -1360,7 +1484,9 @@ fn real_main(args: Vec<String>) {
         "install" | "add" | "agregar" => {
             if config.file.is_empty() {
                 eprintln!("Error: falta el nombre del paquete, archivo local (.lmp) o carpeta");
-                eprintln!("Uso: lumen install <paquete | ./mi_libreria | ./paquete.lmp | usuario/repo>");
+                eprintln!(
+                    "Uso: lumen install <paquete | ./mi_libreria | ./paquete.lmp | usuario/repo>"
+                );
                 eprintln!("     lumen add <paquete>");
                 process::exit(1);
             }
@@ -1372,7 +1498,11 @@ fn real_main(args: Vec<String>) {
             lumen_pkg::search_packages(&config.file);
         }
         "ai" | "asistente" => {
-            let sub = if config.file.is_empty() { "chat" } else { &config.file };
+            let sub = if config.file.is_empty() {
+                "chat"
+            } else {
+                &config.file
+            };
             run_ai(sub, &config.dest, &config.lib_dirs);
         }
         "bundle" | "empaquetar-bin" => {
@@ -1384,11 +1514,19 @@ fn real_main(args: Vec<String>) {
             run_bundle(&config.file, &config.dest, &config.lib_dirs);
         }
         "login" | "iniciar-sesion" => {
-            let token_opt = if !config.dest.is_empty() { Some(config.dest.as_str()) } else { None };
+            let token_opt = if !config.dest.is_empty() {
+                Some(config.dest.as_str())
+            } else {
+                None
+            };
             lumen_pkg::login_user(&config.file, token_opt);
         }
         "registry" | "registro" => {
-            let sub = if config.file.is_empty() { "info" } else { &config.file };
+            let sub = if config.file.is_empty() {
+                "info"
+            } else {
+                &config.file
+            };
             run_registry(sub, config.port);
         }
         "lsp" => {
@@ -1683,10 +1821,17 @@ fn collect_nv_files(dir: &Path, out: &mut Vec<PathBuf>) {
             let p = entry.path();
             if p.is_dir() {
                 let name = p.file_name().unwrap_or_default().to_string_lossy();
-                if name != "target" && name != ".git" && name != "node_modules" && !name.starts_with('.') {
+                if name != "target"
+                    && name != ".git"
+                    && name != "node_modules"
+                    && !name.starts_with('.')
+                {
                     collect_nv_files(&p, out);
                 }
-            } else if p.is_file() && p.extension().is_some_and(|ext| ext == "nv" || ext == "lumen") {
+            } else if p.is_file()
+                && p.extension()
+                    .is_some_and(|ext| ext == "nv" || ext == "lumen")
+            {
                 out.push(p);
             }
         }
@@ -1704,10 +1849,16 @@ fn check_project(root: &str, lib_dirs: &[PathBuf]) {
     files.sort();
 
     println!();
-    println!("  🔍 COMPROBACIÓN GLOBAL DE PROYECTO (lumen check): {}", root);
+    println!(
+        "  🔍 COMPROBACIÓN GLOBAL DE PROYECTO (lumen check): {}",
+        root
+    );
     println!("  ═════════════════════════════════════════════════════════════");
     if files.is_empty() {
-        println!("  ℹ️  No se encontraron archivos de código fuente (.nv) en '{}'", root);
+        println!(
+            "  ℹ️  No se encontraron archivos de código fuente (.nv) en '{}'",
+            root
+        );
         println!();
         return;
     }
@@ -1755,16 +1906,25 @@ fn check_project(root: &str, lib_dirs: &[PathBuf]) {
     println!("  ═════════════════════════════════════════════════════════════");
     if total_errors == 0 {
         println!("  ✨ ¡Proyecto 100% verificado y seguro!");
-        println!("  • {} archivos comprobados, 0 errores, 0 violaciones de tipos.\n", checked_count);
+        println!(
+            "  • {} archivos comprobados, 0 errores, 0 violaciones de tipos.\n",
+            checked_count
+        );
     } else {
-        eprintln!("  ✗ Se encontraron {} errores en el proyecto. Corrígelos antes de compilar.\n", total_errors);
+        eprintln!(
+            "  ✗ Se encontraron {} errores en el proyecto. Corrígelos antes de compilar.\n",
+            total_errors
+        );
         process::exit(1);
     }
 }
 
 fn check_source(path: &str, lib_dirs: &[PathBuf]) {
     let _ = compile_source(path, lib_dirs);
-    println!("✓ El programa '{}' es válido (sintaxis y semántica correctas)", path);
+    println!(
+        "✓ El programa '{}' es válido (sintaxis y semántica correctas)",
+        path
+    );
 }
 
 fn disasm_file(path: &str) {
@@ -1868,7 +2028,11 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
                 }
                 Err(e) => {
                     failed += 1;
-                    eprintln!("  ✗ {} ... FALLÓ: {}", fm.name, e.with_stack(vm.call_stack()));
+                    eprintln!(
+                        "  ✗ {} ... FALLÓ: {}",
+                        fm.name,
+                        e.with_stack(vm.call_stack())
+                    );
                 }
             }
         }
@@ -1940,13 +2104,20 @@ fn run_bench(path: &str, lib_dirs: &[PathBuf]) {
     let min_time = times_ms.iter().cloned().fold(f64::INFINITY, f64::min);
     let max_time = times_ms.iter().cloned().fold(0.0, f64::max);
     let avg_time: f64 = times_ms.iter().sum::<f64>() / iterations as f64;
-    let throughput = if avg_time > 0.0 { 1000.0 / avg_time } else { 0.0 };
+    let throughput = if avg_time > 0.0 {
+        1000.0 / avg_time
+    } else {
+        0.0
+    };
 
     println!("  • Iteraciones de prueba  : {}", iterations);
     println!("  • Tiempo Mínimo (Best)   : {:>8.2} ms", min_time);
     println!("  • Tiempo Promedio (Avg)  : {:>8.2} ms", avg_time);
     println!("  • Tiempo Máximo (Worst)  : {:>8.2} ms", max_time);
-    println!("  • Rendimiento / Throughput: {:>8.1} ejecuciones/segundo", throughput);
+    println!(
+        "  • Rendimiento / Throughput: {:>8.1} ejecuciones/segundo",
+        throughput
+    );
     println!("  ═════════════════════════════════════════════════════════════");
     println!("  ✓ Benchmark completado con éxito.\n");
 }
@@ -1962,7 +2133,10 @@ fn run_bindgen(input_path: &str, output_path: Option<&str>) {
     println!();
     println!("  ⚙️  LÚMEN BINDGEN — GENERADOR AUTOMÁTICO DE ENLACES C / RUST");
     println!("  ═════════════════════════════════════════════════════════════");
-    println!("  • Analizando firmas de funciones y tipos en: {}", input_path);
+    println!(
+        "  • Analizando firmas de funciones y tipos en: {}",
+        input_path
+    );
 
     let stem = Path::new(input_path)
         .file_stem()
@@ -1993,7 +2167,11 @@ fn run_bindgen(input_path: &str, output_path: Option<&str>) {
         {
             let fn_name = if let Some(pos) = trimmed.find('(') {
                 let prefix = trimmed[..pos].trim();
-                prefix.split_whitespace().last().unwrap_or("").trim_start_matches('*')
+                prefix
+                    .split_whitespace()
+                    .last()
+                    .unwrap_or("")
+                    .trim_start_matches('*')
             } else {
                 ""
             };
@@ -2067,6 +2245,7 @@ fn run_bootstrap(file: &str, _lib_dirs: &[PathBuf]) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_native(
     path: &str,
     lib_dirs: &[PathBuf],
@@ -2104,18 +2283,37 @@ fn build_native(
 
     if !target.is_empty() {
         println!();
-        println!("  🎯 COMPILACIÓN CRUZADA INDUSTRIAL (lumen build --target): {}", target);
+        println!(
+            "  🎯 COMPILACIÓN CRUZADA INDUSTRIAL (lumen build --target): {}",
+            target
+        );
         println!("  ═════════════════════════════════════════════════════════════");
         match target {
             "x86_64-linux-gnu" => println!("  • Arquitectura : x86_64 (Linux ELF64 Server)"),
-            "aarch64-apple-darwin" => println!("  • Arquitectura : ARM64 (Apple Silicon M1/M2/M3/M4 macOS)"),
-            "aarch64-linux-gnu" => println!("  • Arquitectura : ARM64 (Raspberry Pi 4/5 / AWS Graviton)"),
-            "x86_64-pc-windows-msvc" | "x86_64-w64-mingw32" => println!("  • Arquitectura : x86_64 (Windows PE32+ Direct .exe)"),
-            "aarch64-linux-android" => println!("  • Arquitectura : ARM64 (Android NDK JNI Shared Object .so)"),
-            "armv7-linux-androideabi" => println!("  • Arquitectura : ARMv7 (Android NDK 32-bit .so)"),
-            "aarch64-apple-ios" => println!("  • Arquitectura : ARM64 (Apple iOS Device Static/Dynamic Lib .a)"),
-            "x86_64-apple-ios" | "aarch64-apple-ios-sim" => println!("  • Arquitectura : iOS Simulator (Xcode XCFramework Lib)"),
-            "riscv64-unknown-elf" => println!("  • Arquitectura : RISC-V 64-bit (Bare-Metal Open Hardware)"),
+            "aarch64-apple-darwin" => {
+                println!("  • Arquitectura : ARM64 (Apple Silicon M1/M2/M3/M4 macOS)")
+            }
+            "aarch64-linux-gnu" => {
+                println!("  • Arquitectura : ARM64 (Raspberry Pi 4/5 / AWS Graviton)")
+            }
+            "x86_64-pc-windows-msvc" | "x86_64-w64-mingw32" => {
+                println!("  • Arquitectura : x86_64 (Windows PE32+ Direct .exe)")
+            }
+            "aarch64-linux-android" => {
+                println!("  • Arquitectura : ARM64 (Android NDK JNI Shared Object .so)")
+            }
+            "armv7-linux-androideabi" => {
+                println!("  • Arquitectura : ARMv7 (Android NDK 32-bit .so)")
+            }
+            "aarch64-apple-ios" => {
+                println!("  • Arquitectura : ARM64 (Apple iOS Device Static/Dynamic Lib .a)")
+            }
+            "x86_64-apple-ios" | "aarch64-apple-ios-sim" => {
+                println!("  • Arquitectura : iOS Simulator (Xcode XCFramework Lib)")
+            }
+            "riscv64-unknown-elf" => {
+                println!("  • Arquitectura : RISC-V 64-bit (Bare-Metal Open Hardware)")
+            }
             _ => println!("  • Arquitectura : {}", target),
         }
         println!("  • Optimización : AOT Industrial (-O3 + LTO)");
@@ -2172,7 +2370,10 @@ fn build_native(
                 .status();
             match s {
                 Ok(st) if st.success() => {
-                    println!("✓ Binario optimizado con LLVM (-O3): {}", exe_name.display());
+                    println!(
+                        "✓ Binario optimizado con LLVM (-O3): {}",
+                        exe_name.display()
+                    );
                 }
                 _ => {
                     println!("✓ Archivo LLVM IR generado (.ll): {}", ll_path.display());
@@ -2210,9 +2411,7 @@ fn build_native(
                 cc_args.push("-fsanitize=address,undefined");
                 cc_args.push("-g");
             }
-            let s = std::process::Command::new(cc)
-                .args(&cc_args)
-                .status();
+            let s = std::process::Command::new(cc).args(&cc_args).status();
             match s {
                 Ok(st) if st.success() => {
                     prof_time("gcc", &t);
@@ -2220,11 +2419,21 @@ fn build_native(
                         let _ = fs::remove_file(&c_path);
                     }
                     if !target.is_empty() {
-                        println!("✓ Artefacto cross-target generado con éxito para [{}]: {}", target, exe_name.display());
+                        println!(
+                            "✓ Artefacto cross-target generado con éxito para [{}]: {}",
+                            target,
+                            exe_name.display()
+                        );
                     } else if standalone && !embedded {
-                        println!("✓ Binario autónomo (Standalone AOT -O3): {}", exe_name.display());
+                        println!(
+                            "✓ Binario autónomo (Standalone AOT -O3): {}",
+                            exe_name.display()
+                        );
                     } else if embedded {
-                        println!("✓ Binario embebido Bare-Metal MCU (<32 KB): {}", exe_name.display());
+                        println!(
+                            "✓ Binario embebido Bare-Metal MCU (<32 KB): {}",
+                            exe_name.display()
+                        );
                     } else {
                         println!("✓ Binario nativo (C -O3): {}", exe_name.display());
                     }
@@ -2336,7 +2545,11 @@ fn render_tui_debugger_panel(
     println!("  \x1b[1;36m╠══════════════════════════════════════════════════════════════════════════════════════╣\x1b[0m");
 
     // Ventana de código fuente (5 líneas antes y 5 líneas después)
-    let start = if current_line > 4 { current_line - 4 } else { 1 };
+    let start = if current_line > 4 {
+        current_line - 4
+    } else {
+        1
+    };
     let end = (start + 8).min(source_lines.len());
 
     println!("  \x1b[1;33m┌─ 📜 CÓDIGO FUENTE (Línea actual: {}) ───────────────────────────────────────────────┐\x1b[0m", current_line);
@@ -2347,7 +2560,11 @@ fn render_tui_debugger_panel(
         let is_bp = breakpoints.contains(&l);
 
         let bp_mark = if is_bp { "\x1b[1;31m🔴\x1b[0m" } else { "  " };
-        let pointer = if is_current { "\x1b[1;32m▶▶▶\x1b[0m" } else { "   " };
+        let pointer = if is_current {
+            "\x1b[1;32m▶▶▶\x1b[0m"
+        } else {
+            "   "
+        };
 
         let num_str = format!("{:4}", l);
         let num_colored = if is_current {
@@ -2362,7 +2579,10 @@ fn render_tui_debugger_panel(
             format!("\x1b[37m{}\x1b[0m", line_text)
         };
 
-        println!("  │ {} {} {} │ {}", bp_mark, pointer, num_colored, code_colored);
+        println!(
+            "  │ {} {} {} │ {}",
+            bp_mark, pointer, num_colored, code_colored
+        );
     }
     println!("  \x1b[1;33m└──────────────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
 
@@ -2380,7 +2600,10 @@ fn render_tui_debugger_panel(
                 }
             }
             if keys.len() > 6 {
-                println!("  │   \x1b[90m... y {} variables más (escribe 'vars' para ver todas)\x1b[0m", keys.len() - 6);
+                println!(
+                    "  │   \x1b[90m... y {} variables más (escribe 'vars' para ver todas)\x1b[0m",
+                    keys.len() - 6
+                );
             }
         }
     } else {
@@ -2393,7 +2616,10 @@ fn render_tui_debugger_panel(
     if !stack.is_empty() {
         println!("  \x1b[1;34m┌─ 🥞 PILA DE LLAMADAS (Call Stack: {} marcos) ────────────────────────────────────────┐\x1b[0m", stack.len());
         for (i, frame) in stack.iter().rev().take(3).enumerate() {
-            println!("  │   [#{}] \x1b[1;33m{}()\x1b[0m (retorno: IP {})", i, frame.func_name, frame.return_ip);
+            println!(
+                "  │   [#{}] \x1b[1;33m{}()\x1b[0m (retorno: IP {})",
+                i, frame.func_name, frame.return_ip
+            );
         }
         println!("  \x1b[1;34m└──────────────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
     }
@@ -2435,31 +2661,34 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
         }
         let trimmed = input.trim();
         match trimmed {
-            "s" | "step" | "paso" | "p" => {
-                match vm.step() {
-                    Ok(()) => {
-                        current_line = (current_line % source_lines.len().max(1)) + 1;
-                        render_tui_debugger_panel(path, &source_lines, current_line, &breakpoints, &vm);
-                    }
-                    Err(e) => {
-                        eprintln!("\n  \x1b[1;31m[DEBUG FINISHED / ERROR]:\x1b[0m {}", e.with_stack(vm.call_stack()));
-                        break;
-                    }
+            "s" | "step" | "paso" | "p" => match vm.step() {
+                Ok(()) => {
+                    current_line = (current_line % source_lines.len().max(1)) + 1;
+                    render_tui_debugger_panel(path, &source_lines, current_line, &breakpoints, &vm);
                 }
-            }
-            "back" | "step-back" | "prev" | "retroceder" | "bck" => {
-                match vm.step_back() {
-                    Ok(true) => {
-                        if current_line > 1 { current_line -= 1; }
-                        render_tui_debugger_panel(path, &source_lines, current_line, &breakpoints, &vm);
-                        println!("  ⏮️ \x1b[1;32m[Time-Travel]\x1b[0m Estado anterior restaurado exitosamente.");
-                    }
-                    Ok(false) => {
-                        println!("  ℹ️ Inicio de la ejecución alcanzado (no hay más snapshots anteriores).");
-                    }
-                    Err(e) => eprintln!("Error al retroceder: {}", e),
+                Err(e) => {
+                    eprintln!(
+                        "\n  \x1b[1;31m[DEBUG FINISHED / ERROR]:\x1b[0m {}",
+                        e.with_stack(vm.call_stack())
+                    );
+                    break;
                 }
-            }
+            },
+            "back" | "step-back" | "prev" | "retroceder" | "bck" => match vm.step_back() {
+                Ok(true) => {
+                    if current_line > 1 {
+                        current_line -= 1;
+                    }
+                    render_tui_debugger_panel(path, &source_lines, current_line, &breakpoints, &vm);
+                    println!("  ⏮️ \x1b[1;32m[Time-Travel]\x1b[0m Estado anterior restaurado exitosamente.");
+                }
+                Ok(false) => {
+                    println!(
+                        "  ℹ️ Inicio de la ejecución alcanzado (no hay más snapshots anteriores)."
+                    );
+                }
+                Err(e) => eprintln!("Error al retroceder: {}", e),
+            },
             "history" | "timeline" | "historial" => {
                 println!("\n  ⏱️ \x1b[1;33mHistorial de Time-Travel:\x1b[0m {} snapshots registrados en memoria.", vm.snapshots.len());
             }
@@ -2467,7 +2696,10 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
                 println!("\n  \x1b[1;35m=== TODAS LAS VARIABLES EN ÁMBITO ===\x1b[0m");
                 if let Some(locals) = vm.current_locals() {
                     for (k, v) in locals.iter() {
-                        println!("    • \x1b[1;34m{}\x1b[0m = \x1b[1;32m{}\x1b[0m \x1b[90m({:?})\x1b[0m", k, v, v);
+                        println!(
+                            "    • \x1b[1;34m{}\x1b[0m = \x1b[1;32m{}\x1b[0m \x1b[90m({:?})\x1b[0m",
+                            k, v, v
+                        );
                     }
                 } else {
                     println!("    (Sin variables)");
@@ -2476,7 +2708,10 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
             "stack" | "pila" => {
                 println!("\n  \x1b[1;34m=== PILA DE LLAMADAS (CALL STACK) ===\x1b[0m");
                 for (i, frame) in vm.call_stack().iter().enumerate() {
-                    println!("    [#{}] {}() -> retorno en IP {}", i, frame.func_name, frame.return_ip);
+                    println!(
+                        "    [#{}] {}() -> retorno en IP {}",
+                        i, frame.func_name, frame.return_ip
+                    );
                 }
             }
             "c" | "continue" | "continuar" => {
@@ -2501,9 +2736,13 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
                 println!("    \x1b[1;32mback, retroceder\x1b[0m    Time-Travel: retrocede 1 snapshot en el tiempo");
                 println!("    \x1b[1;32mc, continue\x1b[0m         Ejecuta hasta el siguiente breakpoint o fin");
                 println!("    \x1b[1;32mb <línea>\x1b[0m           Alterna breakpoint en el número de línea dado");
-                println!("    \x1b[1;32mp <var>\x1b[0m             Imprime el valor de una variable");
+                println!(
+                    "    \x1b[1;32mp <var>\x1b[0m             Imprime el valor de una variable"
+                );
                 println!("    \x1b[1;32mvars\x1b[0m                Muestra todas las variables en memoria");
-                println!("    \x1b[1;32mstack\x1b[0m               Inspecciona la pila de llamadas");
+                println!(
+                    "    \x1b[1;32mstack\x1b[0m               Inspecciona la pila de llamadas"
+                );
                 println!("    \x1b[1;32mhistory\x1b[0m             Muestra cantidad de snapshots Time-Travel");
                 println!("    \x1b[1;32mq, quit, salir\x1b[0m      Cierra el depurador\n");
             }
@@ -2512,7 +2751,10 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
                 break;
             }
             s if s.starts_with("b ") || s.starts_with("break ") => {
-                let rest = if s.starts_with("break ") { &s[6..] } else { &s[2..] };
+                let rest = s
+                    .strip_prefix("break ")
+                    .or_else(|| s.strip_prefix("b "))
+                    .unwrap_or(s);
                 if let Ok(line_num) = rest.trim().parse::<usize>() {
                     if breakpoints.contains(&line_num) {
                         breakpoints.remove(&line_num);
@@ -2525,10 +2767,17 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
                 }
             }
             s if s.starts_with("print ") || s.starts_with("p ") => {
-                let var_name = if s.starts_with("print ") { &s[6..] } else { &s[2..] }.trim();
+                let var_name = s
+                    .strip_prefix("print ")
+                    .or_else(|| s.strip_prefix("p "))
+                    .unwrap_or(s)
+                    .trim();
                 if let Some(locals) = vm.current_locals() {
                     if let Some(val) = locals.get(var_name) {
-                        println!("  \x1b[1;34m{}\x1b[0m = \x1b[1;32m{}\x1b[0m \x1b[90m({:?})\x1b[0m", var_name, val, val);
+                        println!(
+                            "  \x1b[1;34m{}\x1b[0m = \x1b[1;32m{}\x1b[0m \x1b[90m({:?})\x1b[0m",
+                            var_name, val, val
+                        );
                     } else {
                         println!("  Variable '{}' no encontrada en ámbito actual.", var_name);
                     }
@@ -2536,12 +2785,14 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
             }
             "" => continue,
             other => {
-                println!("  Comando '{}' no reconocido. Escribe 'h' o 'ayuda' para ver la lista.", other);
+                println!(
+                    "  Comando '{}' no reconocido. Escribe 'h' o 'ayuda' para ver la lista.",
+                    other
+                );
             }
         }
     }
 }
-
 
 fn mime_type(path: &str) -> &'static str {
     if path.ends_with(".html") {
@@ -2984,7 +3235,10 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
         } else {
             "/web/index.html"
         };
-        let redirect = format!("HTTP/1.1 302 Found\r\nLocation: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", target_loc);
+        let redirect = format!(
+            "HTTP/1.1 302 Found\r\nLocation: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            target_loc
+        );
         let _ = stream.write_all(redirect.as_bytes());
         let dur = t_start.elapsed().as_secs_f64() * 1000.0;
         record_server_log("GET", path_no_query, 302, 0, dur, &client_ip);
@@ -3122,10 +3376,16 @@ fn serve_playground(port: u16) -> ! {
     println!("║   🚀 LÚMEN Web Server & Playground — WASM Runtime v2.4.6            ║");
     println!("║                                                                      ║");
     println!("║   ⚡ Playground Pro (Full IDE):                                      ║");
-    println!("║      ▶ http://localhost:{}/web/playground.html                      ║", port);
+    println!(
+        "║      ▶ http://localhost:{}/web/playground.html                      ║",
+        port
+    );
     println!("║                                                                      ║");
     println!("║   🏠 Portal Principal & Documentación:                               ║");
-    println!("║      ▶ http://localhost:{}/web/index.html                           ║", port);
+    println!(
+        "║      ▶ http://localhost:{}/web/index.html                           ║",
+        port
+    );
     println!("║                                                                      ║");
     println!("║   Presiona Ctrl+C para detener el servidor                           ║");
     println!("╚══════════════════════════════════════════════════════════════════════╝");
@@ -3175,7 +3435,10 @@ fn run_dashboard(_lib_dirs: &[PathBuf]) {
 
 fn run_fix(path: &str, lib_dirs: &[PathBuf]) {
     println!();
-    println!("  💡 LÚMEN AUTO-FIX INTERACTIVO / CODE REPAIR TOOL: {}", path);
+    println!(
+        "  💡 LÚMEN AUTO-FIX INTERACTIVO / CODE REPAIR TOOL: {}",
+        path
+    );
     println!("  ═════════════════════════════════════════════════════════════");
     let source = match fs::read_to_string(path) {
         Ok(s) => s,
@@ -3223,11 +3486,17 @@ fn run_fix(path: &str, lib_dirs: &[PathBuf]) {
 
     if fix_count > 0 {
         let _ = fs::write(path, &fixed);
-        println!("  ✓ {} correcciones automáticas aplicadas en '{}'.", fix_count, path);
+        println!(
+            "  ✓ {} correcciones automáticas aplicadas en '{}'.",
+            fix_count, path
+        );
         println!("  • Comprobando con 'lumen check'...");
         check_source(path, lib_dirs);
     } else {
-        println!("  ✓ No se encontraron errores de sintaxis corregibles automáticamente en '{}'.\n", path);
+        println!(
+            "  ✓ No se encontraron errores de sintaxis corregibles automáticamente en '{}'.\n",
+            path
+        );
     }
 }
 
@@ -3278,14 +3547,31 @@ fn run_config(subcommand: &str, arg: &str, config: &Config) {
             }
             println!();
         }
-        "list" | "listar" | _ => {
+        _ => {
             println!("  • Modelo de Memoria   : {}", config.memory_model);
             println!("  • Nivel Optimización  : -O{}", config.opt_level);
-            println!("  • Neuro-Optimizador   : {}", if config.neuro_opt { "✓ Activo (SIMD + FMA)" } else { "Inactivo" });
-            println!("  • Runtime Self-Healing: {}", if config.self_healing { "✓ Activo (Hot-Patching)" } else { "Inactivo" });
+            println!(
+                "  • Neuro-Optimizador   : {}",
+                if config.neuro_opt {
+                    "✓ Activo (SIMD + FMA)"
+                } else {
+                    "Inactivo"
+                }
+            );
+            println!(
+                "  • Runtime Self-Healing: {}",
+                if config.self_healing {
+                    "✓ Activo (Hot-Patching)"
+                } else {
+                    "Inactivo"
+                }
+            );
             println!("  • Backend AOT Default : {}", config.backend);
             println!("  • Perfil Activo       : {}", config.profile);
-            println!("  • Directorio Caché    : {}", lumen_pkg::cache_dir().display());
+            println!(
+                "  • Directorio Caché    : {}",
+                lumen_pkg::cache_dir().display()
+            );
             println!();
             println!("  💡 Comandos de configuración:");
             println!("     lumen config profile <dev|release|hpc|mcu|cloud>");
@@ -3326,11 +3612,17 @@ fn run_ai(subcommand: &str, target: &str, lib_dirs: &[PathBuf]) {
             let mut structs = Vec::new();
             for decl in &program {
                 match decl {
-                    DeclOrStmt::Decl(lumen_parser::ast::Decl::Function { name, params, .. }) => {
+                    DeclOrStmt::Decl(lumen_parser::ast::Decl::Function {
+                        name, params, ..
+                    }) => {
                         funcs.push(format!("    - función {}({} args)", name, params.len()));
                     }
                     DeclOrStmt::Decl(lumen_parser::ast::Decl::Struct { name, fields, .. }) => {
-                        structs.push(format!("    - estructura {} ({} campos)", name, fields.len()));
+                        structs.push(format!(
+                            "    - estructura {} ({} campos)",
+                            name,
+                            fields.len()
+                        ));
                     }
                     _ => {}
                 }
@@ -3365,10 +3657,16 @@ fn run_ai(subcommand: &str, target: &str, lib_dirs: &[PathBuf]) {
                 Ok(mut prog) => {
                     let errors = SemanticAnalyzer::new().analyze(&mut prog);
                     if errors.is_empty() {
-                        println!("  ✓ No se detectaron errores semánticos ni de tipos en '{}'.", target);
+                        println!(
+                            "  ✓ No se detectaron errores semánticos ni de tipos en '{}'.",
+                            target
+                        );
                         println!("  • El programa está listo para compilar con 'lumen build --native'.\n");
                     } else {
-                        println!("  ⚠️ Se detectaron {} errores. Sugerencias de corrección:", errors.len());
+                        println!(
+                            "  ⚠️ Se detectaron {} errores. Sugerencias de corrección:",
+                            errors.len()
+                        );
                         for err in errors {
                             println!("    • [{}] {}: {}", err.code, err.message, err.suggestion);
                         }
@@ -3408,8 +3706,12 @@ fn run_ai(subcommand: &str, target: &str, lib_dirs: &[PathBuf]) {
             println!("  ✓ Suite de pruebas unitarias generada en: {}", test_file);
             println!("  • Ejecutar con: lumen test {}\n", test_file);
         }
-        "chat" | "consultar" | _ => {
-            let question = if target.is_empty() { subcommand } else { target };
+        _ => {
+            let question = if target.is_empty() {
+                subcommand
+            } else {
+                target
+            };
             println!("  💬 Consulta: \"{}\"", question);
             println!("  🤖 Asistente LÚMEN:");
             let q_lower = question.to_lowercase();
@@ -3421,7 +3723,10 @@ fn run_ai(subcommand: &str, target: &str, lib_dirs: &[PathBuf]) {
                 println!("     • Para concurrencia masiva tolerante a fallos estilo Erlang/OTP:");
                 println!("       Usa 'importar \"actor.nv\";'");
                 println!("       Crea actores con 'actor_crear()', despacha con 'actor_enviar()' y supervisa con 'actor_supervision_sanar()'.");
-            } else if q_lower.contains("ia") || q_lower.contains("llm") || q_lower.contains("cuantiz") {
+            } else if q_lower.contains("ia")
+                || q_lower.contains("llm")
+                || q_lower.contains("cuantiz")
+            {
                 println!("     • Para inferencia LLM y cuantización INT8 / RoPE:");
                 println!("       Usa 'importar \"ia.nv\";'");
                 println!("       Cuantiza matrices con 'ia_cuantizar_int8()' y realiza W8A16 matmul con 'ia_matmul_cuantizado()'.");
@@ -3456,7 +3761,14 @@ fn run_bundle(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
     println!("  • Archivo Fuente : {}", path);
     println!("  • Destino Final  : {}", out_file);
     println!("  • Modo de Motor  : Standalone AOT (-O3 + LTO + Strip)");
-    println!("  • Arquitectura   : {}", if cfg!(windows) { "Windows PE32+ (x86_64)" } else { "Linux ELF64 (x86_64)" });
+    println!(
+        "  • Arquitectura   : {}",
+        if cfg!(windows) {
+            "Windows PE32+ (x86_64)"
+        } else {
+            "Linux ELF64 (x86_64)"
+        }
+    );
     println!("  • Verificando tipos y resolviendo dependencias stdlib...");
 
     build_native(path, lib_dirs, "c", true, true, "", false, false);
@@ -3499,7 +3811,10 @@ fn run_registry(subcommand: &str, port: u16) {
             let listener = match TcpListener::bind(&addr) {
                 Ok(l) => l,
                 Err(e) => {
-                    eprintln!("Error al iniciar el servidor de registro en {}: {}", addr, e);
+                    eprintln!(
+                        "Error al iniciar el servidor de registro en {}: {}",
+                        addr, e
+                    );
                     process::exit(1);
                 }
             };
@@ -3507,11 +3822,9 @@ fn run_registry(subcommand: &str, port: u16) {
             println!("  • Endpoint de publicación: /api/v1/packages/publish");
             println!("  • Endpoint de búsqueda   : /api/v1/packages/search");
             println!("  • Presiona Ctrl+C para detener el servidor.\n");
-            for stream in listener.incoming() {
-                if let Ok(mut stream) = stream {
-                    let resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"ok\",\"registry\":\"lumen-local-v1\",\"packages\":[\"tensor\",\"nn\",\"ia\",\"vector_db\",\"actor\",\"servidor\"]}";
-                    let _ = stream.write_all(resp.as_bytes());
-                }
+            for mut stream in listener.incoming().flatten() {
+                let resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"ok\",\"registry\":\"lumen-local-v1\",\"packages\":[\"tensor\",\"nn\",\"ia\",\"vector_db\",\"actor\",\"servidor\"]}";
+                let _ = stream.write_all(resp.as_bytes());
             }
         }
         _ => {
@@ -3528,7 +3841,9 @@ fn run_registry(subcommand: &str, port: u16) {
             println!("  • Comandos:");
             println!("      lumen install <paquete>  — Instalar paquete");
             println!("      lumen publish [dir]       — Publicar paquete firmado");
-            println!("      lumen registry serve      — Iniciar servidor de registro privado local");
+            println!(
+                "      lumen registry serve      — Iniciar servidor de registro privado local"
+            );
             println!();
         }
     }

@@ -248,7 +248,8 @@ impl Lexer {
                                     code: "E002".to_string(),
                                     message: "String interpolado f\"...\" sin cerrar".to_string(),
                                     pos: start_pos,
-                                    suggestion: "Agrega una comilla doble '\"' al final del texto".to_string(),
+                                    suggestion: "Agrega una comilla doble '\"' al final del texto"
+                                        .to_string(),
                                 });
                                 break;
                             }
@@ -687,7 +688,10 @@ mod tests {
     #[test]
     fn test_pipe_token() {
         let tokens = tokenize("| |>");
-        assert_eq!(tokens, vec![TokenKind::Pipe, TokenKind::PipeGreater, TokenKind::Eof]);
+        assert_eq!(
+            tokens,
+            vec![TokenKind::Pipe, TokenKind::PipeGreater, TokenKind::Eof]
+        );
     }
 
     #[test]

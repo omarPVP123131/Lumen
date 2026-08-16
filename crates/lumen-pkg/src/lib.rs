@@ -1,7 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageMeta {
@@ -34,6 +34,12 @@ pub struct Lockfile {
 pub struct Registry {
     pub base_url: String,
     pub cache_dir: PathBuf,
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Registry {
@@ -188,12 +194,14 @@ pub fn semver_matches(req: &str, ver: &str) -> bool {
 pub fn update_lockfile(proj_root: &Path, pkg_name: &str, version: &str, checksum: &str) {
     let lock_path = proj_root.join("lumen.lock");
     let mut lock_content = String::new();
-    
+
     if lock_path.is_file() {
         lock_content = fs::read_to_string(&lock_path).unwrap_or_default();
     } else {
-        lock_content.push_str("# Archivo de Bloqueo Determinista de Dependencias LÚMEN (lumen.lock)\n");
-        lock_content.push_str("# Generado automáticamente por lumen install con resolución SemVer.\n\n");
+        lock_content
+            .push_str("# Archivo de Bloqueo Determinista de Dependencias LÚMEN (lumen.lock)\n");
+        lock_content
+            .push_str("# Generado automáticamente por lumen install con resolución SemVer.\n\n");
     }
 
     if !lock_content.contains(&format!("[[paquete]]\nnombre = \"{}\"", pkg_name)) {
@@ -203,7 +211,10 @@ pub fn update_lockfile(proj_root: &Path, pkg_name: &str, version: &str, checksum
         );
         lock_content.push_str(&entry);
         let _ = fs::write(&lock_path, lock_content);
-        println!("  🔒 Dependencia bloqueada en lumen.lock: {} v{}", pkg_name, version);
+        println!(
+            "  🔒 Dependencia bloqueada en lumen.lock: {} v{}",
+            pkg_name, version
+        );
     }
 }
 
@@ -212,7 +223,10 @@ pub fn find_project_root() -> Option<PathBuf> {
     if let Ok(cwd) = std::env::current_dir() {
         let mut dir = cwd;
         for _ in 0..5 {
-            if dir.join("lumen.toml").is_file() || dir.join("pkgs").is_dir() || dir.join("src/main.nv").is_file() {
+            if dir.join("lumen.toml").is_file()
+                || dir.join("pkgs").is_dir()
+                || dir.join("src/main.nv").is_file()
+            {
                 return Some(dir);
             }
             dir = match dir.parent() {
@@ -231,7 +245,9 @@ pub fn add_dependency_to_manifest(proj_root: &Path, pkg_name: &str, version_or_p
         return;
     }
     if let Ok(content) = fs::read_to_string(&manifest_path) {
-        if content.contains(&format!("{} =", pkg_name)) || content.contains(&format!("\"{}\" =", pkg_name)) {
+        if content.contains(&format!("{} =", pkg_name))
+            || content.contains(&format!("\"{}\" =", pkg_name))
+        {
             return;
         }
         let mut updated = content.clone();
@@ -241,7 +257,10 @@ pub fn add_dependency_to_manifest(proj_root: &Path, pkg_name: &str, version_or_p
             let entry = format!("\n{} = \"{}\"", pkg_name, version_or_path);
             updated.insert_str(insert_pos, &entry);
         } else {
-            updated.push_str(&format!("\n\n[dependencias]\n{} = \"{}\"\n", pkg_name, version_or_path));
+            updated.push_str(&format!(
+                "\n\n[dependencias]\n{} = \"{}\"\n",
+                pkg_name, version_or_path
+            ));
         }
         let _ = fs::write(&manifest_path, updated);
     }
@@ -271,8 +290,14 @@ pub fn install_package(pkg: &str, cache_dir: &Path) {
         let cache_dest = cache_dir.join(name_str);
         let _ = fs::create_dir_all(&cache_dest);
         copy_dir(local_path, &cache_dest);
-        println!("  ✓ Sincronizado en caché de usuario: {}", cache_dest.display());
-        println!("  • Ya puedes importar sus módulos con: importar \"{}\";", name_str);
+        println!(
+            "  ✓ Sincronizado en caché de usuario: {}",
+            cache_dest.display()
+        );
+        println!(
+            "  • Ya puedes importar sus módulos con: importar \"{}\";",
+            name_str
+        );
         println!();
         return;
     }
@@ -286,14 +311,23 @@ pub fn install_package(pkg: &str, cache_dir: &Path) {
         (pkg, "*")
     };
 
-    if let Some(meta) = curated.iter().find(|p| p.name == target_pkg && semver_matches(req_version, &p.version)) {
+    if let Some(meta) = curated
+        .iter()
+        .find(|p| p.name == target_pkg && semver_matches(req_version, &p.version))
+    {
         println!();
-        println!("  📦 INSTALANDO PAQUETE OFICIAL LÚMEN: {} v{}", meta.name, meta.version);
+        println!(
+            "  📦 INSTALANDO PAQUETE OFICIAL LÚMEN: {} v{}",
+            meta.name, meta.version
+        );
         println!("  ═════════════════════════════════════════════════════════════");
         println!("  • Descripción : {}", meta.description);
         println!("  • Autor       : {}", meta.author);
         println!("  • Licencia    : {}", meta.license);
-        println!("  • SemVer Match: {} coincide con {}", meta.version, req_version);
+        println!(
+            "  • SemVer Match: {} coincide con {}",
+            meta.version, req_version
+        );
 
         let dest = cache_dir.join(&meta.name);
         let _ = fs::create_dir_all(&dest);
@@ -313,7 +347,12 @@ pub fn install_package(pkg: &str, cache_dir: &Path) {
                     let _ = fs::create_dir_all(&proj_pkg);
                     let _ = fs::copy(p, proj_pkg.join(&meta.main));
                     add_dependency_to_manifest(root, &meta.name, &meta.version);
-                    update_lockfile(root, &meta.name, &meta.version, "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+                    update_lockfile(
+                        root,
+                        &meta.name,
+                        &meta.version,
+                        "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    );
                 }
                 break;
             }
@@ -327,10 +366,13 @@ pub fn install_package(pkg: &str, cache_dir: &Path) {
 
     // 3. Fallback: Búsqueda y clonación Git
     let (pkg_name, url) = if pkg.contains('/') {
-        let name = pkg.split('/').last().unwrap_or(pkg);
+        let name = pkg.split('/').next_back().unwrap_or(pkg);
         (name.to_string(), format!("https://github.com/{}", pkg))
     } else {
-        (pkg.to_string(), format!("https://github.com/lumen-pkgs/{}", pkg))
+        (
+            pkg.to_string(),
+            format!("https://github.com/lumen-pkgs/{}", pkg),
+        )
     };
 
     let target_dir = if let Some(ref root) = proj_root {
@@ -340,7 +382,11 @@ pub fn install_package(pkg: &str, cache_dir: &Path) {
     };
 
     if target_dir.exists() {
-        println!("✓ Paquete '{}' ya está instalado en {}", pkg_name, target_dir.display());
+        println!(
+            "✓ Paquete '{}' ya está instalado en {}",
+            pkg_name,
+            target_dir.display()
+        );
         return;
     }
     println!("Instalando paquete '{}' desde {}...", pkg_name, url);
@@ -353,7 +399,11 @@ pub fn install_package(pkg: &str, cache_dir: &Path) {
                 add_dependency_to_manifest(root, &pkg_name, "git");
                 update_lockfile(root, &pkg_name, "1.0.0-git", "sha256:git-commit-head");
             }
-            println!("✓ '{}' instalado con éxito en {}", pkg_name, target_dir.display());
+            println!(
+                "✓ '{}' instalado con éxito en {}",
+                pkg_name,
+                target_dir.display()
+            );
         }
         Ok(s) => eprintln!("Error al clonar repositorio (exit {})", s),
         Err(e) => eprintln!("Error: git no encontrado ({})", e),
@@ -373,7 +423,10 @@ pub fn search_packages(query: &str) {
         .collect();
 
     println!();
-    println!("  🔍 BÚSQUEDA EN REGISTRO LÚMEN (lumen-pkgs) para: '{}'", query);
+    println!(
+        "  🔍 BÚSQUEDA EN REGISTRO LÚMEN (lumen-pkgs) para: '{}'",
+        query
+    );
     println!("  ══════════════════════════════════════════════════════════════════════");
     if matches.is_empty() {
         println!("  No se encontraron paquetes coincidentes.");
@@ -382,7 +435,11 @@ pub fn search_packages(query: &str) {
         for p in matches {
             println!("  📦 {:<14} v{:<6} [{}]", p.name, p.version, p.license);
             println!("     {}", p.description);
-            println!("     Tags: {} | Descargas: {}", p.tags.join(", "), p.downloads);
+            println!(
+                "     Tags: {} | Descargas: {}",
+                p.tags.join(", "),
+                p.downloads
+            );
             println!("     Instalar: lumen install {}", p.name);
             println!();
         }
@@ -498,10 +555,20 @@ pub fn load_credentials() -> Option<UserCredentials> {
 }
 
 pub fn login_user(username: &str, token_opt: Option<&str>) {
-    let final_user = if username.is_empty() { "lumen_developer" } else { username };
+    let final_user = if username.is_empty() {
+        "lumen_developer"
+    } else {
+        username
+    };
     let final_token = token_opt.unwrap_or("lmp_sec_98f4e2b810d73a6c01e923f5b74c8a2e");
-    let pub_key = format!("ed25519:pk_{:x}", final_user.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64)));
-    let registry_url = std::env::var("LUMEN_REGISTRY").unwrap_or_else(|_| "https://registry.lumen-lang.org".to_string());
+    let pub_key = format!(
+        "ed25519:pk_{:x}",
+        final_user
+            .bytes()
+            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64))
+    );
+    let registry_url = std::env::var("LUMEN_REGISTRY")
+        .unwrap_or_else(|_| "https://registry.lumen-lang.org".to_string());
 
     let creds = UserCredentials {
         username: final_user.to_string(),
@@ -512,7 +579,11 @@ pub fn login_user(username: &str, token_opt: Option<&str>) {
     };
 
     if let Err(e) = save_credentials(&creds) {
-        eprintln!("Error al guardar credenciales en {}: {}", credentials_path().display(), e);
+        eprintln!(
+            "Error al guardar credenciales en {}: {}",
+            credentials_path().display(),
+            e
+        );
         return;
     }
 
@@ -529,7 +600,11 @@ pub fn login_user(username: &str, token_opt: Option<&str>) {
 }
 
 pub fn publish_package(dir: &str) {
-    let target_dir = if dir.is_empty() { Path::new(".") } else { Path::new(dir) };
+    let target_dir = if dir.is_empty() {
+        Path::new(".")
+    } else {
+        Path::new(dir)
+    };
     let manifest_path = target_dir.join("lumen.toml");
 
     println!();
@@ -537,21 +612,24 @@ pub fn publish_package(dir: &str) {
     println!("  ═════════════════════════════════════════════════════════════");
 
     if !manifest_path.is_file() {
-        eprintln!("  ✗ Error: No se encontró el manifiesto 'lumen.toml' en '{}'", target_dir.display());
-        eprintln!("  💡 Asegúrate de estar en el directorio de un paquete válido (lumen new <nombre>).");
+        eprintln!(
+            "  ✗ Error: No se encontró el manifiesto 'lumen.toml' en '{}'",
+            target_dir.display()
+        );
+        eprintln!(
+            "  💡 Asegúrate de estar en el directorio de un paquete válido (lumen new <nombre>)."
+        );
         println!();
         return;
     }
 
     let manifest_content = fs::read_to_string(&manifest_path).unwrap_or_default();
-    let creds = load_credentials().unwrap_or_else(|| {
-        UserCredentials {
-            username: "omar_dev".to_string(),
-            token: "lmp_auto_gen_token".to_string(),
-            public_key: "ed25519:pk_default_author".to_string(),
-            registry_url: "https://registry.lumen-lang.org".to_string(),
-            created_at: "2026-08-16T04:00:00Z".to_string(),
-        }
+    let creds = load_credentials().unwrap_or_else(|| UserCredentials {
+        username: "omar_dev".to_string(),
+        token: "lmp_auto_gen_token".to_string(),
+        public_key: "ed25519:pk_default_author".to_string(),
+        registry_url: "https://registry.lumen-lang.org".to_string(),
+        created_at: "2026-08-16T04:00:00Z".to_string(),
     });
 
     let pkg_name = manifest_content
@@ -568,16 +646,26 @@ pub fn publish_package(dir: &str) {
         .map(|s| s.trim().trim_matches('"').trim_matches('\''))
         .unwrap_or("1.0.0");
 
-    let checksum = format!("sha256:{:x}{:x}", pkg_name.len() * 104729, pkg_version.len() * 7919);
+    let checksum = format!(
+        "sha256:{:x}{:x}",
+        pkg_name.len() * 104729,
+        pkg_version.len() * 7919
+    );
 
     println!("  • Paquete a Publicar: {} v{}", pkg_name, pkg_version);
-    println!("  • Autor / Editor    : {} ({})", creds.username, creds.public_key);
+    println!(
+        "  • Autor / Editor    : {} ({})",
+        creds.username, creds.public_key
+    );
     println!("  • Servidor Destino  : {}", creds.registry_url);
     println!("  • Checksum SHA-256  : {}", checksum);
     println!("  • Firma Criptográfica: Ed25519-SIG-OK (Verificada)");
     println!();
     println!("  🚀 Subiendo artefacto comprimido a la nube...");
-    println!("  ✨ ¡Paquete '{}' v{} publicado con éxito en {}!", pkg_name, pkg_version, creds.registry_url);
+    println!(
+        "  ✨ ¡Paquete '{}' v{} publicado con éxito en {}!",
+        pkg_name, pkg_version, creds.registry_url
+    );
     println!("  • Cualquier desarrollador puede instalarlo ahora con:");
     println!("    lumen install {}\n", pkg_name);
 }

@@ -4,12 +4,12 @@
 // Diagnóstico en Tiempo Real, Hover, Definición y Autocompletado Inteligente
 // ============================================================================
 
-use std::collections::HashMap;
-use std::io::{self, BufRead, Read, Write};
-use lumen_lexer::token::{TokenKind};
+use lumen_lexer::token::TokenKind;
 use lumen_lexer::Lexer;
 use lumen_parser::Parser;
 use lumen_sema::SemanticAnalyzer;
+use std::collections::HashMap;
+use std::io::{self, BufRead, Read, Write};
 
 pub fn run_lsp() {
     eprintln!("LÚMEN LSP Server Pro v2.4.6 — Semantic Tokens, Inlay Hints & Code Actions");
@@ -79,8 +79,8 @@ pub fn run_lsp() {
                             "semanticTokensProvider": {
                                 "legend": {
                                     "tokenTypes": [
-                                        "keyword", "type", "function", "variable", 
-                                        "parameter", "struct", "string", "number", 
+                                        "keyword", "type", "function", "variable",
+                                        "parameter", "struct", "string", "number",
                                         "operator", "comment", "macro"
                                     ],
                                     "tokenModifiers": ["declaration", "readonly", "static", "defaultLibrary"]
@@ -158,7 +158,9 @@ pub fn run_lsp() {
                     .as_str()
                     .unwrap_or("");
                 let line = request["params"]["position"]["line"].as_u64().unwrap_or(0) as usize;
-                let col = request["params"]["position"]["character"].as_u64().unwrap_or(0) as usize;
+                let col = request["params"]["position"]["character"]
+                    .as_u64()
+                    .unwrap_or(0) as usize;
 
                 let doc = doc_cache.get(uri).cloned().unwrap_or_default();
                 let sig = compute_signature_help(&doc, line, col);
@@ -201,7 +203,9 @@ pub fn run_lsp() {
                     .as_str()
                     .unwrap_or("");
                 let line = request["params"]["position"]["line"].as_u64().unwrap_or(0) as usize;
-                let col = request["params"]["position"]["character"].as_u64().unwrap_or(0) as usize;
+                let col = request["params"]["position"]["character"]
+                    .as_u64()
+                    .unwrap_or(0) as usize;
 
                 let doc = doc_cache.get(uri).cloned().unwrap_or_default();
                 let hover_info = get_hover_info(&doc, line, col);
@@ -223,7 +227,9 @@ pub fn run_lsp() {
                     .as_str()
                     .unwrap_or("");
                 let line = request["params"]["position"]["line"].as_u64().unwrap_or(0) as usize;
-                let col = request["params"]["position"]["character"].as_u64().unwrap_or(0) as usize;
+                let col = request["params"]["position"]["character"]
+                    .as_u64()
+                    .unwrap_or(0) as usize;
 
                 let doc = doc_cache.get(uri).cloned().unwrap_or_default();
                 let loc = find_definition(&doc, uri, line, col);
@@ -259,28 +265,75 @@ pub fn compute_semantic_tokens(source: &str) -> Vec<u32> {
 
     for tok in tokens {
         let (token_type_idx, modifier_mask) = match &tok.kind {
-            TokenKind::Si | TokenKind::If | TokenKind::Sino | TokenKind::Else
-            | TokenKind::Mientras | TokenKind::While | TokenKind::Para | TokenKind::For
-            | TokenKind::Funcion | TokenKind::Function | TokenKind::Retornar | TokenKind::Return
-            | TokenKind::Elegir | TokenKind::Match | TokenKind::Caso | TokenKind::Case
-            | TokenKind::Defecto | TokenKind::Default | TokenKind::Estructura | TokenKind::Struct
-            | TokenKind::Importar | TokenKind::Import | TokenKind::Como | TokenKind::As
-            | TokenKind::Posponer | TokenKind::Defer | TokenKind::Intentar | TokenKind::Try
-            | TokenKind::Atrapar | TokenKind::Catch | TokenKind::Prestado | TokenKind::Borrowed
-            | TokenKind::Dueno | TokenKind::Owner | TokenKind::Mut | TokenKind::Mutable
-            | TokenKind::EnTiempoCompilacion | TokenKind::Comptime
-            | TokenKind::Ensamblador | TokenKind::Asm
-            | TokenKind::BloqueC | TokenKind::BloqueRust => (0, 0), // keyword
+            TokenKind::Si
+            | TokenKind::If
+            | TokenKind::Sino
+            | TokenKind::Else
+            | TokenKind::Mientras
+            | TokenKind::While
+            | TokenKind::Para
+            | TokenKind::For
+            | TokenKind::Funcion
+            | TokenKind::Function
+            | TokenKind::Retornar
+            | TokenKind::Return
+            | TokenKind::Elegir
+            | TokenKind::Match
+            | TokenKind::Caso
+            | TokenKind::Case
+            | TokenKind::Defecto
+            | TokenKind::Default
+            | TokenKind::Estructura
+            | TokenKind::Struct
+            | TokenKind::Importar
+            | TokenKind::Import
+            | TokenKind::Como
+            | TokenKind::As
+            | TokenKind::Posponer
+            | TokenKind::Defer
+            | TokenKind::Intentar
+            | TokenKind::Try
+            | TokenKind::Atrapar
+            | TokenKind::Catch
+            | TokenKind::Prestado
+            | TokenKind::Borrowed
+            | TokenKind::Dueno
+            | TokenKind::Owner
+            | TokenKind::Mut
+            | TokenKind::Mutable
+            | TokenKind::EnTiempoCompilacion
+            | TokenKind::Comptime
+            | TokenKind::Ensamblador
+            | TokenKind::Asm
+            | TokenKind::BloqueC
+            | TokenKind::BloqueRust => (0, 0), // keyword
 
-            TokenKind::Entero | TokenKind::Integer | TokenKind::Decimal | TokenKind::Float
-            | TokenKind::Texto | TokenKind::String | TokenKind::Booleano | TokenKind::Boolean
-            | TokenKind::Numero | TokenKind::Number | TokenKind::Lista | TokenKind::Array
-            | TokenKind::Resultado | TokenKind::Result | TokenKind::Opcion | TokenKind::Option => (1, 1), // type
+            TokenKind::Entero
+            | TokenKind::Integer
+            | TokenKind::Decimal
+            | TokenKind::Float
+            | TokenKind::Texto
+            | TokenKind::String
+            | TokenKind::Booleano
+            | TokenKind::Boolean
+            | TokenKind::Numero
+            | TokenKind::Number
+            | TokenKind::Lista
+            | TokenKind::Array
+            | TokenKind::Resultado
+            | TokenKind::Result
+            | TokenKind::Opcion
+            | TokenKind::Option => (1, 1), // type
 
             TokenKind::Ident(name) => {
                 if name.starts_with("fn_") || name.contains('_') && !name.starts_with("var_") {
                     (2, 0) // function
-                } else if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+                } else if name
+                    .chars()
+                    .next()
+                    .map(|c| c.is_uppercase())
+                    .unwrap_or(false)
+                {
                     (5, 0) // struct
                 } else {
                     (3, 0) // variable
@@ -288,10 +341,15 @@ pub fn compute_semantic_tokens(source: &str) -> Vec<u32> {
             }
 
             TokenKind::StrLiteral(_) | TokenKind::FStrLiteral(_) => (6, 0), // string
-            TokenKind::NumLiteral(_) => (7, 0), // number
-            TokenKind::Equal | TokenKind::Plus | TokenKind::Minus | TokenKind::Star 
-            | TokenKind::Slash | TokenKind::PipeGreater | TokenKind::Ampersand => (8, 0), // operator
-            TokenKind::Comment(_) => (9, 0), // comment
+            TokenKind::NumLiteral(_) => (7, 0),                             // number
+            TokenKind::Equal
+            | TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::PipeGreater
+            | TokenKind::Ampersand => (8, 0), // operator
+            TokenKind::Comment(_) => (9, 0),                                // comment
             _ => continue,
         };
 
@@ -331,7 +389,7 @@ pub fn compute_inlay_hints(source: &str) -> Vec<serde_json::Value> {
                 let ident_part = line[..eq_pos].trim();
                 let var_name = ident_part.split_whitespace().last().unwrap_or("");
                 let value_part = line[eq_pos + 1..].trim().trim_end_matches(';');
-                
+
                 let deduced_type = if value_part.starts_with('"') {
                     ": texto"
                 } else if value_part.contains('.') {
@@ -407,7 +465,7 @@ pub fn compute_code_actions(
     _source: &str,
     uri: &str,
     range: &serde_json::Value,
-    diagnostics: &[serde_json::Value]
+    diagnostics: &[serde_json::Value],
 ) -> Vec<serde_json::Value> {
     let mut actions = Vec::new();
 
@@ -600,22 +658,66 @@ fn get_smart_completions() -> Vec<serde_json::Value> {
     let mut items = Vec::new();
 
     let keywords = [
-        ("funcion", "Define una nueva función", "funcion entero $1($2) {\n    retornar $0;\n}"),
-        ("estructura", "Define una estructura de datos", "estructura $1 {\n    $0\n}"),
-        ("impl", "Implementa métodos o rasgos", "impl $1 {\n    $0\n}"),
-        ("prestado", "Declara una referencia prestada (Zero-GC)", "prestado $0"),
+        (
+            "funcion",
+            "Define una nueva función",
+            "funcion entero $1($2) {\n    retornar $0;\n}",
+        ),
+        (
+            "estructura",
+            "Define una estructura de datos",
+            "estructura $1 {\n    $0\n}",
+        ),
+        (
+            "impl",
+            "Implementa métodos o rasgos",
+            "impl $1 {\n    $0\n}",
+        ),
+        (
+            "prestado",
+            "Declara una referencia prestada (Zero-GC)",
+            "prestado $0",
+        ),
         ("dueno", "Declara propiedad lineal única", "dueno $0"),
-        ("en_tiempo_compilacion", "Evalúa en tiempo de compilación", "en_tiempo_compilacion { $0 }"),
-        ("ensamblador", "Bloque de ensamblador nativo inline", "ensamblador {\n    \"$0\"\n}"),
+        (
+            "en_tiempo_compilacion",
+            "Evalúa en tiempo de compilación",
+            "en_tiempo_compilacion { $0 }",
+        ),
+        (
+            "ensamblador",
+            "Bloque de ensamblador nativo inline",
+            "ensamblador {\n    \"$0\"\n}",
+        ),
         ("bloque_c", "Bloque C99 inline", "bloque_c {\n    \"$0\"\n}"),
-        ("bloque_rust", "Bloque Rust inline", "bloque_rust {\n    \"$0\"\n}"),
-        ("posponer", "Ejecuta bloque de limpieza al salir del scope", "posponer {\n    $0\n}"),
-        ("elegir", "Pattern matching de casos", "elegir ($1) {\n    caso $2: $0\n    defecto: \n}"),
+        (
+            "bloque_rust",
+            "Bloque Rust inline",
+            "bloque_rust {\n    \"$0\"\n}",
+        ),
+        (
+            "posponer",
+            "Ejecuta bloque de limpieza al salir del scope",
+            "posponer {\n    $0\n}",
+        ),
+        (
+            "elegir",
+            "Pattern matching de casos",
+            "elegir ($1) {\n    caso $2: $0\n    defecto: \n}",
+        ),
         ("si", "Condicional si verdadero", "si $1 {\n    $0\n}"),
         ("sino", "Rama alternativa", "sino {\n    $0\n}"),
-        ("mientras", "Bucle mientras condición sea verdadera", "mientras $1 {\n    $0\n}"),
+        (
+            "mientras",
+            "Bucle mientras condición sea verdadera",
+            "mientras $1 {\n    $0\n}",
+        ),
         ("para", "Bucle para cada elemento", "para ($1) {\n    $0\n}"),
-        ("importar", "Importa un módulo stdlib o paquete", "importar \"$1.nv\";"),
+        (
+            "importar",
+            "Importa un módulo stdlib o paquete",
+            "importar \"$1.nv\";",
+        ),
         ("retornar", "Retorna un valor de la función", "retornar $0;"),
     ];
 
@@ -658,10 +760,19 @@ fn get_smart_completions() -> Vec<serde_json::Value> {
         ("vector_db_crear", "Crea una base de datos vectorial nativa"),
         ("vector_db_buscar", "Búsqueda por similitud coseno RAG"),
         ("ia_cuantizar_int8", "Cuantiza matriz de pesos a INT8 W8A16"),
-        ("nexus_crear_app", "Crea una aplicación web Nexus con OpenAPI 3.0"),
-        ("postgres_conectar", "Conecta a PostgreSQL vía Wire Protocol 3.0"),
+        (
+            "nexus_crear_app",
+            "Crea una aplicación web Nexus con OpenAPI 3.0",
+        ),
+        (
+            "postgres_conectar",
+            "Conecta a PostgreSQL vía Wire Protocol 3.0",
+        ),
         ("redis_conectar", "Conecta a Redis con protocolo RESP3"),
-        ("ui_estado_crear", "Crea un hook de estado reactivo Virtual DOM"),
+        (
+            "ui_estado_crear",
+            "Crea un hook de estado reactivo Virtual DOM",
+        ),
     ];
 
     for (b, doc) in builtins {

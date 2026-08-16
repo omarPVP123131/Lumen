@@ -474,12 +474,11 @@ fn collect_module_declarations(program: &Program) -> HashSet<String> {
                 }
                 Decl::ImplRasgo { .. } => {}
             },
-            DeclOrStmt::Stmt(stmt) => match stmt {
-                Stmt::Assignment { name, .. } => {
+            DeclOrStmt::Stmt(stmt) => {
+                if let Stmt::Assignment { name, .. } = stmt {
                     names.insert(name.clone());
                 }
-                _ => {}
-            },
+            }
         }
     }
     names
@@ -724,7 +723,14 @@ fn prefix_stmt(
             foreach_locals.insert(var_name.clone());
             prefix_expr(expr, prefix, &foreach_locals, known, module_decls);
             for node in body.iter_mut() {
-                prefix_node(node, prefix, &mut foreach_locals, false, known, module_decls);
+                prefix_node(
+                    node,
+                    prefix,
+                    &mut foreach_locals,
+                    false,
+                    known,
+                    module_decls,
+                );
             }
         }
         Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
@@ -993,7 +999,11 @@ fn prefix_expr(
         Expr::SafeFieldAccess { expr: target, .. } => {
             prefix_expr(target, prefix, locals, known, module_decls);
         }
-        Expr::Elvis { expr: target, default, .. } => {
+        Expr::Elvis {
+            expr: target,
+            default,
+            ..
+        } => {
             prefix_expr(target, prefix, locals, known, module_decls);
             prefix_expr(default, prefix, locals, known, module_decls);
         }
@@ -1117,7 +1127,12 @@ fn prefix_type(t: &mut Type, prefix: &str, known: &HashSet<String>) {
             prefix_type(return_type, prefix, known);
         }
         Type::Struct(name) => {
-            if name != "Infer" && name != "Self" && name != "self" && name != "este" && !is_known_prefixed(name, known) {
+            if name != "Infer"
+                && name != "Self"
+                && name != "self"
+                && name != "este"
+                && !is_known_prefixed(name, known)
+            {
                 *name = format!("{}_{}", prefix, name);
             }
         }

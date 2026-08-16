@@ -484,9 +484,9 @@ mod tests {
 
     #[test]
     fn test_nanbox_f64_roundtrip() {
-        let v = NanVal::from_f64(3.14159);
+        let v = NanVal::from_f64(std::f64::consts::PI);
         assert!(v.is_f64());
-        assert!((v.to_f64() - 3.14159).abs() < 1e-10);
+        assert!((v.to_f64() - std::f64::consts::PI).abs() < 1e-10);
     }
 
     #[test]
@@ -504,11 +504,11 @@ mod tests {
     fn test_nanbox_bool_and_void() {
         let v_true = NanVal::from_bool(true);
         assert!(v_true.is_bool());
-        assert_eq!(v_true.to_bool(), true);
+        assert!(v_true.to_bool());
 
         let v_false = NanVal::from_bool(false);
         assert!(v_false.is_bool());
-        assert_eq!(v_false.to_bool(), false);
+        assert!(!v_false.to_bool());
 
         let v_void = NanVal::void();
         assert!(v_void.is_void());

@@ -108,7 +108,8 @@ funcion void test_tensor_dot() {
     decimal d = tensor_producto_punto(a, b);
     testing_afirmar_igual(d, 11.0);
 }
-"#.to_string(),
+"#
+                .to_string(),
             ),
             "web" | "api" | "servidor" => (
                 format!(
@@ -141,7 +142,8 @@ funcion void test_json_resp() {
     servidor_RespuestaHTTP r = servidor_respuesta_json("{\"ok\": true}");
     testing_afirmar_igual(r.codigo, 200);
 }
-"#.to_string(),
+"#
+                .to_string(),
             ),
             "uni" | "universidad" | "academico" => (
                 format!(
@@ -180,7 +182,8 @@ funcion void test_algebra_determinante() {
     decimal det = matrices_determinante_2x2(m);
     testing_afirmar_igual(det, 3.0);
 }
-"#.to_string(),
+"#
+                .to_string(),
             ),
             _ => (
                 format!(
@@ -234,7 +237,8 @@ funcion void test_interpolacion() {
     texto saludo = f"Hola {nombre}";
     testing_afirmar_igual(saludo, "Hola LÚMEN");
 }
-"#.to_string(),
+"#
+                .to_string(),
             ),
         };
 

@@ -169,32 +169,32 @@ pub enum TokenKind {
     FStrLiteral(String),
 
     // Operators
-    Plus,         // +
-    PlusPlus,     // ++
-    Minus,        // -
-    Star,         // *
-    Slash,        // /
-    Percent,      // %
-    Equal,        // =
-    EqualEqual,   // ==
-    Bang,         // !
-    BangEqual,    // !=
-    Less,         // <
-    LessEqual,    // <=
-    Greater,      // >
-    GreaterEqual, // >=
-    AndAnd,       // &&
-    OrOr,         // ||
-    Pipe,         // |
-    PipeGreater,  // |>
-    Ampersand,    // &
-    Caret,        // ^
-    Tilde,        // ~
-    ShiftLeft,    // <<
-    ShiftRight,   // >>
-    Question,     // ?
-    QuestionDot,  // ?.
-    QuestionColon,// ?:
+    Plus,          // +
+    PlusPlus,      // ++
+    Minus,         // -
+    Star,          // *
+    Slash,         // /
+    Percent,       // %
+    Equal,         // =
+    EqualEqual,    // ==
+    Bang,          // !
+    BangEqual,     // !=
+    Less,          // <
+    LessEqual,     // <=
+    Greater,       // >
+    GreaterEqual,  // >=
+    AndAnd,        // &&
+    OrOr,          // ||
+    Pipe,          // |
+    PipeGreater,   // |>
+    Ampersand,     // &
+    Caret,         // ^
+    Tilde,         // ~
+    ShiftLeft,     // <<
+    ShiftRight,    // >>
+    Question,      // ?
+    QuestionDot,   // ?.
+    QuestionColon, // ?:
 
     // Range operators
     DotDot,      // ..

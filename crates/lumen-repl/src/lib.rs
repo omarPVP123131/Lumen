@@ -154,7 +154,9 @@ pub fn run_repl() {
             break;
         } else if input == ":help" || input == ":ayuda" {
             println!("\n  📖 COMANDOS DEL REPL LÚMEN:");
-            println!("   :doc <nombre>     — Muestra documentación interactiva de un tipo o función");
+            println!(
+                "   :doc <nombre>     — Muestra documentación interactiva de un tipo o función"
+            );
             println!("   :bench <código>   — Mide el tiempo de ejecución en microsegundos");
             println!("   :clear / :limpiar — Reinicia el estado y variables acumuladas");
             println!("   :mem              — Muestra el estado del modelo de memoria");
@@ -172,7 +174,10 @@ pub fn run_repl() {
             println!("   • Modo de Ejecución: Hot JIT Tiering Cranelift\n");
             continue;
         } else if input == ":history" {
-            println!("  • Comandos evaluados en esta sesión: {}\n", repl.history_count);
+            println!(
+                "  • Comandos evaluados en esta sesión: {}\n",
+                repl.history_count
+            );
             continue;
         } else if let Some(target) = input.strip_prefix(":doc ") {
             let sym = target.trim();
@@ -195,7 +200,11 @@ pub fn run_repl() {
                 Ok(out) => {
                     let elapsed_us = t_start.elapsed().as_micros();
                     println!("  ⚡ Salida: {}", out);
-                    println!("  ⏱️  Tiempo de ejecución: {} µs ({} ms)\n", elapsed_us, elapsed_us as f64 / 1000.0);
+                    println!(
+                        "  ⏱️  Tiempo de ejecución: {} µs ({} ms)\n",
+                        elapsed_us,
+                        elapsed_us as f64 / 1000.0
+                    );
                 }
                 Err(e) => eprintln!("  ❌ Error: {}", e),
             }

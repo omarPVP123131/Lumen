@@ -636,7 +636,13 @@ impl Formatter {
                 self.push(" ?: ");
                 self.fmt_expr(default);
             }
-            Expr::Comprehension { expr, var_name, iter, condition, .. } => {
+            Expr::Comprehension {
+                expr,
+                var_name,
+                iter,
+                condition,
+                ..
+            } => {
                 self.push("[");
                 self.fmt_expr(expr);
                 self.push(&format!(" para {} en ", var_name));
@@ -647,7 +653,13 @@ impl Formatter {
                 }
                 self.push("]");
             }
-            Expr::Query { var_name, source, where_clause, select_expr, .. } => {
+            Expr::Query {
+                var_name,
+                source,
+                where_clause,
+                select_expr,
+                ..
+            } => {
                 self.push(&format!("consultar {} en ", var_name));
                 self.fmt_expr(source);
                 if let Some(w) = where_clause {

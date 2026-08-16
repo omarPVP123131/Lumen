@@ -5,7 +5,11 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-fn collect_nv(dir: &std::path::Path, base_dir: &std::path::Path, entries: &mut Vec<(String, String)>) {
+fn collect_nv(
+    dir: &std::path::Path,
+    base_dir: &std::path::Path,
+    entries: &mut Vec<(String, String)>,
+) {
     if let Ok(read) = fs::read_dir(dir) {
         let mut items: Vec<_> = read.filter_map(|e| e.ok()).collect();
         items.sort_by_key(|e| e.file_name());

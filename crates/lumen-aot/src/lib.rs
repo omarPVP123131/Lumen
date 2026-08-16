@@ -837,9 +837,7 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
                         Op::BitAnd => out.push_str(&format!("  {} = and i64 {}, {}\n", r, a, b)),
                         Op::BitOr => out.push_str(&format!("  {} = or i64 {}, {}\n", r, a, b)),
                         Op::BitXor => out.push_str(&format!("  {} = xor i64 {}, {}\n", r, a, b)),
-                        Op::ShiftLeft => {
-                            out.push_str(&format!("  {} = shl i64 {}, {}\n", r, a, b))
-                        }
+                        Op::ShiftLeft => out.push_str(&format!("  {} = shl i64 {}, {}\n", r, a, b)),
                         Op::ShiftRight => {
                             out.push_str(&format!("  {} = ashr i64 {}, {}\n", r, a, b))
                         }
@@ -1202,9 +1200,7 @@ fn emit_func(
                     s.push_str("  { Val _x = POP(); PUSH(_v_str(_tipo_de_b(_x))); }\n");
                 } else if n == "__ffi_asm" {
                     s.push_str("  { Val _code = POP(); __asm__ volatile(\"nop\"); PUSH(_v_int(0)); }\n");
-                } else if n == "__ffi_c_eval" {
-                    s.push_str("  { Val _code = POP(); PUSH(_v_int(0)); }\n");
-                } else if n == "__ffi_rust_eval" {
+                } else if n == "__ffi_c_eval" || n == "__ffi_rust_eval" {
                     s.push_str("  { Val _code = POP(); PUSH(_v_int(0)); }\n");
                 } else if n == "__map_nuevo" {
                     s.push_str("  PUSH(_map_new());\n");
@@ -1674,7 +1670,9 @@ mod tests {
                 Instr::Return,
             ],
         };
-        let code_ptr = jit.compile_function("jit_add", &func).expect("JIT compile failed");
+        let code_ptr = jit
+            .compile_function("jit_add", &func)
+            .expect("JIT compile failed");
         assert!(!code_ptr.is_null());
         let callable: fn(i64, i64) -> i64 = unsafe { std::mem::transmute(code_ptr) };
         let res = callable(0, 0);

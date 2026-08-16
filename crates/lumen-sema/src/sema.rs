@@ -694,7 +694,13 @@ impl SemanticAnalyzer {
                     {
                         for p in params.iter_mut() {
                             if let Type::Struct(s) = &p.param_type {
-                                if s == "Self" || s == "self" || s == "este" || s.ends_with("_Self") || s.ends_with("_self") || s.ends_with("_este") {
+                                if s == "Self"
+                                    || s == "self"
+                                    || s == "este"
+                                    || s.ends_with("_Self")
+                                    || s.ends_with("_self")
+                                    || s.ends_with("_este")
+                                {
                                     p.param_type = target_type.clone();
                                 }
                             }
@@ -1003,7 +1009,8 @@ impl SemanticAnalyzer {
                                 target_type
                             ),
                             span: *span,
-                            suggestion: "Este tipo no soporta implementación de métodos".to_string(),
+                            suggestion: "Este tipo no soporta implementación de métodos"
+                                .to_string(),
                         });
                         return TypeInfo::Void;
                     }
@@ -1014,7 +1021,13 @@ impl SemanticAnalyzer {
                         if let Decl::Function { params, .. } = &mut m {
                             for p in params.iter_mut() {
                                 if let Type::Struct(s) = &p.param_type {
-                                    if s == "Self" || s == "self" || s == "este" || s.ends_with("_Self") || s.ends_with("_self") || s.ends_with("_este") {
+                                    if s == "Self"
+                                        || s == "self"
+                                        || s == "este"
+                                        || s.ends_with("_Self")
+                                        || s.ends_with("_self")
+                                        || s.ends_with("_este")
+                                    {
                                         p.param_type = target_type.clone();
                                     }
                                 }
@@ -1849,7 +1862,10 @@ impl SemanticAnalyzer {
                         if !is_numeric(&ot) {
                             self.errors.push(SemError {
                                 code: "E038".to_string(),
-                                message: format!("No puedes aplicar '~' a un valor de tipo '{:?}'", ot),
+                                message: format!(
+                                    "No puedes aplicar '~' a un valor de tipo '{:?}'",
+                                    ot
+                                ),
                                 span: *span,
                                 suggestion: "El operador '~' solo aplica a números".to_string(),
                             });
@@ -2407,7 +2423,8 @@ impl SemanticAnalyzer {
                                     }
                                     if let Some(got) = arg_types.first() {
                                         let base_got = match got {
-                                            TypeInfo::Prestado { inner, .. } | TypeInfo::Dueno(inner) => inner.as_ref(),
+                                            TypeInfo::Prestado { inner, .. }
+                                            | TypeInfo::Dueno(inner) => inner.as_ref(),
                                             other => other,
                                         };
                                         match base_got {
@@ -2970,13 +2987,21 @@ impl SemanticAnalyzer {
             Expr::Index { expr, index, span } => {
                 let expr_type = self.analyze_expr(expr);
                 let index_type = self.analyze_expr(index);
-                let is_range_slice = matches!(index.as_ref(), Expr::Range { .. }) || matches!(index_type, TypeInfo::Lista(_));
-                if !is_range_slice && index_type != TypeInfo::Entero && index_type != TypeInfo::Numero {
+                let is_range_slice = matches!(index.as_ref(), Expr::Range { .. })
+                    || matches!(index_type, TypeInfo::Lista(_));
+                if !is_range_slice
+                    && index_type != TypeInfo::Entero
+                    && index_type != TypeInfo::Numero
+                {
                     self.errors.push(SemError {
                         code: "E043".to_string(),
-                        message: format!("El índice debe ser entero o rango, no '{:?}'", index_type),
+                        message: format!(
+                            "El índice debe ser entero o rango, no '{:?}'",
+                            index_type
+                        ),
                         span: *span,
-                        suggestion: "Usa un valor de tipo 'entero' o un rango como índice".to_string(),
+                        suggestion: "Usa un valor de tipo 'entero' o un rango como índice"
+                            .to_string(),
                     });
                 }
                 if is_range_slice {
@@ -3069,7 +3094,9 @@ impl SemanticAnalyzer {
                     },
                     "largo" | "len" | "length" => {
                         let base_t = match &expr_type {
-                            TypeInfo::Prestado { inner, .. } | TypeInfo::Dueno(inner) => inner.as_ref(),
+                            TypeInfo::Prestado { inner, .. } | TypeInfo::Dueno(inner) => {
+                                inner.as_ref()
+                            }
                             other => other,
                         };
                         match base_t {
@@ -3514,7 +3541,10 @@ impl SemanticAnalyzer {
                                 code: "E059".to_string(),
                                 message: format!("El struct no tiene un campo llamado '{}'", field),
                                 span: *span,
-                                suggestion: format!("Revisa los campos del struct, '{}' no existe", field),
+                                suggestion: format!(
+                                    "Revisa los campos del struct, '{}' no existe",
+                                    field
+                                ),
                             });
                             TypeInfo::Decimal
                         }
@@ -3582,9 +3612,7 @@ impl SemanticAnalyzer {
                 self.scopes.pop();
                 TypeInfo::Lista(Box::new(res_type))
             }
-            Expr::Comptime { expr, span: _ } => {
-                self.analyze_expr(expr)
-            }
+            Expr::Comptime { expr, span: _ } => self.analyze_expr(expr),
         }
     }
 
@@ -3981,7 +4009,9 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
         }
         return true;
     }
-    if let (TypeInfo::Prestado { inner: t_inner, .. }, TypeInfo::Prestado { inner: v_inner, .. }) = (target, value) {
+    if let (TypeInfo::Prestado { inner: t_inner, .. }, TypeInfo::Prestado { inner: v_inner, .. }) =
+        (target, value)
+    {
         return can_assign(t_inner, v_inner);
     }
     if let TypeInfo::Prestado { inner: t_inner, .. } = target {

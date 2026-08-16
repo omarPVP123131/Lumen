@@ -776,7 +776,12 @@ impl Parser {
         let start = self.peek().span;
         self.advance();
         if !self.check(&[TokenKind::LeftBrace]) {
-            self.error("E015", "Se esperaba '{' después de 'ensamblador' / 'asm'", start, "Agrega '{'");
+            self.error(
+                "E015",
+                "Se esperaba '{' después de 'ensamblador' / 'asm'",
+                start,
+                "Agrega '{'",
+            );
             return None;
         }
         self.advance();
@@ -786,18 +791,31 @@ impl Parser {
             _ => "/* inline asm */".to_string(),
         };
         if !self.check(&[TokenKind::RightBrace]) {
-            self.error("E015", "Se esperaba '}' para cerrar el bloque de ensamblador", start, "Agrega '}'");
+            self.error(
+                "E015",
+                "Se esperaba '}' para cerrar el bloque de ensamblador",
+                start,
+                "Agrega '}'",
+            );
             return None;
         }
         self.advance();
-        Some(Stmt::InlineAsm { code, span: Span::merge(&start, &self.previous().span) })
+        Some(Stmt::InlineAsm {
+            code,
+            span: Span::merge(&start, &self.previous().span),
+        })
     }
 
     fn parse_inline_c(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
         self.advance();
         if !self.check(&[TokenKind::LeftBrace]) {
-            self.error("E015", "Se esperaba '{' después de 'bloque_c'", start, "Agrega '{'");
+            self.error(
+                "E015",
+                "Se esperaba '{' después de 'bloque_c'",
+                start,
+                "Agrega '{'",
+            );
             return None;
         }
         self.advance();
@@ -807,18 +825,31 @@ impl Parser {
             _ => "/* inline c */".to_string(),
         };
         if !self.check(&[TokenKind::RightBrace]) {
-            self.error("E015", "Se esperaba '}' para cerrar el bloque C", start, "Agrega '}'");
+            self.error(
+                "E015",
+                "Se esperaba '}' para cerrar el bloque C",
+                start,
+                "Agrega '}'",
+            );
             return None;
         }
         self.advance();
-        Some(Stmt::InlineC { code, span: Span::merge(&start, &self.previous().span) })
+        Some(Stmt::InlineC {
+            code,
+            span: Span::merge(&start, &self.previous().span),
+        })
     }
 
     fn parse_inline_rust(&mut self) -> Option<Stmt> {
         let start = self.peek().span;
         self.advance();
         if !self.check(&[TokenKind::LeftBrace]) {
-            self.error("E015", "Se esperaba '{' después de 'bloque_rust'", start, "Agrega '{'");
+            self.error(
+                "E015",
+                "Se esperaba '{' después de 'bloque_rust'",
+                start,
+                "Agrega '{'",
+            );
             return None;
         }
         self.advance();
@@ -828,11 +859,19 @@ impl Parser {
             _ => "/* inline rust */".to_string(),
         };
         if !self.check(&[TokenKind::RightBrace]) {
-            self.error("E015", "Se esperaba '}' para cerrar el bloque Rust", start, "Agrega '}'");
+            self.error(
+                "E015",
+                "Se esperaba '}' para cerrar el bloque Rust",
+                start,
+                "Agrega '}'",
+            );
             return None;
         }
         self.advance();
-        Some(Stmt::InlineRust { code, span: Span::merge(&start, &self.previous().span) })
+        Some(Stmt::InlineRust {
+            code,
+            span: Span::merge(&start, &self.previous().span),
+        })
     }
 
     fn is_type_keyword(&self, kind: &TokenKind) -> bool {
@@ -1642,50 +1681,6 @@ impl Parser {
                 value,
                 span: Span::merge(&start, &self.previous().span),
             })
-        } else if self.check_ident() && self.check_next(&[TokenKind::Dot]) {
-            let expr = self.parse_expression()?;
-            if self.check(&[TokenKind::Equal]) {
-                self.advance();
-                let value = Box::new(self.parse_expression()?);
-                self.expect_semicolon();
-                match expr {
-                    Expr::FieldAccess {
-                        expr: target,
-                        field,
-                        ..
-                    } => Some(Stmt::FieldAssign {
-                        expr: target,
-                        field,
-                        value,
-                        span: Span::merge(&start, &self.previous().span),
-                    }),
-                    Expr::Index {
-                        expr: target,
-                        index,
-                        ..
-                    } => Some(Stmt::ArraySet {
-                        arr: target,
-                        index,
-                        value,
-                        span: Span::merge(&start, &self.previous().span),
-                    }),
-                    _ => {
-                        self.error(
-                            "E024",
-                            "No se puede asignar a esta expresión",
-                            start,
-                            "Solo se puede asignar a variables, índices y campos de struct",
-                        );
-                        None
-                    }
-                }
-            } else {
-                self.expect_semicolon();
-                Some(Stmt::Expr {
-                    expr: Box::new(expr),
-                    span: Span::merge(&start, &self.previous().span),
-                })
-            }
         } else {
             let expr = self.parse_expression()?;
             if self.check(&[TokenKind::Equal]) {
@@ -1760,9 +1755,15 @@ impl Parser {
                         span,
                     };
                 }
-                Expr::Ident { name, span: id_span } => {
+                Expr::Ident {
+                    name,
+                    span: id_span,
+                } => {
                     left = Expr::Call {
-                        callee: Box::new(Expr::Ident { name, span: id_span }),
+                        callee: Box::new(Expr::Ident {
+                            name,
+                            span: id_span,
+                        }),
                         args: vec![left],
                         type_args: Vec::new(),
                         span,
@@ -2447,22 +2448,23 @@ impl Parser {
                 } else {
                     None
                 };
-                let (order_by, descending) = if self.check(&[TokenKind::OrdenarPor, TokenKind::OrderBy]) {
-                    self.advance();
-                    let ord_expr = self.parse_expression()?;
-                    let desc = if self.check(&[TokenKind::Descendente, TokenKind::Descending]) {
+                let (order_by, descending) =
+                    if self.check(&[TokenKind::OrdenarPor, TokenKind::OrderBy]) {
                         self.advance();
-                        true
-                    } else if self.check(&[TokenKind::Ascendente, TokenKind::Ascending]) {
-                        self.advance();
-                        false
+                        let ord_expr = self.parse_expression()?;
+                        let desc = if self.check(&[TokenKind::Descendente, TokenKind::Descending]) {
+                            self.advance();
+                            true
+                        } else if self.check(&[TokenKind::Ascendente, TokenKind::Ascending]) {
+                            self.advance();
+                            false
+                        } else {
+                            false
+                        };
+                        (Some(Box::new(ord_expr)), desc)
                     } else {
-                        false
+                        (None, false)
                     };
-                    (Some(Box::new(ord_expr)), desc)
-                } else {
-                    (None, false)
-                };
                 if !self.check(&[TokenKind::Seleccionar, TokenKind::Select]) {
                     self.error(
                         "E012",
@@ -4480,7 +4482,10 @@ para a en nums {
         let source = "lista<entero> pares = [x * 2 para x en nums si x % 2 == 0];";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+        if let DeclOrStmt::Decl(Decl::Variable {
+            init: Some(init), ..
+        }) = &program[0]
+        {
             assert!(matches!(init.as_ref(), Expr::Comprehension { .. }));
         } else {
             panic!("Expected Variable declaration with comprehension init");
@@ -4492,7 +4497,10 @@ para a en nums {
         let source = "lista<entero> r = consultar x en nums donde x > 5 seleccionar x * 2;";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+        if let DeclOrStmt::Decl(Decl::Variable {
+            init: Some(init), ..
+        }) = &program[0]
+        {
             assert!(matches!(init.as_ref(), Expr::Query { .. }));
         } else {
             panic!("Expected Variable declaration with Query init");
@@ -4504,7 +4512,10 @@ para a en nums {
         let source = "array<integer> r = query x in nums where x > 5 select x * 2;";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+        if let DeclOrStmt::Decl(Decl::Variable {
+            init: Some(init), ..
+        }) = &program[0]
+        {
             assert!(matches!(init.as_ref(), Expr::Query { .. }));
         } else {
             panic!("Expected Variable declaration with Query init");

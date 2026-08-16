@@ -1641,7 +1641,11 @@ impl IRBuilder {
             }
             Stmt::Block { stmts, .. } => self.collect_variable_refs(stmts, params, out),
             Stmt::Posponer { body, .. } => self.collect_variable_refs(body, params, out),
-            Stmt::TryCatch { try_body, catch_body, .. } => {
+            Stmt::TryCatch {
+                try_body,
+                catch_body,
+                ..
+            } => {
                 self.collect_variable_refs(try_body, params, out);
                 self.collect_variable_refs(catch_body, params, out);
             }
@@ -1716,14 +1720,25 @@ impl IRBuilder {
                 self.collect_expr_refs(expr, params, out);
                 self.collect_expr_refs(default, params, out);
             }
-            Expr::Comprehension { expr, iter, condition, .. } => {
+            Expr::Comprehension {
+                expr,
+                iter,
+                condition,
+                ..
+            } => {
                 self.collect_expr_refs(expr, params, out);
                 self.collect_expr_refs(iter, params, out);
                 if let Some(cond) = condition {
                     self.collect_expr_refs(cond, params, out);
                 }
             }
-            Expr::Query { source, where_clause, order_by, select_expr, .. } => {
+            Expr::Query {
+                source,
+                where_clause,
+                order_by,
+                select_expr,
+                ..
+            } => {
                 self.collect_expr_refs(source, params, out);
                 if let Some(w) = where_clause {
                     self.collect_expr_refs(w, params, out);

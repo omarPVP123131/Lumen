@@ -233,7 +233,10 @@ fn ffi_ints(args: &[Value]) -> Vec<i64> {
         .map(|v| match v {
             Value::Int(i) => *i,
             Value::Float(f) => *f as i64,
-            _ => v.as_i64().or_else(|| v.as_num().map(|f| f as i64)).unwrap_or(0),
+            _ => v
+                .as_i64()
+                .or_else(|| v.as_num().map(|f| f as i64))
+                .unwrap_or(0),
         })
         .collect()
 }
@@ -2082,7 +2085,11 @@ impl VM {
             if ptr_val != 0 {
                 unsafe {
                     let mut b = [0u8; 8];
-                    std::ptr::copy_nonoverlapping((ptr_val + offset) as *const u8, b.as_mut_ptr(), 8);
+                    std::ptr::copy_nonoverlapping(
+                        (ptr_val + offset) as *const u8,
+                        b.as_mut_ptr(),
+                        8,
+                    );
                     let val = i64::from_le_bytes(b);
                     self.push(Value::Int(val));
                 }
@@ -2169,12 +2176,17 @@ impl VM {
         if name == "__self_healing_invocar" {
             let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             // Ejecución protegida de función con fallback automático
-            self.push(Value::str(format!("EJECUTADO_CON_SELF_HEALING:{}", fn_name)));
+            self.push(Value::str(format!(
+                "EJECUTADO_CON_SELF_HEALING:{}",
+                fn_name
+            )));
             return Some(Ok(()));
         }
 
         if name == "__self_healing_estado" {
-            self.push(Value::str("ESTADO:RESILIENTE|FALLOS_INTERCEPTADOS:0|HOT_PATCHES:0"));
+            self.push(Value::str(
+                "ESTADO:RESILIENTE|FALLOS_INTERCEPTADOS:0|HOT_PATCHES:0",
+            ));
             return Some(Ok(()));
         }
 
@@ -3790,76 +3802,75 @@ impl VM {
                 let index = self.pop()?;
                 let container = self.pop()?;
                 match container {
-                    Value::Array(arr) => {
-                        match &index {
-                            Value::Int(i) => {
-                                let idx = *i;
-                                if idx < 0 || idx as usize >= arr.len() {
+                    Value::Array(arr) => match &index {
+                        Value::Int(i) => {
+                            let idx = *i;
+                            if idx < 0 || idx as usize >= arr.len() {
+                                return Err(VmError::Runtime(format!(
+                                    "Índice {} fuera de rango (largo: {})",
+                                    idx,
+                                    arr.len()
+                                )));
+                            }
+                            self.push(arr[idx as usize].clone());
+                        }
+                        Value::Array(range_items) => {
+                            let mut sub = Vec::new();
+                            for item in range_items.iter() {
+                                if let Some(n) = item.as_num() {
+                                    let i = n as usize;
+                                    if i < arr.len() {
+                                        sub.push(arr[i].clone());
+                                    }
+                                }
+                            }
+                            self.push(Value::arr(sub));
+                        }
+                        _ => {
+                            return Err(VmError::TypeError(
+                                "ArrayGet requires integer or range index for arrays".to_string(),
+                            ))
+                        }
+                    },
+                    Value::Str(s) => match &index {
+                        Value::Int(i) => {
+                            let idx = *i;
+                            if idx < 0 {
+                                return Err(VmError::Runtime(format!(
+                                    "Índice {} fuera de rango",
+                                    idx
+                                )));
+                            }
+                            match s.chars().nth(idx as usize) {
+                                Some(c) => self.push(Value::str(c.to_string())),
+                                None => {
                                     return Err(VmError::Runtime(format!(
                                         "Índice {} fuera de rango (largo: {})",
                                         idx,
-                                        arr.len()
-                                    )));
+                                        s.chars().count()
+                                    )))
                                 }
-                                self.push(arr[idx as usize].clone());
-                            }
-                            Value::Array(range_items) => {
-                                let mut sub = Vec::new();
-                                for item in range_items.iter() {
-                                    if let Some(n) = item.as_num() {
-                                        let i = n as usize;
-                                        if i < arr.len() {
-                                            sub.push(arr[i].clone());
-                                        }
-                                    }
-                                }
-                                self.push(Value::arr(sub));
-                            }
-                            _ => {
-                                return Err(VmError::TypeError(
-                                    "ArrayGet requires integer or range index for arrays".to_string(),
-                                ))
                             }
                         }
-                    }
-                    Value::Str(s) => {
-                        match &index {
-                            Value::Int(i) => {
-                                let idx = *i;
-                                if idx < 0 {
-                                    return Err(VmError::Runtime(format!("Índice {} fuera de rango", idx)));
-                                }
-                                match s.chars().nth(idx as usize) {
-                                    Some(c) => self.push(Value::str(c.to_string())),
-                                    None => {
-                                        return Err(VmError::Runtime(format!(
-                                            "Índice {} fuera de rango (largo: {})",
-                                            idx,
-                                            s.chars().count()
-                                        )))
+                        Value::Array(range_items) => {
+                            let chars: Vec<char> = s.chars().collect();
+                            let mut sub = String::new();
+                            for item in range_items.iter() {
+                                if let Some(n) = item.as_num() {
+                                    let i = n as usize;
+                                    if i < chars.len() {
+                                        sub.push(chars[i]);
                                     }
                                 }
                             }
-                            Value::Array(range_items) => {
-                                let chars: Vec<char> = s.chars().collect();
-                                let mut sub = String::new();
-                                for item in range_items.iter() {
-                                    if let Some(n) = item.as_num() {
-                                        let i = n as usize;
-                                        if i < chars.len() {
-                                            sub.push(chars[i]);
-                                        }
-                                    }
-                                }
-                                self.push(Value::str(sub));
-                            }
-                            _ => {
-                                return Err(VmError::TypeError(
-                                    "ArrayGet requires integer or range index for strings".to_string(),
-                                ))
-                            }
+                            self.push(Value::str(sub));
                         }
-                    }
+                        _ => {
+                            return Err(VmError::TypeError(
+                                "ArrayGet requires integer or range index for strings".to_string(),
+                            ))
+                        }
+                    },
                     Value::Map(map) => {
                         let val = map.get(&index).cloned().unwrap_or(Value::Int(0));
                         self.push(val);
@@ -4076,13 +4087,23 @@ impl VM {
                 self.push(Value::Bool(idx != 0));
             }
             Opcode::Load => {
-                let name = self.bytecode.names.get(idx).map(|s| s.as_str()).unwrap_or("");
+                let name = self
+                    .bytecode
+                    .names
+                    .get(idx)
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
                 let val = self.lookup(name)?;
                 self.push(val);
             }
             Opcode::Store => {
                 let val = self.pop()?;
-                let name = self.bytecode.names.get(idx).map(|s| s.as_str()).unwrap_or("");
+                let name = self
+                    .bytecode
+                    .names
+                    .get(idx)
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
                 let n = self.locals.len();
                 if n > 0 {
                     let cur = n - 1;
@@ -4102,7 +4123,10 @@ impl VM {
                 let count = self.call_counts.entry(name.clone()).or_insert(0);
                 *count += 1;
                 if *count == self.jit_threshold && std::env::var_os("LUMEN_JIT_LOG").is_some() {
-                    eprintln!("[jit] 🔥 Hot function detected: '{}' ({} llamadas) -> JIT Tier-1 activado", name, *count);
+                    eprintln!(
+                        "[jit] 🔥 Hot function detected: '{}' ({} llamadas) -> JIT Tier-1 activado",
+                        name, *count
+                    );
                 }
                 let argc_idx = self.ip;
                 self.ip += 1;
@@ -4134,10 +4158,15 @@ impl VM {
                         func_name: name,
                         return_ip: self.ip,
                     });
-                    let mut scope = HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
+                    let mut scope =
+                        HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
                     for i in (0..param_count).rev() {
                         let param_name = self.bytecode.funcs[func_idx].params[i].clone();
-                        let arg = if i < args.len() { args[i].clone() } else { self.pop().unwrap_or(Value::Void) };
+                        let arg = if i < args.len() {
+                            args[i].clone()
+                        } else {
+                            self.pop().unwrap_or(Value::Void)
+                        };
                         scope.insert(param_name, arg);
                     }
                     self.locals.push(scope);
@@ -4752,14 +4781,14 @@ impl VM {
                     }
                 } else if name == "__tcp_connect" || name == "__tcp_conectar" {
                     #[allow(unused_variables)]
-            let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     match std::net::TcpStream::connect(&addr) {
                         Ok(_) => self.push(Value::Bool(true)),
                         Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__tcp_listen" || name == "__tcp_escuchar" {
                     #[allow(unused_variables)]
-            let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     match std::net::TcpListener::bind(&addr) {
                         Ok(l) => {
                             self.tcp_listener = Some(l);
@@ -4783,7 +4812,7 @@ impl VM {
                     }
                 } else if name == "__http_server" || name == "__http_servidor" {
                     #[allow(unused_variables)]
-            let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                    let addr = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     self.push(Value::str(format!("HTTP server on {}", addr)));
                 } else if name == "__serial_open" || name == "__serial_abrir" {
                     self.push(Value::Bool(true));
@@ -4804,7 +4833,8 @@ impl VM {
                         func_name: name,
                         return_ip: self.ip,
                     });
-                    let mut scope = HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
+                    let mut scope =
+                        HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
                     for i in 0..param_count {
                         let param_name = self.bytecode.funcs[func_idx].params[i].clone();
                         let arg = args.get(i).cloned().unwrap_or(Value::Void);
