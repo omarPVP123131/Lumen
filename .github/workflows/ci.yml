@@ -174,9 +174,10 @@ jobs:
             suffix: macos-arm64
             is_zip: false
             binary_name: lumen
-          # macOS Intel
+          # macOS Intel (compilado cross desde runner arm64 — los runners
+          # Intel macos-13/14 tienen colas de horas en planes free)
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15
             suffix: macos-x64
             is_zip: false
             binary_name: lumen
