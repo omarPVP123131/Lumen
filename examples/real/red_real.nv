@@ -1,3 +1,11 @@
+// Headless/CI guard — demo de red, omitida en CI (requiere red)
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo de red omitida");
+    retornar;
+}
 // ==========================================
 // red_real.nv — Network operations (real-world)
 // Uso: lumen run -L stdlib/ examples/real/red_real.nv

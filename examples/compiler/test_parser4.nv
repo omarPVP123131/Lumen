@@ -1,3 +1,5 @@
+// @should_error — compiler self-test, not for lumen run (use cargo test / fuego.ps1)
+imprimir("skip: compiler self-test — use cargo test"); retornar;
 // test_parser4.nv — Parser with numero types for map values
 // Key: use numero (not entero/texto) for __map_obtener results
 // Only a_texto() (builtin) for string conversion

@@ -1,3 +1,5 @@
+// @should_error — compiler self-test, not for lumen run (use cargo test / fuego.ps1)
+imprimir("skip: compiler self-test — use cargo test"); retornar;
 // test_parser_final2.nv — Test the stdlib parser
 importar "parser.nv";
 

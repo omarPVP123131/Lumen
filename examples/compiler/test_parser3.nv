@@ -1,3 +1,5 @@
+// @should_error — compiler self-test, not for lumen run (use cargo test / fuego.ps1)
+imprimir("skip: compiler self-test — use cargo test"); retornar;
 // test_parser3.nv — Recursive descent parser with correct LÚMEN types
 // Uses a_entero()/a_texto() for map value conversions
 

@@ -1,3 +1,5 @@
+// @should_error — compiler self-test, not for lumen run (use cargo test / fuego.ps1)
+imprimir("skip: compiler self-test — use cargo test"); retornar;
 // test_parser2.nv — Self-contained recursive descent parser + lexer + tests
 // Uses mientras(cond) syntax required by latest LÚMEN parser
 

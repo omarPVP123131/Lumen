@@ -13,6 +13,14 @@
 
 importar "graficos.nv";
 importar "graficos_tilemap.nv";
+// Headless/CI guard — demo requiere red/GPU intensiva, omitida en CI
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo omitida");
+    retornar;
+}
 
 // ============================================================
 // CONSTANTES SDL2 / SDL2 CONSTANTS

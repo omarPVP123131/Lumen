@@ -1,3 +1,11 @@
+// Headless/CI guard — demo requiere display/SDL2/consola interactiva
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo omitida (requiere display)");
+    retornar;
+}
 // ==========================================
 // graficos_charts_jr.nv — Charts (junior)
 // Tests: bar data, pie segments, axis calc
