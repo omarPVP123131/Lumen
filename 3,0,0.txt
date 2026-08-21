@@ -1,4 +1,3 @@
-git commit -F - <<'FIN'
 v3.0.0: 167 bugs corregidos, unificación y verificación en tres plataformas
 
 Unifica en una sola entrega el trabajo iniciado sobre la v2.4.6: los 8 bugs
@@ -22,4 +21,3 @@ cuatro fuzzers diferenciales (structs/listas, closures, rechazo y regex)
 sin divergencias.
 
 Detalle completo en INFORME-BUGS-LUMEN.md y CHANGELOG.md.
-FIN
