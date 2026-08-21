@@ -5,6 +5,7 @@
 
 importar "graficos.nv";
 importar "graficos_avanzado.nv";
+importar "sistema.nv";
 
 // ============================================================
 // CONSTANTES SDL2 / SDL2 CONSTANTS
@@ -26,6 +27,13 @@ const entero SDL_SCANCODE_3 = 32;
 // ============================================================
 
 imprimir("=== Gráficos Avanzados LÚMEN ===");
+// Headless/CI: omitir demo que requiere display (SDL2 alpha blending requiere param 'a' fix)
+texto _ci2 = sistema_env_obtener("CI");
+texto _hl2 = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci2 != "" || _hl2 == "1" {
+    imprimir("Headless/CI detectado — demo particulas omitida (requiere display)");
+    retornar;
+}
 imprimir("1. Inicializando SDL2...");
 
 si !graficos_iniciar(SDL_INIT_VIDEO) {

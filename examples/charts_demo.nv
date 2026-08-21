@@ -14,6 +14,7 @@ importar "graficos.nv";
 importar "graficos_charts.nv";
 importar "graficos_canvas.nv";
 importar "matematicas.nv";
+importar "sistema.nv";
 
 // ============================================================
 // CONSTANTES / CONSTANTS
@@ -170,6 +171,18 @@ funcion graficos_charts_ChartConfig config_scatter() {
 
 imprimir("=== Charts Demo ===");
 imprimir("Controles: [1]Barras [2]Líneas [3]Pastel [4]Dispersión [ESC]Salir");
+
+// Headless / CI: requiere display SDL2 con ventana — omitir sin fallar
+texto _ci_env = sistema_env_obtener("CI");
+si _ci_env != "" {
+    imprimir("Headless/CI detectado — demo grafico omitida (requiere display SDL2)");
+    retornar;
+}
+texto _hl_env = sistema_env_obtener("LUMEN_HEADLESS");
+si _hl_env == "1" {
+    imprimir("Headless/CI detectado — demo grafico omitida (requiere display SDL2)");
+    retornar;
+}
 
 // Inicializar SDL2
 si !graficos_iniciar(SDL_INIT_VIDEO) {

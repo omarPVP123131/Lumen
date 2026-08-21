@@ -12,6 +12,7 @@
 
 importar "tui_temas.nv";
 importar "tui_core.nv";
+importar "sistema.nv";
 
 // ============================================================
 // CONSTANTES / CONSTANTS
@@ -230,6 +231,13 @@ funcion void dibujar_pantalla() {
 // ============================================================
 
 imprimir("=== TUI Themes Demo ===");
+// Headless/CI: TUI requiere consola interactiva — en pipe/CI el FFI ReadConsoleInput hace AV 0xC0000005
+texto _ci3 = sistema_env_obtener("CI");
+texto _hl3 = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci3 != "" || _hl3 == "1" {
+    imprimir("Headless/CI detectado — demo TUI omitida (requiere consola interactiva)");
+    retornar;
+}
 imprimir("Iniciando...");
 
 // Inicializar temas
