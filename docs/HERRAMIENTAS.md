@@ -1,6 +1,6 @@
 # LÚMEN — Guía Completa de Herramientas y Ecosistema (DX)
 
-**v2.4.6 — Herramientas Oficiales de Desarrollo, Depuración y Despliegue**
+**v3.0.0 — Herramientas Oficiales de Desarrollo, Depuración y Despliegue**
 
 ---
 
@@ -128,4 +128,4 @@ Inicia un servidor local en `http://localhost:8080` con:
 
 ---
 
-*LÚMEN v2.4.6 — Documentación de Herramientas Sincronizada.*
+*LÚMEN v3.0.0 — Documentación de Herramientas Sincronizada.*

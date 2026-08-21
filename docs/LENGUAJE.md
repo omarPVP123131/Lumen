@@ -1,6 +1,6 @@
 # LÚMEN — Manual Completo del Lenguaje
 
-**Versión Oficial v2.4.6 — Especificación Integral de la Gramática y Ecosistema**
+**Versión Oficial v3.0.0 — Especificación Integral de la Gramática y Ecosistema**
 
 > LÚMEN es un lenguaje de programación nativo bilingüe (Español / Inglés) de ultra-alto rendimiento, tipado estático estricto y modelos de memoria adaptativos (64-bit NaN-Boxing y Borrow Checker Zero-GC).
 
@@ -214,7 +214,7 @@ funcion vacio hardware_directo() {
 
 ---
 
-*LÚMEN v2.4.6 — Documentación Oficial Sincronizada.*
+*LÚMEN v3.0.0 — Documentación Oficial Sincronizada.*
 
 
 ---

@@ -1,3 +1,25 @@
+## [3.0.0] - 2026-08-20
+
+### ⚡ v3.0.0: 167 bugs corregidos, unificación y verificación en tres plataformas
+
+**Unifica en una sola entrega el trabajo iniciado sobre la v2.4.6: los 8 bugs del reporte original y 159 más encontrados de forma activa.**
+
+### 🐛 Correcciones de Más Impacto
+- **BUG-166/167 (`regex.nv`)**: el regex nativo devolvía `false` a todo en Windows y macOS (stubs en la rama no-POSIX) y desbordaba al reemplazar con patrones que casan la cadena vacía. **Motor propio por backtracking, sin dependencias.**
+- **BUG-165 (`lumen_rt.h`)**: `<sys/resource.h>` fuera de su guarda impedía TODA compilación nativa en Windows.
+- **BUG-152/154 (`lumen-bundle`/`lumen new`)**: la stdlib no viajaba en la instalación y el prefijo de paquete se aplicaba mal.
+- **BUG-151/161 (parser)**: bloques sin llave se ejecutaban en silencio; el arreglo rompió las declaraciones adelantadas, restauradas con E084.
+- **BUG-147/148/149/150 (sema/IR)**: semántica de closures, structs y `prestado mut`.
+- **BUG-GUI (build cross-plataforma)**: `gui_ffi.rs` incompatibilidad de tipos `*const u8` vs `*const i8` en `CreateWindowExA` (aarch64 Linux/Android) — corregido con `title_cs.as_ptr().cast()`.
+
+### ✅ Verificación
+- **720 pruebas en verde** en Linux y Windows.
+- **393/393** en `lumen check`.
+- **372 ejemplos** ejecutados sin fallos.
+- **clippy sin avisos** y **cuatro fuzzers diferenciales** (structs/listas, closures, rechazo y regex) sin divergencias.
+
+---
+
 ## [2.4.6] - 2026-08-16
 
 ### 🚀 Nuevas Características Principales
@@ -23,7 +45,22 @@
 
 # Changelog
 
-Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
+Todo los archivos "changes manual" se documentan aquí.
+
+---
+
+## v3.0.0 - 20 Agosto 2026
+
+### Corregido (Verificación en Tres Plataformas)
+- Motor regex nativo propio por backtracking sin dependencias (BUG-166/167) — arregla stubs no-POSIX y desbordes con patrones de cadena vacía.
+- Guardas de plataforma completas en `lumen_rt.h` (BUG-165) — `<sys/resource.h>` bajo su guarda, desbloquea la compilación nativa en Windows.
+- stdlib empaquetada en instalaciones y prefijo de paquete correcto (BUG-152/154).
+- Bloques sin llave ya no se ejecutan en silencio; declaraciones adelantadas restauradas con E084 (BUG-151/161).
+- Semántica de closures, structs y `prestado mut` corregida (BUG-147/148/149/150).
+- GUI nativa Win32 (`gui_ffi.rs`) compilable en aarch64-unknown-linux-gnu y aarch64-linux-android.
+
+### Verificado
+- 720 pruebas en verde (Linux y Windows), 393/393 `lumen check`, 372 ejemplos sin fallos, clippy limpio, 4 fuzzers diferenciales sin divergencias.
 
 ---
 

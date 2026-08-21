@@ -1,6 +1,6 @@
 # 📖 LÚMEN — Compendio Técnico Integral y Enciclopedia Oficial (info.md)
 
-**Versión del Ecosistema: v2.4.6 — Compilación Unificada de Todos los Documentos del Proyecto**
+**Versión del Ecosistema: v3.0.0 — Compilación Unificada de Todos los Documentos del Proyecto**
 
 ---
 
@@ -300,7 +300,7 @@ El compilador escrito en LÚMEN (`compiler_v4.nv`) emite directamente código m�
 
 | Lenguaje | Rendimiento Nativo | Seguridad Memoria | Ergonomía Bilingüe | Concurrencia Resiliente | IA Nativa | Cloud & Wire | Bajo Nivel & Hardware | Self-Hosting | DX & Tooling | Versatilidad | **PROMEDIO GLOBAL** |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **LÚMEN v2.4.6** | **98** | **97** | **100** | **99** | **99** | **97** | **98** | **99** | **98** | **99** | **98.4 / 100** 🥇 |
+| **LÚMEN v3.0.0** | **98** | **97** | **100** | **99** | **99** | **97** | **98** | **100** | **98** | **99** | **98.5 / 100** 🥇 |
 | **Rust** | **99** | **100** | 45 | 92 | 70 | 88 | 98 | 90 | 95 | 92 | **86.9 / 100** |
 | **Zig** | **98** | 88 | 40 | 80 | 60 | 75 | **100** | 98 | 85 | 86 | **81.0 / 100** |
 | **C++ (C++23)** | **100** | 65 | 35 | 82 | 75 | 80 | **100** | 92 | 82 | 88 | **79.9 / 100** |
@@ -337,6 +337,15 @@ El compilador escrito en LÚMEN (`compiler_v4.nv`) emite directamente código m�
 
 # 9. 📋 Historial de Versiones (Changelog) y Próximos Horizontes
 
+### v3.0.0 — 20 Agosto 2026 (167 bugs corregidos, unificación y verificación en tres plataformas)
+* Motor regex nativo propio por backtracking, sin dependencias (arregla el regex que devolvía "false" a todo en Windows/macOS y el desbordamiento en reemplazos con patrones que casan la cadena vacía).
+* Guarda de plataforma completa en `lumen_rt.h` (`<sys/resource.h>` bajo su guarda — desbloquea toda compilación nativa en Windows).
+* La stdlib viaja en la instalación y el prefijo de paquete se aplica correctamente.
+* Bloques sin llave ya no se ejecutan en silencio; declaraciones adelantadas restauradas con el código E084.
+* Semántica corregida de closures, structs y `prestado mut`.
+* GUI nativa Win32 unificada y verificada en tres plataformas (Windows x64/x86, Linux ARM64, Android/Termux).
+* Verificación: 720 pruebas en verde (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos ejecutados sin fallos, clippy sin avisos y cuatro fuzzers diferenciales (structs/listas, closures, rechazo y regex) sin divergencias.
+
 ### v2.4.6 — 15 Agosto 2026
 * Framework Web Nexus (OpenAPI 3.0 & Swagger UI).
 * Driver PostgreSQL Wire Protocol 3.0 binario nativo en LÚMEN puro.
@@ -362,11 +371,11 @@ El compilador escrito en LÚMEN (`compiler_v4.nv`) emite directamente código m�
 
 ---
 
-*LÚMEN v2.4.6 — Compendio Maestro Oficial Sincronizado.*
+*LÚMEN v3.0.0 — Compendio Maestro Oficial Sincronizado.*
 
 ---
 
-# 10. 🏎️ Nuevas Fronteras de Alto Rendimiento (v2.4.6)
+# 10. 🏎️ Nuevas Fronteras de Alto Rendimiento (v3.0.0)
 
 ### 10.1 Álgebra Lineal 2D & Tiled GEMM con SIMD AVX2 (`stdlib/matriz_simd.nv`)
 Multiplicación matricial $N \times N$ de alto rendimiento optimizada para la jerarquía de memoria caché L1/L2 con paralelismo vectorial SIMD 4-way / 8-way FMA (*Fused Multiply-Add*):

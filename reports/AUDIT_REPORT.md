@@ -1,8 +1,8 @@
 # 🛡️ LÚMEN — Reporte Global de Auditoría de Código y Seguridad
 
 **Fecha de Auditoría:** 20 de Agosto de 2026  
-**Versión Auditada:** LÚMEN v2.4.6  
-**Ámbito:** 18 crates de Rust, 70+ módulos de stdlib en LÚMEN puro y 389 ejemplos.
+**Versión Auditada:** LÚMEN v3.0.0  
+**Ámbito:** 18 crates de Rust, 70+ módulos de stdlib en LÚMEN puro, 720 pruebas en verde, 393/393 en `lumen check` y 372 ejemplos ejecutados sin fallos.
 
 ---
 

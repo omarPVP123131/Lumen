@@ -129,7 +129,7 @@ impl GuiWindow {
             let hwnd = create(
                 0,
                 class_name.as_ptr() as *const i8,
-                title_cs.as_ptr(),
+                title_cs.as_ptr().cast(),
                 style,
                 100,
                 100,

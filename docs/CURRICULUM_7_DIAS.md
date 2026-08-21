@@ -1,6 +1,6 @@
 # 🎓 Aprende LÚMEN en 7 Días: De Principiante a Ingeniero de Sistemas
 
-**Plan Oficial de Formación Acelerada — LÚMEN v2.4.6**
+**Plan Oficial de Formación Acelerada — LÚMEN v3.0.0**
 
 ---
 

@@ -1,4 +1,4 @@
-# Plan del Playground Web — LÚMEN v2.4.6+
+# Plan del Playground Web — LÚMEN v3.0.0+
 
 > Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026
 > Estructura: **9 features × 3 niveles (L1 funcional → L2 pulido → L3 avanzado) = 27 fases**, cada una con criterios de aceptación verificables.
@@ -14,11 +14,11 @@
 | Runtime WASM | `crates/lumen-wasm/src/lib.rs`: `LumenRuntime` wasm-bindgen con `run`, `run_with_files`, `check`, `tokenize`, `compile_to_bytes`, `version`, `register_js_function`. Pipeline completo (lexer→parser→sema→IR→codegen→VM) en el browser. |
 | Stdlib embebida | `crates/lumen-wasm/build.rs` genera `embedded_stdlib.rs` (31 archivos incl) + `ModuleLoader::with_memory_files` resuelve imports desde memoria (F3.1). |
 | Editor CodeMirror 6 | `web/vendor/cm/` (11 módulos ESM planos, vendor local sin CDN) + modo LUMEN generado desde `token.rs` (74 keywords, `StreamLanguage` + Catppuccin). **Autosave localStorage, error-line marking, `Ctrl+Enter`, gutter, autocompletado (`Ctrl+Space` + keywords/snippets), minimapa** (F2.1 + F2.3). |
-| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), **selector con categorías, búsqueda, favoritos, marcador "importar"**, 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v2.4.6. |
+| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), **selector con categorías, búsqueda, favoritos, marcador "importar"**, 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v3.0.0. |
 | Descargar .nvc | `compile_to_bytes(source)` → `Uint8Array` → Blob descargable (F9.1). |
 | Build WASM | `wasm-pack build crates/lumen-wasm --target web` + `pkg/` en .gitignore (regenerable). |
 | Batería F4.1 | 128 ejemplos embebidos en `embedded_examples.js` (autogenerado por `gen-embedded-examples.ps1`). |
-| Tests | cargo test 0 fallos (lexer 27, parser 45, sema 56, ir 20, vm 45, e2e 166, aot 4, api 5, etc. ~380). |
+| Tests | cargo test en verde con ~720 pruebas (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos sin fallos, clippy sin avisos. |
 
 ## 2. Gaps que el plan resuelve
 

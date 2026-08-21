@@ -6,6 +6,8 @@
 
 ## Estado Actual — 4 Agosto 2026 (Sprint 7 🟢 — VM en LÚMEN funcional)
 
+> **v3.0.0 PUBLICADO (20 Ago 2026):** el proyecto ya está en **v3.0.0** (release publicada el 20 Ago 2026, tras la v2.4.6). Esta página conserva el historial del plan de self-hosting (etapas 1-8 y sprints previos); la v3.0.0 unifica el trabajo iniciado sobre la v2.4.6 con 167 bugs corregidos y verificación en tres plataformas (720 pruebas en verde Linux/Windows, 393/393 `lumen check`, 372 ejemplos, clippy limpio, 4 fuzzers sin divergencias) — el hito de self-hosting/bootstrapping doble se mantiene intacto.
+
 ### Progreso
 
 | Componente | Estado | Notas |

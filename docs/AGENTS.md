@@ -1,6 +1,6 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v2.3.0 — Released: Julio 2026**
+**v3.0.0 — Released: 20 Agosto 2026**
 
 ---
 
@@ -8,25 +8,21 @@
 
 | Crate | Tests | Tipo |
 |-------|-------|------|
-| lumen-lexer | 24 | unit |
-| lumen-parser | 42 | unit |
-| lumen-sema | 49 | unit |
+| lumen-lexer | 27 | unit |
+| lumen-parser | 50 | unit |
+| lumen-sema | 56 | unit |
 | lumen-ir | 20 | unit + folding |
 | lumen-codegen | 13 | unit |
-| lumen-codegen | 5 | proptest |
-| lumen-vm | 45 | unit |
-| lumen-vm | 166 | e2e |
+| lumen-vm | 48 | unit |
+| lumen-vm | 172 | e2e |
 | lumen-fmt | 2 | unit |
-| lumen-repl | 2 | unit |
+| lumen-repl | 1 | unit |
 | lumen-project | 1 | unit |
-| lumen-aot | 1 | unit |
-| lumen-doc | 1 | unit |
-| lumen-pkg | 1 | unit |
-| lumen-plugin | 1 | unit |
+| lumen-aot | 1+ | unit |
 | lumen-api | 5 | unit |
-| **Total** | **~378** | |
+| **Total** | **~720** | |
 
-**0 warnings, ~385 tests passing. 45/45 ejemplos funcionando. 166 e2e, 45 unit.**
+**v3.0.0: 720 pruebas en verde (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos sin fallos, clippy sin avisos, 4 fuzzers diferenciales sin divergencias.**
 
 ---
 
@@ -608,3 +604,17 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 - **Release empaquetado completo** (`.github/workflows/ci.yml`): cada paquete multi-OS ahora incluye **`stdlib/*.nv`** (importar funciona fuera del repo), **`examples/*.nv`** (120+ para aprender), **`web/`** (playground completo: index.html + vendor/ + embedded_examples.js → `lumen serve` funciona desde el paquete), `run_test.sh` helper + docs. Job nuevo `wasm-pkg` (opcional, continue-on-error): wasm-pack build del runtime WASM → `lumen-wasm-pkg.tar.gz` como artefacto extra. Release notes describen el contenido del paquete.
 - **Verificado**: `lumen run examples/hello.nv` + `test_import.nv` (imports stdlib) + `demo_completo.nv` desde CWD `Temp` (fuera del repo) → OK; `lumen serve` desde CWD ajeno → index.html 200 + `/api/health` OK + `/api/run` con `importar "coleccion"` → `{"ok":true}`; sugerencia de ejemplos funciona; cargo fmt + clippy limpio + tests OK; YAML del workflow válido.
 - **Pendientes**: AI/ML (Fases 186-200) + Playground L2/L3 (F3.3, F5.1, F5.2, F6.1, F6.2, F8.1, F8.2, F9.2).
+
+---
+
+## Progreso (20-21 Ago 2026 — sesión AI · RELEASE v3.0.0: 167 bugs + verificación en tres plataformas)
+
+- **RELEASE v3.0.0** (detalle en `3,0,0.txt`): **unifica en una sola entrega el trabajo iniciado sobre la v2.4.6** — los 8 bugs del reporte original + 159 más encontrados de forma activa. **Verificación: 720 pruebas en verde (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos ejecutados sin fallos, clippy sin avisos y cuatro fuzzers diferenciales (structs/listas, closures, rechazo y regex) sin divergencias.**
+- **BUG-166/167 (`regex.nv`)**: el regex nativo devolvía `false` a todo en Windows y macOS (stubs en la rama no-POSIX) y desbordaba al reemplazar con patrones que casan la cadena vacía. **Fix: motor propio por backtracking, sin dependencias.**
+- **BUG-165 (`lumen_rt.h`)**: `<sys/resource.h>` fuera de su guarda impedía TODA compilación nativa en Windows — movido bajo su `#ifdef` de plataforma.
+- **BUG-152/154 (`lumen-bundle`/`lumen new`)**: la stdlib no viajaba en la instalación y el prefijo de paquete se aplicaba mal — corregido el empaquetado y la resolución de prefijos.
+- **BUG-151/161 (parser)**: bloques sin llave se ejecutaban en silencio; el arreglo rompió las declaraciones adelantadas, restauradas con E084.
+- **BUG-147/148/149/150 (sema/IR)**: semántica de closures, structs y `prestado mut` corregida.
+- **Fix build cross-plataforma (`gui_ffi.rs`)**: los jobs `aarch64-unknown-linux-gnu` y `aarch64-linux-android` fallaban con `E0308` — `title_cs.as_ptr()` devuelve `*const u8` (en aarch64/Android, `c_char = u8`) pero la firma de `CreateWindowExA` espera `*const i8`. **Fix**: `title_cs.as_ptr().cast()` (línea 132), espejo del cast ya presente en la línea 131. El resto de `gui_ffi.rs`/`crypto_ffi.rs` ya usaba casts explícitos (`as *const u8`, `*const u16`) — sin más riesgo cross-plataforma. Verificado: `cargo build --workspace` OK, `cargo test --workspace` 0 FAILED (172 e2e + unit), clippy limpio.
+- **Docs sincronizadas a v3.0.0**: README (badges y sección Estado del Proyecto), CHANGELOG (entrada v3.0.0 arriba + sección cronológica), `info.md` (compendio, matriz, changelog, footer), `docs/AGENTS.md` (header + testing actual a ~720), `docs/roadmap.md`, `docs/siguiente.md`, `docs/self-hosting.md`, LENGUAJE/HERRAMIENTAS/MARKETING/cli, reports/. **`VERSION` = 3.0.0.**
+- **Pendientes**: composer el release tag v3.0.0 en el repo (los tags previos v2.4.x ya existen); Playground L2/L3; AI/ML (Fases 186-200).

@@ -1,7 +1,7 @@
 # 📖 Aprende a Programar con LÚMEN: De Principiante a Ingeniero de Software
 ### *Learn to Code with LÚMEN: From Zero to Software Engineer*
 
-**Versión Oficial v2.4.6 — Guía Completa de Computación, IA y Sistemas**
+**Versión Oficial v3.0.0 — Guía Completa de Computación, IA y Sistemas**
 
 ---
 
@@ -545,7 +545,7 @@ imprimir(dataframe_df_a_csv(df));
 
 ---
 
-*LÚMEN v2.4.6 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.0.0 — © 2026 LÚMEN Core Team & Comunidad.*
 
 
 ---
@@ -686,4 +686,4 @@ imprimir("Paneo estéreo (L/R) : ", 3d.balance_paneo);
 
 ---
 
-*LÚMEN v2.4.6 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.0.0 — © 2026 LÚMEN Core Team & Comunidad.*
