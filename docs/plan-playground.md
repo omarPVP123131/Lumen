@@ -1,4 +1,4 @@
-# Plan del Playground Web — LÚMEN v2.4.2+
+# Plan del Playground Web — LÚMEN v2.4.6+
 
 > Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026
 > Estructura: **9 features × 3 niveles (L1 funcional → L2 pulido → L3 avanzado) = 27 fases**, cada una con criterios de aceptación verificables.
@@ -14,7 +14,7 @@
 | Runtime WASM | `crates/lumen-wasm/src/lib.rs`: `LumenRuntime` wasm-bindgen con `run`, `run_with_files`, `check`, `tokenize`, `compile_to_bytes`, `version`, `register_js_function`. Pipeline completo (lexer→parser→sema→IR→codegen→VM) en el browser. |
 | Stdlib embebida | `crates/lumen-wasm/build.rs` genera `embedded_stdlib.rs` (31 archivos incl) + `ModuleLoader::with_memory_files` resuelve imports desde memoria (F3.1). |
 | Editor CodeMirror 6 | `web/vendor/cm/` (11 módulos ESM planos, vendor local sin CDN) + modo LUMEN generado desde `token.rs` (74 keywords, `StreamLanguage` + Catppuccin). **Autosave localStorage, error-line marking, `Ctrl+Enter`, gutter, autocompletado (`Ctrl+Space` + keywords/snippets), minimapa** (F2.1 + F2.3). |
-| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), **selector con categorías, búsqueda, favoritos, marcador "importar"**, 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v2.4.2. |
+| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), **selector con categorías, búsqueda, favoritos, marcador "importar"**, 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v2.4.6. |
 | Descargar .nvc | `compile_to_bytes(source)` → `Uint8Array` → Blob descargable (F9.1). |
 | Build WASM | `wasm-pack build crates/lumen-wasm --target web` + `pkg/` en .gitignore (regenerable). |
 | Batería F4.1 | 128 ejemplos embebidos en `embedded_examples.js` (autogenerado por `gen-embedded-examples.ps1`). |
@@ -61,7 +61,7 @@ Orden de ejecución global sugerido: **todas las L1 → todas las L2 → todas l
 
 | Nivel | Fase | Descripción | Criterios de aceptación |
 |---|---|---|---|
-| L1 | F3.1 | `crates/lumen-wasm/build.rs` genera `embedded_stdlib.rs` (`include_str!` por archivo, sin deps nuevas) + `ModuleLoader::with_memory_files(HashMap)` en lumen-sema que resuelve imports desde memoria antes de disco | `build.rs` genera el módulo con TODOS los `.nv` de `stdlib/`; nuevo unit test en lumen-sema: import desde memoria sin tocar disco; los 166 e2e y 378 tests existentes siguen verdes (compatibilidad total) |
+| L1 | F3.1 | `crates/lumen-wasm/build.rs` genera `embedded_stdlib.rs` (`include_str!` por archivo, sin deps nuevas) + `ModuleLoader::with_memory_files(HashMap)` en lumen-sema que resuelve imports desde memoria antes de disco | `build.rs` genera el módulo con TODOS los `.nv` de `stdlib/`; nuevo unit test en lumen-sema: import desde memoria sin tocar disco; los 166 e2e y 385 tests existentes siguen verdes (compatibilidad total) |
 | L2 | F3.2 | `run_lumen` (wasm) usa el loader virtual; builtins de filesystem/red/env (`__fs_*`, `__env_*`, `__ffi_*`, `__red_*`) retornan error controlado (no panic) en browser | `importar "texto.nv"` compila y ejecuta en browser; smoke test wasm: `test_stdlib_mini`, `test_texto_std`, `test_json_avanzado` con imports == output CLI (salvo timestamps); un `__fs_*` devuelve mensaje claro tipo `no disponible en navegador`, sin panic |
 | L3 | F3.3 | Batería completa de paridad: `demo_completo`, `test_migracion`, `jr_fecha`, `tui_jr` (secciones sin GUI) contra output CLI; panel "soporte" por builtin en UI | ≥20 ejemplos con imports byte-idénticos a CLI en un harness de test automatizado del wasm (wasm-pack test); la UI lista qué builtins están disponibles/ausentes en browser |
 

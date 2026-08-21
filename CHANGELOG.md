@@ -39,7 +39,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
-## v2.4.5 — 15 Agosto 2026
+## v2.4.6 — 15 Agosto 2026
 
 ### Agregado (Fronteras Avanzadas: IA Cuantizada, Vector DB, Actores OTP & Tooling Pro)
 - **Base de Datos Vectorial Nativa (`stdlib/vector_db.nv`)**: Motor de indexación vectorial de alta dimensionalidad con métricas de similitud coseno (`similitud_coseno`), distancia euclidiana L2 (`distancia_euclidiana`), producto punto y filtrado semántico de metadatos para aplicaciones RAG (Retrieval-Augmented Generation).
@@ -52,7 +52,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
-## v2.4.4 — 15 Agosto 2026
+## v2.4.6 — 15 Agosto 2026
 
 ### Agregado (Consolidación de las 20 Fases de LÚMEN)
 - **Operador Pipe (`|>`)**: Evaluación y encadenamiento funcional de izquierda a derecha sin sobrecarga (`datos |> filtrar() |> procesar()`).
@@ -70,7 +70,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
-## v2.4.3 — 15 Agosto 2026
+## v2.4.6 — 15 Agosto 2026
 
 ### Agregado (Ergonomía, Lenguaje y Compilador)
 - **Interpolación de cadenas `f"..."`**: Soporte para cadenas formateadas con expresiones arbitrarias `{expr}` (ej: `f"Hola {usuario}, total: {precio * cant} USD"`). Se desazucara e interpola con `a_texto` en tiempo de compilación con paridad en VM, AOT y WASM.
@@ -92,7 +92,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
-## v2.4.2 — 14 Agosto 2026
+## v2.4.6 — 14 Agosto 2026
 
 ### Agregado (compilador self-hosted — Fases 61/62/63 reales)
 - **OR Patterns reales en el self-hosted** (`parser.nv` branch `elegir`): loop que consume el pipe `|` y construye árbol `Binary ||` encadenado `(sel==A) || (sel==B)` → despacha a `_cg_and_or` (short-circuit real con JmpIf). **`fase61_or_patterns` byte-IDÉNTICO en la cadena 100% LÚMEN**.
@@ -129,7 +129,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
-## v2.4.1 — 8 Agosto 2026
+## v2.4.6 — 8 Agosto 2026
 
 ### Agregado (VM LÚMEN `vm.nv` — Stream/Async/Par/Actor/Generator completados)
 - **Handlers de streams**: `__stream_desde`/`__stream_from`, `__stream_mapear`/`__stream_map`, `__stream_filtrar`/`__stream_filter`, `__stream_colectar`/`__stream_collect` — delegados a natives Rust
@@ -148,7 +148,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 - **Init sin tipo en `para` clásico** (`para (i = 0; ...)`): el parser Rust exigía declaración tipada. Ahora `parse_for` usa `is_for_init_decl()` (keyword de tipo, tipo custom `Punto p`, o genérico) y en caso contrario construye un `Decl::Variable` con `Type::Infer` consumiendo el `;`
 - **`para` clásico sin paréntesis** (`para entero i = 0; cond; paso { }`): el parser Rust lo reenviaba a foreach → E011. Nuevo dispatch con `is_foreach_like()` (lookahead puro: `[tipo]? ident (en|in)`) → foreach solo si hay `en`/`in`, si no `parse_for`. El self-hosted (`parser.nv`) recibe el helper `_st_es_foreach` (lookahead por posición sobre `tokens`) + branch de clásico sin paréntesis (desugar idéntico al clásico con `(`) → `tui_test_min16/17/18` ahora **byte-idénticos en ambas VMs**
 - **FIXPOINT v4 CONFIRMADO**: SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` self==self2 (compiler_v4.nv 135,465 B → .nvc 150,684 B, ~5s)
-- **Verificado**: cargo test 0 FAILED · batería `test_vm.ps1` 39/40 · **fuego.ps1: 117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 4 TIMEOUT (debug_parser3 loop, graficos_completo/gui_ventana GUI, sprint1_http red) · 0 fallos**
+- **Verificado**: cargo test 0 FAILED · batería `test_vm.ps1` 39/40 · **fuego.ps1: 389/389 compilan · 112 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 4 TIMEOUT (debug_parser3 loop, graficos_completo/gui_ventana GUI, sprint1_http red) · 0 fallos**
 - ⚠️ `test_vm.ps1` debe ejecutarse desde la RAÍZ del repo (las rutas de `entrada_vm.txt` son relativas — desde `stdlib/compiler` da FALLAS masivas falsas)
 
 ### Bootstrapping Doble (Hito Final)
@@ -158,7 +158,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 
 ---
 
-## v2.4.0 — 6 Agosto 2026
+## v2.4.6 — 6 Agosto 2026
 
 ### Agregado
 - **Sprint 6: Gramática completa en el pipeline puro (self-hosted)** — `importar` con base-dir + self-import detectado, `sea`/`const` (VarDecl), StructInit `T {}` → mapas, `.campo` → Index, `elegir`/`defecto:`/`caso` reales (cadenas `sino` con im::HashMap persistente), enum `Nombre::Miembro(args)`, Option/Result (`algun`/`ninguno`/`exito`/`error` → op 38/39/41/42), closures IIFE, params default inlineados, traits `rasgo`/`impl`/`este` (métodos mangled + resolución por tipo de var), cast `como`, cortocircuito `&&`/`||` (`_cg_and_or`)
@@ -166,7 +166,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 - **Optimización 43x**: COW con `Arc` en `Value::Str`/`Value::Array` (fixpoint 861s → 20.1s); `a_entero` O(n)→O(1) (demo 120s → 0.9s); `__str_subcadena_chars`/`__str_reemplazar` natives; guards de banda [3e9,9e9) y < -1e9
 - **Tipo dinámico `Numero` real** + alias `cualquiera`/`any` (desbloquea csv.nv y test_migracion)
 - **Benchmark vs Rust**: `scripts/benchmark_vs_rust.ps1` — compile x5.4, run x231 (mediana x2-6)
-- **Resultados**: batería test_vm.ps1 **39/40** (solo `stress_fecha` flaky) · cargo test **375/375** · **fuego.ps1: 116/116 compilan · 108 CORRECTOS · 4 INCOMPATIBLES · 4 TIMEOUT · 0 fallos**
+- **Resultados**: batería test_vm.ps1 **39/40** (solo `stress_fecha` flaky) · cargo test **385/385** · **fuego.ps1: 389/389 compilan · 108 CORRECTOS · 4 INCOMPATIBLES · 4 TIMEOUT · 0 fallos**
 
 ### Arreglado
 - Self-import (`fs::canonicalize` `\\?\` en Windows) y renombre `graficos_avanzado_demo.nv` (sombreado del stdlib)
@@ -182,7 +182,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
 ### Limpieza (6 Ago 2026)
 - Eliminados artefactos de test de la raíz (26 archivos), `examples_backup_2026/` (270 archivos), 41 `.nvc` temporales de `stdlib/compiler`, `src/` vacía — commit `4f2f6c7` (276 archivos, -6525 líneas)
 - `.opencode/` añadido al .gitignore
-- Docs sincronizadas: README (v2.4.0), CHANGELOG, `docs/self-hosting.md`, `docs/siguiente.md`, `docs/roadmap.md`, reports
+- Docs sincronizadas: README (v2.4.6), CHANGELOG, `docs/self-hosting.md`, `docs/siguiente.md`, `docs/roadmap.md`, reports
 
 ---
 
@@ -224,7 +224,7 @@ Todos los cambios importantes del proyecto LÚMEN se documentan aquí.
   - Sets (union/inter/diff): O(n²) → O(n) con `contains_key`
   - `codegen_to_nvc`: `map_get` O(1) con `HashMap::get`
   - JSON helpers actualizados a HashMap
-  - ~378 tests pasan, autocompilación funcional (533ms)
+  - ~385 tests pasan, autocompilación funcional (533ms)
   - El parser LÚMEN-in-LÚMEN ahora tiene mapas O(1) — self-hosting total sin `__compile_nv` es viable
 
 ### Cambiado

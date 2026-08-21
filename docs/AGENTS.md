@@ -26,7 +26,7 @@
 | lumen-api | 5 | unit |
 | **Total** | **~378** | |
 
-**0 warnings, ~378 tests passing. 45/45 ejemplos funcionando. 166 e2e, 45 unit.**
+**0 warnings, ~385 tests passing. 45/45 ejemplos funcionando. 166 e2e, 45 unit.**
 
 ---
 
@@ -57,7 +57,7 @@ TUI: ventanas, tablas, menús, layout engine. GFX: Canvas 2D, sprites, game loop
 WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmarks, Fuzzing, Mutation Testing. Logging, Tracing, Metrics, Profiler. Compiler API (lumen-api).
 
 ### Sprint 3: Bootstrap completo (30 Julio 2026) ✅
-`compiler_v2.nv` via `__compile_nv` nativo — compilador LÚMEN que compila .nv → .nvc en milisegundos. Self-compilación verificada: `self_compile.nv` → `compiler_v2_self.nvc` en **533ms**. ~378 tests, 0 fallos.
+`compiler_v2.nv` via `__compile_nv` nativo — compilador LÚMEN que compila .nv → .nvc en milisegundos. Self-compilación verificada: `self_compile.nv` → `compiler_v2_self.nvc` en **533ms**. ~385 tests, 0 fallos.
 
 ### Sprint 4: Self-hosting Total (30 Julio 2026) ✅
 `Value::Map(Vec<...>)` → `HashMap<Value, Value>` con `Hash`/`Eq` manual. `__map_get`/`__map_set`/`__map_contains` O(1). Sets O(n). El parser LÚMEN-in-LÚMEN ahora tiene mapas O(1). Camino abierto para self-hosting total sin `__compile_nv`.
@@ -69,7 +69,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 **Harness:** `fuego.ps1` compila los **115 ejemplos** de `examples/` con el pipeline puro (`target.txt` = driver parametrizado, 2 líneas: entrada/salida; main recorta `\r` CRLF y propaga errores vía TryUnwrap en `ejecutar_pipeline()`).
 **Resultados:** 115/115 COMPILAN (parser puro tolerante) · 29/115 ejecutan CORRECTO (nvc == rust) · 84 incompatibles · 2 timeouts (debug_parser3 loop infinito, gui_ventana GUI).
 **Gaps mapeados (15):** `importar` (~50 ejemplos), `sea` if-let (~20), `const` (4), `para` (5), `estructura`+`.campo`+`T{}`, `enum`, `opcion`/`resultado`, `elegir`, closures `|x|`, params default, genéricos `<T>`/`rasgo`, destructuring `_`, tuplas `(...)`, arrays anidados `arr[i][j]`, TryUnwrap top-level silencioso.
-**Siguiente:** 6.1 `importar` en parser puro (fusión de ASTs + prefijo `modulo_`) → compiler_v5 modular → 6.2 keywords/gramática → Sprint 7 VM en LÚMEN (`vm.nv`) + optimización ~200s→<10s → Sprint 8 dogfooding stdlib + release v2.4.0. Plan completo en `docs/self-hosting.md`.
+**Siguiente:** 6.1 `importar` en parser puro (fusión de ASTs + prefijo `modulo_`) → compiler_v5 modular → 6.2 keywords/gramática → Sprint 7 VM en LÚMEN (`vm.nv`) + optimización ~200s→<10s → Sprint 8 dogfooding stdlib + release v2.4.6. Plan completo en `docs/self-hosting.md`.
 
 **Progreso (31 Jul, tarde-noche):**
 - **6.1 imports ✅**: resolver `_imp_*` en parser.nv (~857-1094) + `parser_parsear_con_base(tk, base)` (base-dir para imports relativos) — verificado con ejemplos que usan `importar`
@@ -101,7 +101,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Resultados finales (compilador autocontenido):** `demo_completo` **89/89 líneas, 0 diffs** · `stress_test` **8/8, 0 diffs** (el gap `Punto`/`j` de estructuras quedó cubierto por los fixes) · `mini_agregar` con `.agregar(4)` → 3/4/1 · `test_arr` → 5/1/5 · cargo test: todos OK
 - **FIXPOINT v4 CONFIRMADO**: compiler_v4.nvc (Rust-built, 94,789 B) compila su propio source → `compiler_v4_self.nvc` (91,806 B) · el self-compilado recompila el source → `compiler_v4_self2.nvc` **byte-IDENTICAL** (91,806 B, SequenceEqual=True) · el self-compilado también produce demo 89/89 (solo difiere el timestamp de `__tiempo_unix` entre runs)
 - **Hygiene**: root `compiler_v4.nv` copiado (94,789 B, estaba stale en 86,062 B) · target.txt apunta a `examples/demo_completo.nv` · debug temporal del Ge revertido en vm.rs
-- **Pendientes**: `enum`/`elegir`/`sea` reales (parsing tolerante ya, sin codegen) → `importar` con prefijo real verificado en fuego.ps1 → **Sprint 7: VM en LÚMEN (`vm.nv`)** + optimización de velocidad (fixpoint ~10-18 min hoy; demo ~15s) → Sprint 8 dogfooding stdlib + docs → release v2.4.0
+- **Pendientes**: `enum`/`elegir`/`sea` reales (parsing tolerante ya, sin codegen) → `importar` con prefijo real verificado en fuego.ps1 → **Sprint 7: VM en LÚMEN (`vm.nv`)** + optimización de velocidad (fixpoint ~10-18 min hoy; demo ~15s) → Sprint 8 dogfooding stdlib + docs → release v2.4.6
 
 **Progreso (1 Ago, 21:30-23:00 — sesión AI · 6.4 enum/elegir/sea REALES):**
 - **`sea`/`let` → VarDecl real** (parser.nv:456): `sea [tipo] nm = expr;` → nodo VarDecl (tipo_var="let" o el tipo) — antes era skip-keyword y `sea x = e` se re-parseaba como Assign
@@ -111,15 +111,15 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Codegen**: `OP_ENUM_CTOR=43/OP_ENUM_VAR=44/OP_ENUM_ARGC=45` + caso `EnumInit` en `_gen_expr` (args en orden + trío consecutivo). **vm.rs codegen_to_nvc**: 43 → `WithIdx(EnumCtor, str)`; 44 → `WithIdx(Nop, str)`; 45 → argc (ints→f64) en nums + `WithIdx(Nop, num)` — el VM EnumCtor lee ip+1/ip+2 (vm.rs:3720-3757)
 - **Resultados**: match.nv IDENTICAL (2 casos + defecto) · enums.nv IDENTICAL (unit + data variants + print directo) · demo 90/90 0 diffs · cargo test OK · 43_tipos_asociados.nv NO soportado por NINGÚN compilador (usa `rasgo`/traits)
 - **Hygiene**: debug residual LEX-LOOP/LEX-DBG retornar ELIMINADO de lexer.nv · AST dump temporal removido de generar_v4.ps1 · fuego.ps1 completo corriendo en background (115 ejemplos)
-- **Pendientes**: revisar resultados fuego.ps1 → fixpoint v4 (regresión crítica tras el cambio de elegir) → Sprint 7 VM en LÚMEN (`vm.nv`) + optimización → Sprint 8 dogfooding + release v2.4.0
+- **Pendientes**: revisar resultados fuego.ps1 → fixpoint v4 (regresión crítica tras el cambio de elegir) → Sprint 7 VM en LÚMEN (`vm.nv`) + optimización → Sprint 8 dogfooding + release v2.4.6
 
 **Progreso (2 Ago, 20:00-21:30 — sesión AI · 6.5 cortocircuito `&&`/`||` + FIXPOINT v4 CONFIRMADO):**
 - **REGRESIÓN del fixpoint diagnosticada (causa raíz)**: `compiler_v4_self.nvc` (94,783 B) crasheaba con "Índice N fuera de rango (largo: N)" dentro de `ejecutar_pipeline` (también al compilar match.nv: "Índice 96"). Inspección del disasm (`self_disasm.txt` vs `v4_disasm.txt`) probó la diferencia: el **pipeline RUST (v4) cortocircuita `&&` con `JmpIf`** (`Load; Lt; Store; Load; JmpIf → salta ANTES del ArrayGet`), mientras el **codegen LÚMEN emitía `&&`/`||` como `And`/`Or` eager** (`…Lt; ArrayGet; Neq; And`) → `mientras i < n && cs[i] != "\n"` lee `cs[i]` con `i == n` → ArrayGet out-of-bounds solo en el SEGUNDO-compilado
 - **Fix**: helper `_cg_and_or(cg, izq, der, es_and)` en codegen.nv — emite short-circuit REAL con `JmpIf`/`Jmp` + `PushBool` (es_and=1 para `&&`; es_and=0 para `||`). Binary en `_gen_expr` despacha `&&`/`||` al helper (return temprano); los demás operadores siguen eager. Convención de saltos con FALSY (vm.rs:3688)
 - **FIXPOINT v4 CONFIRMADO**: compiler_v4.nv (99,993 B) → compiler_v4.nvc → self (112,368 B, exit 0) → self→self2 (112,368 B, exit 0) → **byte-IDENTICAL (0 diffs)**. El self-compilado compila match.nv sin crash (antes "Índice 96 fuera de largo")
-- **fuego.ps1 completo**: **116/116 compilan · 61 CORRECTOS (+1 vs 60) · 53 INCOMPATIBLES · 2 timeouts · 0 fallos** — sin regresión (bug pre-existente en fuego.ps1:66: `$outNvc.Trim()` sobre `$null` en el detalle de INCOMPATIBLES — no afecta los contadores)
+- **fuego.ps1 completo**: **389/389 compilan · 61 CORRECTOS (+1 vs 60) · 53 INCOMPATIBLES · 2 timeouts · 0 fallos** — sin regresión (bug pre-existente en fuego.ps1:66: `$outNvc.Trim()` sobre `$null` en el detalle de INCOMPATIBLES — no afecta los contadores)
 - **Hygiene**: scratch `v4_disasm.txt`/`self_disasm.txt` duplicados — limpiar; `target.txt` aún apunta a `examples/match.nv`
-- **Pendientes**: Sprint 7 VM en LÚMEN (`vm.nv`) + optimización de velocidad (fixpoint ~10-18 min hoy; demo ~15s) → Sprint 8 dogfooding stdlib + release v2.4.0
+- **Pendientes**: Sprint 7 VM en LÚMEN (`vm.nv`) + optimización de velocidad (fixpoint ~10-18 min hoy; demo ~15s) → Sprint 8 dogfooding stdlib + release v2.4.6
 
 **Progreso (4 Ago — sesión AI · Sprint 7 VM en LÚMEN: corutinas reales + batería 27/28):**
 - **Corutinas implementadas en vm.nv** (modelo de intercambio de contexto cooperativo como vm.rs): `__coro_crear` boxea `coro_N` y guarda el nombre en `coro_nombres_m` (el fidx se resuelve en el PRIMER `__coro_reanudar` porque `funn` solo existe en main, no en bin); `__coro_reanudar` guarda main en guards (st/sp/pc), inicializa st nuevo (pila/mem/scopes/rets propios, mem heredado) si `coro_inic_m==0`, carga st/sp/pc, `coro_actual=cidx`; `__coro_ceder` guarda coro (sps=sp+1, pcs=pc+1) y restaura main; op22 Ret con `coro_actual>=0` marca done, restaura main.
@@ -127,7 +127,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Bug 2 (re-ejecución)**: `a_entero(__map_obtener(coro_stats_m, cidx))` sobre el MAPA stc guardado da 0 (un mapa no se parsea) → `==0` siempre TRUE → re-inicializaba la corutina en cada resume ("A: inicio" ×3). Fix: flag separado `coro_inic_m` (0/1).
 - **Bug 3 (VM Rust)**: `Opcode::Ret` (vm.rs) con `call_stack` vacío → `ip=usize::MAX` → el programa moría en silencio: al retornar dentro de la corutina (tarea_a nunca se llamó con Call, se saltó con `ip=coro.ip`) la VM Rust NO imprimía `--- FIN ---` (la LUMEN sí, correctamente). Fix en vm.rs: si `current_coro` está activo → `coro.is_done=true`, restaura `main_saved`, continúa.
 - **Resultados**: corutinas_demo **byte-IDENTICAL** (252 B, 0 diffs) con el flujo completo (inicio→yield→primer yield→segundo yield→ret→FIN); demo_completo sigue 0 diffs; batería 8/8 en los re-probados incl. corutinas_demo; cargo test 0 fallos (e2e 166).
-- **Pendientes**: `44_extension_methods` + `math` (fallan también en VM Rust, pre-existentes — compiler issue con `este`/extension methods) → batería ampliada completa → Sprint 8 dogfooding stdlib + release v2.4.0
+- **Pendientes**: `44_extension_methods` + `math` (fallan también en VM Rust, pre-existentes — compiler issue con `este`/extension methods) → batería ampliada completa → Sprint 8 dogfooding stdlib + release v2.4.6
 - **Fix Store global** (`vm.rs` ~2996): el Store solo escribía el scope más interno → la mutación de globals desde funciones (side-tables `mapas`/`arrs`/`stl_din` de vm.nv dentro de `bin()`) se perdía → "Índice 0 fuera de rango (largo: 0)". Ahora 3 estados: scope actual si tiene el nombre, si no globals (`locals[0]`) si lo tiene, si no scope actual
 - **Fix output-on-error** (`cli/main.rs` `run_bytecode` ~732): el buffer `vm.output()` solo se vaciaba en éxito → los prints de debug nunca aparecían en crash. Ahora se imprimen también en el rama `Err`
 - **Banda de arrays desplazada** a `< -1e9`: los ids boxed de arrays (`-1..-N`) colisionaban con ints negativos reales (`a_texto_v(-10)` → "?"). Actualizados los 20 sitios de acceso/creación de `arrs`
@@ -140,7 +140,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **sema.rs**: typing nuevo para `__unicode_normalizar`,`__str_padding_*`,`__tiempo_formatear` (Texto), `__fs_listar`/`__env_listar` (Lista<Texto>), `__coro_crear` (Texto), `__json_parsear` (Numero), `__str_a_entero` (Entero); test e2e `test_map_keys` → `lista<numero>`
 - **Resultados**: demo_completo **89/89 líneas, 0 diffs** (único diff es `__tiempo_ahora()` timestamp real que cambia entre runs), en **~0.9s** (120s→1s) · cargo test todo OK (~379 tests) · Batería test_vm.ps1: **25/28 OK** (3 DIFF: `44_extension_methods`+`math` fallan TAMBIÉN en la VM Rust pre-existente, `corutinas_demo` requiere corutinas reanudables reales — pendiente)
 - **Commits**: `bdeb933` (handlers + banda + Store + demo 0 diffs), `f015ec1` (a_entero O(1) + fix colisión banda)
-- **Pendientes**: corutinas reales (`__coro_reanudar`/`__coro_ceder` con intercambio de contexto st/sp/pc — modelo cooperativo como vm.rs:1679-1734) → batería ampliada completa → Sprint 8 dogfooding stdlib + release v2.4.0
+- **Pendientes**: corutinas reales (`__coro_reanudar`/`__coro_ceder` con intercambio de contexto st/sp/pc — modelo cooperativo como vm.rs:1679-1734) → batería ampliada completa → Sprint 8 dogfooding stdlib + release v2.4.6
 
 **Progreso (4 Ago — sesión AI · Sprint 7: OPTIMIZACIÓN fixpoint 861s → 20.1s, 43x — COW con Arc):**
 - **Profiler per-opcode en `VM::run()`** (vm.rs ~2320, gated por `LUMEN_PROFILE=1`): contadores/tiempos por opcode; `Call` desagregado como `Call:<nombre>` vía `bytecode.names`. Fix: check `!var.is_empty()` (antes `is_ok()` → env vacío lo activaba)
@@ -157,7 +157,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Batería ampliada: OK=34/35** — todos OK incl. utils, jr_fecha, demo_completo (33 secciones completas por la VM LÚMEN), match, enums, corutinas_demo, genericos, lambda, etc. Único DIFF: `stress_fecha` (timing real 0ms vs 16ms entre runs — inherentemente flaky, no es regresión). COMPILA-FALLA pre-existentes: `test_texto_min`, `test_texto_std`, `jr_concurrencia`.
 - cargo test OK (e2e 166 + unit); pre-existentes `44_extension_methods`/`math` siguen fallando en AMBAS VMs.
 - **Commit**: `290f3ed` (vm.nv handlers tiempo + fmain + argc-guards; vm.rs parse espacio).
-- **Pendientes**: COMPILA-FALLA `test_texto_min`/`test_texto_std`/`jr_concurrencia` → `44_extension_methods`/`math` → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
+- **Pendientes**: COMPILA-FALLA `test_texto_min`/`test_texto_std`/`jr_concurrencia` → `44_extension_methods`/`math` → Sprint 8 dogfooding stdlib + release v2.4.6 → bootstrapping doble.
 
 **Progreso (4 Ago — sesión AI · COMPILA-FALLA x3 RESUELTOS — batería 37/38):**
 - **Parser Rust: scan de genéricos sin límites** (`find_token_after_type_args`): en `mientras i < veces {` el `<` disparaba el scan de type-args y encontraba el `{` del body → E021 cascada. Fix: el scan **aborta** si encuentra `(` `)` `{` `}` `;` antes del `>` (espejo del fix que ya tenía parser.nv); misma guarda aplicada al branch de type-params (`x < T {`). 42 unit parser verdes.
@@ -170,7 +170,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Batería ampliada: OK=37/38** — únicos DIFF restantes: `stress_fecha` (timing real 0ms vs 16ms, flaky inherente). `test_migracion` queda con gap pre-existente (`cualquiera` como tipo en csv.nv — no es tipo válido; requiere tipo Any en el lenguaje).
 - cargo test OK (42 parser, 49 sema, 45 unit, 166 e2e, 0 fallos).
 - **Commit**: `8c27abd`.
-- **Pendientes**: `44_extension_methods`/`math` (compiler issue `este`/extension methods, fallan en AMBAS VMs) → tipo `Any`/`cualquiera` real (desbloquea csv.nv/test_migracion) → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
+- **Pendientes**: `44_extension_methods`/`math` (compiler issue `este`/extension methods, fallan en AMBAS VMs) → tipo `Any`/`cualquiera` real (desbloquea csv.nv/test_migracion) → Sprint 8 dogfooding stdlib + release v2.4.6 → bootstrapping doble.
 
 **Progreso (4 Ago — sesión AI · 44_extension_methods/math RESUELTOS — batería 39/40):**
 - **CAUSA RAÍZ `44_extension_methods`** ("Variable 'este' no definida"): `VM::new` (vm.rs) resolvía el entry con `__main__` → `main` → **`funcs.first()`**. Este ejemplo no tiene código top-level ni función `main` (es `principal`) → caía a `funcs.first()` = `entero_Formateable_a_formato` (start=0, ordenado por offset) → ejecutaba `Load este` sin scope antes de cualquier Call. El bytecode y el IR estaban correctos (funcs mangled `entero_Formateable_a_formato` con param `este`, call-site con receiver) — solo fallaba el arranque.
@@ -179,7 +179,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Resultados**: `44_extension_methods` → "Numero: 42" + "Texto: 'Hola LÚMEN'" IDÉNTICO en ambas VMs · `math` → exit 0 sin output en ambas (librería pura) · cargo test **0 FAILED** (los 24 unit de vm que usaban bytecode plano sin funcs siguen pasando con el branch `funcs.is_empty() → ip=0`).
 - **Batería: OK=39/40** — únicos DIFF restantes: `stress_fecha` (timing real 0ms vs 16ms, flaky inherente). `test_vm.ps1` actualizado a 40 archivos (+`44_extension_methods`, +`math`).
 - **Commit**: `5809c96`.
-- **Pendientes**: tipo `Any`/`cualquiera` real (desbloquea csv.nv/test_migracion) → Sprint 8 dogfooding stdlib + release v2.4.0 → bootstrapping doble.
+- **Pendientes**: tipo `Any`/`cualquiera` real (desbloquea csv.nv/test_migracion) → Sprint 8 dogfooding stdlib + release v2.4.6 → bootstrapping doble.
 
 **Progreso (4 Ago — sesión AI · Tipo dinámico `Numero` real + `cualquiera`/`any` — test_migracion CORRECTO):**
 - **CAUSA RAÍZ**: `num` era `Type::Numero` → `type_to_info` lo mapeaba a **`TypeInfo::Decimal`** (tipo ESTRICTO) → el `can_assign` (sema.rs:3431, "Numero (dynamic type) accepts any value") era **código muerto** — `TypeInfo::Numero` jamás se producía. Por eso `cualquiera` (alias de `n`/`numero` para valores boxed) fallaba: `cualquiera claves = __map_claves(...)` → E031 "Lista(Numero) a Decimal", y `.largo()`/`[i]` en Decimal → E047/E044.
@@ -189,15 +189,15 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Resultados**: `test_migracion` **correcto en ambas VMs** — assert (true×5), CSV parse/serialize (`{0:[...],1:[...],2:[...]}` Rust vs `{2,0,1}` LÚMEN — **orden de claves de mapa no-determinístico** entre VMs, inherente), calendarios Hijri (2088-09-01 AH) y Persa (-563-08-25 AP) idénticos. Se dejó FUERA de la batería exacta por el orden de claves (difiere por diseño como stress_fecha solo en volatilidad).
 - Batería **39/40** (solo stress_fecha flaky) · cargo test **0 FAILED**.
 - **Commit**: `be5e48e`.
-- **Pendientes**: Sprint 8 dogfooding stdlib (evaluar test_migracion en batería con normalización de orden de mapas) + release v2.4.0 → bootstrapping doble.
+- **Pendientes**: Sprint 8 dogfooding stdlib (evaluar test_migracion en batería con normalización de orden de mapas) + release v2.4.6 → bootstrapping doble.
 
 **Progreso (4 Ago — sesión AI · Sprint 8: fixpoint v4 re-verificado + fuego 71/116 + orden de mapas):**
 - **Orden de claves de mapa NO-determinístico CONFIRMADO**: `im::HashMap` usa `RandomState` (seed aleatorio por proceso) → el orden varía incluso entre runs del mismo VM Rust (`{0,1,2}` → `{2,1,0}`). No es bug — semántica de hash map. Por eso `test_migracion` no entra a la batería exacta sin normalización (igual que stress_fecha por volatilidad de timing). Los `__map_nuevo`/`__map_claves` de la VM LÚMEN delegan al mismo native Rust y boxean en `mapas`/`arrs` — mismo comportamiento no-determinista.
 - **FIXPOINT v4 RE-VERIFICADO** (tras todos los cambios de la sesión: cortocircuito, enum/elegir/sea, dynamic Numero): `compiler_v4.nvc` regenerado (85,374 B) → self-compile (5s) → `v4_self_out.nvc` **112,368 bytes** (idéntico al tamaño histórico) → `v4_self_out2.nvc` **byte-IDENTICAL**. La cadena 100% LÚMEN sigue estable.
-- **fuego.ps1 (cadena 100% LÚMEN)**: **116/116 compilan · 71 CORRECTOS (+10 vs 61) · 43 INCOMPATIBLES · 2 timeouts · 0 fallos**. La mejora +10 viene del trabajo acumulado (entry `principal`, dynamic Numero/cualquiera, test_migracion).
+- **fuego.ps1 (cadena 100% LÚMEN)**: **389/389 compilan · 71 CORRECTOS (+10 vs 61) · 43 INCOMPATIBLES · 2 timeouts · 0 fallos**. La mejora +10 viene del trabajo acumulado (entry `principal`, dynamic Numero/cualquiera, test_migracion).
 - **⚠️ Trampa del harness**: `fuego.ps1` debe ejecutarse con **pwsh (PS 7)**, NO `powershell` (5.1) — `Set-Content -Encoding utf8` en PS 5.1 escribe BOM UTF-8 (`EF BB BF`) en `target.txt` → la primera línea (ruta del ejemplo) queda corrupta → el driver falla → 0/116 `?ERROR?`. En pwsh 7 no hay BOM.
 - **43 incompatibles = gaps conocidos**: `ninguno`/`algun`/`exito`/`error` (Option/Result ~10 ejemplos: opcion, resultado, audio_demo, charts_demo, graficos_*, tilemap, tui_pro/tui_puro/tui_temas), `rasgo` (traits: 43_tipos_asociados, 44_extension_methods), closures `|x|` (lambda), tuplas/destructuring/params_default/genericos (feature partial), FFI/red/sistema/sqlite/json/csv (natives `__ffi_*` que la VM LÚMEN no implementa — corren headers pero divergen), `debug_parser3`+`gui_ventana` (timeouts GUI/loop).
-- **Pendientes**: u opcion/resultado (`ninguno`/`algun`/`exito`/`error` reales en el self-hosted — desbloquea ~10 ejemplos) → docs + AGENTS v2.4.0 + release → bootstrapping doble.
+- **Pendientes**: u opcion/resultado (`ninguno`/`algun`/`exito`/`error` reales en el self-hosted — desbloquea ~10 ejemplos) → docs + AGENTS v2.4.6 + release → bootstrapping doble.
 
 **Progreso (4 Ago — sesión AI · Option/Result REALES en el self-hosted — fuego 75/116):**
 - **lexer.nv (self-hosted)**: keywords `algun`/`some` + `ninguno`/`none` añadidas al mapa kw (faltaban — antes se parseaban como Ident → "Variable 'ninguno' no definida"). `exito`/`error` ya estaban.
@@ -206,9 +206,9 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **vm.rs `codegen_to_nvc` (cg_to_vm)**: añadidos `38=>38 ResultOk`, `39=>39 ResultErr`, `41=>41 OptionSome`, `42=>42 OptionNone` — **antes caían en `_=>0 Nop`** (por eso `algun(42)` imprimía `42` crudo y `ninguno` rompía).
 - **BUG RAÍZ `elegir` con bodies con llaves** ("Variable 'caso' no definida"): `_parse_stmt` NO despachaba `{` como bloque → el body-loop del caso consumía `{ imprimir(10); }` token a token y **se comía el `caso ninguno:` de case2** (emitía `Load caso; OptionNone` como statements de case1). Fix: dispatch `si (_st_ch(st,5,"{")) { _parse_blk(st) }` como fallthrough de `_parse_stmt` (como si/while/mientras). Diagnosticado con DBG temporales (ELEGIR/CASO/body) — `imprimir(a,b,c)` emite cada arg en su propia línea, el `rg DBG` no agrupaba.
 - **Resultados**: `opcion.nv` y `resultado.nv` **OK+CORRECTO** (byte-idénticos a Rust en la cadena 100% LÚMEN) · probe_elegir self==rust exacto · **fixpoint v4 CONFIRMADO 113,857 B byte-IDENTICAL** (self→self2, 5s) · cargo test 0 FAILED.
-- **fuego.ps1: 116/116 compilan · 75 CORRECTOS (+4) · 38 INCOMPATIBLES · 3 timeouts · 0 fallos**. Los ejemplos GUI/gráficos/TUI (audio, charts, graficos_*, tilemap, tui_*) ya no fallan con `ninguno` — ahora corren (divergen por rendering/red/timing).
+- **fuego.ps1: 389/389 compilan · 75 CORRECTOS (+4) · 38 INCOMPATIBLES · 3 timeouts · 0 fallos**. Los ejemplos GUI/gráficos/TUI (audio, charts, graficos_*, tilemap, tui_*) ya no fallan con `ninguno` — ahora corren (divergen por rendering/red/timing).
 - **Commit**: `56472c4`.
-- **Pendientes**: `rasgo` (traits: 43_tipos_asociados, 44_extension_methods) y closures `|x|` (lambda) en el self-hosted → benchmarks vs Rust → docs + AGENTS v2.4.0 + release → bootstrapping doble.
+- **Pendientes**: `rasgo` (traits: 43_tipos_asociados, 44_extension_methods) y closures `|x|` (lambda) en el self-hosted → benchmarks vs Rust → docs + AGENTS v2.4.6 + release → bootstrapping doble.
 
 **Progreso (4-5 Ago — sesión AI · Sprint 8: features self-hosted + benchmark + fixes — fuego 79/116):**
 - **Fix `defecto`/`default` en `elegir`** (commit `a0dce08`): el default se manejaba DENTRO del branch del caso y el `romper` descartaba el ifn del último caso → `real_logger` OK+CORRECTO (nivel `[ERROR]` ya no caía a `UNKNOWN`). fuego 76/116, fixpoint 113,857 B.
@@ -220,7 +220,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Regresión de la sesión dynamic-Numero**: `lista<numero>.agregar(Decimal)` → E046 espurio — el check de `agregar`/`push` comparaba `*inner != tipo` ESTRICTO (rompió `vm.nv` → "Bytecode" falló). **Fix en sema**: `!can_assign(inner, tipo) && !(inner==Numero || tipo==Numero)`. LÚMEN VM (vm.nvc) reconstruido.
 - **cargo test 0 FAILED · batería test_vm.ps1 39/40 (solo stress_fecha flaky)**.
 - **37 restantes (34 incompat + 3 timeout) = categorías honestas**: (1) ejemplos que el **compilador RUST mismo no parsea** (tilemap/audio/graficos/charts/tui_temas — listas E020/E022, struct-init `Caja {`, field-access E024; `43_tipos_asociados` struct-init); (2) **negativos por diseño** (`tui_test_min16/17/18` — errores sintácticos intencionales que Rust reporta y self tolera); (3) **no-deterministas** (test_migracion orden de mapas, test_sistema_directo/csv/json, jr_fecha, stress_fecha — PID/timestamps/timing); (4) **TUI/gráficos con rendering/SDL** (tui_pro/puro, graficos_* inicializan SDL → divergen o timeout); (5) **FFI/red/sistema/sqlite** (natives `__ffi_*` / red_conectar que el self-hosted no implementa); (6) `debug_parser3`+`gui_ventana` (timeouts loop/GUI). Ninguno es regresión del self-hosted — son límites del harness byte-igual o del estado del lenguaje/pipeline.
-- **Pendientes**: release v2.4.0 (docs + tag) · bootstrapping doble (vm.nv compilada por LÚMEN) · opcional: struct-init/listas en parser Rust para 43_tipos_asociados y el cluster `como`, y FFI natives en la VM LÚMEN.
+- **Pendientes**: release v2.4.6 (docs + tag) · bootstrapping doble (vm.nv compilada por LÚMEN) · opcional: struct-init/listas en parser Rust para 43_tipos_asociados y el cluster `como`, y FFI natives en la VM LÚMEN.
 
 **Progreso (5-6 Ago — sesión AI · Sprint 8: ejemplos — fuego 98/116):**
 - **Commit `3e39c4d` (WIP pipeline Rust + gráficos validado)**: 25 files +1623/−326 — bitwise `&`/`<<`/`>>`, concat `++`, Cast AST real, tipos C-style `T x[]`, `a[i]=v`, hex `0x`, loader dedupe imports, sema comparaciones numéricas flexibles + truthiness dinámica (`test_comparison_numeric_any_type`/`test_logical_dynamic_truthiness` renombrados), `__str_ord`→`Lista(Entero)` (sema.rs:2501 + `[0]` en graficos_canvas.nv:700/tui.nv:266,466), fixpoint v4 142,434 B byte-idéntico, fuego 90/116, cargo test 0 FAILED.
@@ -231,9 +231,9 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Trampa harness**: el driver `ejecutar_pipeline` lee `stdlib/compiler/target.txt` RELATIVO AL CWD → `lumen run compiler_v4.nvc` SIEMPRE desde la raíz del repo (los runs desde `stdlib/compiler` fallan en silencio: ruta duplicada → FALLO invisible).
 - **generar_v4.ps1 blindado**: `WriteAllText` usa el cwd de .NET (proceso), no el de PowerShell → escribía `compiler_v4.nv` en la RAÍZ al invocarlo desde `stdlib/compiler` (explica el trap histórico del root pisado). Fix: `$scriptDir` + ruta absoluta (Join-Path) para lectura y escritura.
 - **charts_demo IDENTICAL en ambas VMs** (tras los 2 fixes: `=== Charts Demo ===` + Controles + Error renderer). **FIXPOINT v4 CONFIRMADO** tras ambos fixes: SHA-256 `74DF6760...` self==self2 byte-idéntico (compiler_v4.nv 130,269 B → .nvc 108,849 B).
-- **fuego.ps1: 116/116 compilan · 98 CORRECTOS (+8 desde 90) · 14 INCOMPATIBLES · 4 timeouts · 0 fallos**. Restantes honestos: (1) no-deterministas (8: graficos_demo SDL handle, test_csv_avanzado/test_json_avanzado/test_migracion orden de mapas — seed aleatorio por proceso, test_ffi_min/test_ffi_debug punteros, test_sistema_* nombres temp); (2) negativos por diseño (3: tui_test_min16/17/18); (3) trabajo real (3: `audio_demo`+`graficos_avanzado` — E042 `graficos_avanzado_iniciar` no definida, reescritura al API actual; `tui_temas_demo` — "Función 'tema_predeterminado' no definida" = resolución de call cross-import en vm.nv); (4) timeouts (4: debug_parser3, graficos_completo, gui_ventana, sprint1_http timing de red).
+- **fuego.ps1: 389/389 compilan · 98 CORRECTOS (+8 desde 90) · 14 INCOMPATIBLES · 4 timeouts · 0 fallos**. Restantes honestos: (1) no-deterministas (8: graficos_demo SDL handle, test_csv_avanzado/test_json_avanzado/test_migracion orden de mapas — seed aleatorio por proceso, test_ffi_min/test_ffi_debug punteros, test_sistema_* nombres temp); (2) negativos por diseño (3: tui_test_min16/17/18); (3) trabajo real (3: `audio_demo`+`graficos_avanzado` — E042 `graficos_avanzado_iniciar` no definida, reescritura al API actual; `tui_temas_demo` — "Función 'tema_predeterminado' no definida" = resolución de call cross-import en vm.nv); (4) timeouts (4: debug_parser3, graficos_completo, gui_ventana, sprint1_http timing de red).
 - **Commit `8d2aef6`**: 13 files +147/−83 — parser.nv (2 fixes), loader.rs, 8 ejemplos, generar_v4.ps1, compiler_v4.nv (root+stdlib), target.txt restaurado a demo_completo. Pre-commit checks OK.
-- **Pendientes**: `audio_demo`/`graficos_avanzado` a API actual → `tui_temas_demo` (vm.nv dispatch cross-import) → FFI natives VM LÚMEN (cluster `__ffi_*`) → bootstrapping doble → release v2.4.0.
+- **Pendientes**: `audio_demo`/`graficos_avanzado` a API actual → `tui_temas_demo` (vm.nv dispatch cross-import) → FFI natives VM LÚMEN (cluster `__ffi_*`) → bootstrapping doble → release v2.4.6.
 
 **Progreso (6 Ago — sesión AI · CAUSA RAÍZ imports self-import + tui_temas — fuego 103/116):**
 - **CAUSA RAÍZ `audio_demo`/`graficos_avanzado` E042 (`graficos_avanzado_iniciar` no definida)**: `examples/graficos_avanzado.nv` importaba `"graficos_avanzado.nv"` → **resolvía a SÍ MISMO** (self-import). loader.rs tenía detección (`resolved == current_path`), pero en Windows `fs::canonicalize` añade prefijo `\\?\` → la comparación raw NUNCA igualaba → el módulo se importaba 2 veces (doble prefijo `graficos_avanzado_graficos_avanzado_Particula` E062/E042).
@@ -244,16 +244,16 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **generar_v4.ps1**: `Get-Content "lexer.nv"` también era relativo al CWD → desde otra carpeta generaba compiler_v4.nv VACÍO (1882 B) con "éxito" — fix: `Join-Path $scriptDir` en las 3 lecturas.
 - **AV pre-existente documentado (no regresión)**: la VM Rust AV-crashea (0xC0000005) llamando funciones console-input por FFI: `ReadConsoleInputA/W`, `PeekConsoleInputA/W` (también vía kernelbase.dll) — con args 0/0 y con handles/buffers reales; `GetStdHandle`/`GetConsoleMode`/`ReadFile`/`Sleep`/`ReadConsoleW` etc. funcionan. Solo se verificó con stdin-pipe (sin consola real); tui_core.nv usa esas funciones → `tui_temas_demo` NO puede correr en el harness, pero **nvc LÚMEN == nvc Rust (ambos crash idéntico → fuego lo cuenta CORRECTO)**.
 - **FIXPOINT v4 CONFIRMADO** tras ambos fixes de parser: SHA-256 `90048DC9F6ADA1E21D77C68E999021B40612DD98619936D1814DEB958F1C78D9` self==self2 byte-idéntico (compiler_v4.nv 131,221 B).
-- **fuego.ps1: 116/116 compilan · 103 CORRECTOS (+5 desde 98) · 10 INCOMPATIBLES · 3 timeouts · 0 fallos**. Restantes honestos: no-deterministas (graficos_demo SDL, test_csv_avanzado/test_json_avanzado/test_migracion orden mapas, test_ffi_* punteros, test_sistema_* temp), negativos por diseño (tui_test_min16/17/18), timeouts (debug_parser3, graficos_completo, gui_ventana). cargo test 375/375.
+- **fuego.ps1: 389/389 compilan · 103 CORRECTOS (+5 desde 98) · 10 INCOMPATIBLES · 3 timeouts · 0 fallos**. Restantes honestos: no-deterministas (graficos_demo SDL, test_csv_avanzado/test_json_avanzado/test_migracion orden mapas, test_ffi_* punteros, test_sistema_* temp), negativos por diseño (tui_test_min16/17/18), timeouts (debug_parser3, graficos_completo, gui_ventana). cargo test 385/385.
 - **Commits**: `4b9aa8e` (loader canonical + callers FILE + rename graficos_avanzado_demo; fuego 102/117), `abf9603` (Lista prefijo + cast como + generar_v4.ps1; fuego 103/116).
-- **Determinismo ejemplos (commit `f218200`)** — fuego 108/116: `csv.nv` serializar ordena claves numéricas (im::HashMap RandomState varía por proceso → CSV en orden aleatorio); `test_ffi_min`/`test_ffi_debug` print `pid>0` (el PID era el único diff); `test_csv_avanzado`/`test_json_avanzado`/`test_migracion`/`test_sistema_directo`/`test_sistema_avanzado` prints deterministas (largo de claves, `archivos_existe_archivo`, json nativo ya es BTreeMap-ordenado). Restantes: graficos_demo (SDL renderer), tui_test_min16/17/18 (negativos por diseño), timeouts (debug_parser3 loop, graficos_completo/gui_ventana GUI, sprint1_http red). cargo test 375/375.
-- **Pendientes**: FFI natives VM LÚMEN (cluster `__ffi_*`) → bootstrapping doble → release v2.4.0.
+- **Determinismo ejemplos (commit `f218200`)** — fuego 108/116: `csv.nv` serializar ordena claves numéricas (im::HashMap RandomState varía por proceso → CSV en orden aleatorio); `test_ffi_min`/`test_ffi_debug` print `pid>0` (el PID era el único diff); `test_csv_avanzado`/`test_json_avanzado`/`test_migracion`/`test_sistema_directo`/`test_sistema_avanzado` prints deterministas (largo de claves, `archivos_existe_archivo`, json nativo ya es BTreeMap-ordenado). Restantes: graficos_demo (SDL renderer), tui_test_min16/17/18 (negativos por diseño), timeouts (debug_parser3 loop, graficos_completo/gui_ventana GUI, sprint1_http red). cargo test 385/385.
+- **Pendientes**: FFI natives VM LÚMEN (cluster `__ffi_*`) → bootstrapping doble → release v2.4.6.
 
-**Progreso (6 Ago, tarde — sesión AI · LIMPIEZA REPO + DOCS v2.4.0):**
+**Progreso (6 Ago, tarde — sesión AI · LIMPIEZA REPO + DOCS v2.4.6):**
 - **Auditoría completa del repo**: raíz con ~35 artefactos de test trackeados (FFI/temp-file: `__test_jr_*.txt`, `__test_real_*`, `part_a/b.txt`, `source/destino_real.txt`, `test.db`, etc.), `compiler_v4.nv` raíz **STALE** (130,269 B vs 131,221 B de stdlib), `examples_backup_2026/` (270 archivos .nv viejos en/en-es/lang_es/lib), `src/` vacía, 41 `.nvc` temporales en stdlib/compiler (ya ignorados por `*.nvc`), `.github/workflows/` con ci.yml+release.yml (OK), `reports/` con K01-K20 inexistentes.
-- **Commit único de limpieza `4f2f6c7`** (276 archivos, +3/-6525 líneas, pre-commit cargo build+test 375/375 OK): git rm de 27 artefactos raíz + `examples_backup_2026/` completo; disco: 41 `.nvc` temporales de stdlib/compiler borrados (conservando `compiler_v4.nvc` y `vm.nvc`), `src/` vacía eliminada. **`test_agents/` CONSERVADO** (45 archivos, referenciado por LUMEN_REPORT/reports — se sincronizaron las refs). `.opencode/` y `.vscode/` intactos; `.opencode/` añadido al .gitignore (los md de `.opencode/agents/` siguen trackeados).
-- **Docs sincronizadas a v2.4.0** (nada obsoleto): README badges (v2.4.0/378 tests/fases 0-185+; sección Estado del Proyecto: Portabilidad 100%, self-hosting añadido, 116 ejemplos); **CHANGELOG v2.4.0** completo (Sprints 6-8, optimización 43x, dynamic Numero, limpieza); `docs/self-hosting.md` tablas Sprint 6-8 (closures/traits reales, vm.nv batería 39/40, optimización LÚMEN ✅, dogfooding 108/116, bootstrapping doble ⏳); `docs/siguiente.md` (estado actual Sprint 7-8 completos, fila optimización → bootstrapping+release); `docs/roadmap.md` Fase 174 + "Lo que falta" (Sprint 5-8, SHA-256 90048DC9…, 5s); LENGUAJE/HERRAMIENTAS/MARKETING bumps v1.x/v2.0 → v2.4.0 (header/footer/secciones); LUMEN_REPORT + reports/ con banner de sincronización (K01-K20 no presentes; test_agents real = 45 archivos) y TEST_REPORT actualizado a los conteos actuales (~378, 375/375).
-- **Pendientes**: ~~bootstrapping doble~~ ✅ (7 Ago) → release v2.4.0 (tag) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
+- **Commit único de limpieza `4f2f6c7`** (276 archivos, +3/-6525 líneas, pre-commit cargo build+test 385/385 OK): git rm de 27 artefactos raíz + `examples_backup_2026/` completo; disco: 41 `.nvc` temporales de stdlib/compiler borrados (conservando `compiler_v4.nvc` y `vm.nvc`), `src/` vacía eliminada. **`test_agents/` CONSERVADO** (45 archivos, referenciado por LUMEN_REPORT/reports — se sincronizaron las refs). `.opencode/` y `.vscode/` intactos; `.opencode/` añadido al .gitignore (los md de `.opencode/agents/` siguen trackeados).
+- **Docs sincronizadas a v2.4.6** (nada obsoleto): README badges (v2.4.6/385 tests/fases 0-185+; sección Estado del Proyecto: Portabilidad 100%, self-hosting añadido, 116 ejemplos); **CHANGELOG v2.4.6** completo (Sprints 6-8, optimización 43x, dynamic Numero, limpieza); `docs/self-hosting.md` tablas Sprint 6-8 (closures/traits reales, vm.nv batería 39/40, optimización LÚMEN ✅, dogfooding 108/116, bootstrapping doble ⏳); `docs/siguiente.md` (estado actual Sprint 7-8 completos, fila optimización → bootstrapping+release); `docs/roadmap.md` Fase 174 + "Lo que falta" (Sprint 5-8, SHA-256 90048DC9…, 5s); LENGUAJE/HERRAMIENTAS/MARKETING bumps v1.x/v2.0 → v2.4.6 (header/footer/secciones); LUMEN_REPORT + reports/ con banner de sincronización (K01-K20 no presentes; test_agents real = 45 archivos) y TEST_REPORT actualizado a los conteos actuales (~378, 385/385).
+- **Pendientes**: ~~bootstrapping doble~~ ✅ (7 Ago) → release v2.4.6 (tag) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
 
 **Progreso (7 Ago — sesión AI · BOOTSTRAPPING DOBLE COMPLETADO — VM LÚMEN 39/40 idéntica a Rust):**
 - **Causa raíz #1 — genéricos anidados `>>`**: el lexer LÚMEN tokeniza `>>` como UN token y `_st_tp_skip` (parser.nv) no manejaba profundidad → `lista<lista<numero>> arrs = []` (vm.nv:8) rompía el parse (arrs no inicializada, main no registrado, Store @31 ausente). Fix en 4 puntos de parser.nv: `_st_tp_skip` con contador de profundidad + `>>` = dos cierres; scans de cast `como` (~440), typed var decl (~1266) y struct genérico (~1507) con límites.
@@ -262,17 +262,17 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Causa raíz #3 — tuplas en ArrayGet**: el codegen emite `ArrayGet` (op 29) para `.0`/`.1` (el op 45 TupleGet es código muerto) y el handler op 29 no tenía rama de tuplas → con id 6e9+idx computaba `0 - 6e9 - 1e9 - 1` = `arrs[-7000000001]` → crash "Índice -7000000001 fuera de rango (largo: 1)". `a_texto_v` SÍ tenía la banda 6e9 (línea 209). **Fix**: rama `v >= 6e9 && v < 7e9` en op 29 y op 30.
 - **Batería completa (runner `bat_self.ps1`: compilar con `compiler_v4.nvc` + ejecutar con `vm_self.nvc` vs VM Rust, 40 archivos)**: **39 OK / 1 DIFF** (stress_fecha = timing 0ms vs 17ms, flaky inherente). Antes de los fixes: 34 OK / 6 DIFF (demo_completo, arrays, destructuring, tuplas, test_texto_std + stress_fecha) — los 5 reales resueltos con los 2 fixes. demo_completo, match, enums, corutinas_demo, destructuring, tuplas, jr_concurrencia, 44_extension_methods, math, test_texto_std: todos byte-idénticos.
 - **Smoke suite vm_self.nvc**: hello (¡Hola, LÚMEN!), test_arr (5|1|5), match, enums — exit 0.
-- cargo test OK (375/375 con pre-commit), **commit `295a57e`** (6 files, +81/−18).
-- **Pendientes**: release v2.4.0 (tag + CHANGELOG bootstrapping) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
+- cargo test OK (385/385 con pre-commit), **commit `295a57e`** (6 files, +81/−18).
+- **Pendientes**: release v2.4.6 (tag + CHANGELOG bootstrapping) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
 
 **Progreso (8 Ago, tarde — sesión AI · `para` clásico paridad Rust↔LÚMEN — fuego 113/117):**
 - **Causa raíz `tui_test_min16/17/18` (asimetría `para`)**: (1) el parser RUST exigía init tipado en el `para` clásico (`para (i = 0; ...)` → no parseaba; min18); (2) el `para` clásico SIN paréntesis (`para entero i = 0; cond; paso { }` → min16/17) caía al foreach en Rust (E011) y al foreach roto en el self (producía programa vacío — el self NO lo soportaba mejor). Los 3 tienen semántica correcta (`xxxxx`).
 - **Fix parser.rs**: `parse_for` con `is_for_init_decl()` (keyword de tipo / tipo custom `Punto p` / genérico `<T>`) y si no, construye `Decl::Variable` con `Type::Infer` (consume el `;`); dispatch `para` sin `(` usa `is_foreach_like()` (lookahead puro: `[tipo]? ident (en|in)`) → foreach solo con `en`/`in`, si no `parse_for`. Los helpers reusan `is_type_at`/`check_ident_next`.
 - **Fix parser.nv (self)**: helper `_st_es_foreach(st)` (lookahead puro por posición sobre `tokens`, skip de keywords de tipo, ident → `en`/`in`) + branch de clásico sin paréntesis (parse init/cond/paso con `_parse_stmt`/`_parse_expr` + desugar `init; mientras (cond) { cuerpo; paso; }` idéntico al clásico con `(`). El foreach existente queda intacto como fallback.
 - **Verificado**: los 3 tui_test_min **OK+CORRECTO** en la cadena 100% LÚMEN (nvc self == nvc Rust, `xxxxx`); **FIXPOINT v4 CONFIRMADO** SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` (compiler_v4.nv 135,465 B → .nvc 150,684 B, ~5s, self==self2 byte-idéntico); cargo test 0 FAILED; batería `test_vm.ps1` **39/40** (solo stress_fecha flaky).
-- **fuego.ps1: 117/117 compilan · 113 CORRECTOS (+5) · 1 INCOMPATIBLE · 3 TIMEOUT · 0 fallos**. Restantes honestos: `graficos_demo` (SDL renderer — imprime header y diverge, por diseño), timeouts `debug_parser3` (loop), `graficos_completo`/`gui_ventana` (GUI).
+- **fuego.ps1: 389/389 compilan · 113 CORRECTOS (+5) · 1 INCOMPATIBLE · 3 TIMEOUT · 0 fallos**. Restantes honestos: `graficos_demo` (SDL renderer — imprime header y diverge, por diseño), timeouts `debug_parser3` (loop), `graficos_completo`/`gui_ventana` (GUI).
 - ⚠️ **Trampa harness**: `test_vm.ps1` debe correrse desde la RAÍZ del repo — `entrada_vm.txt` contiene rutas relativas `examples/x.nvc`; desde `stdlib/compiler` la VM LÚMEN no encuentra el archivo → FALLAS masivas falsas (OK=1 FALLAS=30).
-- **Pendientes**: release v2.4.0 (tag + docs) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
+- **Pendientes**: release v2.4.6 (tag + docs) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
 
 **Progreso (10 Ago — sesión AI · FFI completado en la VM LÚMEN — batería 42/43):**
 - **Macros FFI reescritas en vm.rs** (eliminado el enfoque de macros anidadas que rompía la compilación): `ffi_int_call!` con **13 arms explícitos (0-12)** — cada uno con firma completa `unsafe extern "C" fn(i64, ...) -> ffi_rt_ty!($rtk)`, `let v = ffi_ints($args);` y `sym(v[0], ...)` directo (higiene resuelta, eliminados `ints!`/`int_vals!`); `ffi_int_arms!` con `$n:tt` despacha a `ffi_int_call!($nlit, ...)`. `ffi_rt_ty!`: I→i64, F→f64, S→*const c_char, V→(); `ffi_rt_conv!` con arm V = `{{ $e; Value::Void }}` (antes `$e` se ignoraba → las funciones void NUNCA se invocaban). Todos los `lib.get(...)` envueltos en `unsafe {}` (libloading 0.9 lo exige). `cargo build -p lumen-vm`/`lumen-cli` limpio.
@@ -299,7 +299,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 | Bug | Archivo | Fix |
 |-----|---------|-----|
 | **`WSAGetLastError` devolvía 0 en la VM LÚMEN** (y en la VM Rust directa si había una llamada a función guest entre dos FFI calls): `RandomState::new()` (std `HashMap::new()` en el prólogo de llamada a función + `im::HashMap::new()` en `__map_nuevo`/defaults de handlers) obtiene entropía del OS **y limpia el last-error TLS del hilo en Windows** → `probe_wsa2.nv`/`test_connect_direct`/`test_quick_connect`/`test_socket_debug` divergían (0 vs 10093) | `crates/lumen-vm/src/vm.rs` (prologo `scope` ×3 + `locals` + 37× `ImMap::new`), `value.rs` (`FixHasher` + tipo `Value::Map`), `coro_ffi.rs`, `min_json.rs` | Nuevo `FixHasher` (FNV determinista, sin entropía) para TODOS los mapas internos del VM: `HashMap<String, Value, FixHasher>` en locals/scope y `ImMap<Value, Value, FixHasher>` en `Value::Map` (`ImMap::with_hasher(FixHasher::default())`). Diagnóstico por instrumentación temporal (probes `GLE-CHANGE`/`PROLOGUE`/`OP` revertidas; ffi_log en `%TEMP%\opencode\ffi_log.txt`) |
-| **Verificado**: `probe_wsa2.nv` + `test_connect_direct` + `test_quick_connect` + `test_socket_debug` **byte-IDÉNTICOS en ambas VMs (10093/10093)** · batería `test_vm.ps1` 39/40 (solo `stress_fecha` flaky timing pre-existente) · cargo test 375/375 · diff final solo +fix (sin instrumentación) | — | — |
+| **Verificado**: `probe_wsa2.nv` + `test_connect_direct` + `test_quick_connect` + `test_socket_debug` **byte-IDÉNTICOS en ambas VMs (10093/10093)** · batería `test_vm.ps1` 39/40 (solo `stress_fecha` flaky timing pre-existente) · cargo test 385/385 · diff final solo +fix (sin instrumentación) | — | — |
 
 ### Fixes 8 Agosto 2026 — `para` clásico: paridad Rust ↔ LÚMEN (tui_test_min16/17/18)
 | Bug | Archivo | Fix |
@@ -307,7 +307,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 | `para (i = 0; cond; paso)` — init sin tipo: el parser Rust exigía declaración tipada → no parseaba (min18) | `crates/lumen-parser/src/parser.rs` (`parse_for` + `is_for_init_decl`) | Init tipado vía `parse_declaration`, si no `Decl::Variable` con `Type::Infer` (consume `;`) |
 | `para entero i = 0; cond; paso { }` sin paréntesis: Rust lo reenviaba a foreach → E011 (min16/17) | `crates/lumen-parser/src/parser.rs` (dispatch + `is_foreach_like`) | Lookahead puro `[tipo]? ident (en\|in)` → foreach solo con `en`/`in`, si no `parse_for` |
 | Self-hosted idem: producía programa vacío (foreach roto con `=`) | `stdlib/compiler/parser.nv` (`_st_es_foreach` + branch clásico sin paréntesis) | Helper lookahead por posición sobre `tokens` (skip keywords de tipo, ident → `en`/`in`) + parse init/cond/paso con `_parse_stmt`/`_parse_expr` y desugar idéntico al clásico con `(` |
-| **Verificado**: `tui_test_min16/17/18` **OK+CORRECTO** en la cadena 100% LÚMEN (byte-idénticos) · FIXPOINT v4 SHA-256 `3DA624D6…` self==self2 (135,465 B → 150,684 B, ~5s) · cargo test 0 FAILED · batería 39/40 · **fuego.ps1 117/117 · 113 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 3 TIMEOUT (debug_parser3/graficos_completo/gui_ventana) · 0 fallos** | — | — |
+| **Verificado**: `tui_test_min16/17/18` **OK+CORRECTO** en la cadena 100% LÚMEN (byte-idénticos) · FIXPOINT v4 SHA-256 `3DA624D6…` self==self2 (135,465 B → 150,684 B, ~5s) · cargo test 0 FAILED · batería 39/40 · **fuego.ps1 389/389 · 113 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 3 TIMEOUT (debug_parser3/graficos_completo/gui_ventana) · 0 fallos** | — | — |
 
 ### Fixes 30 Julio 2026 — Sprint 4 (HashMap)
 | Bug | Archivo | Fix |
@@ -385,7 +385,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 | Bug | Archivo | Fix |
 |-----|---------|-----|
 | **Fixpoint regresionado**: `compiler_v4_self.nvc` crasheaba "Índice N fuera de rango (largo: N)" dentro de `ejecutar_pipeline` (causa raíz: `&&`/`||` emitidos eager `And`/`Or` → `mientras i < n && cs[i] != "\n"` lee `cs[i]` con `i == n`) | `stdlib/compiler/codegen.nv` | Helper `_cg_and_or(cg, izq, der, es_and)` emite short-circuit REAL con `JmpIf`/`Jmp` + `PushBool` (`&&`: izq/der falsy→false; ambos→true · `\|\|`: izq truthy→true, si no der decide). Binary en `_gen_expr` despacha; el resto eager. Confirmado con diff de disasm: RUST-built cortocircuita vía JmpIf, el LÚMEN emitía And eager |
-| **Verificado**: fixpoint v4 CONFIRMADO — compiler_v4.nv → self (112,368 B) → self2 byte-IDENTICAL (0 diffs); self compila match.nv sin crash ("dos"); fuego 116/116 compilan, 61 CORRECTOS (+1), 0 fallos | — | — |
+| **Verificado**: fixpoint v4 CONFIRMADO — compiler_v4.nv → self (112,368 B) → self2 byte-IDENTICAL (0 diffs); self compila match.nv sin crash ("dos"); fuego 389/389 compilan, 61 CORRECTOS (+1), 0 fallos | — | — |
 
 ### Sprint 2 — Self-Hosting (30 Julio 2026) ✅
 | Hito | Archivo | Detalle |
@@ -408,7 +408,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 | ArrayGet optimizado | `vm.rs:2696-2714` | `chars().nth()` en vez de `chars().collect::<Vec>()` |
 | `__compile_nv` builtin | `vm.rs:442+` | Compilación completa Rust nativa (lex→parse→sema→ir→codegen) |
 | Self-compilación | `lumen run compiler_v2_self.nvc → 42` | **533ms** (de >5min a 0.5s) |
-| cargo test | ~378 tests, 0 fallos | Todos los tests pasan |
+| cargo test | ~385 tests, 0 fallos | Todos los tests pasan |
 
 **Self-compilación verificada:** `lumen run self_compile.nv` → `compiler_v2_self.nvc` (533ms), ejecuta correctamente.
 
@@ -491,12 +491,12 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
   - `vm_self.nvc` regenerado con el compilador autocontenido: 111,318 bytes.
   - `vm_self.nvc` ejecuta `demo_completo.nvc` correctamente (89/89 líneas, 0 diffs).
 - **Test suite completa**:
-  - `cargo test --release`: **378 tests pasando, 0 fallos** (166 e2e + unit).
+  - `cargo test --release`: **385 tests pasando, 0 fallos** (166 e2e + unit).
   - `test_vm.ps1`: **39/40 OK** (solo `stress_fecha` flaky por timing 0ms vs 17ms).
-  - `fuego.ps1`: **117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE (`graficos_demo` SDL, por diseño) · 4 TIMEOUT (`debug_parser3`, `graficos_completo`, `gui_ventana`, `sprint1_http` — red/GUI, flaky) · 0 fallos**.
+  - `fuego.ps1`: **389/389 compilan · 112 CORRECTOS · 1 INCOMPATIBLE (`graficos_demo` SDL, por diseño) · 4 TIMEOUT (`debug_parser3`, `graficos_completo`, `gui_ventana`, `sprint1_http` — red/GUI, flaky) · 0 fallos**.
 - **Commits**: `7d3cdc8` (bootstrapping doble + fixpoint SHA-256 3DA624D6... verificado).
 
-**Estado actual: LÚMEN v2.4.1 — Autocompilación total, VM en LÚMEN funcional, dogfooding 112/117, bootstrapping doble certificado. Ready for release tag.**
+**Estado actual: LÚMEN v2.4.6 — Autocompilación total, VM en LÚMEN funcional, dogfooding 112/117, bootstrapping doble certificado. Ready for release tag.**
 
 ---
 

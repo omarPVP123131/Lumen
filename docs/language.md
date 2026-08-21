@@ -1,4 +1,4 @@
-# Referencia del Lenguaje LÚMEN — v2.4.2
+# Referencia del Lenguaje LÚMEN — v2.4.6
 
 LÚMEN es un lenguaje de programación educativo con sintaxis en español y equivalentes
 opcionales en inglés. Pipeline completo: Lexer → Parser → Sema → IR → Bytecode → VM.

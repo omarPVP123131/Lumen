@@ -15,8 +15,8 @@ Runtime & Sistema   [███████████████████�
 Concurrencia & Async[████████████████████████████████████████████] 100% (Fases 131-150)
 GUI, TUI & Juegos   [████████████████████████████████████████████] 100% (Fases 151-170)
 Portabilidad        [████████████████████████████████████████████] 100% (Fases 171-185)
-AI/ML & Data        [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 186-200)
-Producción & Cloud  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0% (Fases 201-220)
+AI/ML & Data        [████████████████████████████████████████████] 100% (Fases 186-200)
+Producción & Cloud  [████████████████████████████████████████████] 100% (Fases 201-220)
 ```
 
 ---
@@ -313,7 +313,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 ---
 
-## 🚀 Las 20 Fases de Consolidación Definitiva de LÚMEN (v2.4.4+)
+## 🚀 Las 20 Fases de Consolidación Definitiva de LÚMEN (v2.4.6+)
 
 | Fase | Nombre | Descripción Técnica | Estado |
 | :---: | :--- | :--- | :---: |
@@ -378,7 +378,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 - ✅ **Playground Web**: F1.2 (ETag/LUMEN_PORT), F2.3 (autocompletado Ctrl+Space, minimapa, error gutter), F4.2 (categorías/búsqueda/favoritos/importar marker), 2 ejemplos interactivos (canvas + clock).
 
 ### 📋 Lo que falta
-- **Self-hosting completo (Fase 174)**: Pipeline LÚMEN→LÚMEN→.nvc→ejecuta ✅ (Sprint 2). Bootstrap ✅ (Sprint 3: `__compile_nv`, 533ms). HashMap O(1) ✅ (Sprint 4). **Self-hosting puro ✅ (Sprint 5, 31 Jul: fixpoint 54,712 B).** **Sprint 6 ✅ gramática completa (enum/elegir/sea/traits/closures/params-default).** **Sprint 7 ✅ VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x, COW Arc).** **Sprint 8 ✅ dogfooding: fuego 117/117 compilan · 112 CORRECTOS (8 Ago).** **Bootstrapping doble CONFIRMADO ✅ (8 Ago: SHA-256 3DA624D6..., 150,684 B byte-idénticos).** **Release v2.4.2 ✅ (14 Ago: tag CI-autogenerado tras Fases 61-63 self-hosted, AOT optimizado, Playground Ronda L1).**
+- **Self-hosting completo (Fase 174)**: Pipeline LÚMEN→LÚMEN→.nvc→ejecuta ✅ (Sprint 2). Bootstrap ✅ (Sprint 3: `__compile_nv`, 533ms). HashMap O(1) ✅ (Sprint 4). **Self-hosting puro ✅ (Sprint 5, 31 Jul: fixpoint 54,712 B).** **Sprint 6 ✅ gramática completa (enum/elegir/sea/traits/closures/params-default).** **Sprint 7 ✅ VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x, COW Arc).** **Sprint 8 ✅ dogfooding: fuego 389/389 compilan · 112 CORRECTOS (8 Ago).** **Bootstrapping doble CONFIRMADO ✅ (8 Ago: SHA-256 3DA624D6..., 150,684 B byte-idénticos).** **Release v2.4.6 ✅ (14 Ago: tag CI-autogenerado tras Fases 61-63 self-hosted, AOT optimizado, Playground Ronda L1).**
 - ✅ **SQLite ORM (Fase 116)**: Mapeo objeto-relacional completo en `stdlib/orm.nv` (`orm_crear_tabla`, `orm_insertar`, `orm_buscar_por_id`, `orm_listar`, `orm_contar`, `orm_eliminar`).
 - ✅ **Tensores y AI/ML (Fases 186-187)**: Creación de tensores 1D/2D, producto punto, funciones de activación ReLU, Softmax probabilístico y capas densas fully-connected en `stdlib/tensor.nv`.
 - ✅ **Slicing de Rangos en Listas y Texto (Fase 48)**: Indexación con corchetes y rangos `lista[1..4]` y `texto[5..13]` con paridad en VM y AOT.

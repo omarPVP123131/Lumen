@@ -18,7 +18,7 @@
 | **Optimización fixpoint** | ✅ **861s → 20.1s (43x)** | COW con `Arc` en Value (vm.rs) — clonado O(1) de strings/arrays grandes; fixpoint v4 byte-IDENTICAL |
 | **Bootstrapping doble** (vm.nv compilada por LÚMEN y auto-ejecutándose) | ⏳ | Próximo hito — 0 dependencias de Rust |
 | **Optimización fixpoint** | ✅ | Fixpoint v4 re-verificado en **5s** (112,368 B byte-IDENTICAL, 4 Ago) |
-| **Sprint 8: Dogfooding + release v2.4.0** | 🟢 en curso | **fuego: 116/116 compilan · 75/116 CORRECTOS (+14)** con la cadena 100% LÚMEN (**opcion.nv + resultado.nv ahora OK+CORRECTO** vía Option/Result reales; 38 no-corregidos son gaps: traits, closures, FFI/GUI, tuplas, timing) — fixpoint v4 **113,857 B byte-IDENTICAL** |
+| **Sprint 8: Dogfooding + release v2.4.6** | 🟢 en curso | **fuego: 389/389 compilan · 75/116 CORRECTOS (+14)** con la cadena 100% LÚMEN (**opcion.nv + resultado.nv ahora OK+CORRECTO** vía Option/Result reales; 38 no-corregidos son gaps: traits, closures, FFI/GUI, tuplas, timing) — fixpoint v4 **113,857 B byte-IDENTICAL** |
 
 ### Arquitectura (actualizada)
 
@@ -231,7 +231,7 @@ si (_st_ch(st, 4, "<")) {
 >
 > ⚠️ **mini_fuego.ps1**: correr desde la raíz; los ejemplos van como parámetro (`mini_fuego.ps1 test_arr foreach`); el bucle del script corta si un ejemplo tarda demasiado (correr de a 1-2).
 
-**Siguiente**: ✅ COMPLETADO — `estructura`/`enum` reales vía desugar (6.4: enum/elegir/sea REALES — nodo `EnumInit`, `defecto:` con cadenas de `sino` reconstruidas desde el final por la persistencia de `im::HashMap`), cortocircuito `&&`/`||` real con JmpIf (6.5), **fixpoint v4 CONFIRMADO** (112,368 B byte-IDÉNTICO en self/self2) y **fuego.ps1: 116/116 compilan, 61 CORRECTOS, 0 fallos**. Detalles en AGENTS.md (Fixes 1-2 Agosto 2026).
+**Siguiente**: ✅ COMPLETADO — `estructura`/`enum` reales vía desugar (6.4: enum/elegir/sea REALES — nodo `EnumInit`, `defecto:` con cadenas de `sino` reconstruidas desde el final por la persistencia de `im::HashMap`), cortocircuito `&&`/`||` real con JmpIf (6.5), **fixpoint v4 CONFIRMADO** (112,368 B byte-IDÉNTICO en self/self2) y **fuego.ps1: 389/389 compilan, 61 CORRECTOS, 0 fallos**. Detalles en AGENTS.md (Fixes 1-2 Agosto 2026).
 
 ---
 
@@ -248,7 +248,7 @@ si (_st_ch(st, 4, "<")) {
 | TryUnwrap top-level con error visible | ✅ | Cubierto por driver nuevo (`__tipo_de(fin)` en main de generar_v4.ps1) |
 | Cortocircuito `&&`/`\|\|` en codegen puro | ✅ | Helper `_cg_and_or` con JmpIf/Jmp reales (fixpoint v4 regresionado por And eager) |
 | Traits `rasgo`/`impl`/`este` | ✅ | `impl Trait para Tipo` → métodos mangled `Tipo_Trait_metodo` + resolución `n.metodo()` por tipo de var (commit 9328fec) |
-| Fixpoint v4 + `fuego.ps1` | ✅ | Fixpoint: self/self2 byte-IDÉNTICOS (SHA-256 90048DC9…) · fuego: **116/116 compilan, 108 CORRECTOS, 0 fallos** |
+| Fixpoint v4 + `fuego.ps1` | ✅ | Fixpoint: self/self2 byte-IDÉNTICOS (SHA-256 90048DC9…) · fuego: **389/389 compilan, 108 CORRECTOS, 0 fallos** |
 
 ### 🟢 Sprint 7 — VM en LÚMEN + optimización
 
@@ -260,14 +260,14 @@ si (_st_ch(st, 4, "<")) {
 | **Bootstrapping doble** (compiler_v4 compila vm.nv; vm.nvc corre en VM LÚMEN) | ✅ | **0 dependencias de Rust — HITO FINAL CUMPLIDO** · Fixpoint SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` (150,684 B byte-id.) |
 | **Stream/Async/Par/Actor/Generator handlers en `vm.nv`** | ✅ | `__stream_*`, `__par_*`, `__actor_*`, `__generador_*`, `__select`, `__*_async` → delegados a natives Rust (vm.rs 1890-2260) · `sprint1_concurrencia` 100% paridad |
 
-### 🟢 Sprint 8 — Dogfooding completo (release v2.4.0)
+### 🟢 Sprint 8 — Dogfooding completo (release v2.4.6)
 
 | Tarea | Estado | Notas |
 |-------|--------|-------|
-| Compilar stdlib completo con compiler_v5 | ✅ | matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos — stdlib completo compila con el pipeline puro (fuego 116/116 compilan) |
-| Ejecutar 115 ejemplos con cadena 100% LÚMEN | ✅ | **fuego.ps1: 117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos** (restantes: SDL/negativos por diseño/no-deterministas/GUI/FFI) |
+| Compilar stdlib completo con compiler_v5 | ✅ | matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos — stdlib completo compila con el pipeline puro (fuego 389/389 compilan) |
+| Ejecutar 115 ejemplos con cadena 100% LÚMEN | ✅ | **fuego.ps1: 389/389 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos** (restantes: SDL/negativos por diseño/no-deterministas/GUI/FFI) |
 | Benchmarks vs Rust | ✅ | `scripts/benchmark_vs_rust.ps1`: compile x5.4, run x231 (intérprete-en-intérprete; mediana x2-6) |
-| Docs + AGENTS + release | ✅ | Docs sincronizadas (8-14 Ago 2026); **release v2.4.2 con tag CI-autogenerado** (Fases 61-63 self-hosted, AOT optimized, Playground L1) |
+| Docs + AGENTS + release | ✅ | Docs sincronizadas (8-14 Ago 2026); **release v2.4.6 con tag CI-autogenerado** (Fases 61-63 self-hosted, AOT optimized, Playground L1) |
 
 ---
 

@@ -1,7 +1,7 @@
 # 📖 Aprende a Programar con LÚMEN: De Principiante a Ingeniero de Software
 ### *Learn to Code with LÚMEN: From Zero to Software Engineer*
 
-**Versión Oficial v2.4.4 — Guía Completa de Computación, IA y Sistemas**
+**Versión Oficial v2.4.6 — Guía Completa de Computación, IA y Sistemas**
 
 ---
 
@@ -545,7 +545,7 @@ imprimir(dataframe_df_a_csv(df));
 
 ---
 
-*LÚMEN v2.4.4 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v2.4.6 — © 2026 LÚMEN Core Team & Comunidad.*
 
 
 ---
@@ -606,3 +606,84 @@ importar "baremetal.nv";
 baremetal_UnikernelConfig os = baremetal_arrancar_unikernel("LUMEN-OS");
 imprimir(baremetal_resumen(os));
 ```
+
+---
+
+# CAPÍTULO 19: Inferencia Local de LLMs Cuantizados con GGUF v3 (`stdlib/gguf.nv`)
+
+Ejecuta modelos de lenguaje de gran escala (como **LLaMA-3, Phi-3, Mistral, Gemma**) 100% offline sin depender de Python ni librerías externas:
+
+```lumen
+importar "gguf.nv";
+
+// 1. Cargar archivo de pesos GGUF v3 (Q4_K_M)
+gguf_GgufModelo modelo = gguf_cargar_modelo("modelos/llama3-8b.Q4_K_M.gguf", 0.7, 0.9);
+
+// 2. Iniciar sesión interactiva con KV-Cache
+gguf_GgufSesionChat sesion = gguf_crear_sesion(modelo, "Eres un asistente experto en LÚMEN.");
+
+// 3. Generar respuesta con muestreo Top-P
+texto respuesta = gguf_generar_respuesta(sesion, "¿Cómo calculo el factorial en LÚMEN?");
+imprimir(respuesta);
+```
+
+---
+
+# CAPÍTULO 20: Nexus Cloud Mesh & Microservicios RPC sobre HTTP/3 (`stdlib/nexus.nv`)
+
+Construye mallas de microservicios distribuidos con comunicación RPC binaria tipada y protocolos QUIC / UDP:
+
+```lumen
+importar "nexus.nv";
+
+// Iniciar nodo de la malla cloud
+nexus_NexusNodoMesh nodo = nexus_iniciar_malla("nodo_us_east", "10.0.1.5", 9000, "HTTP3_QUIC");
+nodo = nexus_registrar_servicio_mesh(nodo, "ServicioUsuariosRPC");
+
+// Llamada a procedimiento remoto (Zero-Copy)
+texto respuesta = nexus_invocar_rpc_mesh(nodo, "ServicioUsuariosRPC", "obtener_perfil", "{\"id\": 1}");
+imprimir(respuesta);
+```
+
+---
+
+# CAPÍTULO 21: GUI Nativa de Escritorio Direct2D / Win32 (`stdlib/ui_reactiva.nv`)
+
+Crea aplicaciones de escritorio con aceleración gráfica por hardware a 144 FPS y un consumo de memoria inferior a 1.5 MB de RAM (sin la sobrecarga de Electron):
+
+```lumen
+importar "ui_reactiva.nv";
+
+// 1. Hook de estado reactivo
+ui_reactiva_EstadoReactivo contador = ui_reactiva_ui_estado_crear("0");
+
+// 2. Ventana acelerada por Direct2D
+ui_reactiva_VentanaNativaDirect2D win = ui_reactiva_ui_crear_ventana_direct2d("LÚMEN Studio Desktop", 1024, 768);
+win = ui_reactiva_ui_agregar_componente_direct2d(win, ui_reactiva_ui_texto("Panel de Control"));
+win = ui_reactiva_ui_agregar_componente_direct2d(win, ui_reactiva_ui_boton("Sumar (+1)", "btn_sumar"));
+
+// 3. Reconciliación Virtual DOM
+contador = ui_reactiva_ui_estado_actualizar(contador, "1");
+imprimir("Valor del contador: ", contador.valor);
+```
+
+---
+
+# CAPÍTULO 22: Audio Espacial 3D y Procesamiento Digital de Señales (`stdlib/audio_dsp.nv`)
+
+Genera ondas en tiempo real, aplica filtros digitales y posiciona sonidos en el espacio tridimensional binaural:
+
+```lumen
+importar "audio_dsp.nv";
+
+audio_dsp_BufferAudioMono onda = audio_dsp_oscilador_seno(440.0, 1.0, 44100);
+audio_dsp_BufferAudioMono filtrado = audio_dsp_filtro_lowpass(onda, 0.25);
+audio_dsp_BufferAudioEstereo 3d = audio_dsp_posicionar_3d(filtrado, 0.0, 0.0, 0.0, 8.0, 0.0, 6.0);
+
+imprimir("Atenuación calculada: ", 3d.volumen_atenuado);
+imprimir("Paneo estéreo (L/R) : ", 3d.balance_paneo);
+```
+
+---
+
+*LÚMEN v2.4.6 — © 2026 LÚMEN Core Team & Comunidad.*

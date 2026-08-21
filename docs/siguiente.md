@@ -1,6 +1,6 @@
 # Siguientes Pasos — Roadmap LÚMEN v2.4 → v3.0
 
-**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 117/117 compilan · 112 CORRECTOS** (8 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos/concurrencia/stream/async byte-idénticos** (8 Ago 2026, batería 39/40). **Bootstrapping doble (compilador + VM) CONFIRMADO con fixpoint SHA-256 `3DA624D6...` (150,684 B)**. **Release v2.4.2 ✅ (14 Ago):** tag CI-autogenerado tras AOT optimizado (Cranelift 20x/C 18x), Fases 61-63 self-hosted (OR/if-let/rangos), Playground Ronda L1 + F1.2/F2.3/F4.2 completadas.
+**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 389/389 compilan · 112 CORRECTOS** (8 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos/concurrencia/stream/async byte-idénticos** (8 Ago 2026, batería 39/40). **Bootstrapping doble (compilador + VM) CONFIRMADO con fixpoint SHA-256 `3DA624D6...` (150,684 B)**. **Release v2.4.6 ✅ (14 Ago):** tag CI-autogenerado tras AOT optimizado (Cranelift 20x/C 18x), Fases 61-63 self-hosted (OR/if-let/rangos), Playground Ronda L1 + F1.2/F2.3/F4.2 completadas.
 
 ---
 
@@ -16,7 +16,7 @@
 
 | Área | Complejidad | Impacto | Razón |
 |------|-------------|---------|-------|
-| **Bootstrapping doble + release v2.4.2** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv compilada por el compilador LÚMEN + fixpoint certificado + tag/release v2.4.2 (CI autotag). |
+| **Bootstrapping doble + release v2.4.6** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv compilada por el compilador LÚMEN + fixpoint certificado + tag/release v2.4.6 (CI autotag). |
 | **Fixes y pulido** | 🟢 Baja | 🔥 Alto | Estabilidad general, edge cases |
 
 ## 🔵 Prioridad Baja — Muy Complejo + Nicho
@@ -58,7 +58,7 @@
 - **6.3 Runtime** ✅ — arrays anidados, ArraySet `arr[i] = x`, TryUnwrap top-level con `__tipo_de(fin)`, floats con `.`, lexer CRLF/UTF-8 seguro (`__str_subcadena_chars` nativo)
 - **FIXPOINT v4 CONFIRMADO** ✅ — self/self2 byte-IDENTICAL (SHA-256 90048DC9… → 3DA624D6…), 5s
 - **Sprint 7 — VM en LÚMEN** ✅ — `vm.nv` (dispatch 0-46, corutinas reales, handlers JSON/tarea/coro/crypto/fs/env/tiempo/hilo/mutex/calendario), demo 120s → 0.9s, batería 39/40
-- **Sprint 8 — Dogfooding** ✅ — stdlib completo compila; **fuego.ps1: 117/117 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos**; benchmarks: compile x5.4, run x231 (mediana x2-6)
+- **Sprint 8 — Dogfooding** ✅ — stdlib completo compila; **fuego.ps1: 389/389 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos**; benchmarks: compile x5.4, run x231 (mediana x2-6)
 - **Paridad VM LÚMEN-Rust (8 Ago 2026)** ✅ — `__map_obtener` con boxeo por tipo real + lookup dual (keys boxed guest vs strings JSON host); handlers `__existe_archivo`/`__leer_archivo`/`__escribir_archivo` → **test_json_avanzado, test_sistema_directo, test_sistema_avanzado byte-IDÉNTICOS** · batería 39/40 (solo `stress_fecha` flaky timing) · `vm_self.nvc` regenerado (111,318 B) · **Stream/Async/Par/Actor/Generator 100% delegados** · `sprint1_concurrencia` 100% paridad
 - **Bootstrapping doble CONFIRMADO** ✅ — SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` (150,684 B byte-idénticos en self/self2)
 - **Fases 61-63 reales en el pipeline Rust (12 Ago)** ✅ — OR patterns (`|` en arms ya no es `BitOr`), **rangos `..`/`..=` end-to-end** (lexer tokens + `Expr::Range` + desugar IR + sema E044) como patrones de `elegir` y como expresión-lista; fix del self-loop de JmpIf en el match con `NotEqual; JmpIf(body)`; fix `tcp_listener` cfg para builds sin features; **3 ejemplos nuevos** (`examples/fase61_or_patterns.nv`, `fase63_range_patterns.nv`, `fase64_string_patterns.nv`) byte-idénticos en VM y backend C; lexer 27 / parser 45 / sema 56 tests · cargo test 0 FAILED
