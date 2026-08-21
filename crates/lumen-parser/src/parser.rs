@@ -3703,15 +3703,21 @@ impl Parser {
 
     fn expect_ident(&mut self) -> Option<String> {
         let token = self.advance()?;
-        match token.kind {
-            TokenKind::Ident(s) => Some(s),
+        match &token.kind {
+            TokenKind::Ident(s) => Some(s.clone()),
             _ => {
-                self.error(
-                    "E011",
-                    "Se esperaba un nombre de variable",
-                    token.span,
-                    "Escribe un identificador",
-                );
+                let kw = token.kind.as_str();
+                let message = if !kw.is_empty() {
+                    format!("La palabra '{}' es una palabra reservada del lenguaje y no puede usarse como identificador", kw)
+                } else {
+                    "Se esperaba un nombre de variable".to_string()
+                };
+                let suggestion = if !kw.is_empty() {
+                    format!("Elige otro nombre para tu variable (p. ej. '{}_val', 'res', 'dato', 'valor')", kw)
+                } else {
+                    "Escribe un identificador".to_string()
+                };
+                self.error("E011", message, token.span, suggestion);
                 None
             }
         }

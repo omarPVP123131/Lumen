@@ -19,7 +19,6 @@ pub struct IRBuilder {
     default_params: HashMap<String, Vec<Option<Expr>>>,
     fn_names: HashSet<String>,
     impl_method_map: HashMap<String, String>,
-    capture_map: HashMap<String, String>,
     is_in_lambda: bool,
 }
 
@@ -42,7 +41,6 @@ impl IRBuilder {
             default_params: HashMap::new(),
             fn_names: HashSet::new(),
             impl_method_map: HashMap::new(),
-            capture_map: HashMap::new(),
             is_in_lambda: false,
         }
     }
@@ -186,12 +184,7 @@ impl IRBuilder {
             Decl::Variable { name, init, .. } => {
                 if let Some(init_expr) = init {
                     self.gen_expr(init_expr);
-                    let resolved = self
-                        .capture_map
-                        .get(name)
-                        .cloned()
-                        .unwrap_or_else(|| name.clone());
-                    self.emit(Instr::Store(resolved));
+                    self.emit(Instr::Store(name.clone()));
                 }
             }
             Decl::Destructure { targets, init, .. } => {
@@ -320,12 +313,7 @@ impl IRBuilder {
             }
             Decl::Const { name, value, .. } => {
                 self.gen_expr(value);
-                let resolved = self
-                    .capture_map
-                    .get(name)
-                    .cloned()
-                    .unwrap_or_else(|| name.clone());
-                self.emit(Instr::Store(resolved));
+                self.emit(Instr::Store(name.clone()));
             }
         }
     }
@@ -334,12 +322,7 @@ impl IRBuilder {
         match stmt {
             Stmt::Assignment { name, value, .. } => {
                 self.gen_expr(value);
-                let resolved = self
-                    .capture_map
-                    .get(name)
-                    .cloned()
-                    .unwrap_or_else(|| name.clone());
-                self.emit(Instr::Store(resolved));
+                self.emit(Instr::Store(name.clone()));
             }
             Stmt::If {
                 condition,
@@ -752,12 +735,7 @@ impl IRBuilder {
                 self.emit(Instr::ConstBool(*value));
             }
             Expr::Ident { name, .. } => {
-                let resolved = self
-                    .capture_map
-                    .get(name)
-                    .cloned()
-                    .unwrap_or_else(|| name.clone());
-                self.emit(Instr::Load(resolved));
+                self.emit(Instr::Load(name.clone()));
             }
             Expr::Binary {
                 op,
@@ -855,6 +833,22 @@ impl IRBuilder {
                                     | "read"
                                     | "a_texto"
                                     | "to_texto"
+                                    | "abs"
+                                    | "absoluto"
+                                    | "min"
+                                    | "minimo"
+                                    | "max"
+                                    | "maximo"
+                                    | "raiz"
+                                    | "sqrt"
+                                    | "potencia"
+                                    | "pow"
+                                    | "piso"
+                                    | "floor"
+                                    | "techo"
+                                    | "ceil"
+                                    | "redondear"
+                                    | "round"
                                     | "__str_from"
                                     | "largo"
                                     | "len"
@@ -1535,18 +1529,6 @@ impl IRBuilder {
         self.lambda_counter += 1;
 
         let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
-        let mut captured = Vec::new();
-        self.collect_variable_refs(body, &param_names, &mut captured);
-        // Only create capture slots when NOT already inside a lambda (nested lambdas
-        // capture via parent's params which are already in the parent's scope)
-        if !self.is_in_lambda {
-            for var_name in &captured {
-                if !param_names.contains(var_name) && !self.capture_map.contains_key(var_name) {
-                    let cap_name = format!("__cap_{}_{}", self.lambda_counter, var_name);
-                    self.capture_map.insert(var_name.clone(), cap_name);
-                }
-            }
-        }
 
         let func = Func {
             name: lambda_name.clone(),
@@ -1582,179 +1564,8 @@ impl IRBuilder {
         self.temp_counter = saved_temp;
         self.label_counter = saved_label;
         self.loop_labels = saved_loop;
-        // Keep capture_map — don't restore, so outer scope shares captured vars
         self.is_in_lambda = saved_is_lambda;
         lambda_name
-    }
-
-    fn collect_variable_refs(&self, body: &[DeclOrStmt], params: &[String], out: &mut Vec<String>) {
-        for node in body {
-            match node {
-                DeclOrStmt::Stmt(stmt) => self.collect_stmt_refs(stmt, params, out),
-                DeclOrStmt::Decl(decl) => self.collect_decl_refs(decl, params, out),
-            }
-        }
-    }
-
-    fn collect_stmt_refs(&self, stmt: &Stmt, params: &[String], out: &mut Vec<String>) {
-        match stmt {
-            Stmt::Expr { expr, .. } => self.collect_expr_refs(expr, params, out),
-            Stmt::Assignment { name, value, .. } => {
-                if !params.contains(name) && !out.contains(name) {
-                    out.push(name.clone());
-                }
-                self.collect_expr_refs(value, params, out);
-            }
-            Stmt::If {
-                condition,
-                then_body,
-                else_body,
-                ..
-            } => {
-                self.collect_expr_refs(condition, params, out);
-                self.collect_variable_refs(then_body, params, out);
-                if let Some(eb) = else_body {
-                    self.collect_variable_refs(eb, params, out);
-                }
-            }
-            Stmt::While {
-                condition, body, ..
-            } => {
-                self.collect_expr_refs(condition, params, out);
-                self.collect_variable_refs(body, params, out);
-            }
-            Stmt::ForEach { expr, body, .. } => {
-                self.collect_expr_refs(expr, params, out);
-                self.collect_variable_refs(body, params, out);
-            }
-            Stmt::Return { value: Some(v), .. } => self.collect_expr_refs(v, params, out),
-            Stmt::Return { value: None, .. } => {}
-            Stmt::FieldAssign { expr, value, .. } => {
-                self.collect_expr_refs(expr, params, out);
-                self.collect_expr_refs(value, params, out);
-            }
-            Stmt::Match { expr, arms, .. } => {
-                self.collect_expr_refs(expr, params, out);
-                for arm in arms {
-                    self.collect_variable_refs(&arm.body, params, out);
-                }
-            }
-            Stmt::Block { stmts, .. } => self.collect_variable_refs(stmts, params, out),
-            Stmt::Posponer { body, .. } => self.collect_variable_refs(body, params, out),
-            Stmt::TryCatch {
-                try_body,
-                catch_body,
-                ..
-            } => {
-                self.collect_variable_refs(try_body, params, out);
-                self.collect_variable_refs(catch_body, params, out);
-            }
-            _ => {}
-        }
-    }
-
-    fn collect_decl_refs(&self, decl: &Decl, params: &[String], out: &mut Vec<String>) {
-        match decl {
-            Decl::Variable { init: Some(v), .. } => self.collect_expr_refs(v, params, out),
-            Decl::Variable { init: None, .. } => {}
-            Decl::Destructure { init, .. } => {
-                self.collect_expr_refs(init, params, out);
-            }
-            _ => {}
-        }
-    }
-
-    fn collect_expr_refs(&self, expr: &Expr, params: &[String], out: &mut Vec<String>) {
-        match expr {
-            Expr::Ident { name, .. } => {
-                if !params.contains(name) && !out.contains(name) {
-                    out.push(name.clone());
-                }
-            }
-            Expr::Binary { left, right, .. } => {
-                self.collect_expr_refs(left, params, out);
-                self.collect_expr_refs(right, params, out);
-            }
-            Expr::Unary { operand, .. } => self.collect_expr_refs(operand, params, out),
-            Expr::Call { callee, args, .. } => {
-                self.collect_expr_refs(callee, params, out);
-                for a in args {
-                    self.collect_expr_refs(a, params, out);
-                }
-            }
-            Expr::Index { expr, index, .. } => {
-                self.collect_expr_refs(expr, params, out);
-                self.collect_expr_refs(index, params, out);
-            }
-            Expr::MethodCall { expr, args, .. } => {
-                self.collect_expr_refs(expr, params, out);
-                for a in args {
-                    self.collect_expr_refs(a, params, out);
-                }
-            }
-            Expr::Ternary {
-                condition,
-                true_branch,
-                false_branch,
-                ..
-            } => {
-                self.collect_expr_refs(condition, params, out);
-                self.collect_expr_refs(true_branch, params, out);
-                self.collect_expr_refs(false_branch, params, out);
-            }
-            Expr::List { items, .. } => {
-                for i in items {
-                    self.collect_expr_refs(i, params, out);
-                }
-            }
-            Expr::Grouping { expr, .. } => self.collect_expr_refs(expr, params, out),
-            Expr::Cast { expr, .. } => self.collect_expr_refs(expr, params, out),
-            Expr::StructInit { fields, .. } => {
-                for (_, v) in fields {
-                    self.collect_expr_refs(v, params, out);
-                }
-            }
-            Expr::FieldAccess { expr, .. } => self.collect_expr_refs(expr, params, out),
-            Expr::SafeFieldAccess { expr, .. } => self.collect_expr_refs(expr, params, out),
-            Expr::Elvis { expr, default, .. } => {
-                self.collect_expr_refs(expr, params, out);
-                self.collect_expr_refs(default, params, out);
-            }
-            Expr::Comprehension {
-                expr,
-                iter,
-                condition,
-                ..
-            } => {
-                self.collect_expr_refs(expr, params, out);
-                self.collect_expr_refs(iter, params, out);
-                if let Some(cond) = condition {
-                    self.collect_expr_refs(cond, params, out);
-                }
-            }
-            Expr::Query {
-                source,
-                where_clause,
-                order_by,
-                select_expr,
-                ..
-            } => {
-                self.collect_expr_refs(source, params, out);
-                if let Some(w) = where_clause {
-                    self.collect_expr_refs(w, params, out);
-                }
-                if let Some(o) = order_by {
-                    self.collect_expr_refs(o, params, out);
-                }
-                self.collect_expr_refs(select_expr, params, out);
-            }
-            Expr::Tuple { items, .. } => {
-                for i in items {
-                    self.collect_expr_refs(i, params, out);
-                }
-            }
-            _ => {}
-        }
     }
 
     fn emit(&mut self, instr: Instr) {

@@ -104,6 +104,7 @@ pub struct SemanticAnalyzer {
     traits: HashMap<String, TraitSig>,
     impls: HashMap<ImplKey, Vec<usize>>,
     impl_methods: Vec<(String, FuncSig)>,
+    seen_impls: std::collections::HashSet<ImplKey>,
     type_param_bounds: HashMap<String, Vec<(String, String)>>,
     errors: Vec<SemError>,
     loop_depth: usize,
@@ -125,6 +126,7 @@ impl SemanticAnalyzer {
             traits: HashMap::new(),
             impls: HashMap::new(),
             impl_methods: Vec::new(),
+            seen_impls: std::collections::HashSet::new(),
             type_param_bounds: HashMap::new(),
             errors: Vec::new(),
             loop_depth: 0,
@@ -132,9 +134,9 @@ impl SemanticAnalyzer {
     }
 
     pub fn analyze(mut self, program: &mut Program) -> Vec<SemError> {
+        self.collect_enums(program);
         self.collect_traits(program);
         self.collect_structs(program);
-        self.collect_enums(program);
         self.collect_impls(program);
         self.collect_functions(program);
         self.analyze_program(program);
@@ -999,7 +1001,7 @@ impl SemanticAnalyzer {
                 methods,
                 span,
             } => {
-                let _type_name = match type_to_impl_name(target_type) {
+                let type_name = match type_to_impl_name(target_type) {
                     Some(n) => n,
                     None => {
                         self.errors.push(SemError {
@@ -1015,6 +1017,25 @@ impl SemanticAnalyzer {
                         return TypeInfo::Void;
                     }
                 };
+                if !trait_name.is_empty() {
+                    let key = (type_name.clone(), trait_name.clone());
+                    if self.seen_impls.contains(&key) {
+                        self.errors.push(SemError {
+                            code: "E085".to_string(),
+                            message: format!(
+                                "Implementación duplicada: el rasgo '{}' ya está implementado para el tipo '{}'",
+                                trait_name, type_name
+                            ),
+                            span: *span,
+                            suggestion: format!(
+                                "Elimina la implementación redundante de '{}' para '{}'",
+                                trait_name, type_name
+                            ),
+                        });
+                        return TypeInfo::Void;
+                    }
+                    self.seen_impls.insert(key);
+                }
                 if trait_name.is_empty() {
                     for method in methods {
                         let mut m = method.clone();
@@ -1987,6 +2008,83 @@ impl SemanticAnalyzer {
                                     || callee == "read"
                                 {
                                     TypeInfo::Void
+                                } else if callee == "abs" || callee == "absoluto" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento numérico, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 número (entero o decimal)"
+                                                .to_string(),
+                                        });
+                                    }
+                                    match arg_types.first() {
+                                        Some(TypeInfo::Entero) => TypeInfo::Entero,
+                                        Some(TypeInfo::Decimal) => TypeInfo::Decimal,
+                                        _ => TypeInfo::Numero,
+                                    }
+                                } else if callee == "min"
+                                    || callee == "minimo"
+                                    || callee == "max"
+                                    || callee == "maximo"
+                                    || callee == "potencia"
+                                    || callee == "pow"
+                                {
+                                    if args.len() != 2 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 2 argumentos numéricos, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 2 números".to_string(),
+                                        });
+                                    }
+                                    if arg_types.iter().all(|t| *t == TypeInfo::Entero) {
+                                        TypeInfo::Entero
+                                    } else {
+                                        TypeInfo::Decimal
+                                    }
+                                } else if callee == "raiz" || callee == "sqrt" {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento numérico, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 número".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Decimal
+                                } else if callee == "piso"
+                                    || callee == "floor"
+                                    || callee == "techo"
+                                    || callee == "ceil"
+                                    || callee == "redondear"
+                                    || callee == "round"
+                                {
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento numérico, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa 1 número".to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Entero
                                 } else if callee == "a_texto"
                                     || callee == "to_texto"
                                     || callee == "__str_from"
@@ -2846,6 +2944,9 @@ impl SemanticAnalyzer {
                                                 }
                                             }
                                             *return_type
+                                        }
+                                        Some(TypeInfo::TypeVar(_)) | Some(TypeInfo::Numero) => {
+                                            TypeInfo::Numero
                                         }
                                         Some(other) => {
                                             self.errors.push(SemError {
@@ -3750,6 +3851,7 @@ impl SemanticAnalyzer {
     fn resolve_type(&self, t: Type, type_params: &[String]) -> TypeInfo {
         match t {
             Type::Struct(ref name) if type_params.contains(name) => TypeInfo::TypeVar(name.clone()),
+            Type::Struct(ref name) if self.enums.contains_key(name) => TypeInfo::Enum(name.clone()),
             Type::GenericStruct { name, args } => {
                 // Resolve type args too
                 let resolved_args: Vec<TypeInfo> = args

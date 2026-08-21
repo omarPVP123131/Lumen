@@ -309,23 +309,20 @@ impl Formatter {
                     self.push_indent();
                 }
                 self.push("si ");
-                self.push("(");
-                self.fmt_expr(condition);
-                self.push(") ");
-                self.fmt_block(then_body);
+                let mut cond = condition.as_ref();
+                while let Expr::Grouping { expr, .. } = cond {
+                    cond = expr.as_ref();
+                }
+                self.fmt_expr(cond);
+                self.push(" ");
+                let has_else = else_body.as_ref().map(|eb| !eb.is_empty()).unwrap_or(false);
+                self.fmt_block_inline(then_body, !has_else);
                 if let Some(ref eb) = else_body {
                     if !eb.is_empty() {
                         self.push(" sino ");
                         if eb.len() == 1 {
-                            if let DeclOrStmt::Stmt(Stmt::If { .. }) = &eb[0] {
-                                self.fmt_stmt(
-                                    if let DeclOrStmt::Stmt(s) = &eb[0] {
-                                        s
-                                    } else {
-                                        return;
-                                    },
-                                    false,
-                                );
+                            if let DeclOrStmt::Stmt(s @ Stmt::If { .. }) = &eb[0] {
+                                self.fmt_stmt(s, false);
                             } else {
                                 self.fmt_block(eb);
                             }
@@ -342,9 +339,12 @@ impl Formatter {
                     self.push_indent();
                 }
                 self.push("mientras ");
-                self.push("(");
-                self.fmt_expr(condition);
-                self.push(") ");
+                let mut cond = condition.as_ref();
+                while let Expr::Grouping { expr, .. } = cond {
+                    cond = expr.as_ref();
+                }
+                self.fmt_expr(cond);
+                self.push(" ");
                 self.fmt_block(body);
             }
             Stmt::ForEach {
@@ -505,6 +505,10 @@ impl Formatter {
     }
 
     fn fmt_block(&mut self, body: &[DeclOrStmt]) {
+        self.fmt_block_inline(body, true);
+    }
+
+    fn fmt_block_inline(&mut self, body: &[DeclOrStmt], trailing_newline: bool) {
         self.push("{");
         self.newline();
         self.indent_inc();
@@ -514,7 +518,9 @@ impl Formatter {
         self.indent_dec();
         self.push_indent();
         self.push("}");
-        self.newline();
+        if trailing_newline {
+            self.newline();
+        }
     }
 
     fn fmt_params(&mut self, params: &[Param]) {

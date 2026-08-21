@@ -425,6 +425,8 @@ fn ffi_call_typed(
     }
 }
 
+pub const MAX_CALL_STACK_DEPTH: usize = 10_000;
+
 #[derive(Debug, Clone)]
 pub struct CallFrame {
     pub func_name: String,
@@ -646,16 +648,120 @@ impl VM {
     fn call_core_builtin(&mut self, name: &str, args: &[Value]) -> Option<Result<(), VmError>> {
         let args = args.to_vec();
         if name == "imprimir" || name == "print" {
+            let mut combined = String::new();
             for arg in args {
-                let s = format!("{}", arg);
-                self.output.push(s);
+                combined.push_str(&format!("{}", arg));
             }
+            self.output.push(combined);
             self.push(Value::Void);
             return Some(Ok(()));
         }
 
         if name == "leer" || name == "read" {
             self.push(Value::str(String::new()));
+            return Some(Ok(()));
+        }
+
+        if name == "abs" || name == "absoluto" {
+            match args.first() {
+                Some(Value::Int(i)) => self.push(Value::Int(i.abs())),
+                Some(Value::Float(f)) => self.push(Value::Float(f.abs())),
+                Some(other) => {
+                    if let Some(n) = other.as_num() {
+                        self.push(Value::Float(n.abs()));
+                    } else {
+                        return builtin_err(VmError::TypeError(format!(
+                            "'abs' espera un número, no {:?}",
+                            other
+                        )));
+                    }
+                }
+                None => {
+                    return builtin_err(VmError::TypeError("'abs' espera 1 argumento".to_string()))
+                }
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "min" || name == "minimo" {
+            let a = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            let b = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0);
+            if args
+                .first()
+                .map(|v| matches!(v, Value::Int(_)))
+                .unwrap_or(false)
+                && args
+                    .get(1)
+                    .map(|v| matches!(v, Value::Int(_)))
+                    .unwrap_or(false)
+            {
+                self.push(Value::Int((a as i64).min(b as i64)));
+            } else {
+                self.push(Value::Float(a.min(b)));
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "max" || name == "maximo" {
+            let a = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            let b = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0);
+            if args
+                .first()
+                .map(|v| matches!(v, Value::Int(_)))
+                .unwrap_or(false)
+                && args
+                    .get(1)
+                    .map(|v| matches!(v, Value::Int(_)))
+                    .unwrap_or(false)
+            {
+                self.push(Value::Int((a as i64).max(b as i64)));
+            } else {
+                self.push(Value::Float(a.max(b)));
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "raiz" || name == "sqrt" {
+            let a = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            self.push(Value::Float(a.sqrt()));
+            return Some(Ok(()));
+        }
+
+        if name == "potencia" || name == "pow" {
+            let a = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            let b = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0);
+            if args
+                .first()
+                .map(|v| matches!(v, Value::Int(_)))
+                .unwrap_or(false)
+                && args
+                    .get(1)
+                    .map(|v| matches!(v, Value::Int(_)))
+                    .unwrap_or(false)
+                && b >= 0.0
+            {
+                self.push(Value::Int((a as i64).pow(b as u32)));
+            } else {
+                self.push(Value::Float(a.powf(b)));
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "piso" || name == "floor" {
+            let a = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            self.push(Value::Int(a.floor() as i64));
+            return Some(Ok(()));
+        }
+
+        if name == "techo" || name == "ceil" {
+            let a = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            self.push(Value::Int(a.ceil() as i64));
+            return Some(Ok(()));
+        }
+
+        if name == "redondear" || name == "round" {
+            let a = args.first().and_then(|v| v.as_num()).unwrap_or(0.0);
+            self.push(Value::Int(a.round() as i64));
             return Some(Ok(()));
         }
 
@@ -3295,6 +3401,12 @@ impl VM {
                     scope.insert(param_name.clone(), arg.clone());
                 }
             }
+            if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
+                return Err(VmError::Runtime(format!(
+                    "Desbordamiento de pila (Stack overflow): límite de recursión excedido (>{} llamadas)",
+                    MAX_CALL_STACK_DEPTH
+                )));
+            }
             self.locals.push(scope);
             self.call_stack.push(CallFrame {
                 func_name: name.to_string(),
@@ -4103,13 +4215,15 @@ impl VM {
                 let n = self.locals.len();
                 if n > 0 {
                     let cur = n - 1;
-                    if let Some(entry) = self.locals[cur].get_mut(name) {
-                        *entry = val;
-                    } else if n >= 2 && self.locals[0].contains_key(name) {
-                        if let Some(entry) = self.locals[0].get_mut(name) {
-                            *entry = val;
+                    let mut found = false;
+                    for scope in self.locals.iter_mut().rev() {
+                        if let Some(entry) = scope.get_mut(name) {
+                            *entry = val.clone();
+                            found = true;
+                            break;
                         }
-                    } else {
+                    }
+                    if !found {
                         self.locals[cur].insert(name.to_string(), val);
                     }
                 }
@@ -4148,6 +4262,12 @@ impl VM {
                     return result;
                 }
                 if let Some(&func_idx) = self.func_index_cache.get(&name) {
+                    if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
+                        return Err(VmError::Runtime(format!(
+                            "Desbordamiento de pila (Stack overflow): límite de recursión excedido (>{} llamadas)",
+                            MAX_CALL_STACK_DEPTH
+                        )));
+                    }
                     let func_start = self.bytecode.funcs[func_idx].start;
                     let param_count = self.bytecode.funcs[func_idx].params.len();
                     self.call_stack.push(CallFrame {
@@ -4192,10 +4312,11 @@ impl VM {
                     }
                 };
                 if name == "imprimir" || name == "print" {
+                    let mut combined = String::new();
                     for arg in args {
-                        let s = format!("{}", arg);
-                        self.output.push(s);
+                        combined.push_str(&format!("{}", arg));
                     }
+                    self.output.push(combined);
                     self.push(Value::Void);
                 } else if name == "leer" || name == "read" {
                     self.push(Value::str(String::new()));
@@ -4823,6 +4944,12 @@ impl VM {
                     let json = lumen_value_to_json(&val);
                     self.push(Value::str(serde_json::to_string(&json).unwrap_or_default()));
                 } else if let Some(&func_idx) = self.func_index_cache.get(&name) {
+                    if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
+                        return Err(VmError::Runtime(format!(
+                            "Desbordamiento de pila (Stack overflow): límite de recursión excedido (>{} llamadas)",
+                            MAX_CALL_STACK_DEPTH
+                        )));
+                    }
                     let func_start = self.bytecode.funcs[func_idx].start;
                     let param_count = self.bytecode.funcs[func_idx].params.len();
                     self.call_stack.push(CallFrame {
