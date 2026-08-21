@@ -1,0 +1,6 @@
+funcion entero externa() {
+  entero local = 7;
+  g = funcion() { retornar local; };
+  retornar g();
+}
+imprimir(externa());

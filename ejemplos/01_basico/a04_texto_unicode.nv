@@ -1,0 +1,3 @@
+texto s = "áéíóú ñ";
+imprimir(s);
+imprimir(largo(s));

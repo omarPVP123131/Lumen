@@ -308,6 +308,20 @@ fn ffi_call_typed(
         .collect();
     let n = shape.len();
     let r = parse_ffi_ret(ret);
+    // BUG-078: `n` sale de la cadena de tipos, pero los valores se leen de
+    // `args`. Si el llamante declara más tipos que argumentos pasa (por ejemplo
+    // porque omitió la cadena de tipos y todo se desplazó), las macros indexan
+    // `v[0]` sobre un vector vacío y la VM PANICA con "index out of bounds".
+    // Un error del programa del usuario nunca debe tumbar el intérprete.
+    if n > args.len() {
+        return Err(format!(
+            "FFI '{}': se declararon {} tipo(s) de parámetro pero se pasaron {} argumento(s). \
+             La firma es __ffi_llamar(lib, nombre, \"tipos\", [args], \"retorno\")",
+            name,
+            n,
+            args.len()
+        ));
+    }
     if shape == "E".repeat(n) {
         ffi_int_arms!(
             args,
@@ -425,10 +439,67 @@ fn ffi_call_typed(
     }
 }
 
+/// BUG-049: límite de profundidad de la pila de llamadas.
+///
+/// La VM no tenía ninguno: una recursión infinita
+/// (`funcion entero f(entero n) { retornar f(n + 1); }`) hacía crecer
+/// `call_stack` y `locals` sin freno hasta que el sistema operativo mataba el
+/// proceso por consumo de memoria. Para un lenguaje que se quiere usar en
+/// producción eso es inaceptable: un error del programa del usuario debe dar
+/// un error del programa del usuario, no tumbar el proceso entero.
+///
+/// El valor es lo bastante alto para no estorbar a la recursión legítima
+/// (`baja(100000)` sigue funcionando, y los tests cubren 1000 niveles) y lo
+/// bastante bajo para cortar antes de agotar la memoria.
+pub const MAX_CALL_DEPTH: usize = 250_000;
+
+/// BUG-054: registro de las asignaciones hechas con `__ffi_asignar`.
+///
+/// Los builtins de FFI crudo escribían y liberaban usando el tamaño que les
+/// pasara el programa, sin comprobar nada. `stdlib/tui_core.nv` reservaba
+/// `s.largo()` bytes —que son CARACTERES— y luego copiaba la cadena en UTF-8,
+/// donde `╭` ocupa 3 bytes: el buffer se desbordaba y el heap acababa
+/// corrompido (`realloc(): invalid next size`, `rc=134`). Guardar el tamaño
+/// real permite validar cada escritura y cada liberación.
+static FFI_ALLOCS: OnceLock<std::sync::Mutex<HashMap<usize, (usize, usize)>>> = OnceLock::new();
+
+fn ffi_allocs() -> &'static std::sync::Mutex<HashMap<usize, (usize, usize)>> {
+    FFI_ALLOCS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
 #[derive(Debug, Clone)]
 pub struct CallFrame {
     pub func_name: String,
     pub return_ip: usize,
+    /// BUG-027: profundidad de la pila de operandos al entrar en la función.
+    /// Una sentencia-expresión (`imprimir(x);`) evalúa y deja su resultado
+    /// ahí, sin que nadie lo consuma. Al retornar recortamos la pila a esta
+    /// marca para descartar esa basura, o se mezclaría con los operandos que
+    /// el llamador tenía a medio montar.
+    pub stack_base: usize,
+    /// BUG-008: nombres de los parámetros del marco, en orden. Permite que
+    /// `__frame_param(i)` recupere el valor final de un parámetro
+    /// `prestado mut` justo después de que la función retorne.
+    pub param_names: Vec<String>,
+    /// BUG-052: celdas compartidas de la closure en ejecución. Al retornar se
+    /// vuelca el valor final de cada captura, para que la mutación persista
+    /// entre llamadas.
+    pub closure_cells: Vec<(String, Arc<std::sync::Mutex<Value>>)>,
+}
+
+/// BUG-022: un manejador `atrapar` instalado y todavía vigente.
+#[derive(Debug, Clone)]
+struct Handler {
+    /// Instrucción del bloque `atrapar`.
+    target: usize,
+    /// Altura de la pila de operandos al instalarlo.
+    stack_len: usize,
+    /// Número de marcos de llamada vivos al instalarlo.
+    call_depth: usize,
+    /// Profundidad de `locals` al instalarlo.
+    locals_depth: usize,
+    /// Manejadores anidados que se descartan al saltar aquí.
+    handlers_len: usize,
 }
 
 #[derive(Debug)]
@@ -439,6 +510,28 @@ pub enum VmError {
     UndefinedFunction(String),
     DivisionByZero,
     TypeError(String),
+}
+
+/// BUG-088: el orden de `__map_claves` difería entre la VM (orden de hash) y el
+/// binario nativo (orden de inserción), así que el mismo programa imprimía las
+/// claves en distinto orden según el backend. Ninguno de los dos órdenes era
+/// significativo; ambos ordenan ahora igual: números por valor y el resto por
+/// su representación textual.
+fn ordenar_claves_mapa(mut claves: Vec<Value>) -> Vec<Value> {
+    fn num(v: &Value) -> Option<f64> {
+        match v {
+            Value::Int(n) => Some(*n as f64),
+            Value::Float(n) => Some(*n),
+            _ => None,
+        }
+    }
+    claves.sort_by(|a, b| match (num(a), num(b)) {
+        (Some(x), Some(y)) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.to_string().cmp(&b.to_string()),
+    });
+    claves
 }
 
 impl std::fmt::Display for VmError {
@@ -498,7 +591,36 @@ pub struct VM {
     ip: usize,
     bytecode: Bytecode,
     output: Vec<String>,
+    /// BUG-138: cuando está activo, `imprimir` escribe además en stdout al
+    /// instante. El buffer `output` se mantiene (lo necesitan los tests y el
+    /// `step_back` del depurador time-travel, que lo trunca), pero deja de ser
+    /// el ÚNICO camino de la salida: un programa que no termina —un servidor,
+    /// un bucle de eventos, un TUI, o simplemente un cuelgue— ya no se traga
+    /// todo lo que había impreso.
+    stream_stdout: bool,
     call_stack: Vec<CallFrame>,
+    /// BUG-008: locales + parámetros del último marco retornado, conservados
+    /// hasta la siguiente llamada para poder copiar de vuelta los
+    /// `prestado mut`.
+    last_frame: Option<(Vec<String>, HashMap<String, Value, FixHasher>)>,
+    /// BUG-052: celdas compartidas de las capturas mutables. La clave es
+    /// (profundidad del marco que declara la variable, nombre). Así todas las
+    /// closures creadas en la MISMA invocación comparten celda —y ven las
+    /// mutaciones de las otras—, mientras que otra invocación de la misma
+    /// factoría estrena celdas y queda aislada.
+    capture_cells: HashMap<(u64, String), Arc<std::sync::Mutex<Value>>>,
+    /// BUG-052: identificador único de cada invocación viva, paralelo a
+    /// `locals`. La profundidad NO sirve como clave: dos llamadas sucesivas a
+    /// la misma factoría ocupan la misma profundidad y compartirían celda
+    /// (`mk(5)` y `mk(100)` volvían a pisarse). Este id es monótono.
+    frame_ids: Vec<u64>,
+    next_frame_id: u64,
+    /// BUG-022: manejadores de `intentar/atrapar` activos. Cada entrada guarda
+    /// a dónde saltar y cuánto hay que desenrollar para llegar ahí en un estado
+    /// coherente: si el error se produjo tres llamadas más adentro, hay que
+    /// tirar esos marcos y recortar la pila de operandos a lo que había al
+    /// entrar en el `intentar`.
+    handlers: Vec<Handler>,
     func_index_cache: HashMap<String, usize>,
     pub debug: bool,
     pub breakpoints: Vec<usize>,
@@ -553,9 +675,122 @@ pub struct VM {
     task_counter: usize,
 }
 
+/// Builtins "suaves" añadidos por conveniencia (matemáticas y conversiones):
+/// si el programa define una función con ese nombre, gana la del usuario.
+/// Los builtins del núcleo (`imprimir`, `a_texto`, los `__*` internos) NO son
+/// sombreables para no romper la semántica del lenguaje.
+fn is_shadowable_builtin(name: &str) -> bool {
+    matches!(
+        name,
+        "abs"
+            | "absoluto"
+            | "minimo"
+            | "min"
+            | "maximo"
+            | "max"
+            | "raiz"
+            | "sqrt"
+            | "potencia"
+            | "pow"
+            | "piso"
+            | "floor"
+            | "techo"
+            | "ceil"
+            | "redondear"
+            | "round"
+            | "es_numero"
+            | "is_number"
+            | "a_entero"
+            | "to_int"
+            | "to_entero"
+            | "a_decimal"
+            | "to_float"
+            | "a_numero"
+            | "to_number"
+            | "a_entero_seguro"
+            | "to_int_safe"
+            | "a_decimal_seguro"
+            | "to_float_safe"
+            // BUG-018: `leer`/`read` son nombres muy naturales para una función
+            // del usuario. Como builtins devuelven "" (stdin) y ensombrecían en
+            // silencio la función definida en el programa.
+            | "leer"
+            | "read"
+    )
+}
+
 /// Helper to convert VmError into the builtin return type.
 fn builtin_err(err: VmError) -> Option<Result<(), VmError>> {
     Some(Err(err))
+}
+
+/// Convierte un `Value` a i64 siguiendo la semántica de `a_entero()`.
+/// Acepta texto con espacios, signo y (truncando) parte decimal — devuelve
+/// `None` cuando la entrada no es convertible, para que las variantes
+/// `_seguro` puedan reportar `error(...)`.
+fn parse_int_value(v: &Value) -> Option<i64> {
+    match v {
+        Value::Int(n) => Some(*n),
+        Value::Float(f) => {
+            if f.is_finite() {
+                Some(*f as i64)
+            } else {
+                None
+            }
+        }
+        Value::Bool(b) => Some(if *b { 1 } else { 0 }),
+        Value::Str(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                return None;
+            }
+            if let Ok(n) = t.parse::<i64>() {
+                return Some(n);
+            }
+            // Soporta "3.9" → 3 (truncado hacia cero, como en C/Rust `as i64`).
+            t.parse::<f64>()
+                .ok()
+                .filter(|f| f.is_finite())
+                .map(|f| f as i64)
+        }
+        _ => None,
+    }
+}
+
+/// Convierte un `Value` a f64 siguiendo la semántica de `a_decimal()`.
+fn parse_float_value(v: &Value) -> Option<f64> {
+    match v {
+        Value::Int(n) => Some(*n as f64),
+        Value::Float(f) => Some(*f),
+        Value::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
+        Value::Str(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                return None;
+            }
+            t.parse::<f64>().ok()
+        }
+        _ => None,
+    }
+}
+
+/// BUG-030: igualdad estructural para `==` / `!=`.
+///
+/// El intérprete traía un `match` propio que sólo cubría enteros, decimales,
+/// textos, booleanos, structs, enums y `opcion`: todo lo demás caía en
+/// `_ => false`, de modo que comparar dos listas con el mismo contenido —o
+/// incluso una lista consigo misma— daba `false`, y `!=` daba `true` por el
+/// `_ => true` simétrico. `Value` ya implementa `PartialEq` de forma completa
+/// y recursiva (listas, tuplas, mapas, `exito`/`error`...), así que delegamos
+/// en él y sólo conservamos aparte la comparación entero/decimal, que necesita
+/// tolerancia en coma flotante y no es parte de `PartialEq`.
+fn values_equal(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Int(x), Value::Float(y)) => (*x as f64 - y).abs() < f64::EPSILON,
+        (Value::Float(x), Value::Int(y)) => (x - *y as f64).abs() < f64::EPSILON,
+        (Value::Float(x), Value::Float(y)) => (x - y).abs() < f64::EPSILON,
+        _ => a == b,
+    }
 }
 
 impl VM {
@@ -588,8 +823,14 @@ impl VM {
             locals: vec![HashMap::with_hasher(FixHasher::default())],
             ip,
             bytecode,
+            handlers: Vec::new(),
             output: Vec::new(),
+            stream_stdout: false,
             call_stack: Vec::new(),
+            last_frame: None,
+            capture_cells: HashMap::new(),
+            frame_ids: vec![0],
+            next_frame_id: 1,
             func_index_cache,
             debug: false,
             breakpoints: Vec::new(),
@@ -646,10 +887,16 @@ impl VM {
     fn call_core_builtin(&mut self, name: &str, args: &[Value]) -> Option<Result<(), VmError>> {
         let args = args.to_vec();
         if name == "imprimir" || name == "print" {
-            for arg in args {
-                let s = format!("{}", arg);
-                self.output.push(s);
-            }
+            // BUG-009: `imprimir("a: ", x)` debe emitir UNA línea con los
+            // argumentos concatenados (que es como lo usan los ejemplos y la
+            // stdlib, p.ej. los mensajes de error de `testing.nv`), no una
+            // línea por argumento.
+            let line = args
+                .iter()
+                .map(|a| format!("{}", a))
+                .collect::<Vec<_>>()
+                .concat();
+            self.emitir_linea(line);
             self.push(Value::Void);
             return Some(Ok(()));
         }
@@ -665,6 +912,199 @@ impl VM {
             return Some(Ok(()));
         }
 
+        // ── Conversiones públicas texto → número (BUG-007 / BUG-002) ──
+        // `a_entero` / `a_decimal` / `a_numero` son la inversa de `a_texto` y
+        // siguen el patrón `a_<tipo>()`. Devuelven `resultado<T, texto>` sólo en
+        // la variante `_seguro`; la forma directa satura a 0 como el resto de
+        // builtins de la stdlib para mantener la ergonomía en scripts.
+        if name == "a_entero" || name == "to_int" || name == "to_entero" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            let n = parse_int_value(&v).unwrap_or_default();
+            self.push(Value::Int(n));
+            return Some(Ok(()));
+        }
+
+        if name == "a_decimal" || name == "to_float" || name == "a_numero" || name == "to_number" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            let f = parse_float_value(&v).unwrap_or(0.0);
+            self.push(Value::Float(f));
+            return Some(Ok(()));
+        }
+
+        // Variantes seguras: devuelven resultado<T, texto> para poder usar
+        // `intentar` / `elegir` en parsers que necesitan detectar entrada inválida.
+        if name == "a_entero_seguro" || name == "to_int_safe" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            match parse_int_value(&v) {
+                Some(n) => self.push(Value::Exito(Box::new(Value::Int(n)))),
+                None => self.push(Value::Error(Box::new(Value::str(format!(
+                    "no se puede convertir '{}' a entero",
+                    v
+                ))))),
+            }
+            return Some(Ok(()));
+        }
+
+        if name == "a_decimal_seguro" || name == "to_float_safe" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            match parse_float_value(&v) {
+                Some(f) => self.push(Value::Exito(Box::new(Value::Float(f)))),
+                None => self.push(Value::Error(Box::new(Value::str(format!(
+                    "no se puede convertir '{}' a decimal",
+                    v
+                ))))),
+            }
+            return Some(Ok(()));
+        }
+
+        // `es_numero(texto)` — permite validar antes de convertir sin excepciones.
+        if name == "es_numero" || name == "is_number" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            self.push(Value::Bool(parse_float_value(&v).is_some()));
+            return Some(Ok(()));
+        }
+
+        // ── Valor absoluto (BUG-001) ──
+        // Preserva el tipo: abs(entero) → entero, abs(decimal) → decimal.
+        if name == "abs" || name == "absoluto" {
+            match args.first() {
+                Some(Value::Int(n)) => self.push(Value::Int(n.wrapping_abs())),
+                Some(Value::Float(f)) => self.push(Value::Float(f.abs())),
+                Some(other) => {
+                    let f = parse_float_value(other).unwrap_or(0.0);
+                    self.push(Value::Float(f.abs()));
+                }
+                None => self.push(Value::Int(0)),
+            }
+            return Some(Ok(()));
+        }
+
+        // ── Utilidades numéricas frecuentes (mismo patrón, evitan redefinirlas
+        //    a mano en cada programa como pasaba con abs) ──
+        if name == "minimo" || name == "min" || name == "maximo" || name == "max" {
+            let a = args.first().cloned().unwrap_or(Value::Int(0));
+            let b = args.get(1).cloned().unwrap_or(Value::Int(0));
+            let want_max = name == "maximo" || name == "max";
+            let val = match (&a, &b) {
+                (Value::Int(x), Value::Int(y)) => {
+                    Value::Int(if (x > y) == want_max { *x } else { *y })
+                }
+                _ => {
+                    let x = parse_float_value(&a).unwrap_or(0.0);
+                    let y = parse_float_value(&b).unwrap_or(0.0);
+                    Value::Float(if (x > y) == want_max { x } else { y })
+                }
+            };
+            self.push(val);
+            return Some(Ok(()));
+        }
+
+        if name == "raiz" || name == "sqrt" {
+            let f = args.first().and_then(parse_float_value).unwrap_or(0.0);
+            self.push(Value::Float(f.sqrt()));
+            return Some(Ok(()));
+        }
+
+        if name == "potencia" || name == "pow" {
+            let b = args.first().and_then(parse_float_value).unwrap_or(0.0);
+            let e = args.get(1).and_then(parse_float_value).unwrap_or(0.0);
+            self.push(Value::Float(b.powf(e)));
+            return Some(Ok(()));
+        }
+
+        if name == "piso"
+            || name == "floor"
+            || name == "techo"
+            || name == "ceil"
+            || name == "redondear"
+            || name == "round"
+        {
+            let f = args.first().and_then(parse_float_value).unwrap_or(0.0);
+            let r = match name {
+                "piso" | "floor" => f.floor(),
+                "techo" | "ceil" => f.ceil(),
+                _ => f.round(),
+            };
+            self.push(Value::Float(r));
+            return Some(Ok(()));
+        }
+
+        // ── BUG-008: lectura del parámetro `i` del marco recién retornado ──
+        // Lo emite el compilador tras llamar a una función con parámetros
+        // `prestado mut`, para copiar el valor mutado de vuelta al llamador.
+        if name == "__frame_param" {
+            let i = args.first().and_then(parse_int_value).unwrap_or(-1);
+            let val = match (&self.last_frame, i) {
+                (Some((names, locals)), i) if i >= 0 => names
+                    .get(i as usize)
+                    .and_then(|n| locals.get(n))
+                    .cloned()
+                    .unwrap_or(Value::Void),
+                _ => Value::Void,
+            };
+            self.push(val);
+            return Some(Ok(()));
+        }
+
+        // ── Introspección de enums (soporte de patrones con datos, BUG-003) ──
+        // Emitidos por el IR builder al compilar `caso Enum::Variante(x):`.
+        if name == "__enum_variante" || name == "__enum_variant" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            let variant = match &v {
+                Value::Enum { variant, .. } => variant.clone(),
+                // `algun/exito/error` se exponen con el mismo protocolo para que
+                // los patrones sean uniformes.
+                Value::Opcion(Some(_)) => "algun".to_string(),
+                Value::Opcion(None) => "ninguno".to_string(),
+                Value::Exito(_) => "exito".to_string(),
+                Value::Error(_) => "error".to_string(),
+                _ => String::new(),
+            };
+            self.push(Value::str(variant));
+            return Some(Ok(()));
+        }
+
+        if name == "__enum_nombre" || name == "__enum_name" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            let n = match &v {
+                Value::Enum { name, .. } => name.clone(),
+                _ => String::new(),
+            };
+            self.push(Value::str(n));
+            return Some(Ok(()));
+        }
+
+        if name == "__enum_campo" || name == "__enum_field" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            let i = args.get(1).and_then(parse_int_value).unwrap_or(0);
+            let field = match &v {
+                Value::Enum { fields, .. } => {
+                    if i >= 0 && (i as usize) < fields.len() {
+                        fields[i as usize].clone()
+                    } else {
+                        Value::Void
+                    }
+                }
+                Value::Opcion(Some(inner)) if i == 0 => (**inner).clone(),
+                Value::Exito(inner) if i == 0 => (**inner).clone(),
+                Value::Error(inner) if i == 0 => (**inner).clone(),
+                _ => Value::Void,
+            };
+            self.push(field);
+            return Some(Ok(()));
+        }
+
+        if name == "__enum_aridad" || name == "__enum_arity" {
+            let v = args.first().cloned().unwrap_or(Value::Void);
+            let n = match &v {
+                Value::Enum { fields, .. } => fields.len() as i64,
+                Value::Opcion(Some(_)) | Value::Exito(_) | Value::Error(_) => 1,
+                _ => 0,
+            };
+            self.push(Value::Int(n));
+            return Some(Ok(()));
+        }
+
         // ██ Utility builtins (core — disponibles también en wasm sin feature "full") ██
         if name == "__tipo_de" || name == "__typeof" {
             let val = args.first().cloned().unwrap_or(Value::Void);
@@ -676,7 +1116,7 @@ impl VM {
                 Value::Array(_) => "lista",
                 Value::Map(_) => "diccionario",
                 Value::Void => "nulo",
-                Value::Func(_) => "funcion",
+                Value::Func(_) | Value::Closure { .. } => "funcion",
                 Value::Struct { .. } => "estructura",
                 Value::Enum { .. } => "enumeracion",
                 Value::Tuple(_) => "tupla",
@@ -739,7 +1179,11 @@ impl VM {
 
         if name == "__str_len" || name == "__str_longitud" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Int(s.len() as i64));
+            // BUG-042: usaba `s.len()`, que son BYTES, mientras que `largo()`
+            // cuenta caracteres. `__str_longitud("Lúmen")` daba 6 y
+            // `largo("Lúmen")` daba 5 para el mismo texto. Se unifican en
+            // caracteres, que es la semántica documentada.
+            self.push(Value::Int(s.chars().count() as i64));
             return Some(Ok(()));
         }
 
@@ -923,7 +1367,13 @@ impl VM {
         if name == "__file_size" || name == "__tamano_archivo" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             match std::fs::metadata(&path) {
-                Ok(meta) => self.push(Value::Int(meta.len() as i64)),
+                // BUG-135: devolvía el tamaño como `entero` pelado pero el
+                // error como `Error(...)`. El contrato quedaba partido: un
+                // `si sea exito(tam) = __tamano_archivo(p)` NUNCA casaba, así
+                // que `logging_tamano_archivo` daba -1 sobre ficheros que
+                // existían. El resto de builtins de fichero (`__leer_archivo`,
+                // `__escribir_archivo`) sí envuelven en `Exito`.
+                Ok(meta) => self.push(Value::Exito(Box::new(Value::Int(meta.len() as i64)))),
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
@@ -1044,7 +1494,7 @@ impl VM {
                 Ok(p) => p,
                 Err(e) => {
                     self.push(Value::Error(Box::new(Value::str(format!(
-                        "Loader error: {:?}",
+                        "Error del cargador: {:?}",
                         e
                     )))));
                     return Some(Ok(()));
@@ -1059,7 +1509,7 @@ impl VM {
                     .collect::<Vec<_>>()
                     .join("; ");
                 self.push(Value::Error(Box::new(Value::str(format!(
-                    "Sem error: {}",
+                    "Error de análisis semántico: {}",
                     msg
                 )))));
                 return Some(Ok(()));
@@ -1204,7 +1654,7 @@ impl VM {
             match m {
                 Value::Map(m) => {
                     let keys: Vec<Value> = m.into_iter().map(|(k, _)| k).collect();
-                    self.push(Value::arr(keys));
+                    self.push(Value::arr(ordenar_claves_mapa(keys)));
                 }
                 _ => {
                     return builtin_err(VmError::TypeError("__map_keys espera diccionario".into()))
@@ -1907,7 +2357,20 @@ impl VM {
                     self.ffi_libraries.insert(id.clone(), ptr);
                     self.push(Value::str(id));
                 }
-                Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
+                // BUG-163: se propagaba `e.to_string()` tal cual. En Linux
+                // incluye la ruta ("libX.so: cannot open shared object file"),
+                // pero en Windows `libloading` devuelve solo
+                // "LoadLibraryExW failed": un mensaje que no dice QUE
+                // biblioteca falto. El nombre lo conocemos, asi que se antepone.
+                Err(e) => {
+                    let detalle = e.to_string();
+                    let msg = if detalle.contains(path.as_str()) {
+                        detalle
+                    } else {
+                        format!("no se pudo cargar la biblioteca '{}': {}", path, detalle)
+                    };
+                    self.push(Value::Error(Box::new(Value::str(msg))))
+                }
             }
             return Some(Ok(()));
         }
@@ -1925,10 +2388,22 @@ impl VM {
             let lib_ptr = match self.ffi_libraries.get(&lib_id) {
                 Some(&p) => p,
                 None => {
-                    self.push(Value::Error(Box::new(Value::str(format!(
-                        "Biblioteca '{}' no encontrada",
-                        lib_id
-                    )))));
+                    // BUG-137: si el handle que llega ya es un `error(...)` —el
+                    // caso normal cuando `__ffi_cargar` falló— se formateaba
+                    // dentro del mensaje y salía `Biblioteca 'error(msvcrt.dll:
+                    // cannot open shared object file)' no encontrada`: un error
+                    // envuelto en otro que culpa a una biblioteca cuyo nombre es,
+                    // literalmente, el fallo anterior. Se propaga el original,
+                    // que es el que dice qué pasó de verdad.
+                    if let Some(Value::Error(_)) = args.first() {
+                        let original = args.first().cloned().unwrap();
+                        self.push(original);
+                    } else {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Biblioteca '{}' no encontrada",
+                            lib_id
+                        )))));
+                    }
                     return Some(Ok(()));
                 }
             };
@@ -1961,10 +2436,22 @@ impl VM {
             let lib_ptr = match self.ffi_libraries.get(&lib_id) {
                 Some(&p) => p,
                 None => {
-                    self.push(Value::Error(Box::new(Value::str(format!(
-                        "Biblioteca '{}' no encontrada",
-                        lib_id
-                    )))));
+                    // BUG-137: si el handle que llega ya es un `error(...)` —el
+                    // caso normal cuando `__ffi_cargar` falló— se formateaba
+                    // dentro del mensaje y salía `Biblioteca 'error(msvcrt.dll:
+                    // cannot open shared object file)' no encontrada`: un error
+                    // envuelto en otro que culpa a una biblioteca cuyo nombre es,
+                    // literalmente, el fallo anterior. Se propaga el original,
+                    // que es el que dice qué pasó de verdad.
+                    if let Some(Value::Error(_)) = args.first() {
+                        let original = args.first().cloned().unwrap();
+                        self.push(original);
+                    } else {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Biblioteca '{}' no encontrada",
+                            lib_id
+                        )))));
+                    }
                     return Some(Ok(()));
                 }
             };
@@ -1991,6 +2478,12 @@ impl VM {
                 }
             };
             let ptr = unsafe { std::alloc::alloc(layout) };
+            // BUG-054: recuerda el tamaño real para poder validar escrituras.
+            if !ptr.is_null() {
+                if let Ok(mut m) = ffi_allocs().lock() {
+                    m.insert(ptr as usize, (size, align));
+                }
+            }
             self.push(Value::Int(ptr as i64));
             return Some(Ok(()));
         }
@@ -2010,6 +2503,31 @@ impl VM {
                         return Some(Ok(()));
                     }
                 };
+                // BUG-054: liberar con un tamaño distinto al de la reserva
+                // también corrompe el asignador. Se usa el layout real.
+                //
+                // BUG-079: si el puntero NO está en el registro, antes se
+                // liberaba igualmente con el layout que diera el usuario. Un
+                // segundo `__ffi_liberar(p)` (o liberar un puntero arbitrario)
+                // provocaba un doble free que **abortaba el proceso entero**:
+                // el programa del usuario mataba la VM sin traza ni error
+                // recuperable. Ahora sólo se libera lo que se reservó.
+                let registrado = ffi_allocs()
+                    .lock()
+                    .ok()
+                    .and_then(|mut m| m.remove(&ptr_val));
+                let layout = match registrado {
+                    Some((real_size, real_align)) => {
+                        std::alloc::Layout::from_size_align(real_size, real_align).unwrap_or(layout)
+                    }
+                    None => {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Puntero {:#x} no fue reservado con __ffi_asignar o ya se liberó",
+                            ptr_val
+                        )))));
+                        return Some(Ok(()));
+                    }
+                };
                 unsafe {
                     std::alloc::dealloc(ptr_val as *mut u8, layout);
                 }
@@ -2025,6 +2543,32 @@ impl VM {
             let data = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
             let bytes = data.as_bytes();
             if ptr_val != 0 {
+                // BUG-054: antes se copiaba a ciegas. Si el buffer se reservó
+                // con `s.largo()` (caracteres) y la cadena lleva UTF-8, los
+                // bytes no caben y se pisaba el heap ajeno. Se comprueba contra
+                // el tamaño real, sin olvidar el NUL final que también se
+                // escribe.
+                let necesario = bytes.len() + 1;
+                let conocido = ffi_allocs()
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&ptr_val).map(|(sz, _)| *sz));
+                if let Some(cap) = conocido {
+                    if offset + necesario > cap {
+                        return Some(Err(VmError::TypeError(format!(
+                            "__ffi_escribir: no caben {} bytes (con el terminador) en un búfer \
+                             de {} bytes{}. Recuerda que `largo()` cuenta CARACTERES y el \
+                             búfer se mide en BYTES: en UTF-8 un carácter puede ocupar hasta 4.",
+                            necesario,
+                            cap,
+                            if offset > 0 {
+                                format!(" a partir del desplazamiento {}", offset)
+                            } else {
+                                String::new()
+                            }
+                        ))));
+                    }
+                }
                 unsafe {
                     std::ptr::copy_nonoverlapping(
                         bytes.as_ptr(),
@@ -2034,7 +2578,11 @@ impl VM {
                     *((ptr_val + offset + bytes.len()) as *mut u8) = 0;
                 }
             }
-            self.push(Value::Void);
+            // BUG-054: `sema` ya declaraba que esta función devuelve `entero`,
+            // pero se empujaba `Void`. Devolver los bytes realmente escritos
+            // permite a quien llama pasarle esa cifra a `write(2)` en vez de
+            // un número de caracteres que trunca el texto.
+            self.push(Value::Int(bytes.len() as i64));
             return Some(Ok(()));
         }
 
@@ -2426,7 +2974,7 @@ impl VM {
             let coro_id = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             if let Some(coro) = self.coroutines.get(&coro_id) {
                 if coro.is_done {
-                    self.push(Value::Error(Box::new(Value::str("Coroutine terminada"))));
+                    self.push(Value::Error(Box::new(Value::str("Corrutina terminada"))));
                     return Some(Ok(()));
                 }
             }
@@ -2550,7 +3098,7 @@ impl VM {
                 if let Some(rx) = self.task_results.remove(&task_id) {
                     match rx.recv() {
                         Ok(val) => Some(val),
-                        Err(_) => Some(Value::Error(Box::new(Value::str("Task failed")))),
+                        Err(_) => Some(Value::Error(Box::new(Value::str("La tarea falló")))),
                     }
                 } else {
                     None
@@ -2560,7 +3108,7 @@ impl VM {
             let found = self.task_results_sync.remove(&task_id);
             match found {
                 Some(val) => self.push(val),
-                None => self.push(Value::Error(Box::new(Value::str("Task not found")))),
+                None => self.push(Value::Error(Box::new(Value::str("Tarea no encontrada")))),
             }
             return Some(Ok(()));
         }
@@ -2798,7 +3346,9 @@ impl VM {
                 if let Some((_, handle)) = self.thread_handles.remove_entry(&hid) {
                     match handle.join() {
                         Ok(val) => Some(val),
-                        Err(_) => Some(Value::Error(Box::new(Value::str("Thread panicked")))),
+                        Err(_) => Some(Value::Error(Box::new(Value::str(
+                            "El hilo entró en pánico",
+                        )))),
                     }
                 } else {
                     None
@@ -2808,7 +3358,7 @@ impl VM {
             let found = self.task_results_sync.remove(&hid);
             match found {
                 Some(val) => self.push(val),
-                None => self.push(Value::Error(Box::new(Value::str("Thread not found")))),
+                None => self.push(Value::Error(Box::new(Value::str("Hilo no encontrado")))),
             }
             return Some(Ok(()));
         }
@@ -2830,7 +3380,7 @@ impl VM {
                     Err(_) => self.push(Value::Bool(false)),
                 }
             } else {
-                self.push(Value::Error(Box::new(Value::str("Channel not found"))));
+                self.push(Value::Error(Box::new(Value::str("Canal no encontrado"))));
             }
             return Some(Ok(()));
         }
@@ -2853,7 +3403,7 @@ impl VM {
                     self.push(val);
                 }
                 None => {
-                    self.push(Value::Error(Box::new(Value::str("Channel not found"))));
+                    self.push(Value::Error(Box::new(Value::str("Canal no encontrado"))));
                 }
             }
             return Some(Ok(()));
@@ -2880,7 +3430,7 @@ impl VM {
                 vm.run_function(&fn_name, vec![fn_arg])
                     .unwrap_or(Value::Void)
             } else {
-                Value::Error(Box::new(Value::str("Mutex not found")))
+                Value::Error(Box::new(Value::str("Mutex no encontrado")))
             };
             self.push(result);
             return Some(Ok(()));
@@ -3061,7 +3611,7 @@ impl VM {
                     Err(_) => self.push(Value::Bool(false)),
                 }
             } else {
-                self.push(Value::Error(Box::new(Value::str("Actor not found"))));
+                self.push(Value::Error(Box::new(Value::str("Actor no encontrado"))));
             }
             return Some(Ok(()));
         }
@@ -3082,7 +3632,7 @@ impl VM {
                     self.push(val);
                 }
                 None => {
-                    self.push(Value::Error(Box::new(Value::str("Actor not found"))));
+                    self.push(Value::Error(Box::new(Value::str("Actor no encontrado"))));
                 }
             }
             return Some(Ok(()));
@@ -3102,7 +3652,9 @@ impl VM {
             let fn_name = if let Some(fn_name) = self.generators.get(&gid) {
                 fn_name.clone()
             } else {
-                self.push(Value::Error(Box::new(Value::str("Generator not found"))));
+                self.push(Value::Error(Box::new(Value::str(
+                    "Generador no encontrado",
+                ))));
                 return Some(Ok(()));
             };
             let mut vm = VM::new(self.bytecode.clone());
@@ -3194,14 +3746,21 @@ impl VM {
             let cur_ip = self.ip;
             self.ip += 1;
             self.instr_count += 1;
-            match self.bytecode.instructions[cur_ip] {
-                Instruction::Simple(op) => self.execute_simple(op)?,
-                Instruction::WithIdx(op, idx) => self.execute_with_idx(op, idx)?,
-                Instruction::WithNum(op, n) => self.execute_with_num(op, n)?,
-                Instruction::WithBool(op, b) => self.execute_with_bool(op, b)?,
+            let res = match self.bytecode.instructions[cur_ip] {
+                Instruction::Simple(op) => self.execute_simple(op),
+                Instruction::WithIdx(op, idx) => self.execute_with_idx(op, idx),
+                Instruction::WithNum(op, n) => self.execute_with_num(op, n),
+                Instruction::WithBool(op, b) => self.execute_with_bool(op, b),
                 Instruction::WithStr(op, ref s) => {
                     let s_clone = s.clone();
-                    self.execute_with_str(op, &s_clone)?;
+                    self.execute_with_str(op, &s_clone)
+                }
+            };
+            // BUG-022: si hay un `atrapar` vigente, el error no aborta el
+            // programa: se desenrolla hasta él y se sigue ejecutando.
+            if let Err(e) = res {
+                if !self.unwind_to_handler(&e) {
+                    return Err(e);
                 }
             }
         }
@@ -3228,6 +3787,47 @@ impl VM {
             }
         }
         Ok(())
+    }
+
+    /// BUG-022: busca el `atrapar` más interno y restaura el estado que había
+    /// al entrar en su `intentar`.
+    ///
+    /// Desenrollar no es sólo saltar: hay que tirar los marcos de llamada que
+    /// el error dejó a medias (el fallo puede venir de varias llamadas más
+    /// adentro) y recortar la pila de operandos, o el resto del programa
+    /// seguiría leyendo basura. Devuelve `false` si nadie puede atender el
+    /// error, en cuyo caso el programa termina como siempre.
+    fn unwind_to_handler(&mut self, err: &VmError) -> bool {
+        let h = match self.handlers.pop() {
+            Some(h) => h,
+            None => return false,
+        };
+        // Tirar los marcos abiertos por debajo del `intentar`.
+        while self.call_stack.len() > h.call_depth {
+            self.call_stack.pop();
+        }
+        while self.locals.len() > h.locals_depth {
+            self.locals.pop();
+            self.frame_ids.pop();
+        }
+        // Recortar la pila de operandos a la altura del `intentar`.
+        self.stack.truncate(h.stack_len);
+        self.handlers.truncate(h.handlers_len);
+        // El bloque `atrapar` espera el error en la cima: lo liga a su variable
+        // con `StoreLocal`.
+        let msg = match err {
+            VmError::Runtime(m) => m.clone(),
+            VmError::UndefinedVariable(v) => format!("Variable '{}' no definida", v),
+            VmError::UndefinedFunction(f) => format!("Función '{}' no definida", f),
+            VmError::DivisionByZero => "División por cero".to_string(),
+            VmError::TypeError(m) => m.clone(),
+            VmError::StackUnderflow => {
+                "Desbordamiento de pila por defecto (pila vacía)".to_string()
+            }
+        };
+        self.stack.push(Value::str(msg));
+        self.ip = h.target;
+        true
     }
 
     pub fn set_breakpoint(&mut self, ip: usize) {
@@ -3278,8 +3878,29 @@ impl VM {
         self.locals.last()
     }
 
+    /// BUG-138: registra la línea en el buffer y, si el modo streaming está
+    /// activo, la escribe ya en stdout con flush. Sin el flush explícito, un
+    /// stdout redirigido a fichero o tubería queda en buffer de bloque y se
+    /// pierde igual cuando el proceso no termina por su cuenta.
+    fn emitir_linea(&mut self, line: String) {
+        if self.stream_stdout {
+            use std::io::Write;
+            let stdout = std::io::stdout();
+            let mut h = stdout.lock();
+            let _ = writeln!(h, "{}", line);
+            let _ = h.flush();
+        }
+        self.output.push(line);
+    }
+
     pub fn output(&self) -> &[String] {
         &self.output
+    }
+
+    /// BUG-138: activa el volcado inmediato de `imprimir` a stdout. Lo usa
+    /// `lumen run`; el depurador y los tests siguen leyendo `output()`.
+    pub fn set_stream_stdout(&mut self, on: bool) {
+        self.stream_stdout = on;
     }
 
     pub fn call_stack(&self) -> &[CallFrame] {
@@ -3288,6 +3909,18 @@ impl VM {
 
     /// Run a specific function by name with given args, returning its result.
     /// Used by spawned task threads to execute a function in isolation.
+    /// BUG-049: aborta con un error normal en vez de dejar que la recursión
+    /// infinita agote la memoria del proceso.
+    fn check_call_depth(&self) -> Result<(), VmError> {
+        if self.call_stack.len() >= MAX_CALL_DEPTH {
+            return Err(VmError::Runtime(format!(
+                "Profundidad máxima de llamadas superada ({}). ¿Hay una recursión infinita?",
+                MAX_CALL_DEPTH
+            )));
+        }
+        Ok(())
+    }
+
     pub fn run_function(&mut self, name: &str, args: Vec<Value>) -> Result<Value, VmError> {
         if let Some(func) = self.find_func(name) {
             let func_start = func.start;
@@ -3299,10 +3932,17 @@ impl VM {
                     scope.insert(param_name.clone(), arg.clone());
                 }
             }
+            self.check_call_depth()?;
+            // BUG-052: id único paralelo al marco (ver `capture_cells`).
+            self.frame_ids.push(self.next_frame_id);
+            self.next_frame_id += 1;
             self.locals.push(scope);
             self.call_stack.push(CallFrame {
                 func_name: name.to_string(),
                 return_ip: self.bytecode.instructions.len(), // Past end → run() loop breaks
+                stack_base: self.stack.len(),
+                param_names: Vec::new(),
+                closure_cells: Vec::new(),
             });
             self.ip = func_start;
             self.run()?;
@@ -3345,7 +3985,7 @@ impl VM {
                     (Value::Bool(a), Value::Str(b)) => self.push(Value::str(format!("{}{}", a, b))),
                     _ => {
                         return Err(VmError::TypeError(
-                            "Add requires numbers or strings".to_string(),
+                            "El operador '+' requiere números o textos".to_string(),
                         ))
                     }
                 }
@@ -3358,7 +3998,11 @@ impl VM {
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Float(a as f64 - b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Float(a - b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Float(a - b)),
-                    _ => return Err(VmError::TypeError("Sub requires numbers".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "El operador '-' requiere números".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Mul => {
@@ -3369,7 +4013,11 @@ impl VM {
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Float(a as f64 * b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Float(a * b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Float(a * b)),
-                    _ => return Err(VmError::TypeError("Mul requires numbers".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "El operador '*' requiere números".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Div => {
@@ -3377,7 +4025,11 @@ impl VM {
                 let a = self.pop()?;
                 match (a, b) {
                     (Value::Int(_), Value::Int(0)) => return Err(VmError::DivisionByZero),
-                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a / b)),
+                    // BUG-109: `i64::MIN / -1` desborda y hacía pánico de Rust
+                    // («attempt to divide with overflow»), abortando el proceso
+                    // con un volcado interno. Se envuelve como el resto de la
+                    // aritmética entera, que ya usa `overflowing_*`.
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a.overflowing_div(b).0)),
                     (Value::Int(a), Value::Float(b)) => {
                         if b == 0.0 {
                             return Err(VmError::DivisionByZero);
@@ -3396,7 +4048,11 @@ impl VM {
                         }
                         self.push(Value::Float(a / b))
                     }
-                    _ => return Err(VmError::TypeError("Div requires numbers".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "El operador '/' requiere números".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Mod => {
@@ -3404,7 +4060,15 @@ impl VM {
                 let a = self.pop()?;
                 match (a, b) {
                     (Value::Int(_), Value::Int(0)) => return Err(VmError::DivisionByZero),
-                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a.rem_euclid(b))),
+                    // BUG-109: `i64::MIN % -1` desbordaba y hacía pánico.
+                    // BUG-111: la VM era la única de las cuatro rutas que usaba
+                    // el resto euclídeo (siempre positivo). El plegado de
+                    // constantes del IR, el backend nativo en C y el `%` de
+                    // decimales (`fmod`) usan el resto truncado, así que
+                    // `-7 % 3` valía 2 en la VM, -1 en el binario nativo y -1
+                    // si los operandos eran literales (porque se plegaba al
+                    // compilar). Se unifica al resto truncado.
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a.overflowing_rem(b).0)),
                     (Value::Int(a), Value::Float(b)) => {
                         if b == 0.0 {
                             return Err(VmError::DivisionByZero);
@@ -3423,81 +4087,23 @@ impl VM {
                         }
                         self.push(Value::Float(a % b))
                     }
-                    _ => return Err(VmError::TypeError("Mod requires numbers".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "El operador '%' requiere números".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Eq => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-                let result = match (&a, &b) {
-                    (Value::Int(a), Value::Int(b)) => a == b,
-                    (Value::Int(a), Value::Float(b)) => (*a as f64 - b).abs() < f64::EPSILON,
-                    (Value::Float(a), Value::Int(b)) => (a - *b as f64).abs() < f64::EPSILON,
-                    (Value::Float(a), Value::Float(b)) => (a - b).abs() < f64::EPSILON,
-                    (Value::Str(a), Value::Str(b)) => a == b,
-                    (Value::Bool(a), Value::Bool(b)) => a == b,
-                    (
-                        Value::Struct {
-                            name: an,
-                            fields: af,
-                        },
-                        Value::Struct {
-                            name: bn,
-                            fields: bf,
-                        },
-                    ) => an == bn && af == bf,
-                    (Value::Opcion(a), Value::Opcion(b)) => a == b,
-                    (
-                        Value::Enum {
-                            name: an,
-                            variant: av,
-                            fields: af,
-                        },
-                        Value::Enum {
-                            name: bn,
-                            variant: bv,
-                            fields: bf,
-                        },
-                    ) => an == bn && av == bv && af == bf,
-                    _ => false,
-                };
+                let result = values_equal(&a, &b);
                 self.push(Value::Bool(result));
             }
             Opcode::Neq => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-                let result = match (&a, &b) {
-                    (Value::Int(a), Value::Int(b)) => a != b,
-                    (Value::Int(a), Value::Float(b)) => (*a as f64 - b).abs() >= f64::EPSILON,
-                    (Value::Float(a), Value::Int(b)) => (a - *b as f64).abs() >= f64::EPSILON,
-                    (Value::Float(a), Value::Float(b)) => (a - b).abs() >= f64::EPSILON,
-                    (Value::Str(a), Value::Str(b)) => a != b,
-                    (Value::Bool(a), Value::Bool(b)) => a != b,
-                    (
-                        Value::Struct {
-                            name: an,
-                            fields: af,
-                        },
-                        Value::Struct {
-                            name: bn,
-                            fields: bf,
-                        },
-                    ) => an != bn || af != bf,
-                    (Value::Opcion(a), Value::Opcion(b)) => a != b,
-                    (
-                        Value::Enum {
-                            name: an,
-                            variant: av,
-                            fields: af,
-                        },
-                        Value::Enum {
-                            name: bn,
-                            variant: bv,
-                            fields: bf,
-                        },
-                    ) => an != bn || av != bv || af != bf,
-                    _ => true,
-                };
+                let result = !values_equal(&a, &b);
                 self.push(Value::Bool(result));
             }
             Opcode::Lt => {
@@ -3511,7 +4117,7 @@ impl VM {
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a < b)),
                     _ => {
                         return Err(VmError::TypeError(
-                            "Lt requires numbers or strings".to_string(),
+                            "El operador '<' requiere números o textos".to_string(),
                         ))
                     }
                 }
@@ -3527,7 +4133,7 @@ impl VM {
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a <= b)),
                     _ => {
                         return Err(VmError::TypeError(
-                            "Le requires numbers or strings".to_string(),
+                            "El operador '<=' requiere números o textos".to_string(),
                         ))
                     }
                 }
@@ -3543,7 +4149,7 @@ impl VM {
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a > b)),
                     _ => {
                         return Err(VmError::TypeError(
-                            "Gt requires numbers or strings".to_string(),
+                            "El operador '>' requiere números o textos".to_string(),
                         ))
                     }
                 }
@@ -3559,7 +4165,7 @@ impl VM {
                     (Value::Str(a), Value::Str(b)) => self.push(Value::Bool(a >= b)),
                     _ => {
                         return Err(VmError::TypeError(
-                            "Ge requires numbers or strings".to_string(),
+                            "El operador '>=' requiere números o textos".to_string(),
                         ))
                     }
                 }
@@ -3579,7 +4185,11 @@ impl VM {
                 let a = self.pop()?;
                 match (&a, &b) {
                     (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a | b)),
-                    _ => return Err(VmError::TypeError("BitOr requires integers".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "El operador '|' requiere enteros".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::BitAnd => {
@@ -3587,7 +4197,11 @@ impl VM {
                 let a = self.pop()?;
                 match (&a, &b) {
                     (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a & b)),
-                    _ => return Err(VmError::TypeError("BitAnd requires integers".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "El operador '&' requiere enteros".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::BitXor => {
@@ -3595,7 +4209,11 @@ impl VM {
                 let a = self.pop()?;
                 match (&a, &b) {
                     (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a ^ b)),
-                    _ => return Err(VmError::TypeError("BitXor requires integers".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "El operador '^' requiere enteros".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::BitNot => {
@@ -3620,7 +4238,7 @@ impl VM {
                     }
                     _ => {
                         return Err(VmError::TypeError(
-                            "ShiftLeft requires integers".to_string(),
+                            "El operador '<<' requiere enteros".to_string(),
                         ))
                     }
                 }
@@ -3640,7 +4258,7 @@ impl VM {
                     }
                     _ => {
                         return Err(VmError::TypeError(
-                            "ShiftRight requires integers".to_string(),
+                            "El operador '>>' requiere enteros".to_string(),
                         ))
                     }
                 }
@@ -3661,7 +4279,7 @@ impl VM {
                     }
                     _ => {
                         return Err(VmError::TypeError(
-                            "Concat requires strings or lists".to_string(),
+                            "El operador de concatenación requiere textos o listas".to_string(),
                         ))
                     }
                 }
@@ -3671,7 +4289,11 @@ impl VM {
                 match a {
                     Value::Int(n) => self.push(Value::Int(-n)),
                     Value::Float(n) => self.push(Value::Float(-n)),
-                    _ => return Err(VmError::TypeError("Neg requires number".to_string())),
+                    _ => {
+                        return Err(VmError::TypeError(
+                            "El operador '-' unario requiere un número".to_string(),
+                        ))
+                    }
                 }
             }
             Opcode::Not => {
@@ -3700,8 +4322,53 @@ impl VM {
                     }
                 }
                 if let Some(frame) = self.call_stack.pop() {
-                    self.locals.pop();
+                    // BUG-008: conserva el marco que retorna para que
+                    // `__frame_param(i)` pueda leer los `prestado mut`.
+                    let frame_locals = self.locals.pop();
+                    self.frame_ids.pop();
+                    if let Some(fl) = frame_locals {
+                        // BUG-052: vuelca el valor final de cada captura a su
+                        // celda compartida, para que `n = n + 1` dentro de la
+                        // closure se vea en la siguiente llamada.
+                        for (k, cell) in &frame.closure_cells {
+                            if let Some(v) = fl.get(k) {
+                                if let Ok(mut slot) = cell.lock() {
+                                    *slot = v.clone();
+                                }
+                                // BUG-149: el volcado a la celda hacía que la
+                                // mutación se viera en la SIGUIENTE llamada a
+                                // la closure, pero la variable original del
+                                // marco que la declara seguía con el valor
+                                // viejo: `x = x + n` dentro de la closure daba
+                                // 5, 10, 15 al llamarla, mientras que
+                                // `imprimir(x)` en la función envolvente seguía
+                                // imprimiendo 0. Se sincroniza también hacia el
+                                // marco declarante para que la captura sea una
+                                // sola variable y no dos copias divergentes.
+                                let fid = self.declaring_frame_id(k);
+                                for (i, scope) in self.locals.iter_mut().enumerate().rev() {
+                                    if scope.contains_key(k) {
+                                        let this_id =
+                                            self.frame_ids.get(i).copied().unwrap_or(i as u64);
+                                        if this_id == fid {
+                                            scope.insert(k.clone(), v.clone());
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        self.last_frame = Some((frame.param_names.clone(), fl));
+                    }
                     self.ip = frame.return_ip;
+                    // BUG-027: descartar lo que las sentencias-expresión del
+                    // cuerpo dejaron sin consumir (p. ej. el `void` de un
+                    // `imprimir(...)` suelto). Sin esto, `imprimir("t=", f(2))`
+                    // imprimía `void2`: la basura se colaba entre los
+                    // argumentos que el llamador estaba apilando.
+                    if self.stack.len() > frame.stack_base {
+                        self.stack.truncate(frame.stack_base);
+                    }
                     self.push(ret_val);
                 } else {
                     self.ip = usize::MAX;
@@ -3998,6 +4665,7 @@ impl VM {
                         let err_wrapper = Value::Error(inner);
                         if let Some(frame) = self.call_stack.pop() {
                             self.locals.pop();
+                            self.frame_ids.pop();
                             self.ip = frame.return_ip;
                         }
                         self.push(err_wrapper);
@@ -4033,6 +4701,14 @@ impl VM {
             }
             Opcode::EnumCtor => {
                 // handled in execute_with_idx
+            }
+            // BUG-022: el bloque `intentar` acabó sin lanzar, el manejador ya
+            // no aplica. Va aquí y no en `execute_with_idx` porque se emite
+            // como `Instruction::Simple`; colocado en el despachador
+            // equivocado, el `_ => {}` final se lo tragaba en silencio y los
+            // manejadores se acumulaban para siempre.
+            Opcode::PopHandler => {
+                self.handlers.pop();
             }
             _ => {}
         }
@@ -4118,6 +4794,26 @@ impl VM {
                     }
                 }
             }
+            // BUG-023: una declaración de variable liga SIEMPRE en el marco
+            // actual. `Store` escribe en la global si el nombre ya existe allí,
+            // lo que hacía que `entero x = ...` dentro de una función pisara la
+            // global homónima en vez de crear una local que la sombrease.
+            // BUG-027: descarta el valor sin consumir de una sentencia-expresión.
+            Opcode::Drop => {
+                let _ = self.stack.pop();
+            }
+            Opcode::StoreLocal => {
+                let val = self.pop()?;
+                let name = self
+                    .bytecode
+                    .names
+                    .get(idx)
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                if let Some(frame) = self.locals.last_mut() {
+                    frame.insert(name.to_string(), val);
+                }
+            }
             Opcode::Call => {
                 let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
                 let count = self.call_counts.entry(name.clone()).or_insert(0);
@@ -4144,8 +4840,15 @@ impl VM {
                     args.push(self.pop()?);
                 }
                 args.reverse();
-                if let Some(result) = self.call_core_builtin(&name, &args) {
-                    return result;
+                // Una función definida por el usuario con el mismo nombre que
+                // un builtin "suave" (abs, raiz, min...) tiene prioridad: el
+                // programa del usuario nunca debe quedar ensombrecido por un
+                // builtin añadido después.
+                let user_defined = self.func_index_cache.contains_key(&name);
+                if !(user_defined && is_shadowable_builtin(&name)) {
+                    if let Some(result) = self.call_core_builtin(&name, &args) {
+                        return result;
+                    }
                 }
                 #[cfg(any(feature = "extra", feature = "full"))]
                 if let Some(result) = self.call_extra_builtin(&name, &args) {
@@ -4154,9 +4857,14 @@ impl VM {
                 if let Some(&func_idx) = self.func_index_cache.get(&name) {
                     let func_start = self.bytecode.funcs[func_idx].start;
                     let param_count = self.bytecode.funcs[func_idx].params.len();
+                    self.check_call_depth()?;
                     self.call_stack.push(CallFrame {
                         func_name: name,
                         return_ip: self.ip,
+                        // Se fija abajo, cuando la pila ya se ha estabilizado.
+                        stack_base: 0,
+                        param_names: self.bytecode.funcs[func_idx].params.clone(),
+                        closure_cells: Vec::new(),
                     });
                     let mut scope =
                         HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
@@ -4169,6 +4877,15 @@ impl VM {
                         };
                         scope.insert(param_name, arg);
                     }
+                    // BUG-027: la marca se toma DESPUÉS de ligar los parámetros
+                    // (que pueden haber sacado más valores de la pila). Lo que
+                    // quede por debajo pertenece al llamador y es intocable.
+                    if let Some(frame) = self.call_stack.last_mut() {
+                        frame.stack_base = self.stack.len();
+                    }
+                    // BUG-052: id único paralelo al marco (ver `capture_cells`).
+                    self.frame_ids.push(self.next_frame_id);
+                    self.next_frame_id += 1;
                     self.locals.push(scope);
                     self.ip = func_start;
                 } else {
@@ -4177,7 +4894,44 @@ impl VM {
             }
             Opcode::FuncRef => {
                 let name = self.bytecode.strings.get(idx).cloned().unwrap_or_default();
-                self.push(Value::Func(name));
+                // BUG-032: si la función tiene capturas anotadas, se resuelven
+                // AHORA (mientras el marco que las define sigue vivo) y viajan
+                // con la closure. Así `mk(5)` y `mk(100)` producen entornos
+                // independientes y la closure sobrevive a su factoría.
+                let caps: Vec<String> = self
+                    .bytecode
+                    .funcs
+                    .iter()
+                    .find(|f| f.name == name)
+                    .map(|f| f.captures.clone())
+                    .unwrap_or_default();
+                if caps.is_empty() {
+                    self.push(Value::Func(name));
+                } else {
+                    let mut env = Vec::with_capacity(caps.len());
+                    for c in &caps {
+                        // Un nombre que no existe todavía no es un error aquí:
+                        // puede ser una función global resuelta por nombre.
+                        if let Ok(v) = self.lookup(c) {
+                            // BUG-052: la celda se comparte con el marco que
+                            // declara la variable, para que las mutaciones
+                            // hechas dentro de la closure persistan. La
+                            // profundidad identifica la invocación concreta.
+                            let fid = self.declaring_frame_id(c);
+                            let key = (fid, c.clone());
+                            let cell = match self.capture_cells.get(&key) {
+                                Some(cell) => Arc::clone(cell),
+                                None => {
+                                    let cell = Arc::new(std::sync::Mutex::new(v));
+                                    self.capture_cells.insert(key, Arc::clone(&cell));
+                                    cell
+                                }
+                            };
+                            env.push((c.clone(), cell));
+                        }
+                    }
+                    self.push(Value::Closure { name, env });
+                }
             }
             Opcode::CallValue => {
                 let argc = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
@@ -4187,19 +4941,33 @@ impl VM {
                 }
                 args.reverse();
                 let callee = self.pop()?;
-                let name = match &callee {
-                    Value::Func(n) => n.clone(),
+                let (name, closure_env) = match &callee {
+                    Value::Func(n) => (n.clone(), Vec::new()),
+                    // BUG-032: la closure trae su entorno capturado.
+                    Value::Closure { name, env } => (name.clone(), env.clone()),
                     _ => {
                         return Err(VmError::TypeError(
                             "Se esperaba una función para llamar".to_string(),
                         ))
                     }
                 };
-                if name == "imprimir" || name == "print" {
-                    for arg in args {
-                        let s = format!("{}", arg);
-                        self.output.push(s);
+                // Los builtins centrales se resuelven con la misma tabla que
+                // `Opcode::Call`, para que llamarlos por valor (`f = abs; f(-3)`)
+                // o vía pipe se comporte idéntico a la llamada directa.
+                let user_defined_cv = self.func_index_cache.contains_key(&name);
+                if !(user_defined_cv && is_shadowable_builtin(&name)) {
+                    if let Some(result) = self.call_core_builtin(&name, &args) {
+                        return result;
                     }
+                }
+                if name == "imprimir" || name == "print" {
+                    // Ver BUG-009: una sola línea con los argumentos concatenados.
+                    let line = args
+                        .iter()
+                        .map(|a| format!("{}", a))
+                        .collect::<Vec<_>>()
+                        .concat();
+                    self.emitir_linea(line);
                     self.push(Value::Void);
                 } else if name == "leer" || name == "read" {
                     self.push(Value::str(String::new()));
@@ -4217,7 +4985,8 @@ impl VM {
                     }
                 } else if name == "__str_len" || name == "__str_longitud" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    self.push(Value::Int(s.len() as i64));
+                    // BUG-042: caracteres, no bytes (ver arriba).
+                    self.push(Value::Int(s.chars().count() as i64));
                 } else if name == "__str_upper" || name == "__str_mayusculas" {
                     let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     self.push(Value::str(s.to_uppercase()));
@@ -4371,7 +5140,8 @@ impl VM {
                         .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
                     match m {
                         Value::Map(m) => {
-                            self.push(Value::arr(m.into_iter().map(|(k, _)| k).collect()));
+                            let keys: Vec<Value> = m.into_iter().map(|(k, _)| k).collect();
+                            self.push(Value::arr(ordenar_claves_mapa(keys)));
                         }
                         _ => {
                             return Err(VmError::TypeError("__map_keys espera diccionario".into()))
@@ -4829,17 +5599,36 @@ impl VM {
                 } else if let Some(&func_idx) = self.func_index_cache.get(&name) {
                     let func_start = self.bytecode.funcs[func_idx].start;
                     let param_count = self.bytecode.funcs[func_idx].params.len();
+                    // BUG-027: aquí los argumentos ya vienen en `args`, así que
+                    // la cima actual es la marca correcta.
+                    let stack_base = self.stack.len();
+                    self.check_call_depth()?;
                     self.call_stack.push(CallFrame {
                         func_name: name,
                         return_ip: self.ip,
+                        stack_base,
+                        param_names: self.bytecode.funcs[func_idx].params.clone(),
+                        closure_cells: closure_env.clone(),
                     });
-                    let mut scope =
-                        HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
+                    let mut scope = HashMap::with_capacity_and_hasher(
+                        param_count + closure_env.len(),
+                        FixHasher::default(),
+                    );
+                    // BUG-032: el entorno capturado se siembra ANTES que los
+                    // parámetros, para que un parámetro homónimo lo sombree.
+                    for (k, cell) in &closure_env {
+                        if let Ok(v) = cell.lock() {
+                            scope.insert(k.clone(), v.clone());
+                        }
+                    }
                     for i in 0..param_count {
                         let param_name = self.bytecode.funcs[func_idx].params[i].clone();
                         let arg = args.get(i).cloned().unwrap_or(Value::Void);
                         scope.insert(param_name, arg);
                     }
+                    // BUG-052: id único paralelo al marco (ver `capture_cells`).
+                    self.frame_ids.push(self.next_frame_id);
+                    self.next_frame_id += 1;
                     self.locals.push(scope);
                     self.ip = func_start;
                 } else {
@@ -4897,6 +5686,18 @@ impl VM {
             Opcode::Jmp => {
                 let target = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
                 self.ip = target;
+            }
+            // BUG-022: registra a dónde saltar si algo falla dentro del
+            // `intentar`, junto con el estado al que hay que volver.
+            Opcode::PushHandler => {
+                let target = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
+                self.handlers.push(Handler {
+                    target,
+                    stack_len: self.stack.len(),
+                    call_depth: self.call_stack.len(),
+                    locals_depth: self.locals.len(),
+                    handlers_len: self.handlers.len(),
+                });
             }
             Opcode::JmpIf => {
                 let val = self.pop()?;
@@ -4996,6 +5797,21 @@ impl VM {
 
     fn pop(&mut self) -> Result<Value, VmError> {
         self.stack.pop().ok_or(VmError::StackUnderflow)
+    }
+
+    /// BUG-052: profundidad del marco donde vive la variable. Identifica la
+    /// invocación concreta de la factoría, de modo que dos llamadas distintas
+    /// no compartan celda.
+    fn declaring_frame_id(&self, name: &str) -> u64 {
+        for (i, scope) in self.locals.iter().enumerate().rev() {
+            if scope.contains_key(name) {
+                // Las corrutinas y los snapshots reemplazan `locals` entero, así
+                // que `frame_ids` puede quedarse corto: en ese caso se cae a la
+                // profundidad, que sigue siendo estable dentro de ese contexto.
+                return self.frame_ids.get(i).copied().unwrap_or(i as u64);
+            }
+        }
+        0
     }
 
     fn lookup(&self, name: &str) -> Result<Value, VmError> {
@@ -6013,11 +6829,13 @@ mod tests {
                     name: "__main__".to_string(),
                     params: vec![],
                     start: 0,
+                    captures: vec![],
                 },
                 FuncMeta {
                     name: "sum".to_string(),
                     params: vec!["a".to_string(), "b".to_string()],
                     start: 6,
+                    captures: vec![],
                 },
             ],
         };
@@ -6042,6 +6860,7 @@ mod tests {
                 name: "__main__".to_string(),
                 params: vec![],
                 start: 0,
+                captures: vec![],
             }],
         };
         let mut vm = VM::new(bc);
@@ -6070,6 +6889,7 @@ mod tests {
                 name: "__main__".to_string(),
                 params: vec![],
                 start: 0,
+                captures: vec![],
             }],
         };
         let mut vm = VM::new(bc);

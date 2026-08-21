@@ -1,0 +1,50 @@
+// Igualdad en LUMEN: `==` y `!=` comparan por CONTENIDO (estructuralmente),
+// no por identidad. Funciona en cadena hacia dentro: listas de listas,
+// structs con campos, tuplas, enums con datos...
+
+lista<entero> a = [1, 2, 3];
+lista<entero> b = [1, 2, 3];
+lista<entero> c = [9, 9];
+
+imprimir("=== Listas ===");
+imprimir("[1,2,3] == [1,2,3] : ", a == b);
+imprimir("[1,2,3] == [9,9]   : ", a == c);
+imprimir("[1,2,3] != [9,9]   : ", a != c);
+
+imprimir("");
+imprimir("=== Listas anidadas ===");
+lista<lista<entero>> m1 = [[1,2],[3,4]];
+lista<lista<entero>> m2 = [[1,2],[3,4]];
+imprimir("iguales : ", m1 == m2);
+
+imprimir("");
+imprimir("=== Structs ===");
+estructura Punto { x: entero, y: entero }
+Punto p1 = Punto { x: 3, y: 4 };
+Punto p2 = Punto { x: 3, y: 4 };
+Punto p3 = Punto { x: 0, y: 0 };
+imprimir("(3,4) == (3,4) : ", p1 == p2);
+imprimir("(3,4) == (0,0) : ", p1 == p3);
+
+imprimir("");
+imprimir("=== Tuplas ===");
+sea t1 = (1, "ana");
+sea t2 = (1, "ana");
+imprimir("iguales : ", t1 == t2);
+
+imprimir("");
+imprimir("=== Enums ===");
+enum Estado { Activo, Inactivo }
+Estado e = Estado::Activo;
+imprimir("Activo == Activo   : ", e == Estado::Activo);
+imprimir("Activo == Inactivo : ", e == Estado::Inactivo);
+
+imprimir("");
+imprimir("=== resultado y opcion ===");
+imprimir("exito(5) == exito(5) : ", exito(5) == exito(5));
+imprimir("algun(3) == algun(3) : ", algun(3) == algun(3));
+
+imprimir("");
+imprimir("=== Numeros mixtos ===");
+imprimir("1 == 1.0 : ", 1 == 1.0);
+imprimir("2.5 == 2.5 : ", 2.5 == 2.5);

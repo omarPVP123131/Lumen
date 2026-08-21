@@ -1,7 +1,7 @@
 use im::HashMap;
 use std::fmt;
 use std::hash::{BuildHasher, Hash, Hasher};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 // ── NaN-Boxing Representation (64-bit compact values) ────────────────
 // IEEE 754 Quiet NaN: 0x7ff8_0000_0000_0000
@@ -127,6 +127,19 @@ pub enum Value {
     Bool(bool),
     Array(Arc<Vec<Value>>),
     Func(String),
+    /// BUG-032: closure con su entorno capturado por valor. Se crea en
+    /// `FuncRef` cuando la función tiene capturas anotadas, de modo que la
+    /// closure siga siendo válida después de que muera el marco que la creó y
+    /// dos instancias de la misma factoría no compartan estado.
+    Closure {
+        name: String,
+        /// BUG-052: celdas COMPARTIDAS. La closure y el marco que la creó
+        /// apuntan al mismo `Arc<Mutex<Value>>`, de modo que `n = n + 1` dentro
+        /// de la closure persiste entre llamadas (el idioma del contador).
+        /// Cada `FuncRef` crea celdas nuevas, así que dos instancias de la
+        /// misma factoría siguen aisladas entre sí.
+        env: Vec<(String, Arc<Mutex<Value>>)>,
+    },
     Struct {
         name: String,
         fields: Vec<(String, Value)>,
@@ -153,6 +166,9 @@ impl PartialEq for Value {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Array(a), Value::Array(b)) => a.as_ref() == b.as_ref(),
             (Value::Func(a), Value::Func(b)) => a == b,
+            (Value::Closure { name: a, .. }, Value::Closure { name: b, .. }) => a == b,
+            (Value::Func(a), Value::Closure { name: b, .. })
+            | (Value::Closure { name: a, .. }, Value::Func(b)) => a == b,
             (
                 Value::Struct {
                     name: na,
@@ -217,6 +233,12 @@ impl Hash for Value {
                 }
             }
             Value::Func(name) => {
+                6u8.hash(state);
+                name.hash(state);
+            }
+            // Igual que `Func`: dos closures del mismo lambda tienen el mismo
+            // hash; `eq` compara sólo el nombre, así que el contrato se cumple.
+            Value::Closure { name, .. } => {
                 6u8.hash(state);
                 name.hash(state);
             }
@@ -335,7 +357,7 @@ impl Value {
             Value::Float(n) => *n != 0.0,
             Value::Str(s) => !s.is_empty(),
             Value::Array(v) => !v.is_empty(),
-            Value::Func(_) => true,
+            Value::Func(_) | Value::Closure { .. } => true,
             Value::Struct { .. } => true,
             Value::Enum { .. } => true,
             Value::Exito(_) => true,
@@ -354,8 +376,18 @@ impl fmt::Display for Value {
         match self {
             Value::Int(n) => write!(f, "{}", n),
             Value::Float(n) => {
-                if n.fract() == 0.0 {
+                // BUG-116: `*n as i64` SATURA en Rust, así que un decimal por
+                // encima de 2^63 se imprimía como 9223372036854775807 aunque su
+                // valor real fuera otro: `9223372036854775807.0` (que el double
+                // redondea a 2^63) salía como ...807 en vez de ...808. Sólo se
+                // usa la vía entera cuando el valor cabe de verdad en un i64.
+                if n.fract() == 0.0 && n.abs() < 9223372036854775296.0 {
                     write!(f, "{}", *n as i64)
+                } else if n.fract() == 0.0 && n.is_finite() {
+                    // Entero demasiado grande para i64: se imprime sin
+                    // notación científica y sin el `.0` final.
+                    let s = format!("{:.1}", n);
+                    write!(f, "{}", s.strip_suffix(".0").unwrap_or(&s))
                 } else {
                     write!(f, "{}", n)
                 }
@@ -367,6 +399,7 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", items.join(", "))
             }
             Value::Func(s) => write!(f, "<funcion {}>", s),
+            Value::Closure { name, .. } => write!(f, "<funcion {}>", name),
             Value::Struct { name: _, fields } => {
                 let items: Vec<String> = fields
                     .iter()
@@ -398,7 +431,11 @@ impl fmt::Display for Value {
                 let items: Vec<String> = map.iter().map(|(k, v)| format!("{}: {}", k, v)).collect();
                 write!(f, "{{{} }}", items.join(", "))
             }
-            Value::Void => write!(f, "void"),
+            // BUG-159: imprimia "void" mientras `__tipo_de` devolvia "nulo"
+            // para EL MISMO valor. `void` era ademas el unico anglicismo en un
+            // juego de nombres por lo demas integramente en espanol (entero,
+            // booleano, ninguno...). Se alinea con `__tipo_de`.
+            Value::Void => write!(f, "nulo"),
         }
     }
 }
@@ -435,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_display_void() {
-        assert_eq!(format!("{}", Value::Void), "void");
+        assert_eq!(format!("{}", Value::Void), "nulo");
     }
 
     #[test]

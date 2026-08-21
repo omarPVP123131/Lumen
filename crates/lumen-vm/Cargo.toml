@@ -41,6 +41,8 @@ hex = { version = "0.4", optional = true }
 im = "15"
 
 [dev-dependencies]
+lumen-aot = { path = "../lumen-aot" }
+lumen-fmt = { path = "../lumen-fmt" }
 lumen-lexer = { path = "../lumen-lexer" }
 lumen-parser = { path = "../lumen-parser" }
 lumen-sema = { path = "../lumen-sema" }

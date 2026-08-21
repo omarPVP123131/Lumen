@@ -11,6 +11,12 @@ pub struct Lexer {
 
 impl Lexer {
     pub fn new(source: &str) -> Self {
+        // BUG-130: un fichero guardado con BOM UTF-8 (lo que hacen por defecto
+        // el Bloc de notas y varios editores de Windows) fallaba con «E001:
+        // Caracter inesperado» en la línea 1, columna 1, sin pista de qué
+        // carácter era: el BOM es invisible. El código era perfectamente
+        // válido. Se descarta la marca, que sólo indica la codificación.
+        let source = source.strip_prefix('\u{FEFF}').unwrap_or(source);
         Self {
             chars: source.chars().collect(),
             pos: 0,

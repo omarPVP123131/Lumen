@@ -1,6 +1,6 @@
 # LÚMEN — Manual Completo del Lenguaje
 
-**Versión Oficial v2.4.6 — Especificación Integral de la Gramática y Ecosistema**
+**Versión Oficial v3.0 — Especificación Integral de la Gramática y Ecosistema**
 
 > LÚMEN es un lenguaje de programación nativo bilingüe (Español / Inglés) de ultra-alto rendimiento, tipado estático estricto y modelos de memoria adaptativos (64-bit NaN-Boxing y Borrow Checker Zero-GC).
 
@@ -74,6 +74,120 @@ funcion entero procesar_buffer(prestado texto mensaje, dueno lista<entero> datos
 }
 ```
 
+### Semántica de paso de parámetros (importante)
+
+LÚMEN pasa **todos** los parámetros **por valor** de forma predeterminada, sin
+importar si son primitivos, `estructura` o `lista<T>`. Mutar un parámetro dentro
+de una función **no** afecta a la variable del llamador:
+
+```lumen
+estructura Caja { valor: entero }
+
+funcion vacio no_muta(Caja c) { c.valor = 999; }   // opera sobre una copia
+
+Caja a = Caja { valor: 1 };
+no_muta(a);
+imprimir(a.valor);   // 1  — sin cambios
+```
+
+Para que una mutación sea visible fuera de la función hay que pedirlo de forma
+explícita con `prestado mut`, que sí pasa por referencia:
+
+```lumen
+funcion vacio si_muta(prestado mut Caja c) { c.valor = 999; }
+
+Caja b = Caja { valor: 1 };
+si_muta(b);
+imprimir(b.valor);   // 999
+
+// Igual para listas: acumular sin tener que reasignar el retorno.
+funcion vacio acumular(prestado mut lista<entero> camino, entero n) {
+    si n <= 0 { retornar; }
+    camino.agregar(n);
+    acumular(camino, n - 1);   // funciona también en recursión
+}
+
+lista<entero> camino = [];
+acumular(camino, 5);
+imprimir(camino.largo());   // 5
+```
+
+`prestado` (sin `mut`) permite leer sin copiar pero prohíbe mutar: intentarlo
+produce el error `E061`. La alternativa sin préstamos sigue siendo válida:
+devolver el valor modificado y reasignarlo (`mi_lista = f(mi_lista);`).
+
+---
+
+### Ámbito de las variables
+
+Cada bloque (`si`, `sino`, `mientras`, `para`, `para ... en` y los bloques
+sueltos `{ ... }`) abre su propio ámbito. Una variable declarada dentro **sombrea**
+a la de fuera mientras dura el bloque, y la exterior queda intacta al salir:
+
+```lumen
+entero x = 1;
+si (1 > 0) {
+    entero x = 2;   // variable nueva, sólo vive aquí dentro
+    imprimir(x);    // 2
+}
+imprimir(x);        // 1 — la de fuera no se tocó
+```
+
+Ojo con la diferencia entre **declarar** y **asignar**. Sin tipo delante no hay
+variable nueva: se muta la de fuera, que es justo lo que se quiere en un
+acumulador.
+
+```lumen
+entero suma = 0;
+para i en 1..4 { suma = suma + i; }   // asigna, no declara
+imprimir(suma);                        // 6
+```
+
+Los parámetros y las variables de una función o de una lambda pertenecen a su
+propio marco, así que nunca chocan con los de quien llama.
+
+## 3.1. Conversiones de Tipo y Builtins Numéricos
+
+Todas las conversiones siguen el prefijo **`a_<tipo>()`**. Los nombres de tipo
+(`texto`, `entero`, `decimal`) **no** son funciones de conversión:
+
+```lumen
+texto  s = a_texto(42);        // 42  → "42"
+entero n = a_entero("42");     // "42" → 42   (inversa de a_texto)
+decimal d = a_decimal("3.5");  // "3.5" → 3.5
+
+// a_entero trunca hacia cero y tolera espacios y signo:
+a_entero("  -17 ");            // -17
+a_entero("3.9");               // 3
+```
+
+Cuando la entrada puede ser inválida (parsers, entrada de usuario), usa las
+variantes **`_seguro`**, que devuelven `resultado<T, texto>`:
+
+```lumen
+resultado<entero, texto> r = a_entero_seguro(token);
+elegir (r) {
+    caso exito(v): imprimir("número: ", v);
+    caso error(e): imprimir("entrada inválida: ", e);
+}
+
+si es_numero(token) { /* ... */ }   // validación booleana previa
+```
+
+Builtins numéricos disponibles sin importar ningún módulo — `abs` preserva el
+tipo del argumento (entero → entero, decimal → decimal):
+
+| Función (ES / EN) | Descripción |
+|---|---|
+| `abs` / `absoluto` | Valor absoluto |
+| `minimo` / `min`, `maximo` / `max` | Mínimo y máximo de dos valores |
+| `raiz` / `sqrt` | Raíz cuadrada |
+| `potencia` / `pow` | Potencia `base^exp` |
+| `piso` / `floor`, `techo` / `ceil`, `redondear` / `round` | Redondeos |
+
+Definir una función propia con uno de estos nombres es válido: la tuya tiene
+prioridad sobre el builtin.
+
 ---
 
 ## 4. Metaprogramación en Tiempo de Compilación (`comptime`)
@@ -101,6 +215,34 @@ entero mascara = (0xFF & 0x0F) | (1 << 4) ^ 0x01;
 
 ---
 
+### Números: división, resto y desplazamientos
+
+El operador `%` devuelve el **resto truncado**, con el signo del dividendo
+(igual que C, Rust o Java; no es el módulo euclídeo de Python):
+
+```lumen
+imprimir(-7 % 3);   // -1   (no 2)
+imprimir(7 % -3);   //  1
+imprimir(-7 / 3);   // -2   (la división entera trunca hacia cero)
+```
+
+Con decimales, `%` es el resto en coma flotante: `5.5 % 2.0` es `1.5`.
+
+Los desplazamientos `<<` y `>>` sólo aceptan enteros y el número de posiciones
+se limita a `0..63`; `>>` es aritmético, así que conserva el signo.
+
+### Decimales: lo que el lenguaje NO admite
+
+- **Un decimal exige la parte fraccionaria escrita**: `1.0`, no `1.`, y `2.0`
+  en vez de `2` donde se espere un `decimal`.
+- **No hay notación científica.** `1.0e10` es un error de sintaxis (E012); hay
+  que escribir el número completo. Tampoco se imprime nunca en esa notación: un
+  decimal muy grande o muy pequeño sale siempre en decimal plano, de forma
+  idéntica en el intérprete y en el binario compilado.
+- `raiz(-1.0)` imprime `NaN`, y los infinitos, `inf` / `-inf`.
+
+---
+
 ## 6. Cadenas de Texto e Interpolación `f"..."`
 
 ```lumen
@@ -125,6 +267,28 @@ lista<entero> sublista = valores[1..4]; // [20, 30, 40]
 
 ---
 
+### Añadir elementos a una lista
+
+`agregar` admite las dos sintaxis, y desde v3.0 son **equivalentes**: ambas
+modifican la lista.
+
+```lumen
+lista<entero> l = [1, 2];
+agregar(l, 3);   // forma función
+l.agregar(4);    // forma método
+imprimir(largo(l));   // 4
+```
+
+Recuerda que las listas se pasan **por valor**: si añades dentro de una función,
+el llamador no lo verá salvo que el parámetro sea `prestado mut`.
+
+```lumen
+funcion vacio mete(prestado mut lista<entero> l) { agregar(l, 9); }
+lista<entero> xs = [1];
+mete(xs);
+imprimir(largo(xs));   // 2
+```
+
 ## 8. Consultas Integradas de Datos (LINQ / SQL Style)
 
 ```lumen
@@ -147,7 +311,58 @@ elegir (edad) {
 }
 ```
 
+### Patrones de enumeración con datos
+
+Un `caso` puede desestructurar los datos que lleva una variante ligándolos a
+variables disponibles en el cuerpo del caso. Se admiten varios datos, literales
+para filtrar, `_` para ignorar y patrones OR con `|`:
+
+```lumen
+enum Figura { Circulo(decimal), Rect(decimal, decimal), Punto }
+
+funcion decimal area(Figura f) {
+    elegir (f) {
+        caso Figura::Circulo(r): retornar 3.14159 * r * r;  // liga r
+        caso Figura::Rect(w, h): retornar w * h;            // liga w y h
+        caso Figura::Punto: retornar 0.0;
+    }
+    retornar 0.0;
+}
+
+enum Msg { Codigo(entero) }
+
+elegir (m) {
+    caso Msg::Codigo(404): imprimir("no encontrado"); // literal: filtra
+    caso Msg::Codigo(c):   imprimir("codigo: ", c);   // captura el resto
+}
+```
+
+El número de variables capturadas debe coincidir con los datos de la variante;
+si no, el compilador informa `E067` indicando cuántos se esperaban.
+
 ---
+
+### El dato capturado conserva su tipo
+
+En un `elegir`, la variable que captura el contenido de `algun`, `exito` o
+`error` tiene el tipo real del valor, no sólo números. Puedes capturar structs,
+listas o texto y usarlos con normalidad:
+
+```lumen
+estructura Usuario { nombre: texto, }
+
+funcion opcion<Usuario> buscar() {
+    retornar algun(Usuario { nombre: "Ana" });
+}
+
+elegir (buscar()) {
+    caso algun(u): imprimir(u.nombre);   // acceso al campo: correcto
+    caso ninguno: imprimir("nadie");
+}
+```
+
+Lo mismo con `resultado<T, E>`: `exito(v)` liga `v` con `T` y `error(e)` liga
+`e` con `E`.
 
 ## 10. Estructuras (Structs) y Métodos `impl`
 
@@ -214,7 +429,7 @@ funcion vacio hardware_directo() {
 
 ---
 
-*LÚMEN v2.4.6 — Documentación Oficial Sincronizada.*
+*LÚMEN v3.0 — Documentación Oficial Sincronizada.*
 
 
 ---

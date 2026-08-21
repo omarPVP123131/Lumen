@@ -1,0 +1,28 @@
+// Rangos, comprensiones de lista y el operador pipeline `|>`.
+
+imprimir("=== Rangos ===");
+// `a..b` excluye el extremo; `a..=b` lo incluye.
+imprimir("1..5  (excluyente):");
+para i en 1..5 { imprimir("  ", i); }
+imprimir("1..=3 (inclusivo):");
+para i en 1..=3 { imprimir("  ", i); }
+
+imprimir("");
+imprimir("=== Comprensiones ===");
+sea cuadrados = [n * n para n en 1..6];
+imprimir("cuadrados de 1..6 : ", cuadrados);
+
+sea pares = [n para n en 1..10 si n % 2 == 0];
+imprimir("pares de 1..10    : ", pares);
+
+sea decenas = [x * 10 para x en 1..=5];
+imprimir("decenas 1..=5     : ", decenas);
+
+imprimir("");
+imprimir("=== Pipeline |> ===");
+// `x |> f` pasa x como argumento a f, encadenable de izquierda a derecha.
+funcion entero triplicar(entero x) { retornar x * 3; }
+funcion entero sumar_diez(entero x) { retornar x + 10; }
+
+imprimir("5 |> triplicar            = ", 5 |> triplicar);
+imprimir("5 |> triplicar |> sumar_diez = ", 5 |> triplicar |> sumar_diez);

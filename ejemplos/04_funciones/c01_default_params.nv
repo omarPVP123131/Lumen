@@ -1,0 +1,3 @@
+funcion entero suma(entero a, entero b = 10) { retornar a + b; }
+imprimir(suma(1));
+imprimir(suma(1, 2));

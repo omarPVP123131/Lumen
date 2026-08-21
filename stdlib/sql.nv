@@ -18,7 +18,7 @@ funcion entero abrir(texto ruta) {
     cualquiera lib = _sql_obtener_lib();
     si __tipo_de(lib) != "texto" || lib == "" { retornar 0; }
     entero len = ruta.largo();
-    entero path_buf = __ffi_asignar(len + 1);
+    entero path_buf = __ffi_asignar(len * 4 + 1);
     __ffi_escribir(path_buf, 0, ruta);
     __ffi_poke_byte(path_buf, len, 0);
     entero db_buf = __ffi_asignar(8);
@@ -38,7 +38,7 @@ funcion entero ejecutar(entero db, texto sql) {
     cualquiera lib = _sql_obtener_lib();
     si __tipo_de(lib) != "texto" || lib == "" { retornar -1; }
     entero slen = sql.largo();
-    entero sql_buf = __ffi_asignar(slen + 1);
+    entero sql_buf = __ffi_asignar(slen * 4 + 1);
     __ffi_escribir(sql_buf, 0, sql);
     __ffi_poke_byte(sql_buf, slen, 0);
     entero rc = __ffi_llamar(lib, "sqlite3_exec", "entero,entero,entero,entero,entero", [db, sql_buf, 0, 0, 0], "entero");
@@ -53,7 +53,7 @@ funcion cualquiera ejecutar_consulta(entero db, texto sql) {
     cualquiera lib = _sql_obtener_lib();
     si __tipo_de(lib) != "texto" || lib == "" { retornar ninguno; }
     entero slen = sql.largo();
-    entero sql_buf = __ffi_asignar(slen + 1);
+    entero sql_buf = __ffi_asignar(slen * 4 + 1);
     __ffi_escribir(sql_buf, 0, sql);
     __ffi_poke_byte(sql_buf, slen, 0);
     entero stmt_buf = __ffi_asignar(8);

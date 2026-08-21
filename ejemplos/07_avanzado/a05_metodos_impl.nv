@@ -1,0 +1,27 @@
+// Métodos sobre una estructura. `prestado mut` permite mutar el receptor.
+
+estructura Pila { items: lista<entero> }
+
+impl Pila {
+    funcion vacio apilar(prestado mut Pila self, entero v) {
+        lista<entero> tmp = self.items;
+        tmp.agregar(v);
+        self.items = tmp;
+    }
+    funcion entero tamano(prestado Pila self) {
+        retornar largo(self.items);
+    }
+    funcion entero cima(prestado Pila self) {
+        si (largo(self.items) == 0) { retornar 0; }
+        retornar self.items[largo(self.items) - 1];
+    }
+}
+
+lista<entero> vacia = [];
+Pila p = Pila { items: vacia };
+p.apilar(10);
+p.apilar(20);
+p.apilar(30);
+
+imprimir("tamano = ", p.tamano());
+imprimir("cima   = ", p.cima());

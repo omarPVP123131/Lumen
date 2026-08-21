@@ -1,0 +1,8 @@
+// romper/continuar en para-cada ANIDADO: debe afectar al bucle interno
+para i en [1,2] {
+  para j en [10,20,30] {
+    si (j == 20) { romper; }
+    imprimir(j);
+  }
+  imprimir(i);
+}

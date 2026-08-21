@@ -1,0 +1,5 @@
+texto cmd = "start";
+elegir (cmd) {
+  caso "start": imprimir("iniciando");
+  caso "stop": imprimir("parando");
+}

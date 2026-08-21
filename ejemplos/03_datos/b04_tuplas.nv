@@ -1,0 +1,3 @@
+(entero, texto) t = (1, "uno");
+imprimir(t.0);
+imprimir(t.1);

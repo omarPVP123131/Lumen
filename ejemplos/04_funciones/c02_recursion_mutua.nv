@@ -1,0 +1,10 @@
+funcion booleano es_par(entero n) {
+  si (n == 0) { retornar verdadero; }
+  retornar es_impar(n - 1);
+}
+funcion booleano es_impar(entero n) {
+  si (n == 0) { retornar falso; }
+  retornar es_par(n - 1);
+}
+imprimir(es_par(10));
+imprimir(es_impar(7));

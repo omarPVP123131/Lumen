@@ -44,6 +44,12 @@ pub enum Instr {
     ConstBool(bool),
     Load(String),
     Store(String),
+    /// BUG-023: declaración de variable. Liga siempre en el marco actual.
+    StoreLocal(String),
+    /// BUG-027: descarta el valor en la cima de la pila. Lo emiten las
+    /// sentencias-expresión (`imprimir(x);`) cuya evaluación deja un valor que
+    /// nadie consume.
+    Drop,
     Binary(Op),
     Unary(Op),
     Call(String, usize),
@@ -76,6 +82,10 @@ pub enum Instr {
     },
     Jmp(usize),
     JmpIf(usize),
+    /// BUG-022: instala el manejador del `atrapar` cuya etiqueta se indica.
+    PushHandler(usize),
+    /// BUG-022: desinstala el manejador del `intentar` que acaba de terminar.
+    PopHandler,
     Label(usize),
     Phi(usize, usize),
     Nop,
@@ -88,6 +98,11 @@ pub struct Func {
     pub params: Vec<String>,
     pub entry: usize,
     pub instrs: Vec<Instr>,
+    /// BUG-032: nombres del entorno que una lambda captura por valor. Se
+    /// resuelven en el momento de crear la closure (`FuncRef`), de modo que la
+    /// closure siga funcionando cuando el marco que la creó ya ha muerto.
+    /// Vacío para las funciones normales.
+    pub captures: Vec<String>,
 }
 
 #[derive(Debug, Clone)]

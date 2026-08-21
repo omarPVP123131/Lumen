@@ -1,0 +1,5 @@
+estructura C { v: entero }
+funcion vacio poner(prestado mut C c, entero n) { c.v = n; }
+C x = C { v: 0 };
+poner(x, 42);
+imprimir(x.v);

@@ -1,5 +1,5 @@
 // ============================================================================
-// LÚMEN Interactive REPL Pro — v2.4.6
+// LÚMEN Interactive REPL Pro — v3.0.0
 // REPL Avanzado con Comandos Interactivos (:help, :doc, :bench, :ast, :mem, :clear)
 // Evaluación en caliente con NaN-Boxing y Auto-Semicolon
 // ============================================================================
@@ -11,12 +11,15 @@ use lumen_codegen::Codegen;
 use lumen_ir::IRBuilder;
 use lumen_lexer::Lexer;
 use lumen_parser::Parser;
-use lumen_sema::SemanticAnalyzer;
+use lumen_sema::{ModuleLoader, SemanticAnalyzer};
 use lumen_vm::VM;
 
 pub struct Repl {
     accumulated: String,
     history_count: usize,
+    /// BUG-156: rutas de `-L/--lib-dir`, para que el REPL resuelva imports con
+    /// los mismos directorios que `lumen run`.
+    lib_dirs: Vec<std::path::PathBuf>,
 }
 
 impl Default for Repl {
@@ -27,9 +30,16 @@ impl Default for Repl {
 
 impl Repl {
     pub fn new() -> Self {
+        Self::con_lib_dirs(Vec::new())
+    }
+
+    /// REPL que resuelve los imports usando estos directorios, ademas de la
+    /// stdlib embebida.
+    pub fn con_lib_dirs(lib_dirs: Vec<std::path::PathBuf>) -> Self {
         Self {
             accumulated: String::from("importar ingles;\n"),
             history_count: 0,
+            lib_dirs,
         }
     }
 
@@ -58,7 +68,7 @@ impl Repl {
 
         // 2. Parser
         let parser = Parser::new(tokens);
-        let (mut program, parse_errors) = parser.parse();
+        let (_program_parseado, parse_errors) = parser.parse();
         if !parse_errors.is_empty() {
             let mut msg = String::new();
             for e in &parse_errors {
@@ -69,6 +79,34 @@ impl Repl {
             }
             return Err(msg.trim_end().to_string());
         }
+
+        // 2b. Imports. BUG-156: el REPL nunca invocaba al `ModuleLoader`, asi
+        // que `importar "texto";` no cargaba nada Y NO DABA ERROR: la linea se
+        // aceptaba con `=> ()` y las funciones del modulo seguian sin existir.
+        // Peor aun, `importar "no_existe";` tambien se aceptaba en silencio, de
+        // modo que el REPL no servia para probar un modulo antes de usarlo, que
+        // es justo para lo que se usa un REPL. Se resuelve igual que en `run`;
+        // la stdlib embebida (BUG-152) hace que funcione sin ficheros al lado.
+        let mut loader = ModuleLoader::new(self.lib_dirs.clone());
+        let base = std::path::Path::new("<repl>.nv");
+        // `resolve_imports` reparsea el fuente y devuelve el programa ya
+        // aplanado, asi que sustituye al que acaba de salir del parser; aquel
+        // solo sirve para reportar los errores de sintaxis de mas arriba.
+        let mut program = match loader.resolve_imports(&combined, base) {
+            Ok(p) => p,
+            Err(e) => {
+                let msg = match &e {
+                    lumen_sema::ModuleError::Circular { path, .. } => {
+                        format!("  [E063] Import circular detectado: {}", path.display())
+                    }
+                    lumen_sema::ModuleError::Io { path, message } => {
+                        format!("  Error al cargar '{}': {}", path.display(), message)
+                    }
+                    otro => format!("  Error de import: {:?}", otro),
+                };
+                return Err(msg);
+            }
+        };
 
         // 3. Semántica
         let sema = SemanticAnalyzer::new();
@@ -95,12 +133,12 @@ impl Repl {
             Ok(()) => {
                 self.history_count += 1;
                 let output: Vec<String> = vm.output().to_vec();
-                let is_decl = trimmed.contains("funcion")
-                    || trimmed.contains("estructura")
-                    || trimmed.contains("enum")
-                    || trimmed.contains("rasgo")
-                    || trimmed.contains("impl");
-                if is_decl {
+                // BUG-004: además de las declaraciones de tipo/función, hay que
+                // persistir las declaraciones de variable para que la línea
+                // siguiente las vea. El REPL reejecuta el historial acumulado,
+                // así que sólo se guarda lo que declara algo (no las
+                // expresiones con efectos, que se duplicarían al reejecutarse).
+                if is_persistent_decl(&trimmed) {
                     self.accumulated = format!("{}\n{}\n", self.accumulated, trimmed);
                 }
                 if output.is_empty() {
@@ -114,6 +152,123 @@ impl Repl {
     }
 }
 
+/// BUG-004: decide si una línea debe conservarse en el estado acumulado del
+/// REPL. Se conservan las declaraciones (tipos, funciones y variables) porque
+/// definen nombres que las líneas siguientes necesitan resolver.
+///
+/// Las llamadas y expresiones sueltas NO se conservan: el REPL reejecuta todo
+/// el historial en cada línea, así que persistirlas duplicaría su salida y sus
+/// efectos secundarios.
+fn is_persistent_decl(line: &str) -> bool {
+    let t = line.trim();
+    if t.is_empty() {
+        return false;
+    }
+
+    // Declaraciones de tipo / función / trait, en español e inglés.
+    const DECL_KEYWORDS: [&str; 12] = [
+        "funcion ",
+        "function ",
+        "estructura ",
+        "struct ",
+        "enum ",
+        "rasgo ",
+        "trait ",
+        "impl ",
+        "importar ",
+        "import ",
+        "const ",
+        "async ",
+    ];
+    if DECL_KEYWORDS.iter().any(|k| t.starts_with(k)) {
+        return true;
+    }
+
+    // `sea x = ...` / `let x = ...` — inferencia de tipo.
+    if t.starts_with("sea ") || t.starts_with("let ") {
+        return true;
+    }
+
+    // Declaración con tipo explícito: `entero x = 0;`, `lista<texto> l = [];`,
+    // `resultado<entero, texto> r = exito(1);`, `Punto p = Punto { ... };`.
+    is_typed_var_decl(t)
+}
+
+/// Reconoce `TIPO nombre = valor;` (incluyendo genéricos `T<...>`), que es la
+/// forma de declarar variables con tipo explícito en LÚMEN.
+fn is_typed_var_decl(t: &str) -> bool {
+    // Debe haber una asignación de nivel superior.
+    let Some(eq) = find_top_level_assign(t) else {
+        return false;
+    };
+    let head = t[..eq].trim();
+    if head.is_empty() {
+        return false;
+    }
+
+    // Ignora asignaciones a variables ya existentes (`x = 1`), campos
+    // (`p.x = 1`) e índices (`l[0] = 1`): no declaran nombres nuevos.
+    if head.contains('.') || head.ends_with(']') {
+        return false;
+    }
+
+    // Separa el nombre final del tipo que lo precede, respetando `<...>`.
+    let mut depth = 0i32;
+    let mut split = None;
+    for (i, c) in head.char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            c if c.is_whitespace() && depth == 0 => split = Some(i),
+            _ => {}
+        }
+    }
+    let Some(split) = split else {
+        return false; // `x = 1` — un solo token: asignación, no declaración.
+    };
+
+    let type_part = head[..split].trim();
+    let name_part = head[split..].trim();
+
+    !type_part.is_empty()
+        && !name_part.is_empty()
+        && name_part
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || !c.is_ascii())
+        && name_part.chars().next().is_some_and(|c| !c.is_numeric())
+}
+
+/// Encuentra el `=` de asignación de nivel superior, ignorando `==`, `!=`,
+/// `<=`, `>=`, los que van dentro de cadenas y los de genéricos.
+fn find_top_level_assign(t: &str) -> Option<usize> {
+    let b = t.as_bytes();
+    let mut in_str = false;
+    let mut depth = 0i32;
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        match c {
+            b'"' if !in_str => in_str = true,
+            b'"' if in_str => in_str = false,
+            b'\\' if in_str => i += 1,
+            b'(' | b'[' | b'{' if !in_str => depth += 1,
+            b')' | b']' | b'}' if !in_str => depth -= 1,
+            b'=' if !in_str && depth == 0 => {
+                let prev = if i > 0 { b[i - 1] } else { b' ' };
+                let next = if i + 1 < b.len() { b[i + 1] } else { b' ' };
+                let is_cmp = next == b'='
+                    || matches!(prev, b'=' | b'!' | b'<' | b'>' | b'+' | b'-' | b'*' | b'/');
+                if !is_cmp {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
 fn normalize_semicolon(s: &str) -> String {
     let trimmed = s.trim();
     if trimmed.ends_with(';') || trimmed.ends_with('}') {
@@ -124,15 +279,20 @@ fn normalize_semicolon(s: &str) -> String {
 }
 
 pub fn run_repl() {
+    run_repl_con_lib_dirs(Vec::new())
+}
+
+/// BUG-156: variante que recibe los `-L` de la linea de comandos.
+pub fn run_repl_con_lib_dirs(lib_dirs: Vec<std::path::PathBuf>) {
     println!();
     println!("  ╔══════════════════════════════════════════════════════════════════════╗");
-    println!("  ║             LÚMEN REPL PRO v2.4.6 — Entorno Interactivo              ║");
+    println!("  ║             LÚMEN REPL PRO v3.0.0 — Entorno Interactivo              ║");
     println!("  ║             64-bit NaN-Boxing • JIT Activo • Dual ES/EN              ║");
     println!("  ╚══════════════════════════════════════════════════════════════════════╝");
     println!("  💡 Comandos: :help, :doc <simbolo>, :bench <codigo>, :mem, :clear, salir");
     println!();
 
-    let mut repl = Repl::new();
+    let mut repl = Repl::con_lib_dirs(lib_dirs);
     let stdin = io::stdin();
 
     loop {

@@ -91,9 +91,15 @@ funcion lista<entero> _tc_size() {
 
 funcion booleano _tc_write(texto s) {
     si !_cargar() { retornar falso; }
-    entero len = s.largo();
-    entero buf = __ffi_asignar(len);
-    __ffi_escribir(buf, 0, s);
+    // BUG-054: `largo()` cuenta CARACTERES, pero el búfer y `write(2)` se
+    // miden en BYTES. Los marcos de las ventanas usan box-drawing UTF-8
+    // (`╭`, `─`, `│`…), de 3 bytes cada uno, así que reservar `largo()`
+    // desbordaba el heap y abortaba el proceso (rc=134). Se reserva el peor
+    // caso de UTF-8 (4 bytes por carácter) más el terminador, y se escriben
+    // los bytes que `__ffi_escribir` informa haber copiado.
+    entero cap = s.largo() * 4 + 1;
+    entero buf = __ffi_asignar(cap);
+    entero len = __ffi_escribir(buf, 0, s);
     entero rc = -1;
     si _is_windows == 1 {
         entero h = __ffi_llamar(_sys_lib, "GetStdHandle", "entero", [-11], "entero");
@@ -103,7 +109,7 @@ funcion booleano _tc_write(texto s) {
     } sino {
         rc = __ffi_llamar(_sys_lib, "write", "entero,entero,entero", [1, buf, len], "entero");
     }
-    __ffi_liberar(buf, len);
+    __ffi_liberar(buf, cap);
     retornar rc == 0;
 }
 

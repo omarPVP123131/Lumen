@@ -1,0 +1,3 @@
+texto s = "";
+imprimir(largo(s));
+si (s == "") { imprimir("vacio"); }

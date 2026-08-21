@@ -7,15 +7,15 @@ texto src = intentar __leer_archivo("stdlib/compiler/compiler_v2.nv");
 imprimir("Source: ", largo(src), " bytes");
 
 // 1. Lexer
-numero tk = lexer_lexer_tokenizar(src);
+numero tk = lexer_tokenizar(src);
 imprimir("Tokens: ", __map_obtener(tk, "cnt"));
 
 // 2. Parser
-numero ast = parser_parser_parsear(tk);
+numero ast = parser_parse(tk);
 imprimir("AST tipo: ", __map_obtener(ast, "tipo"));
 
 // 3. Codegen
-numero cg = codegen_codegen_generar(ast);
+numero cg = codegen_generar(ast);
 imprimir("Instructions: ", __map_obtener(cg, "pos"));
 
 // 4. Serialize to .nvc

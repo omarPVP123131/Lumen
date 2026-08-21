@@ -1,0 +1,30 @@
+// a09_mapas.nv — diccionarios con los builtins `__map_*`
+//
+// LÚMEN no tiene literal de mapa (`{"a": 1}` no es sintaxis válida) ni el tipo
+// `mapa<K,V>`. Los diccionarios se manejan con builtins y son **persistentes**:
+// `__map_poner` NO muta el mapa, devuelve uno nuevo. Hay que reasignar.
+
+sea m = __map_nuevo();
+
+// Ojo: sin reasignar, el mapa original se queda vacío.
+m = __map_poner(m, "manzanas", 3);
+m = __map_poner(m, "peras", 5);
+
+imprimir("manzanas -> ", __map_obtener(m, "manzanas"));
+imprimir("tamano   -> ", __map_longitud(m));
+imprimir("claves   -> ", __map_claves(m));
+
+// Volver a poner una clave la reemplaza.
+m = __map_poner(m, "manzanas", 10);
+imprimir("tras reemplazar -> ", __map_obtener(m, "manzanas"));
+
+// `__map_contiene` para comprobar antes de leer: una clave ausente da `void`.
+imprimir("contiene 'uvas'  -> ", __map_contiene(m, "uvas"));
+imprimir("contiene 'peras' -> ", __map_contiene(m, "peras"));
+
+// Como es persistente, se puede conservar la versión anterior.
+sea antes = __map_nuevo();
+antes = __map_poner(antes, "x", 1);
+sea despues = __map_poner(antes, "x", 2);
+imprimir("antes.x   -> ", __map_obtener(antes, "x"));
+imprimir("despues.x -> ", __map_obtener(despues, "x"));

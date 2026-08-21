@@ -1,0 +1,5 @@
+lista<entero> a = [1,2];
+lista<entero> b = a;
+b.agregar(3);
+imprimir(largo(a));
+imprimir(largo(b));

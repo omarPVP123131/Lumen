@@ -1,0 +1,4 @@
+funcion vacio agrega(prestado mut lista<entero> l) { l.agregar(9); }
+lista<entero> xs = [1];
+agrega(xs);
+imprimir(xs);

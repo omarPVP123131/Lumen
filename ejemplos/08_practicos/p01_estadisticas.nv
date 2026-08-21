@@ -1,0 +1,30 @@
+// Estadísticas básicas sobre una lista de números.
+
+funcion entero suma(lista<entero> l) {
+    entero t = 0;
+    para v en l { t = t + v; }
+    retornar t;
+}
+
+funcion entero maximo(lista<entero> l) {
+    si (largo(l) == 0) { retornar 0; }
+    entero m = l[0];
+    para v en l { si (v > m) { m = v; } }
+    retornar m;
+}
+
+funcion entero minimo(lista<entero> l) {
+    si (largo(l) == 0) { retornar 0; }
+    entero m = l[0];
+    para v en l { si (v < m) { m = v; } }
+    retornar m;
+}
+
+lista<entero> notas = [7, 9, 4, 10, 6, 8];
+
+imprimir("datos   : ", notas);
+imprimir("cuantos : ", largo(notas));
+imprimir("suma    : ", suma(notas));
+imprimir("maximo  : ", maximo(notas));
+imprimir("minimo  : ", minimo(notas));
+imprimir("media   : ", suma(notas) / largo(notas));

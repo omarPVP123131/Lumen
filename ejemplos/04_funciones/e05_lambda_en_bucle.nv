@@ -1,0 +1,2 @@
+cuadrado = funcion(entero x) { retornar x * x; };
+para n en [1,2,3] { imprimir(cuadrado(n)); }

@@ -1469,7 +1469,8 @@ numero f = __deque_quitar_frente(dq);
 imprimir(f);
 "#;
     let output = run_source(src).unwrap();
-    assert_eq!(output, vec!["0", "void"]);
+    // BUG-159: el nulo se imprime "nulo", igual que lo nombra `__tipo_de`.
+    assert_eq!(output, vec!["0", "nulo"]);
 }
 
 // --- Heap empty ---
@@ -1483,7 +1484,8 @@ numero p = __monticulo_quitar(h);
 imprimir(p);
 "#;
     let output = run_source(src).unwrap();
-    assert_eq!(output, vec!["void", "0", "void"]);
+    // BUG-159: antes "void"; ahora coherente con `__tipo_de`.
+    assert_eq!(output, vec!["nulo", "0", "nulo"]);
 }
 
 // --- Linked list empty ---
@@ -1726,9 +1728,9 @@ entero res = __tarea_esperar(tid);
 imprimir(res);";
     let output = run_source(src).unwrap();
     // The nonexistent function returns Void in the spawned task
-    // Void prints as "void" on the output
+    // BUG-159: Void se imprime como "nulo" (antes "void").
     assert!(
-        output[0].contains("void") || output[0].contains("error") || output[0].contains("Error")
+        output[0].contains("nulo") || output[0].contains("error") || output[0].contains("Error")
     );
 }
 

@@ -120,6 +120,9 @@ mod tests {
                 params: vec![],
                 entry: 0,
                 instrs: vec![Instr::Nop, Instr::ConstInt(42), Instr::Nop, Instr::Return],
+                // BUG-032 añadió las capturas de las closures a `Func`; este
+                // test no las usa, pero el campo es obligatorio.
+                captures: vec![],
             },
         );
         reg.run_ir(&mut program);

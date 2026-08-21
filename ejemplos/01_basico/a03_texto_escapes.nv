@@ -1,0 +1,3 @@
+imprimir("tab:\there");
+imprimir("comilla:\"x\"");
+imprimir("backslash:\\");

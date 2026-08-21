@@ -1,0 +1,3 @@
+// para-cada sobre lista vacia
+para n en [] { imprimir("no debe salir"); }
+imprimir("vacio ok");

@@ -302,6 +302,67 @@ pub fn install_package(pkg: &str, cache_dir: &Path) {
         return;
     }
 
+    // 1b. Caso: archivo de paquete .lmp local
+    //
+    // BUG-142: `lumen pack` genera un .lmp y su propio mensaje final invita a
+    // instalarlo con `lumen install <ruta>.lmp`, pero no había ninguna rama
+    // para ficheros: la ruta caía hasta el fallback de git y se concatenaba a
+    // `https://github.com/`, produciendo URLs como
+    // `https://github.com//tmp/x/paq.lmp` y un «repository not found». El
+    // formato que la propia herramienta produce no se podía instalar.
+    if local_path.is_file() && pkg.ends_with(".lmp") {
+        println!();
+        println!("  📦 INSTALANDO PAQUETE LOCAL: {}", local_path.display());
+        println!("  ═════════════════════════════════════════════════════════════");
+
+        let tmp = std::env::temp_dir().join(format!("lumen-install-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        let _ = fs::create_dir_all(&tmp);
+
+        let extraido = match unpack_package(pkg, &tmp) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("  ✗ No se pudo abrir el paquete: {}", e);
+                let _ = fs::remove_dir_all(&tmp);
+                return;
+            }
+        };
+
+        // El nombre sale del manifiesto si está; si no, del nombre del fichero.
+        let name_str = read_manifest_name(&extraido).unwrap_or_else(|| {
+            Path::new(pkg)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("paquete")
+                .trim_end_matches(".lmp")
+                .to_string()
+        });
+
+        if let Some(ref root) = proj_root {
+            let pkgs_dir = root.join("pkgs").join(&name_str);
+            let _ = fs::create_dir_all(&pkgs_dir);
+            copy_dir(&extraido, &pkgs_dir);
+            add_dependency_to_manifest(root, &name_str, &format!("file:{}", local_path.display()));
+            update_lockfile(root, &name_str, "0.1.0-local", "sha256:local-lmp");
+            println!("  ✓ Instalado en el proyecto local: {}", pkgs_dir.display());
+        }
+
+        let cache_dest = cache_dir.join(&name_str);
+        let _ = fs::create_dir_all(&cache_dest);
+        copy_dir(&extraido, &cache_dest);
+        println!(
+            "  ✓ Sincronizado en caché de usuario: {}",
+            cache_dest.display()
+        );
+        println!(
+            "  • Ya puedes importar sus módulos con: importar \"{}\";",
+            name_str
+        );
+        println!();
+        let _ = fs::remove_dir_all(&tmp);
+        return;
+    }
+
     // 2. Caso: Registro oficial lumen-pkgs con SemVer
     let curated = Registry::get_curated_packages();
     let (target_pkg, req_version) = if pkg.contains('@') {
@@ -474,6 +535,23 @@ fn copy_dir(src: &Path, dest: &Path) {
     }
 }
 
+/// BUG-142: el nombre real del paquete vive en `lumen.toml`; usar el del
+/// fichero daría `lib_saludo-0.1.0` en vez de `lib_saludo`.
+fn read_manifest_name(dir: &Path) -> Option<String> {
+    let txt = fs::read_to_string(dir.join("lumen.toml")).ok()?;
+    for linea in txt.lines() {
+        let l = linea.trim();
+        if let Some(v) = l.strip_prefix("nombre").or_else(|| l.strip_prefix("name")) {
+            let v = v.trim_start().strip_prefix('=')?.trim();
+            let v = v.trim_matches('"').trim();
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
 pub fn unpack_package(pkg_path: &str, dest_dir: &Path) -> Result<PathBuf, String> {
     let src = PathBuf::from(pkg_path);
     if !src.exists() {
@@ -534,6 +612,15 @@ pub fn credentials_path() -> PathBuf {
         .join("credentials.json")
 }
 
+/// BUG-145: SHA-256 real del artefacto, para que el valor que `publish`
+/// muestra sirva de verdad para verificar la descarga.
+pub fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(data);
+    h.finalize().iter().map(|b| format!("{:02x}", b)).collect()
+}
+
 pub fn save_credentials(creds: &UserCredentials) -> Result<(), String> {
     let path = credentials_path();
     if let Some(parent) = path.parent() {
@@ -541,6 +628,14 @@ pub fn save_credentials(creds: &UserCredentials) -> Result<(), String> {
     }
     let json = serde_json::to_string_pretty(creds).map_err(|e| e.to_string())?;
     fs::write(&path, json).map_err(|e| e.to_string())?;
+    // BUG-145: el fichero guarda un token de autenticación y se creaba con
+    // los permisos por defecto (0644), legible por cualquier usuario de la
+    // máquina. `ssh`, `gpg` y `npm` lo restringen a 0600; aquí igual.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
     Ok(())
 }
 
@@ -594,9 +689,16 @@ pub fn login_user(username: &str, token_opt: Option<&str>) {
     println!("  • Servidor Registry  : {}", registry_url);
     println!("  • Clave Pública Auth : {}", pub_key);
     println!("  • Credenciales en    : {}", credentials_path().display());
-    println!("  • Estado de Sesión   : 🟢 Activa (Token Ed25519 Válido)");
+    // BUG-145: se anunciaba "🟢 Activa (Token Ed25519 Válido)" sin haber
+    // contactado con ningún servidor ni validado nada. El registro oficial
+    // todavía no existe —el dominio ni siquiera resuelve— y la CLI no lleva
+    // cliente HTTP, así que la sesión es puramente local.
+    println!("  • Estado de Sesión   : 🟡 Guardada localmente (sin validar)");
     println!();
-    println!("  🚀 Ya puedes publicar paquetes con: lumen publish [directorio]\n");
+    println!("  ⚠️  El registro público de LÚMEN aún no está operativo: estas");
+    println!("     credenciales se guardan en disco pero no se han verificado");
+    println!("     contra ningún servidor.");
+    println!();
 }
 
 pub fn publish_package(dir: &str) {

@@ -1,0 +1,29 @@
+// Lambdas: capturan variables del entorno, se anidan y se guardan en variables.
+
+entero base = 100;
+
+// Captura una variable de fuera.
+sea sumar_base = funcion(entero x) { retornar x + base; };
+imprimir("20 + base = ", sumar_base(20));
+
+// Una lambda declarada dentro de otra lambda.
+sea externa = funcion() {
+    sea interna = funcion() { retornar 7; };
+    retornar interna() * 2;
+};
+imprimir("anidada -> ", externa());
+
+// Un contador que muta su propia captura.
+entero cuenta = 0;
+sea incrementar = funcion() { cuenta = cuenta + 1; retornar cuenta; };
+imprimir(incrementar());
+imprimir(incrementar());
+imprimir("cuenta final = ", cuenta);
+
+// Lambdas creadas dentro de un bucle.
+entero k = 0;
+mientras (k < 3) {
+    sea doble = funcion() { retornar k * 2; };
+    imprimir("k=", k, " doble=", doble());
+    k = k + 1;
+}

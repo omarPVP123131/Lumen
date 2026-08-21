@@ -20,7 +20,30 @@ pub struct IRBuilder {
     fn_names: HashSet<String>,
     impl_method_map: HashMap<String, String>,
     capture_map: HashMap<String, String>,
+    /// BUG-063: pila de ámbitos de bloque. Cada entrada mapea el nombre escrito
+    /// por el usuario al slot real donde vive. Las variables del runtime son
+    /// planas por marco (una tabla por nombre), así que un `entero x` dentro de
+    /// un `si` machacaba la `x` de fuera en vez de sombrearla. Sólo se renombra
+    /// cuando el nombre YA es visible en un ámbito exterior, para no tocar el
+    /// código que ya funcionaba.
+    block_scopes: Vec<HashMap<String, String>>,
+    shadow_counter: usize,
+    /// BUG-028: cuerpos de los bloques `posponer` de la función que se está
+    /// generando. Se emiten al salir (final de la función y en cada
+    /// `retornar`), en orden inverso al de declaración, como manda un `defer`.
+    deferred: Vec<Vec<crate::ir::Instr>>,
     is_in_lambda: bool,
+    /// BUG-060: nombre de la variable que se está inicializando ahora mismo con
+    /// una lambda. Su cuerpo puede referirse a ella (recursión), y esa
+    /// referencia NO es una captura del entorno: en el momento de crear la
+    /// closure la variable todavía no tiene valor, así que capturarla por valor
+    /// guardaba un hueco y la llamada recursiva moría con «Variable no
+    /// definida». Se resuelve por nombre al llamar, cuando ya está asignada.
+    self_binding: Option<String>,
+    /// BUG-008: índices de los parámetros declarados `prestado mut` en cada
+    /// función. Tras la llamada se copia el valor final del parámetro de vuelta
+    /// a la variable del llamador (paso por referencia observable).
+    mut_borrow_params: HashMap<String, Vec<usize>>,
 }
 
 impl Default for IRBuilder {
@@ -43,11 +66,20 @@ impl IRBuilder {
             fn_names: HashSet::new(),
             impl_method_map: HashMap::new(),
             capture_map: HashMap::new(),
+            block_scopes: Vec::new(),
+            shadow_counter: 0,
+            deferred: Vec::new(),
             is_in_lambda: false,
+            self_binding: None,
+            mut_borrow_params: HashMap::new(),
         }
     }
 
     pub fn build(mut self, program: &[DeclOrStmt]) -> crate::ir::Program {
+        // BUG-063: ámbito base del programa (`__main__`). Sin él, las variables
+        // de nivel superior no quedan registradas y un bloque interior no sabe
+        // que está sombreando algo.
+        self.push_block_scope();
         let has_toplevel_code = program.iter().any(|node| {
             !matches!(
                 node,
@@ -66,9 +98,21 @@ impl IRBuilder {
                     params: params.iter().map(|p| p.name.clone()).collect(),
                     entry: 0,
                     instrs: Vec::new(),
+                    captures: Vec::new(),
                 };
                 self.program.funcs.insert(name.clone(), func);
                 self.fn_names.insert(name.clone());
+                // BUG-008: registra qué parámetros son `prestado mut` para
+                // emitir la copia de vuelta en cada llamada.
+                let mut_idx: Vec<usize> = params
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, p)| matches!(&p.param_type, Type::Prestado { mutable: true, .. }))
+                    .map(|(i, _)| i)
+                    .collect();
+                if !mut_idx.is_empty() {
+                    self.mut_borrow_params.insert(name.clone(), mut_idx);
+                }
             }
         }
 
@@ -109,9 +153,28 @@ impl IRBuilder {
                             params: param_names,
                             entry: 0,
                             instrs: Vec::new(),
+                            captures: Vec::new(),
                         };
                         self.program.funcs.insert(mangled.clone(), func);
                         self.fn_names.insert(mangled.clone());
+                        // BUG-020: registrar también los `prestado mut` de los
+                        // métodos. Los índices son sobre la lista de parámetros
+                        // ya normalizada (con `self` en la posición 0).
+                        let has_explicit_self = params
+                            .iter()
+                            .any(|p| p.name == "self" || p.name == "yo" || p.name == "este");
+                        let offset = if has_explicit_self { 0 } else { 1 };
+                        let mut_idx: Vec<usize> = params
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, p)| {
+                                matches!(&p.param_type, Type::Prestado { mutable: true, .. })
+                            })
+                            .map(|(i, _)| i + offset)
+                            .collect();
+                        if !mut_idx.is_empty() {
+                            self.mut_borrow_params.insert(mangled.clone(), mut_idx);
+                        }
                         self.impl_method_map.insert(name.clone(), mangled);
                     }
                 }
@@ -134,6 +197,7 @@ impl IRBuilder {
                 params: Vec::new(),
                 entry: 0,
                 instrs: Vec::new(),
+                captures: Vec::new(),
             };
             self.program.funcs.insert("__main__".to_string(), main_func);
             self.fn_names.insert("__main__".to_string());
@@ -146,6 +210,12 @@ impl IRBuilder {
         for node in program {
             self.gen_decl_or_stmt(node);
         }
+
+        // BUG-028: el código de nivel superior termina en `Halt`, no en
+        // `Return`, así que un `posponer` global se quedaba sin volcar y su
+        // bloque no se ejecutaba nunca. Se emite justo antes del `Halt`.
+        self.emit_deferred();
+        self.deferred.clear();
 
         if self
             .current_instrs
@@ -163,11 +233,20 @@ impl IRBuilder {
 
         if has_toplevel_code && self.program.funcs.contains_key("main") {
             if let Some(main_func) = self.program.funcs.get_mut("__main__") {
-                if matches!(main_func.instrs.last(), Some(Instr::Halt)) {
-                    main_func.instrs.pop();
+                // BUG-014: sólo auto-invocar `main` si el código de nivel
+                // superior no la llamó ya; en caso contrario se ejecutaba dos
+                // veces (una por la llamada del usuario y otra por ésta).
+                let ya_llamada = main_func
+                    .instrs
+                    .iter()
+                    .any(|i| matches!(i, Instr::Call(name, _) if name == "main"));
+                if !ya_llamada {
+                    if matches!(main_func.instrs.last(), Some(Instr::Halt)) {
+                        main_func.instrs.pop();
+                    }
+                    main_func.instrs.push(Instr::Call("main".to_string(), 0));
+                    main_func.instrs.push(Instr::Halt);
                 }
-                main_func.instrs.push(Instr::Call("main".to_string(), 0));
-                main_func.instrs.push(Instr::Halt);
             }
         }
 
@@ -185,13 +264,35 @@ impl IRBuilder {
         match decl {
             Decl::Variable { name, init, .. } => {
                 if let Some(init_expr) = init {
+                    // BUG-060: mientras se compila el cuerpo de una lambda que
+                    // se asigna a `name`, las referencias a `name` son
+                    // recursión, no capturas del entorno.
+                    let previo = if matches!(**init_expr, Expr::Lambda { .. }) {
+                        self.self_binding.replace(name.clone())
+                    } else {
+                        self.self_binding.clone()
+                    };
                     self.gen_expr(init_expr);
-                    let resolved = self
-                        .capture_map
-                        .get(name)
-                        .cloned()
-                        .unwrap_or_else(|| name.clone());
-                    self.emit(Instr::Store(resolved));
+                    self.self_binding = previo;
+                    // BUG-063: la declaracion liga en el ambito de bloque actual.
+                    let slot = self.declare_in_block(name);
+                    let resolved = if slot != *name {
+                        slot
+                    } else {
+                        self.capture_map
+                            .get(name)
+                            .cloned()
+                            .unwrap_or_else(|| name.clone())
+                    };
+                    // BUG-023: una declaración liga en el marco actual. Si el
+                    // nombre está remapeado por una captura conservamos `Store`,
+                    // porque entonces el destino es el slot de la captura y no
+                    // una variable nueva.
+                    if resolved == *name {
+                        self.emit(Instr::StoreLocal(resolved));
+                    } else {
+                        self.emit(Instr::Store(resolved));
+                    }
                 }
             }
             Decl::Destructure { targets, init, .. } => {
@@ -221,14 +322,27 @@ impl IRBuilder {
                     .map(|f| f.instrs.clone())
                     .unwrap_or_default();
                 self.temp_counter = 0;
+                // BUG-063: una función es otro marco: ámbito de bloque limpio.
+                let saved_scopes = std::mem::take(&mut self.block_scopes);
+                self.push_block_scope();
+                // BUG-028: los `posponer` son por función; no deben filtrarse
+                // a la que se estuviera generando por fuera.
+                let saved_deferred = std::mem::take(&mut self.deferred);
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
-                if !self
-                    .current_instrs
-                    .iter()
-                    .any(|i| matches!(i, Instr::Return))
-                {
+                self.block_scopes = saved_scopes;
+                // BUG-028: caída natural por el final — volcar los diferidos.
+                if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
+                    self.emit_deferred();
+                }
+                self.deferred = saved_deferred;
+                // BUG-010: sólo se puede omitir el `Return` final si la ÚLTIMA
+                // instrucción ya es un retorno. Comprobar `any(...)` hacía que
+                // un `retornar` temprano dentro de un `si` dejara la función
+                // sin terminador: la ejecución continuaba sobre las
+                // instrucciones de la función siguiente / fin del bytecode.
+                if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
                     self.emit(Instr::Return);
                 }
                 self.finalize_func(); // Guardar las instrucciones de esta función
@@ -289,14 +403,22 @@ impl IRBuilder {
                             .map(|f| f.instrs.clone())
                             .unwrap_or_default();
                         self.temp_counter = 0;
+                        // BUG-063: ámbito de bloque limpio también en métodos.
+                        let saved_scopes = std::mem::take(&mut self.block_scopes);
+                        self.push_block_scope();
+                        let saved_deferred = std::mem::take(&mut self.deferred);
                         for node in body {
                             self.gen_decl_or_stmt(node);
                         }
-                        if !self
-                            .current_instrs
-                            .iter()
-                            .any(|i| matches!(i, Instr::Return))
-                        {
+                        self.block_scopes = saved_scopes;
+                        // BUG-028: volcar los `posponer` en la salida natural.
+                        if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
+                            self.emit_deferred();
+                        }
+                        self.deferred = saved_deferred;
+                        // BUG-010: ver arriba — el terminador depende de la
+                        // última instrucción, no de que exista algún `Return`.
+                        if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
                             self.emit(Instr::Return);
                         }
                         self.finalize_func(); // Guardar las instrucciones de este método
@@ -330,16 +452,96 @@ impl IRBuilder {
         }
     }
 
+    /// BUG-026: una variable capturada por una lambda pasa a vivir en el slot
+    /// `__cap_N_x`, pero el código YA emitido antes de crear la lambda (por
+    /// ejemplo la condición de un `mientras`) sigue leyendo `x`. Si sólo
+    /// escribimos en el slot, esa condición nunca ve los cambios y el bucle
+    /// se vuelve infinito. Mantenemos los dos nombres sincronizados: tras
+    /// guardar en el slot copiamos el valor de vuelta al nombre original.
+    /// BUG-063: entra en un ámbito de bloque (`si`, `mientras`, `para`, ...).
+    fn push_block_scope(&mut self) {
+        self.block_scopes.push(HashMap::new());
+    }
+
+    fn pop_block_scope(&mut self) {
+        self.block_scopes.pop();
+    }
+
+    /// BUG-063: registra una declaración en el ámbito actual y devuelve el slot
+    /// donde debe vivir. Si el nombre ya es visible fuera, se le da un slot
+    /// propio para que la variable exterior sobreviva intacta.
+    fn declare_in_block(&mut self, name: &str) -> String {
+        let ya_visible = self
+            .block_scopes
+            .iter()
+            .any(|scope| scope.contains_key(name));
+        let slot = if ya_visible {
+            let s = format!("__sh_{}_{}", self.shadow_counter, name);
+            self.shadow_counter += 1;
+            s
+        } else {
+            name.to_string()
+        };
+        if let Some(actual) = self.block_scopes.last_mut() {
+            actual.insert(name.to_string(), slot.clone());
+        }
+        slot
+    }
+
+    /// BUG-063: resuelve un nombre al slot real. El ámbito de bloque manda sólo
+    /// cuando de verdad renombró algo; si no, se respeta el mapa de capturas
+    /// tal y como estaba antes.
+    fn resolve_var(&self, name: &str) -> String {
+        for scope in self.block_scopes.iter().rev() {
+            if let Some(slot) = scope.get(name) {
+                if slot != name {
+                    return slot.clone();
+                }
+                break;
+            }
+        }
+        self.capture_map
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| name.to_string())
+    }
+
+    fn emit_store_syncing_capture(&mut self, name: &str) {
+        // BUG-063: si el nombre está sombreado en un bloque, la asignación va a
+        // su slot y no toca ni la variable exterior ni ninguna captura.
+        let resolved = self.resolve_var(name);
+        if resolved != name && !resolved.starts_with("__cap_") {
+            self.emit(Instr::Store(resolved));
+            return;
+        }
+        match self.capture_map.get(name).cloned() {
+            Some(slot) => {
+                self.emit(Instr::Store(slot.clone()));
+                self.emit(Instr::Load(slot));
+                self.emit(Instr::Store(name.to_string()));
+            }
+            None => self.emit(Instr::Store(name.to_string())),
+        }
+    }
+
+    /// BUG-028: vuelca los bloques `posponer` pendientes en el punto de salida
+    /// actual. En orden inverso al de declaración (LIFO), como un `defer`.
+    fn emit_deferred(&mut self) {
+        if self.deferred.is_empty() {
+            return;
+        }
+        let blocks = self.deferred.clone();
+        for block in blocks.iter().rev() {
+            self.current_instrs.extend(block.iter().cloned());
+        }
+    }
+
     fn gen_stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Assignment { name, value, .. } => {
                 self.gen_expr(value);
-                let resolved = self
-                    .capture_map
-                    .get(name)
-                    .cloned()
-                    .unwrap_or_else(|| name.clone());
-                self.emit(Instr::Store(resolved));
+                // BUG-026: mantener sincronizados `x` y su slot de captura.
+                self.emit_store_syncing_capture(name);
             }
             Stmt::If {
                 condition,
@@ -351,15 +553,19 @@ impl IRBuilder {
                 let end_label = self.new_label();
                 self.gen_expr(condition);
                 self.emit(Instr::JmpIf(else_label));
+                self.push_block_scope();
                 for node in then_body {
                     self.gen_decl_or_stmt(node);
                 }
+                self.pop_block_scope();
                 self.emit(Instr::Jmp(end_label));
                 self.emit(Instr::Label(else_label));
                 if let Some(else_body) = else_body {
+                    self.push_block_scope();
                     for node in else_body {
                         self.gen_decl_or_stmt(node);
                     }
+                    self.pop_block_scope();
                 }
                 self.emit(Instr::Label(end_label));
             }
@@ -376,9 +582,11 @@ impl IRBuilder {
                     continue_label: start_label,
                     loop_name: None,
                 });
+                self.push_block_scope();
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
+                self.pop_block_scope();
                 self.loop_labels.pop();
                 self.emit(Instr::Jmp(start_label));
                 self.emit(Instr::Label(end_label));
@@ -393,6 +601,7 @@ impl IRBuilder {
                 let start_label = self.new_label();
                 let end_label = self.new_label();
                 let continue_label = self.new_label();
+                self.push_block_scope();
                 self.gen_decl(init);
                 self.emit(Instr::Label(start_label));
                 self.gen_expr(condition);
@@ -410,8 +619,13 @@ impl IRBuilder {
                 self.gen_stmt(update);
                 self.emit(Instr::Jmp(start_label));
                 self.emit(Instr::Label(end_label));
+                self.pop_block_scope();
             }
             Stmt::Return { value, .. } => {
+                // BUG-028: los bloques `posponer` corren antes de retornar. Se
+                // emiten ANTES de evaluar el valor de retorno para no dejar
+                // basura por encima de él en la pila.
+                self.emit_deferred();
                 if let Some(val) = value {
                     self.gen_expr(val);
                 }
@@ -425,18 +639,28 @@ impl IRBuilder {
                     expr: base, index, ..
                 } = expr.as_ref()
                 {
+                    // BUG-011: `lista[i].campo = v`. `ArraySet` espera la pila
+                    // en orden [array, índice, valor]; emitir el struct
+                    // modificado ANTES de la lista dejaba [elem, array, índice]
+                    // y corrompía la asignación (error "StructGet requires
+                    // struct value"). Se guarda el elemento actualizado en un
+                    // temporal y se recompone la pila en el orden correcto.
+                    let elem_tmp = format!("__fa_elem_{}", self.temp_counter);
+                    self.temp_counter += 1;
                     self.gen_expr(base);
                     self.gen_expr(index);
                     self.emit(Instr::ArrayGet);
                     self.emit(Instr::ConstStr(field.clone()));
                     self.gen_expr(value);
                     self.emit(Instr::StructSet);
+                    self.emit(Instr::Store(elem_tmp.clone()));
+
                     self.gen_expr(base);
                     self.gen_expr(index);
+                    self.emit(Instr::Load(elem_tmp));
                     self.emit(Instr::ArraySet);
-                    if let Expr::Ident { name, .. } = base.as_ref() {
-                        self.emit(Instr::Store(name.clone()));
-                    }
+                    // BUG-094: idem para `a.b[i].campo = v`.
+                    self.finish_writeback(base);
                 } else if let Expr::FieldAccess {
                     expr: base,
                     field: outer_field,
@@ -453,9 +677,8 @@ impl IRBuilder {
                     self.gen_expr(value);
                     self.emit(Instr::StructSet);
                     self.emit(Instr::StructSet);
-                    if let Expr::Ident { name, .. } = base.as_ref() {
-                        self.emit(Instr::Store(name.clone()));
-                    }
+                    // BUG-094: idem para `a.b.c.d = v`.
+                    self.finish_writeback(base);
                 } else {
                     let var_name = match expr.as_ref() {
                         Expr::Ident { name, .. } => Some(name.clone()),
@@ -490,9 +713,13 @@ impl IRBuilder {
                     self.gen_expr(value);
                     self.emit(Instr::ArraySet);
                     self.emit(Instr::ArraySet);
-                    if let Expr::Ident { name, .. } = base.as_ref() {
-                        self.emit(Instr::Store(name.clone()));
-                    }
+                    // BUG-094: el write-back sólo se emitía cuando la base era
+                    // una variable suelta. Con `m.g[i][j] = v` la base es un
+                    // campo (`FieldAccess`), así que la lista modificada se
+                    // quedaba en la pila y se descartaba: la asignación no
+                    // hacía NADA, en silencio y sin error. `finish_writeback`
+                    // sube por la cadena (`a.b[i][j]`, `a[i].b[j]`, ...).
+                    self.finish_writeback(base);
                 } else if let Expr::FieldAccess {
                     expr: base,
                     field: struct_field,
@@ -509,9 +736,8 @@ impl IRBuilder {
                     self.gen_expr(value);
                     self.emit(Instr::ArraySet);
                     self.emit(Instr::StructSet);
-                    if let Expr::Ident { name, .. } = base.as_ref() {
-                        self.emit(Instr::Store(name.clone()));
-                    }
+                    // BUG-094: idem para `a.b.campo[i] = v`.
+                    self.finish_writeback(base);
                 } else {
                     self.gen_expr(arr);
                     self.gen_expr(index);
@@ -523,28 +749,77 @@ impl IRBuilder {
                 }
             }
             Stmt::Expr { expr, .. } => {
+                // BUG-064: `agregar(l, x)` en forma de FUNCIÓN es puramente
+                // funcional: apila la lista nueva y nadie la guarda, así que el
+                // elemento se perdía SIN ERROR (`lumen check` daba el programa
+                // por válido). La forma método `l.agregar(x)` sí escribía de
+                // vuelta desde BUG-033, con lo que dos sintaxis equivalentes
+                // hacían cosas distintas. Aquí, como sentencia, el valor iba a
+                // descartarse igualmente: lo guardamos en el receptor en vez de
+                // tirarlo.
+                if let Some(receptor) = self.agregar_como_sentencia(expr.as_ref()) {
+                    self.gen_expr(expr);
+                    match &receptor {
+                        // Variable suelta: se guarda igual que hace la forma
+                        // método cuando el receptor es un `Ident`.
+                        Expr::Ident { name, .. } => {
+                            let destino = self.resolve_var(name);
+                            self.emit(Instr::Store(destino));
+                        }
+                        // `c.items` / `m[i]`: reutiliza el write-back de BUG-033.
+                        otro => self.emit_container_writeback(otro),
+                    }
+                    return;
+                }
                 self.gen_expr(expr);
+                // BUG-027: una sentencia-expresión evalúa por su efecto
+                // secundario; el valor resultante (p. ej. el `void` de
+                // `imprimir(...)`) no lo consume nadie y hay que descartarlo,
+                // o se queda en la pila y se mezcla con los operandos que el
+                // llamador esté montando.
+                self.emit(Instr::Drop);
             }
             Stmt::Posponer { body, .. } => {
+                // BUG-028: `posponer` es un `defer`: su cuerpo debe ejecutarse
+                // al SALIR de la función, no donde está escrito. Antes se
+                // emitía en línea, así que la "limpieza" corría antes que el
+                // código que usaba el recurso. Lo generamos aparte y lo
+                // guardamos para volcarlo en cada punto de salida.
+                let saved = std::mem::take(&mut self.current_instrs);
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
+                let block = std::mem::replace(&mut self.current_instrs, saved);
+                self.deferred.push(block);
             }
             Stmt::TryCatch {
                 try_body,
-                err_var: _,
+                err_var,
                 catch_body,
                 ..
             } => {
+                // BUG-022: antes se emitía la etiqueta del `atrapar` pero NADIE
+                // saltaba a ella y `err_var` se ignoraba, así que el bloque era
+                // código muerto y cualquier error abortaba el programa. Ahora
+                // se instala un manejador de verdad: `PushHandler` registra el
+                // destino, y la VM salta ahí desenrollando la pila cuando algo
+                // falla.
                 let catch_label = self.new_label();
                 let end_label = self.new_label();
 
+                self.emit(Instr::PushHandler(catch_label));
                 for node in try_body {
                     self.gen_decl_or_stmt(node);
                 }
+                // El `intentar` terminó bien: el manejador ya no aplica.
+                self.emit(Instr::PopHandler);
                 self.emit(Instr::Jmp(end_label));
 
                 self.emit(Instr::Label(catch_label));
+                // La VM deja el error en la cima de la pila; se liga a la
+                // variable del `atrapar (e)`. `StoreLocal` para que no pise una
+                // global homónima (BUG-023).
+                self.emit(Instr::StoreLocal(err_var.clone()));
                 for node in catch_body {
                     self.gen_decl_or_stmt(node);
                 }
@@ -616,9 +891,11 @@ impl IRBuilder {
                 self.emit(Instr::Label(end_label));
             }
             Stmt::Block { stmts, .. } => {
+                self.push_block_scope();
                 for node in stmts {
                     self.gen_decl_or_stmt(node);
                 }
+                self.pop_block_scope();
             }
             Stmt::ForEach {
                 var_name,
@@ -628,6 +905,7 @@ impl IRBuilder {
             } => {
                 let start_label = self.new_label();
                 let end_label = self.new_label();
+                let continue_label = self.new_label();
                 let arr_temp = format!("__for_arr_{}", self.temp_counter);
                 self.temp_counter += 1;
                 let idx_temp = format!("__for_i_{}", self.temp_counter);
@@ -651,9 +929,21 @@ impl IRBuilder {
                 self.emit(Instr::Load(idx_temp.clone()));
                 self.emit(Instr::ArrayGet);
                 self.emit(Instr::Store(var_name.clone()));
+                // BUG-015: registrar el ciclo para que 'romper'/'continuar'
+                // tengan destino. 'continuar' debe saltar al incremento del
+                // índice (no a start_label), o el bucle no avanzaría nunca.
+                self.loop_labels.push(LoopLabels {
+                    break_label: end_label,
+                    continue_label,
+                    loop_name: None,
+                });
+                self.push_block_scope();
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
+                self.pop_block_scope();
+                self.loop_labels.pop();
+                self.emit(Instr::Label(continue_label));
                 self.emit(Instr::Load(idx_temp.clone()));
                 self.emit(Instr::ConstInt(1));
                 self.emit(Instr::Binary(Op::Add));
@@ -752,11 +1042,8 @@ impl IRBuilder {
                 self.emit(Instr::ConstBool(*value));
             }
             Expr::Ident { name, .. } => {
-                let resolved = self
-                    .capture_map
-                    .get(name)
-                    .cloned()
-                    .unwrap_or_else(|| name.clone());
+                // BUG-063: el ambito de bloque tiene prioridad sobre el mapa de capturas.
+                let resolved = self.resolve_var(name);
                 self.emit(Instr::Load(resolved));
             }
             Expr::Binary {
@@ -856,6 +1143,36 @@ impl IRBuilder {
                                     | "a_texto"
                                     | "to_texto"
                                     | "__str_from"
+                                    // Conversiones y matemáticas públicas (BUG-001/002/007)
+                                    | "a_entero"
+                                    | "to_int"
+                                    | "to_entero"
+                                    | "a_decimal"
+                                    | "to_float"
+                                    | "a_numero"
+                                    | "to_number"
+                                    | "a_entero_seguro"
+                                    | "to_int_safe"
+                                    | "a_decimal_seguro"
+                                    | "to_float_safe"
+                                    | "es_numero"
+                                    | "is_number"
+                                    | "abs"
+                                    | "absoluto"
+                                    | "minimo"
+                                    | "min"
+                                    | "maximo"
+                                    | "max"
+                                    | "raiz"
+                                    | "sqrt"
+                                    | "potencia"
+                                    | "pow"
+                                    | "piso"
+                                    | "floor"
+                                    | "techo"
+                                    | "ceil"
+                                    | "redondear"
+                                    | "round"
                                     | "largo"
                                     | "len"
                                     | "agregar"
@@ -1179,6 +1496,12 @@ impl IRBuilder {
                                 args.len()
                             };
                             self.emit(Instr::Call(name.clone(), argc));
+                            // BUG-008: copia de vuelta de los parámetros
+                            // `prestado mut`. La VM conserva el marco de la
+                            // llamada recién retornada, así que se lee el valor
+                            // final del parámetro y se guarda en la variable
+                            // que el llamador pasó como argumento.
+                            self.emit_mut_borrow_writeback(name, args);
                         } else {
                             self.emit(Instr::Load(name.clone()));
                             for arg in args {
@@ -1270,7 +1593,15 @@ impl IRBuilder {
                     for arg in args {
                         self.gen_expr(arg);
                     }
-                    self.emit(Instr::Call(fname, args.len() + 1));
+                    self.emit(Instr::Call(fname.clone(), args.len() + 1));
+                    // BUG-020: en una llamada a método el receptor es el
+                    // parámetro 0. Si está declarado `prestado mut self`, hay
+                    // que copiarle de vuelta el valor final igual que se hace
+                    // con las funciones libres, o la mutación se pierde.
+                    let mut recv_args: Vec<Expr> = Vec::with_capacity(args.len() + 1);
+                    recv_args.push(expr.as_ref().clone());
+                    recv_args.extend(args.iter().cloned());
+                    self.emit_mut_borrow_writeback(&fname, &recv_args);
                 } else {
                     self.gen_expr(expr);
                     match method.as_str() {
@@ -1281,6 +1612,16 @@ impl IRBuilder {
                             self.emit(Instr::ArrayPush);
                             if let Some(name) = var_name {
                                 self.emit(Instr::Store(name));
+                            } else {
+                                // BUG-033: `c.items.agregar(x)` y `m[i].agregar(x)`
+                                // hacían el `ArrayPush` pero nunca guardaban la
+                                // lista resultante: el receptor no era un `Ident`,
+                                // así que `var_name` era `None` y la mutación se
+                                // perdía SIN ERROR ALGUNO. Como `ArrayPush` deja la
+                                // lista actualizada en la pila, la escribimos de
+                                // vuelta en su sitio reutilizando la misma
+                                // maquinaria que las asignaciones normales.
+                                self.emit_container_writeback(expr.as_ref());
                             }
                         }
                         "largo" | "len" | "length" => {
@@ -1537,12 +1878,88 @@ impl IRBuilder {
         let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
         let mut captured = Vec::new();
         self.collect_variable_refs(body, &param_names, &mut captured);
-        // Only create capture slots when NOT already inside a lambda (nested lambdas
-        // capture via parent's params which are already in the parent's scope)
-        if !self.is_in_lambda {
+        // BUG-060: quitar la autorreferencia de una lambda recursiva.
+        if let Some(ref propio) = self.self_binding {
+            captured.retain(|v| v != propio);
+        }
+        // BUG-021: `collect_variable_refs` también reporta los nombres que el
+        // cuerpo *asigna* (así es como se declara una lambda anidada:
+        // `interna = funcion() {...};`). Ésos son locales de la lambda, no
+        // capturas del entorno: si se renombran a `__cap_N_x` el `Store` guarda
+        // en `x` y la lectura busca `__cap_N_x`, que nunca existe.
+        let mut locales = Vec::new();
+        collect_assigned_names(body, &mut locales);
+        // BUG-052: dentro de otra función hay que afinar. `collect_assigned_names`
+        // mezcla las DECLARACIONES (`entero x = 0;`) con las simples
+        // ASIGNACIONES (`n = n + 1;`). Para el contador clásico eso es fatal:
+        // `n = n + 1` sobre la `n` del entorno es una mutación de la captura,
+        // no una local nueva, y descartarla dejaba a la closure sin `n`.
+        // Sólo las declaraciones de verdad son locales de la lambda.
+        // BUG-148: mismo criterio que abajo — dentro de cualquier marco propio
+        // sólo las declaraciones de verdad son locales de la lambda.
+        let dentro_de_funcion = self.is_in_lambda
+            || self
+                .current_func
+                .as_deref()
+                .is_some_and(|f| f != "__main__");
+        if dentro_de_funcion {
+            let mut declaradas = Vec::new();
+            collect_declared_names(body, &mut declaradas);
+            captured.retain(|v| !declaradas.contains(v));
+        } else {
+            captured.retain(|v| !locales.contains(v));
+        }
+        // BUG-032: una lambda creada DENTRO de otra función (o de otra lambda)
+        // no puede usar los slots globales `__cap_*`: dos closures fabricadas
+        // por la misma factoría compartirían el slot y devolverían valores
+        // erróneos en silencio (`mk(5)` y `mk(100)` daban ambas 101). Para ese
+        // caso se anota la lista de nombres capturados en la propia función; la
+        // VM los resuelve al crear la closure (`FuncRef`) y se los lleva
+        // consigo, así que la closure sigue siendo válida cuando el marco que
+        // la creó ya ha muerto. Cada `FuncRef` produce un entorno propio, de
+        // modo que las instancias quedan aisladas entre sí.
+        // BUG-148: la elección de mecanismo dependía sólo de `is_in_lambda`,
+        // que nunca se activa al compilar una función normal. Una lambda
+        // declarada dentro de `funcion crear() { ... }` caía por tanto en la
+        // rama de slots globales `__cap_N_x`, que se llenan en el marco de la
+        // función envolvente y mueren con él: al devolver la closure y
+        // llamarla desde fuera fallaba con «Variable '__cap_1_n' no definida».
+        // Y con dos closures sobre la misma variable, la segunda reutilizaba
+        // el `capture_map` de la primera y las mutaciones dejaban de verse.
+        // El criterio correcto es «estoy dentro de algún marco», no «dentro de
+        // una lambda»: `__main__` es el único sitio donde los slots globales
+        // sobreviven.
+        let en_marco_propio = self.is_in_lambda
+            || self
+                .current_func
+                .as_deref()
+                .is_some_and(|f| f != "__main__");
+        let mut env_captures: Vec<String> = Vec::new();
+        if en_marco_propio {
+            for var_name in &captured {
+                if !param_names.contains(var_name)
+                    && !env_captures.contains(var_name)
+                    // Las funciones de nivel superior se resuelven por nombre,
+                    // no son variables que haya que capturar.
+                    && !self.program.funcs.contains_key(var_name)
+                {
+                    env_captures.push(var_name.clone());
+                }
+            }
+        }
+        if !en_marco_propio {
             for var_name in &captured {
                 if !param_names.contains(var_name) && !self.capture_map.contains_key(var_name) {
                     let cap_name = format!("__cap_{}_{}", self.lambda_counter, var_name);
+                    // BUG-017: registrar el renombrado no bastaba — el `Store`
+                    // de la variable original ya se había emitido, así que el
+                    // slot `__cap_N_x` nunca se llenaba y la lambda fallaba con
+                    // "Variable '__cap_N_x' no definida". Copiamos aquí el valor
+                    // al slot (captura por valor en el momento de crear la
+                    // lambda). Se emite en la función envolvente, que es la que
+                    // sigue activa en `current_instrs`.
+                    self.emit(Instr::Load(var_name.clone()));
+                    self.emit(Instr::Store(cap_name.clone()));
                     self.capture_map.insert(var_name.clone(), cap_name);
                 }
             }
@@ -1553,6 +1970,7 @@ impl IRBuilder {
             params: param_names,
             entry: 0,
             instrs: Vec::new(),
+            captures: env_captures,
         };
         self.program.funcs.insert(lambda_name.clone(), func);
         let saved_instrs = std::mem::take(&mut self.current_instrs);
@@ -1561,26 +1979,41 @@ impl IRBuilder {
         let saved_label = self.label_counter;
         let saved_loop = std::mem::take(&mut self.loop_labels);
         let saved_is_lambda = self.is_in_lambda;
+        let saved_deferred = std::mem::take(&mut self.deferred);
         self.current_func = Some(lambda_name.clone());
         self.current_instrs = Vec::new();
         self.temp_counter = 0;
-        self.label_counter = 0;
+        // BUG-062: NO se reinicia `label_counter`. `codegen` resuelve las
+        // etiquetas con un ÚNICO mapa global `label -> posición`, así que si la
+        // lambda vuelve a numerar desde 0 su `L0` sobrescribe el `L0` de la
+        // función envolvente y los saltos aterrizan en otra función. El síntoma
+        // era desconcertante: un `si/sino` antes de una lambda recursiva
+        // imprimía las DOS ramas, y la recursión no terminaba nunca.
         self.is_in_lambda = true;
+        // BUG-063: la lambda es otro marco: ámbito de bloque limpio. Las
+        // capturas siguen resolviéndose por `capture_map`, que no se toca.
+        let saved_scopes = std::mem::take(&mut self.block_scopes);
+        self.push_block_scope();
         for node in body {
             self.gen_decl_or_stmt(node);
         }
-        if !self
-            .current_instrs
-            .iter()
-            .any(|i| matches!(i, Instr::Return))
-        {
+        self.block_scopes = saved_scopes;
+        // BUG-028: idem para lambdas — sus `posponer` son suyos.
+        if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
+            self.emit_deferred();
+        }
+        self.deferred = saved_deferred;
+        // BUG-010: idem para lambdas.
+        if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
             self.emit(Instr::Return);
         }
         self.finalize_func();
         self.current_func = saved_func;
         self.current_instrs = saved_instrs;
         self.temp_counter = saved_temp;
-        self.label_counter = saved_label;
+        // `label_counter` se deja como está: las etiquetas deben ser únicas en
+        // todo el programa, no por función.
+        let _ = saved_label;
         self.loop_labels = saved_loop;
         // Keep capture_map — don't restore, so outer scope shares captured vars
         self.is_in_lambda = saved_is_lambda;
@@ -1677,7 +2110,25 @@ impl IRBuilder {
             }
             Expr::Unary { operand, .. } => self.collect_expr_refs(operand, params, out),
             Expr::Call { callee, args, .. } => {
-                self.collect_expr_refs(callee, params, out);
+                // BUG-029: el destino de una llamada escrito como identificador
+                // simple (`doblar(21)`, `imprimir(...)`) es un NOMBRE DE
+                // FUNCIÓN, no una variable del entorno. Si se apunta como
+                // captura, la lambda intenta leer `__cap_N_imprimir` y muere
+                // con "Variable 'imprimir' no definida". Sólo descendemos
+                // cuando el callee es una expresión de verdad (una lambda
+                // guardada en una variable, `f()` donde `f` es un valor, etc.),
+                // que se detecta porque el nombre no es una función conocida.
+                match callee.as_ref() {
+                    Expr::Ident { name, .. } => {
+                        if !self.fn_names.contains(name)
+                            && !name.starts_with("__")
+                            && !is_public_builtin_name(name)
+                        {
+                            self.collect_expr_refs(callee, params, out);
+                        }
+                    }
+                    other => self.collect_expr_refs(other, params, out),
+                }
                 for a in args {
                     self.collect_expr_refs(a, params, out);
                 }
@@ -1751,6 +2202,39 @@ impl IRBuilder {
             Expr::Tuple { items, .. } => {
                 for i in items {
                     self.collect_expr_refs(i, params, out);
+                }
+            }
+            // BUG-032: hay que descender en las lambdas anidadas. Con tres
+            // niveles (`externa -> media -> interna`), la lambda del medio no
+            // menciona `n` en su propio cuerpo, sólo la más interna lo usa; si
+            // no se mira dentro, `media` no captura `n` y no puede pasárselo a
+            // `interna`, que muere con "Variable 'n' no definida". Los
+            // parámetros de la lambda interior son suyos, así que se excluyen.
+            Expr::Lambda {
+                params: inner_params,
+                body,
+                ..
+            } => {
+                let mut inner_scope: Vec<String> = params.to_vec();
+                for p in inner_params {
+                    if !inner_scope.contains(&p.name) {
+                        inner_scope.push(p.name.clone());
+                    }
+                }
+                // Lo que la lambda interior declara es suyo, no del entorno.
+                let mut inner_locals = Vec::new();
+                collect_assigned_names(body, &mut inner_locals);
+                for l in inner_locals {
+                    if !inner_scope.contains(&l) {
+                        inner_scope.push(l);
+                    }
+                }
+                let mut inner_refs = Vec::new();
+                self.collect_variable_refs(body, &inner_scope, &mut inner_refs);
+                for r in inner_refs {
+                    if !params.contains(&r) && !out.contains(&r) {
+                        out.push(r);
+                    }
                 }
             }
             _ => {}
@@ -1833,6 +2317,132 @@ impl IRBuilder {
         }
     }
 
+    /// BUG-008: tras llamar a una función con parámetros `prestado mut`, copia
+    /// el valor final de cada uno de esos parámetros a la variable que el
+    /// llamador pasó, de modo que la mutación sea visible fuera de la función.
+    ///
+    /// Sólo se escribe de vuelta cuando el argumento es una variable simple
+    /// (un *lvalue*); pasar un literal o el resultado de una expresión no tiene
+    /// destino al que copiar y simplemente se ignora.
+    /// BUG-033: guarda el valor que hay en lo alto de la pila de vuelta en el
+    /// contenedor del que salió `receiver` (`base.campo` o `base[i]`), y repite
+    /// el proceso hacia arriba hasta llegar a una variable con nombre. Sin esto
+    /// las mutaciones sobre listas alcanzadas a través de un campo o de un
+    /// índice se descartaban en silencio.
+    /// BUG-064: reconoce `agregar(receptor, x)` / `push(...)` usado como
+    /// SENTENCIA y devuelve el receptor si es un destino al que se puede
+    /// escribir de vuelta. Sólo se activa en posición de sentencia: si alguien
+    /// usa el valor de retorno (`sea n = agregar(l, x);`) se respeta la
+    /// semántica funcional de siempre.
+    fn agregar_como_sentencia(&self, expr: &Expr) -> Option<Expr> {
+        let Expr::Call { callee, args, .. } = expr else {
+            return None;
+        };
+        let Expr::Ident { name, .. } = callee.as_ref() else {
+            return None;
+        };
+        if (name != "agregar" && name != "push") || args.len() != 2 {
+            return None;
+        }
+        // El usuario puede haber definido su propia función con ese nombre.
+        if self.fn_names.contains(name.as_str()) {
+            return None;
+        }
+        match args.first()? {
+            e @ (Expr::Ident { .. } | Expr::FieldAccess { .. } | Expr::Index { .. }) => {
+                Some(e.clone())
+            }
+            _ => None,
+        }
+    }
+
+    fn emit_container_writeback(&mut self, receiver: &Expr) {
+        match receiver {
+            // `base.campo` : [.. , nuevo_valor] -> StructSet sobre `base`
+            Expr::FieldAccess {
+                expr: base, field, ..
+            } => {
+                let tmp = format!("__wb_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.emit(Instr::Store(tmp.clone()));
+                self.gen_expr(base);
+                self.emit(Instr::ConstStr(field.clone()));
+                self.emit(Instr::Load(tmp));
+                self.emit(Instr::StructSet);
+                self.finish_writeback(base);
+            }
+            // `base[i]` : [.. , nuevo_valor] -> ArraySet sobre `base`
+            Expr::Index {
+                expr: base, index, ..
+            } => {
+                let tmp = format!("__wb_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.emit(Instr::Store(tmp.clone()));
+                self.gen_expr(base);
+                self.gen_expr(index);
+                self.emit(Instr::Load(tmp));
+                self.emit(Instr::ArraySet);
+                self.finish_writeback(base);
+            }
+            // Cualquier otra cosa (p. ej. el retorno de una llamada) no tiene
+            // sitio donde volver: se descarta como antes.
+            _ => {}
+        }
+    }
+
+    /// Cierra un write-back: si la base es una variable la guarda, y si es otro
+    /// contenedor sigue subiendo recursivamente (`a.b.c`, `a[i].b`, ...).
+    fn finish_writeback(&mut self, base: &Expr) {
+        match base {
+            Expr::Ident { name, .. } => {
+                let name = name.clone();
+                self.emit_store_syncing_capture(&name);
+            }
+            other => self.emit_container_writeback(other),
+        }
+    }
+
+    fn emit_mut_borrow_writeback(&mut self, fn_name: &str, args: &[Expr]) {
+        let Some(indices) = self.mut_borrow_params.get(fn_name).cloned() else {
+            return;
+        };
+        for idx in indices {
+            let Some(arg) = args.get(idx) else {
+                continue;
+            };
+            match arg {
+                Expr::Ident { name, .. } => {
+                    let target = self
+                        .capture_map
+                        .get(name)
+                        .cloned()
+                        .unwrap_or_else(|| name.clone());
+                    // `__frame_param(i)` devuelve el valor del parámetro `i`
+                    // del marco que acaba de retornar (la VM lo conserva hasta
+                    // esta lectura).
+                    self.emit(Instr::ConstInt(idx as i64));
+                    self.emit(Instr::Call("__frame_param".to_string(), 1));
+                    self.emit(Instr::Store(target));
+                }
+                // BUG-147: sólo se copiaba de vuelta cuando el argumento era
+                // una variable simple. Al pasar `s.l` o `l[0]` a un parámetro
+                // `prestado mut`, el `continue` descartaba la mutación **en
+                // silencio**: el programa compilaba, `check` lo daba por bueno
+                // y la llamada no tenía ningún efecto. La maquinaria para
+                // escribir en `base.campo` y `base[i]` ya existía —la usa
+                // `agregar` desde BUG-033/064—, así que se reutiliza.
+                Expr::FieldAccess { .. } | Expr::Index { .. } => {
+                    self.emit(Instr::ConstInt(idx as i64));
+                    self.emit(Instr::Call("__frame_param".to_string(), 1));
+                    self.emit_container_writeback(arg);
+                }
+                // Un literal o el resultado de una expresión no tiene destino
+                // al que copiar; se ignora igual que antes.
+                _ => continue,
+            }
+        }
+    }
+
     fn emit_match_pattern(
         &mut self,
         expr: &Expr,
@@ -1893,6 +2503,53 @@ impl IRBuilder {
                 }
                 self.emit(Instr::Jmp(body_label));
             }
+            // BUG-003: `caso Figura::Circulo(r):` — compara la variante y liga
+            // los datos capturados a variables antes de ejecutar el cuerpo.
+            // Sin argumentos (`caso Color::Rojo:`) sigue siendo una comparación
+            // de variante, pero por tag en vez de igualdad estructural, para que
+            // funcione igual con variantes que llevan datos.
+            Expr::EnumCtor { variant, args, .. } => {
+                // Convención de `emit_match_pattern`: si el patrón NO coincide
+                // se cae al siguiente test (patrones OR: `caso A | B:`); sólo
+                // se salta a `body_label` cuando coincide. Por eso el fallo va
+                // a una etiqueta local y no directamente a `fail_label`.
+                let next_label = self.new_label();
+                let temp = format!("__mt_en_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.gen_expr(expr);
+                self.emit(Instr::Store(temp.clone()));
+
+                // ¿La variante coincide? __enum_variante(v) == "Variante"
+                self.emit(Instr::Load(temp.clone()));
+                self.emit(Instr::Call("__enum_variante".to_string(), 1));
+                self.emit(Instr::ConstStr(variant.clone()));
+                self.emit(Instr::Binary(Op::Equal));
+                self.emit(Instr::JmpIf(next_label));
+
+                // Liga cada dato posicional. Un identificador captura; `_` ignora;
+                // cualquier otra expresión se compara por igualdad (patrón literal).
+                for (i, arg) in args.iter().enumerate() {
+                    match arg {
+                        Expr::Ident { name, .. } if name == "_" => {}
+                        Expr::Ident { name, .. } => {
+                            self.emit(Instr::Load(temp.clone()));
+                            self.emit(Instr::ConstInt(i as i64));
+                            self.emit(Instr::Call("__enum_campo".to_string(), 2));
+                            self.emit(Instr::Store(name.clone()));
+                        }
+                        other => {
+                            self.emit(Instr::Load(temp.clone()));
+                            self.emit(Instr::ConstInt(i as i64));
+                            self.emit(Instr::Call("__enum_campo".to_string(), 2));
+                            self.gen_expr(other);
+                            self.emit(Instr::Binary(Op::Equal));
+                            self.emit(Instr::JmpIf(next_label));
+                        }
+                    }
+                }
+                self.emit(Instr::Jmp(body_label));
+                self.emit(Instr::Label(next_label));
+            }
             Expr::StructInit { fields, .. } => {
                 let temp = format!("__mt_st_{}", self.temp_counter);
                 self.temp_counter += 1;
@@ -1917,6 +2574,14 @@ impl IRBuilder {
                         }
                     }
                 }
+                self.emit(Instr::Jmp(body_label));
+            }
+            // BUG-031: `caso _:` es un comodín, no una variable. Antes caía en
+            // la rama genérica de abajo, que emitía `Load("_")` y reventaba en
+            // tiempo de ejecución con `Variable '_' no definida` — pese a que
+            // `lumen check` daba el programa por válido. Coincide siempre, así
+            // que saltamos directamente al cuerpo.
+            Expr::Ident { name, .. } if name == "_" => {
                 self.emit(Instr::Jmp(body_label));
             }
             _ => {
@@ -1977,16 +2642,20 @@ impl IRBuilder {
             (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Mul)) => {
                 Some(Instr::ConstInt(a.overflowing_mul(*b).0))
             }
+            // BUG-109: `i64::MIN / -1` y `i64::MIN % -1` desbordan; plegarlos
+            // con `/` y `%` a secas hacía pánico al COMPILAR. Se usa la misma
+            // semántica envolvente que Add/Sub/Mul (que ya usaban
+            // `overflowing_*`) y que ahora aplica también la VM.
             (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Div)) => {
                 if *b != 0 {
-                    Some(Instr::ConstInt(a / b))
+                    Some(Instr::ConstInt(a.overflowing_div(*b).0))
                 } else {
                     None
                 }
             }
             (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Mod)) => {
                 if *b != 0 {
-                    Some(Instr::ConstInt(a % b))
+                    Some(Instr::ConstInt(a.overflowing_rem(*b).0))
                 } else {
                     None
                 }
@@ -2179,39 +2848,198 @@ impl IRBuilder {
         func.instrs = optimized;
     }
 
+    /// BUG-106: esta pasada aplicaba «reducción de fuerza» convirtiendo
+    /// `x * 2`, `x * 4` y `x * 8` en desplazamientos de bits (`x << 1|2|3`).
+    ///
+    /// La transformación **sólo es válida para enteros**, pero el IR en este
+    /// punto no lleva información de tipos: el patrón se reconocía mirando
+    /// únicamente la constante literal, así que también se aplicaba cuando el
+    /// operando izquierdo era un decimal. El resultado era incoherente entre
+    /// backends para una expresión tan corriente como `precio * 2`:
+    ///
+    /// - En la VM, `ShiftLeft` rechaza los floats ⇒ el programa moría con
+    ///   «ShiftLeft requires integers», un operador que no aparecía en el
+    ///   código fuente.
+    /// - En el binario nativo, el shift truncaba el float a entero
+    ///   (`lumen_rt.h`) ⇒ `2.5 * 2` imprimía **4** en vez de 5, en silencio.
+    ///
+    /// Recuperar la optimización con seguridad exige propagar tipos hasta el
+    /// IR y aplicarla sólo cuando ambos operandos son enteros. Multiplicar por
+    /// una potencia de dos no es un cuello de botella que justifique un
+    /// resultado erróneo, así que la pasada se deja como identidad: se conserva
+    /// la función (y su punto de llamada) para no alterar la estructura del
+    /// pipeline y para que el día que haya tipos en el IR el sitio esté claro.
     pub fn neuro_symbolic_pass(instrs: &[Instr]) -> Vec<Instr> {
-        let mut result = Vec::with_capacity(instrs.len());
-        let mut i = 0;
-        while i < instrs.len() {
-            // Strength Reduction on constant powers of 2 for multiplication:
-            // e.g. ConstInt(2), Binary(Mul) -> ConstInt(1), Binary(ShiftLeft)
-            // e.g. ConstInt(4), Binary(Mul) -> ConstInt(2), Binary(ShiftLeft)
-            // e.g. ConstInt(8), Binary(Mul) -> ConstInt(3), Binary(ShiftLeft)
-            if i + 1 < instrs.len() {
-                if let (Instr::ConstInt(k), Instr::Binary(Op::Mul)) = (&instrs[i], &instrs[i + 1]) {
-                    if *k == 2 {
-                        result.push(Instr::ConstInt(1));
-                        result.push(Instr::Binary(Op::ShiftLeft));
-                        i += 2;
-                        continue;
-                    } else if *k == 4 {
-                        result.push(Instr::ConstInt(2));
-                        result.push(Instr::Binary(Op::ShiftLeft));
-                        i += 2;
-                        continue;
-                    } else if *k == 8 {
-                        result.push(Instr::ConstInt(3));
-                        result.push(Instr::Binary(Op::ShiftLeft));
-                        i += 2;
-                        continue;
-                    }
+        instrs.to_vec()
+    }
+}
+
+/// Nombres que un cuerpo de lambda **asigna** en su propio ámbito (BUG-021).
+///
+/// Se usa para excluirlos de la lista de capturas: una lambda anidada se
+/// declara con una asignación (`interna = funcion() {...};`) y por tanto es una
+/// variable local, no una captura del entorno. Sólo recorre las sentencias del
+/// nivel de la lambda y sus bloques de control; no desciende a cuerpos de otras
+/// lambdas, cuyos locales pertenecen a su propio ámbito.
+fn collect_assigned_names(body: &[DeclOrStmt], out: &mut Vec<String>) {
+    fn walk_stmt(stmt: &Stmt, out: &mut Vec<String>) {
+        match stmt {
+            Stmt::Assignment { name, .. } => {
+                if !out.contains(name) {
+                    out.push(name.clone());
                 }
             }
-            result.push(instrs[i].clone());
-            i += 1;
+            Stmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_assigned_names(then_body, out);
+                if let Some(eb) = else_body {
+                    collect_assigned_names(eb, out);
+                }
+            }
+            Stmt::While { body, .. } => collect_assigned_names(body, out),
+            Stmt::For { body, .. } => collect_assigned_names(body, out),
+            Stmt::ForEach { body, .. } => collect_assigned_names(body, out),
+            Stmt::Block { stmts, .. } => collect_assigned_names(stmts, out),
+            Stmt::Match { arms, default, .. } => {
+                for arm in arms {
+                    collect_assigned_names(&arm.body, out);
+                }
+                if let Some(d) = default {
+                    collect_assigned_names(d, out);
+                }
+            }
+            Stmt::TryCatch {
+                try_body,
+                catch_body,
+                ..
+            } => {
+                collect_assigned_names(try_body, out);
+                collect_assigned_names(catch_body, out);
+            }
+            _ => {}
         }
-        result
     }
+
+    for node in body {
+        match node {
+            DeclOrStmt::Stmt(stmt) => walk_stmt(stmt, out),
+            DeclOrStmt::Decl(Decl::Variable { name, .. }) => {
+                if !out.contains(name) {
+                    out.push(name.clone());
+                }
+            }
+            DeclOrStmt::Decl(_) => {}
+        }
+    }
+}
+
+/// BUG-052: nombres que el cuerpo DECLARA de verdad (`entero x = ...`,
+/// `sea x = ...`), a diferencia de `collect_assigned_names`, que también cuenta
+/// las simples asignaciones (`x = x + 1`). Para decidir si una lambda captura
+/// una variable hay que distinguirlas: `n = n + 1` sobre una `n` del entorno es
+/// una MUTACIÓN de la captura, no la declaración de una local. Confundirlas
+/// hacía que el contador clásico (`sea inc = funcion() { n = n + 1; ... }`)
+/// perdiera la captura y muriese con "Variable 'n' no definida".
+fn collect_declared_names(body: &[DeclOrStmt], out: &mut Vec<String>) {
+    fn walk_stmt(stmt: &Stmt, out: &mut Vec<String>) {
+        match stmt {
+            Stmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_declared_names(then_body, out);
+                if let Some(eb) = else_body {
+                    collect_declared_names(eb, out);
+                }
+            }
+            Stmt::While { body, .. } => collect_declared_names(body, out),
+            Stmt::For { body, .. } => collect_declared_names(body, out),
+            Stmt::ForEach { body, .. } => collect_declared_names(body, out),
+            Stmt::Block { stmts, .. } => collect_declared_names(stmts, out),
+            Stmt::Match { arms, default, .. } => {
+                for arm in arms {
+                    collect_declared_names(&arm.body, out);
+                }
+                if let Some(d) = default {
+                    collect_declared_names(d, out);
+                }
+            }
+            Stmt::TryCatch {
+                try_body,
+                catch_body,
+                ..
+            } => {
+                collect_declared_names(try_body, out);
+                collect_declared_names(catch_body, out);
+            }
+            _ => {}
+        }
+    }
+
+    for node in body {
+        match node {
+            DeclOrStmt::Stmt(stmt) => walk_stmt(stmt, out),
+            DeclOrStmt::Decl(Decl::Variable { name, .. }) => {
+                if !out.contains(name) {
+                    out.push(name.clone());
+                }
+            }
+            DeclOrStmt::Decl(_) => {}
+        }
+    }
+}
+
+/// BUG-029: nombres de builtins públicos (sin prefijo `__`) que pueden
+/// aparecer como destino de una llamada. Al recolectar las capturas de una
+/// lambda no deben confundirse con variables del entorno: `imprimir(...)`
+/// dentro de una lambda no captura nada.
+fn is_public_builtin_name(name: &str) -> bool {
+    matches!(
+        name,
+        "imprimir"
+            | "print"
+            | "leer"
+            | "read"
+            | "a_texto"
+            | "to_texto"
+            | "a_entero"
+            | "to_int"
+            | "to_entero"
+            | "a_decimal"
+            | "to_float"
+            | "a_numero"
+            | "to_number"
+            | "a_entero_seguro"
+            | "to_int_safe"
+            | "a_decimal_seguro"
+            | "to_float_safe"
+            | "es_numero"
+            | "is_number"
+            | "abs"
+            | "absoluto"
+            | "minimo"
+            | "min"
+            | "maximo"
+            | "max"
+            | "raiz"
+            | "sqrt"
+            | "potencia"
+            | "pow"
+            | "piso"
+            | "floor"
+            | "techo"
+            | "ceil"
+            | "redondear"
+            | "round"
+            | "largo"
+            | "len"
+            | "agregar"
+            | "push"
+    )
 }
 
 fn type_to_impl_name(t: &Type) -> Option<String> {
@@ -2453,6 +3281,7 @@ imprimir(x);";
         let mut func = Func {
             name: "test".to_string(),
             params: vec![],
+            captures: vec![],
             entry: 0,
             instrs: vec![
                 Instr::Nop,

@@ -1,0 +1,9 @@
+estructura C { v: entero }
+impl C {
+  funcion vacio poner(prestado mut C self, entero n) { self.v = n; }
+  funcion entero leer2(prestado C self) { retornar self.v; }
+}
+C c = C { v: 0 };
+c.poner(42);
+imprimir(c.v);
+imprimir(c.leer2());

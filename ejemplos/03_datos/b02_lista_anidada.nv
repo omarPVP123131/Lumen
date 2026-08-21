@@ -1,0 +1,5 @@
+lista<lista<entero>> m = [[1,2],[3,4]];
+imprimir(m[0][1]);
+imprimir(m[1][0]);
+m[0][0] = 9;
+imprimir(m);

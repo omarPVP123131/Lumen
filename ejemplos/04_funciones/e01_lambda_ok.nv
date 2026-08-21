@@ -1,0 +1,2 @@
+dup = funcion(entero x) { retornar x * 2; };
+imprimir(dup(5));

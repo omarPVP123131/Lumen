@@ -97,13 +97,12 @@ funcion void log_a_archivo(entero nivel, texto msg, texto path) {
     // Si el archivo no existe, crear con la nueva linea
     // If file doesn't exist, create with new line
     texto contenido = "";
-    cualquiera resultado = __leer_archivo(path);
+    cualquiera res_archivo = __leer_archivo(path);
     // Pattern match on Resultado/Exito/Error
-    sea Exito(texto existente) = resultado sino {
-        // Archivo no existe o error de lectura, empezar desde cero
-        // File doesn't exist or read error, start from scratch
-        existente = "";
-    };
+    texto existente = "";
+    si sea exito(_leido) = res_archivo {
+        existente = _leido;
+    }
     contenido = existente + linea;
 
     // Escribir el contenido completo / Write full content
@@ -124,11 +123,11 @@ funcion booleano file_exists(texto path) { retornar archivo_existe(path); }
 
 // Obtiene el tamano de un archivo en bytes / Get file size in bytes
 funcion entero tamano_archivo(texto path) {
-    cualquiera resultado = __tamano_archivo(path);
-    sea Exito(entero tam) = resultado sino {
-        retornar -1;
-    };
-    retornar tam;
+    cualquiera res_archivo = __tamano_archivo(path);
+    si sea exito(tam) = res_archivo {
+        retornar tam;
+    }
+    retornar -1;
 }
 funcion entero file_size(texto path) { retornar tamano_archivo(path); }
 
@@ -161,11 +160,9 @@ funcion void rotar_archivo_si_necesario(texto path, entero max_mb) {
         // Solo rotar si la fuente existe / Only rotate if source exists
         si archivo_existe(ruta_vieja) {
             cualquiera res_lectura = __leer_archivo(ruta_vieja);
-            sea Exito(texto contenido) = res_lectura sino {
-                idx = idx - 1;
-                continuar;
-            };
-            __escribir_archivo(ruta_nueva, contenido);
+            si sea exito(contenido) = res_lectura {
+                __escribir_archivo(ruta_nueva, contenido);
+            }
         }
 
         idx = idx - 1;
@@ -209,10 +206,11 @@ funcion void log_buffer_vaciar(texto path) {
 
         // Read + append + write
         texto contenido = "";
-        cualquiera resultado = __leer_archivo(path);
-        sea Exito(texto existente) = resultado sino {
-            existente = "";
-        };
+        cualquiera res_archivo = __leer_archivo(path);
+        texto existente = "";
+        si sea exito(_leido) = res_archivo {
+            existente = _leido;
+        }
         contenido = existente + linea;
         __escribir_archivo(path, contenido);
 

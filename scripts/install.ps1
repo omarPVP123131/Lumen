@@ -3,7 +3,7 @@
 # Uso: irm https://raw.githubusercontent.com/omarPVP123131/Lumen/main/scripts/install.ps1 | pwsh
 # O:   ./scripts/install.ps1
 
-$Version = "1.6.0"
+$Version = if ($env:LUMEN_VERSION) { $env:LUMEN_VERSION } else { "3.0.0" }
 $Repo = "omarPVP123131/Lumen"
 $BinDir = "$env:LOCALAPPDATA\lumen\bin"
 

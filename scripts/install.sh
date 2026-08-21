@@ -3,7 +3,8 @@
 # Uso: curl -fsSL https://raw.githubusercontent.com/omarPVP123131/Lumen/main/scripts/install.sh | sh
 
 set -e
-VERSION="1.6.0"
+# La versión se puede fijar con LUMEN_VERSION=v3.0.0 sh install.sh
+VERSION="${LUMEN_VERSION:-3.0.0}"
 REPO="omarPVP123131/Lumen"
 
 # Detectar OS y arquitectura
@@ -37,6 +38,30 @@ TMP_FILE="/tmp/lumen-${VERSION}.tar.gz"
 echo "  Descargando ${URL} ..."
 if curl -fsSL "$URL" -o "$TMP_FILE" 2>/dev/null; then
     echo "  ✓ Descargado"
+
+    # Verificar integridad si el release publica SHA256SUMS.txt. Un binario
+    # corrupto o manipulado no debe instalarse en silencio.
+    SUMS_URL="https://github.com/${REPO}/releases/download/v${VERSION}/SHA256SUMS.txt"
+    if curl -fsSL "$SUMS_URL" -o /tmp/lumen-sums.txt 2>/dev/null; then
+        if command -v sha256sum >/dev/null 2>&1; then
+            REAL=$(sha256sum "$TMP_FILE" | cut -d" " -f1)
+        elif command -v shasum >/dev/null 2>&1; then
+            REAL=$(shasum -a 256 "$TMP_FILE" | cut -d" " -f1)
+        else
+            REAL=""
+        fi
+        ESPERADO=$(grep "lumen-${TARGET}.tar.gz" /tmp/lumen-sums.txt 2>/dev/null | cut -d" " -f1)
+        if [ -n "$REAL" ] && [ -n "$ESPERADO" ] && [ "$REAL" != "$ESPERADO" ]; then
+            echo "  ✗ SHA256 no coincide — descarga corrupta o manipulada."
+            echo "    esperado: $ESPERADO"
+            echo "    obtenido: $REAL"
+            rm -f "$TMP_FILE"
+            exit 1
+        fi
+        [ -n "$REAL" ] && [ -n "$ESPERADO" ] && echo "  ✓ SHA256 verificado"
+        rm -f /tmp/lumen-sums.txt
+    fi
+
     tar -xzf "$TMP_FILE" -C "$BIN_DIR" 2>/dev/null || cp "$TMP_FILE" "$BIN_DIR/lumen"
     chmod +x "$BIN_DIR/lumen"
 else

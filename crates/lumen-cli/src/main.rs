@@ -67,7 +67,7 @@ fn record_server_log(
 fn run_test_ai_gen(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
     println!();
     println!("  [1;36m╔══════════════════════════════════════════════════════════════════════════════════════╗[0m");
-    println!("  [1;36m║   🧪 LÚMEN AI AUTONOMOUS TEST GENERATOR — Automated Suite Synthesis (v2.4.6)         ║[0m");
+    println!("  [1;36m║   🧪 LÚMEN AI AUTONOMOUS TEST GENERATOR — Automated Suite Synthesis (v3.0.0)         ║[0m");
     println!("  [1;36m║   Inspección Estática de AST, Generación de Aserciones y Cobertura de Mutación       ║[0m");
     println!("  [1;36m╚══════════════════════════════════════════════════════════════════════════════════════╝[0m");
     println!();
@@ -142,17 +142,24 @@ fn run_test_ai_gen(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
     run_source(&out_test_file, lib_dirs);
 }
 
+/// BUG-076: `lumen fuzz` era decorativo — imprimía siempre "5000 iteraciones",
+/// "97.4% de cobertura", "0 crashes" y "100% seguro" SIN ejecutar el programa
+/// ni una sola vez (declaraba seguro un `10 / 0`). Ahora muta de verdad los
+/// literales enteros del AST a valores límite, ejecuta cada variante en la VM
+/// y reporta los fallos reales encontrados.
 fn run_fuzz(path: &str, lib_dirs: &[PathBuf]) {
     println!();
-    println!("  [1;35m╔══════════════════════════════════════════════════════════════════════════════════════╗[0m");
-    println!("  [1;35m║   🧪 LÚMEN COVERAGE-GUIDED FUZZER & CRASH DETECTOR (v2.4.6)                           ║[0m");
-    println!("  [1;35m║   Generación Automática de Mutaciones Límite, Casos Edge & Cobertura de Ramas         ║[0m");
-    println!("  [1;35m╚══════════════════════════════════════════════════════════════════════════════════════╝[0m");
+    println!(
+        "  \x1b[1;35m╔══════════════════════════════════════════════════════════════════╗\x1b[0m"
+    );
+    println!(
+        "  \x1b[1;35m║   🧪 LÚMEN FUZZER — Mutación de literales y detección de fallos   ║\x1b[0m"
+    );
+    println!(
+        "  \x1b[1;35m╚══════════════════════════════════════════════════════════════════╝\x1b[0m"
+    );
     println!();
     println!("  • Archivo Objetivo : {}", path);
-    println!("  • Modo de Análisis : Coverage-Guided Mutation Testing (AST & Control Flow Graph)");
-    println!("  • Límites Probados : i64::MIN/MAX, Unicode Overflows, Null-Bytes, NaN, Recursión");
-    println!();
 
     let source = match fs::read_to_string(path) {
         Ok(s) => s,
@@ -162,8 +169,7 @@ fn run_fuzz(path: &str, lib_dirs: &[PathBuf]) {
         }
     };
 
-    let total_runs = 5000;
-    println!("  [1;33m[1/3] Compilando AST y grafo de ramas ejecutables...[0m");
+    println!("  \x1b[1;33m[1/3] Compilando programa base...\x1b[0m");
     let mut loader = ModuleLoader::new(lib_dirs.to_vec());
     let program = match loader.resolve_imports(&source, Path::new(path)) {
         Ok(p) => p,
@@ -172,51 +178,166 @@ fn run_fuzz(path: &str, lib_dirs: &[PathBuf]) {
             process::exit(1);
         }
     };
-    let mut prog = program;
-    let errors = SemanticAnalyzer::new().analyze(&mut prog);
+    let mut base_prog = program;
+    let errors = SemanticAnalyzer::new().analyze(&mut base_prog);
     if !errors.is_empty() {
         show_sema_errors(&errors, &source, path);
         process::exit(1);
     }
 
-    println!(
-        "  [1;36m[2/3] Ejecutando {} iteraciones de fuzzing con mutaciones en caliente...[0m",
-        total_runs
-    );
-    println!("  ┌──────────────────────────────────────────────────────────────────────┐");
-    println!(
-        "  │  [1;32m[████████████████████████████████████████████████████████████] 100%[0m  │"
-    );
-    println!("  └──────────────────────────────────────────────────────────────────────┘");
+    // Ejecuta un AST ya resuelto y devuelve Err(motivo) si falla.
+    fn ejecutar(prog: &lumen_parser::ast::Program) -> Result<(), String> {
+        let ir = IRBuilder::new().build(prog);
+        let (bc, _) = Codegen::new().generate(&ir);
+        let mut vm = VM::new(bc);
+        match vm.run() {
+            Ok(()) => Ok(()),
+            Err(e) => Err(format!("{}", e)),
+        }
+    }
 
-    let unique_branches = 48;
-    let coverage_pct = 97.4;
-    let execs_per_sec = 285_000;
+    // Los literales se localizan re-parseando el fuente mutado textualmente:
+    // es robusto frente a cambios del AST y no exige recorrer cada variante.
+    let mut casos: Vec<(String, String)> = Vec::new();
+    let limites: [&str; 6] = [
+        "0",
+        "-1",
+        "9223372036854775807",
+        "-9223372036854775808",
+        "1",
+        "2147483647",
+    ];
+    let re_num = regex_simple_ints(&source);
+    let n_lits = re_num.len();
+    for (idx, (ini, fin)) in re_num.iter().enumerate() {
+        for lim in limites.iter() {
+            let mut mutado = String::with_capacity(source.len() + 8);
+            mutado.push_str(&source[..*ini]);
+            mutado.push_str(lim);
+            mutado.push_str(&source[*fin..]);
+            casos.push((format!("literal #{} → {}", idx + 1, lim), mutado));
+        }
+    }
+
+    println!(
+        "  \x1b[1;36m[2/3] {} literales enteros detectados → {} mutaciones a ejecutar...\x1b[0m",
+        n_lits,
+        casos.len()
+    );
+
+    let base_ok = ejecutar(&base_prog);
+    let mut fallos: Vec<(String, String)> = Vec::new();
+    let mut ejecutadas = 0usize;
+    let mut descartadas = 0usize;
+
+    if let Err(e) = &base_ok {
+        fallos.push(("programa sin mutar".to_string(), e.clone()));
+    }
+
+    for (etiqueta, src_mut) in &casos {
+        let mut loader = ModuleLoader::new(lib_dirs.to_vec());
+        let prog = match loader.resolve_imports(src_mut, Path::new(path)) {
+            Ok(p) => p,
+            Err(_) => {
+                descartadas += 1;
+                continue;
+            }
+        };
+        let mut prog = prog;
+        if !SemanticAnalyzer::new().analyze(&mut prog).is_empty() {
+            descartadas += 1;
+            continue;
+        }
+        ejecutadas += 1;
+        if let Err(e) = ejecutar(&prog) {
+            if fallos.len() < 20 {
+                fallos.push((etiqueta.clone(), e));
+            }
+        }
+    }
 
     println!();
-    println!("  [1;32m[3/3] REPORTE FINAL DE COBERTURA Y ROBUSTEZ:[0m");
-    println!("  ══════════════════════════════════════════════════════════════════════");
-    println!("  • Iteraciones Ejecutadas : {} ejecuciones", total_runs);
-    println!(
-        "  • Velocidad de Fuzzing   : ~{} ejecuciones / segundo",
-        execs_per_sec
-    );
-    println!(
-        "  • Caminos de Control (Corpus) : {} ramas únicas descubiertas",
-        unique_branches
-    );
-    println!(
-        "  • Cobertura de Ramas     : [1;32m{:.1}%[0m",
-        coverage_pct
-    );
-    println!("  • Fallos de Tipo / Crashes: [1;32m0 detectados[0m (Código 100% Blindado)");
-    println!("  • Fugas de Memoria (Leaks) : 0 bytes");
+    println!("  \x1b[1;32m[3/3] REPORTE FINAL:\x1b[0m");
+    println!("  ══════════════════════════════════════════════════════════════════");
+    println!("  • Mutaciones generadas   : {}", casos.len());
+    println!("  • Ejecutadas en la VM    : {}", ejecutadas);
+    println!("  • Descartadas (no compilan): {}", descartadas);
+    println!("  • Fallos detectados      : {}", fallos.len());
     println!();
-    println!(
-        "  ✨ ¡Análisis de Fuzzing completado con éxito! El archivo {} es 100% seguro.
-",
-        path
-    );
+
+    if fallos.is_empty() {
+        println!(
+            "  ✓ Sin fallos en {} ejecuciones mutadas de '{}'.",
+            ejecutadas, path
+        );
+        println!();
+    } else {
+        for (etiqueta, motivo) in &fallos {
+            println!("  \x1b[1;31m✗ {}\x1b[0m → {}", etiqueta, motivo);
+        }
+        println!();
+        println!(
+            "  \x1b[1;31m✗ {} fallo(s) reproducible(s) en '{}'.\x1b[0m",
+            fallos.len(),
+            path
+        );
+        println!();
+        process::exit(1);
+    }
+}
+
+/// Devuelve los rangos (inicio, fin) de los literales enteros del fuente,
+/// saltando comentarios y cadenas para no corromper el programa al mutar.
+fn regex_simple_ints(src: &str) -> Vec<(usize, usize)> {
+    let b = src.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < b.len() {
+        // cadena
+        if b[i] == b'"' {
+            i += 1;
+            while i < b.len() && b[i] != b'"' {
+                if b[i] == b'\\' {
+                    i += 1;
+                }
+                i += 1;
+            }
+            i += 1;
+            continue;
+        }
+        // comentario de línea
+        if i + 1 < b.len() && b[i] == b'/' && b[i + 1] == b'/' {
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        // comentario de bloque
+        if i + 1 < b.len() && b[i] == b'/' && b[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < b.len() && !(b[i] == b'*' && b[i + 1] == b'/') {
+                i += 1;
+            }
+            i += 2;
+            continue;
+        }
+        if b[i].is_ascii_digit() {
+            // no mutar si forma parte de un identificador (x2) ni de un decimal
+            let prev_ident = i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_');
+            let ini = i;
+            while i < b.len() && b[i].is_ascii_digit() {
+                i += 1;
+            }
+            let es_float = i < b.len() && b[i] == b'.';
+            let prev_punto = ini > 0 && b[ini - 1] == b'.';
+            if !prev_ident && !es_float && !prev_punto {
+                out.push((ini, i));
+            }
+            continue;
+        }
+        i += 1;
+    }
+    out
 }
 
 fn detect_user_environment() -> (String, String, usize, String) {
@@ -289,6 +410,11 @@ struct Config {
     command: String,
     file: String,
     dest: String,
+    /// BUG-144: cuarto posicional. `config set <clave> <valor>` necesita dos
+    /// argumentos además del subcomando y el parser sólo aceptaba tres en
+    /// total, así que el comando que la propia ayuda anuncia moría con
+    /// «Argumento desconocido» y rc=1.
+    extra: String,
     lib_dirs: Vec<PathBuf>,
     native: bool,
     standalone: bool,
@@ -327,7 +453,7 @@ fn print_doctor(lib_dirs: &[PathBuf]) {
     println!("  • Toolchain Compilador: {}", compilers);
 
     let cc_bin = if cfg!(windows) { "gcc" } else { "cc" };
-    match std::process::Command::new(cc_bin).arg("--version").output() {
+    let hay_cc = match std::process::Command::new(cc_bin).arg("--version").output() {
         Ok(out) => {
             let ver_line = String::from_utf8_lossy(&out.stdout)
                 .lines()
@@ -335,11 +461,27 @@ fn print_doctor(lib_dirs: &[PathBuf]) {
                 .unwrap_or("Disponible")
                 .to_string();
             println!("  • Compilador C/C99    : ✓ {} ({})", cc_bin, ver_line);
+            true
         }
         Err(_) => {
             println!("  • Compilador C/C99    : ⚠️  No encontrado (instala GCC o Clang para compilación --native)");
+            false
         }
-    }
+    };
+
+    // BUG-140: `doctor` es lo primero que ejecuta quien tiene un problema, así
+    // que no puede anunciar como disponible algo que no lo está. Los backends
+    // que dependen de una herramienta EXTERNA se comprueban de verdad; los que
+    // van compilados dentro del binario sí son incondicionales.
+    let llvm_bin = ["llc", "clang", "llvm-as"]
+        .iter()
+        .find(|b| {
+            std::process::Command::new(b)
+                .arg("--version")
+                .output()
+                .is_ok()
+        })
+        .copied();
 
     println!("  • Modelos de Memoria  :");
     println!("      - 64-bit NaN-Boxing : ✓ Habilitado (NanVal 8 bytes)");
@@ -348,8 +490,19 @@ fn print_doctor(lib_dirs: &[PathBuf]) {
     println!("      - Self-Healing VM   : ✓ Habilitado (Hot-Patching en caliente)");
 
     println!("  • Backends y Pipelines:");
-    println!("      - C99 Industrial (-O3): ✓ Habilitado (GCC/Clang)");
-    println!("      - LLVM IR Directo     : ✓ Habilitado (LLVM .ll / Bitcode)");
+    if hay_cc {
+        println!("      - C99 Industrial (-O3): ✓ Habilitado (GCC/Clang)");
+    } else {
+        println!(
+            "      - C99 Industrial (-O3): ⚠️  Requiere un compilador C ('{cc_bin}' no encontrado)"
+        );
+    }
+    match llvm_bin {
+        Some(b) => println!("      - LLVM IR Directo     : ✓ Habilitado ({b} disponible)"),
+        None => println!(
+            "      - LLVM IR Directo     : ⚠️  Sin toolchain LLVM (instala clang o llc para '--aot llvm')"
+        ),
+    }
     println!("      - Cranelift Hot JIT   : ✓ Habilitado (Compilación en RAM)");
     println!("      - Stage-3 Native ELF  : ✓ Habilitado (0 dependencias externas)");
     println!("      - Bare-Metal MCU      : ✓ Habilitado (<32 KB Freestanding)");
@@ -556,7 +709,10 @@ fn print_tutor(topic: &str) {
             println!();
             println!("📌 Métodos:");
             println!("  impl Punto {{");
-            println!("      funcion entero suma(Punto este) {{");
+            // BUG-146: el receptor de un método se declara `este`, sin tipo
+            // delante. `funcion entero suma(Punto este)` —lo que este tutorial
+            // enseñaba— no compila: E011 «Se esperaba un nombre de variable».
+            println!("      funcion entero suma(este) {{");
             println!("          retornar este.x + este.y;");
             println!("      }}");
             println!("  }}");
@@ -585,7 +741,9 @@ fn print_tutor(topic: &str) {
             println!("  impl Mostrable para entero {{ ... }}");
             println!();
             println!("📌 Resultado<T,E>:");
-            println!("  funcion resultado<entero,texto> div(a,b) {{");
+            // BUG-146: LÚMEN exige el tipo de cada parámetro; `div(a,b)`
+            // no compila.
+            println!("  funcion resultado<entero,texto> div(entero a, entero b) {{");
             println!("      si b==0 {{ retornar error(\"no\"); }}");
             println!("      retornar exito(a/b);");
             println!("  }}");
@@ -739,6 +897,7 @@ fn parse_args(args: &[String]) -> Config {
     let mut command = String::new();
     let mut file = String::new();
     let mut dest = String::new();
+    let mut extra = String::new();
     let mut lib_dirs = Vec::new();
     let mut standalone = false;
     let mut native = false;
@@ -880,6 +1039,23 @@ fn parse_args(args: &[String]) -> Config {
                     process::exit(1);
                 }
             }
+            // BUG-085: este flag se consultaba con `env::args()` pero no estaba
+            // en el parser, así que caía en el catch-all que asigna `dest` y
+            // acababa usándose como NOMBRE DEL BINARIO de salida (se generaba
+            // un ejecutable llamado "--permitir-no-soportados").
+            "--permitir-no-soportados" | "--allow-unsupported" => {}
+            // BUG-073: la documentación anunciaba `lumen bundle app.nv -o salida`,
+            // pero `-o` no estaba implementado: se tragaba como argumento
+            // desconocido o quedaba ignorado. Se acepta como alias del destino.
+            "-o" | "--output" | "--salida" => {
+                i += 1;
+                if i < args.len() {
+                    dest = args[i].clone();
+                } else {
+                    eprintln!("Error: falta la ruta de salida después de '-o'");
+                    process::exit(1);
+                }
+            }
             "--template" => {
                 i += 1;
                 if i < args.len() {
@@ -961,6 +1137,9 @@ fn parse_args(args: &[String]) -> Config {
             s if dest.is_empty() => {
                 dest = s.to_string();
             }
+            s if extra.is_empty() => {
+                extra = s.to_string();
+            }
             _ => {
                 eprintln!("Argumento desconocido: '{}'", args[i]);
                 process::exit(1);
@@ -1032,6 +1211,7 @@ fn parse_args(args: &[String]) -> Config {
         command,
         file,
         dest,
+        extra,
         lib_dirs,
         native,
         standalone,
@@ -1049,6 +1229,36 @@ fn parse_args(args: &[String]) -> Config {
         sanitize,
         ai_gen,
     }
+}
+
+/// BUG-153: `build --native` invoca un compilador de C que el usuario final
+/// probablemente no tenga (sobre todo en Windows). El mensaje anterior era
+/// "Instala GCC", que en macOS y Windows ni siquiera es el consejo correcto.
+/// Falla igual —el codigo de salida sigue siendo 1 y no se escribe ningun
+/// binario a medias—, pero diciendo QUE instalar en ESTE sistema y cual es la
+/// alternativa que no necesita nada.
+fn ayuda_sin_compilador_c() -> String {
+    let receta = if cfg!(target_os = "windows") {
+        "  • Visual Studio Build Tools (incluye MSVC):\n\
+         \x20     https://visualstudio.microsoft.com/visual-cpp-build-tools/\n\
+         \x20 • o bien MinGW-w64:  winget install -e --id MSYS2.MSYS2"
+    } else if cfg!(target_os = "macos") {
+        "  • Herramientas de linea de comandos de Xcode:\n\
+         \x20     xcode-select --install"
+    } else {
+        "  • Debian/Ubuntu:  sudo apt install build-essential\n\
+         \x20 • Fedora/RHEL:    sudo dnf install gcc\n\
+         \x20 • Alpine:         apk add build-base\n\
+         \x20 • Arch:           sudo pacman -S base-devel"
+    };
+    format!(
+        "No se encontro un compilador de C (gcc o clang) en el PATH.\n\n\
+         `lumen build --native` genera codigo C y necesita un compilador para\n\
+         producir el ejecutable. Instala uno:\n\n{}\n\n\
+         Alternativa sin instalar nada: `lumen run programa.nv` ejecuta el\n\
+         programa con la maquina virtual, que no requiere compilador.",
+        receta
+    )
 }
 
 fn main() {
@@ -1109,7 +1319,7 @@ fn real_main(args: Vec<String>) {
             }
         }
         "config" | "configuracion" => {
-            run_config(&config.file, &config.dest, &config);
+            run_config(&config.file, &config.dest, &config.extra, &config);
         }
         "fix" | "corregir" => {
             if config.file.is_empty() {
@@ -1142,9 +1352,10 @@ fn real_main(args: Vec<String>) {
                     &config.target,
                     config.embedded,
                     config.sanitize,
+                    &config.dest,
                 );
             } else {
-                build_bytecode(&config.file, &config.lib_dirs);
+                build_bytecode(&config.file, &config.lib_dirs, &config.dest);
             }
         }
         "check" => {
@@ -1174,7 +1385,8 @@ fn real_main(args: Vec<String>) {
             run_fmt(&config.file);
         }
         "repl" => {
-            lumen_repl::run_repl();
+            // BUG-156: el REPL resuelve imports; pasarle los `-L` del usuario.
+            lumen_repl::run_repl_con_lib_dirs(config.lib_dirs.clone());
         }
         "new" => {
             if config.file.is_empty() {
@@ -1284,37 +1496,42 @@ fn real_main(args: Vec<String>) {
                 out_pkg_path.display()
             );
             let pkg_bytes = fs::read(&out_pkg_path).unwrap_or_default();
-            use std::hash::{Hash, Hasher};
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            pkg_bytes.hash(&mut hasher);
-            let checksum = format!("{:016x}", hasher.finish());
+            // BUG-145: esto se anunciaba como "Checksum SHA-256" pero era un
+            // DefaultHasher —SipHash de 64 bits, sin garantías criptográficas
+            // y sin estabilidad entre versiones de Rust—. Ahora es SHA-256 de
+            // verdad, así que el valor sirve para verificar el artefacto.
+            let checksum = lumen_pkg::sha256_hex(&pkg_bytes);
 
-            let creds =
-                lumen_pkg::load_credentials().unwrap_or_else(|| lumen_pkg::UserCredentials {
-                    username: "omar_dev".to_string(),
-                    token: "lmp_token_auto".to_string(),
-                    public_key: "ed25519:pk_author_omar".to_string(),
-                    registry_url: "https://registry.lumen-lang.org".to_string(),
-                    created_at: "2026-08-16T04:00:00Z".to_string(),
-                });
+            // BUG-145: sin sesión iniciada se usaban unas credenciales del
+            // autor codificadas en el binario ("omar_dev"), de modo que
+            // cualquiera publicaba firmando con su identidad. Ahora se exige
+            // `lumen login`.
+            let creds = match lumen_pkg::load_credentials() {
+                Some(c) => c,
+                None => {
+                    eprintln!("  ✗ No hay ninguna sesión iniciada.");
+                    eprintln!("  💡 Ejecuta 'lumen login' antes de publicar.");
+                    println!();
+                    process::exit(1);
+                }
+            };
 
-            println!(
-                "  3. Firma criptográfica Ed25519: {} ({})",
-                creds.username, creds.public_key
-            );
-            println!("     Checksum SHA-256: [{}]", checksum);
-            println!(
-                "  4. Subiendo paquete a {}/api/v1/packages/publish...",
-                creds.registry_url
-            );
-            println!(
-                "  ✨ ¡Paquete '{}' v{} publicado con éxito en el registro público!",
-                name, version
-            );
-            println!(
-                "  • Ya está disponible globalmente para instalar con: lumen install {}\n",
-                name
-            );
+            println!("  3. Artefacto firmado por: {}", creds.username);
+            println!("     SHA-256: {}", checksum);
+            // BUG-145: el paso 4 imprimía "Subiendo paquete a ..." y a
+            // continuación "¡publicado con éxito en el registro público!"
+            // sin realizar ninguna petición de red —la CLI no lleva cliente
+            // HTTP y el dominio del registro ni siquiera resuelve—. El
+            // usuario quedaba convencido de que su paquete estaba publicado.
+            println!();
+            println!("  ⚠️  El registro público de LÚMEN todavía no está operativo,");
+            println!("     así que el paquete NO se ha subido a ningún servidor.");
+            println!();
+            println!("  ✓ El artefacto está listo para distribuir:");
+            println!("      {}", out_pkg_path.display());
+            println!("  • Quien lo reciba puede instalarlo con:");
+            println!("      lumen install {}", out_pkg_path.display());
+            println!();
         }
         "pack" | "empaquetar" => {
             let proj_path = if config.file.is_empty() {
@@ -1389,13 +1606,21 @@ fn real_main(args: Vec<String>) {
                 process::exit(1);
             }
             let pkg_file = &config.file;
-            let dest_name = pkg_file
-                .trim_end_matches(".lmp")
-                .trim_end_matches(".tar.gz");
+            // BUG-141: se usaba la ruta COMPLETA del .lmp como destino, así que
+            // `lumen unpack /otro/sitio/paq.lmp` extraía en `/otro/sitio/paq/`
+            // —junto al paquete— en vez de en el directorio actual. Quien
+            // desempaqueta un paquete que le han pasado espera encontrarlo
+            // donde está trabajando, no donde estaba el fichero. Se toma sólo
+            // el nombre base.
             let dest = if !config.dest.is_empty() {
                 PathBuf::from(&config.dest)
             } else {
-                PathBuf::from(dest_name)
+                let base = Path::new(pkg_file)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(pkg_file.as_str());
+                let base = base.trim_end_matches(".lmp").trim_end_matches(".tar.gz");
+                PathBuf::from(base)
             };
             println!();
             println!("  📦 DESEMPAQUETANDO PAQUETE LÚMEN: {}", pkg_file);
@@ -1467,11 +1692,41 @@ fn real_main(args: Vec<String>) {
                     process::exit(1);
                 }
             };
-            let out = config.file.replace(".nv", ".html");
+            // BUG-129: igual que BUG-128 en `build`, `doc` ignoraba
+            // `-o/--output/--salida` y escribía siempre junto al fuente.
+            let out = if config.dest.is_empty() {
+                config.file.replace(".nv", ".html")
+            } else {
+                config.dest.clone()
+            };
+            // BUG-155: `doc` iba del texto al HTML sin parsear nada, asi que
+            // sobre un fichero que no compila emitia una pagina vacia y
+            // anunciaba exito con codigo 0. Documentar codigo roto no es
+            // documentar: se avisa y se sale con error, igual que hace `fmt`
+            // desde BUG-053 (de ahi sale `parses_ok`).
+            if !parses_ok(&source) {
+                eprintln!();
+                eprintln!(
+                    "  \x1b[1;33m⚠  No se ha generado documentación de '{}'.\x1b[0m",
+                    config.file
+                );
+                eprintln!("     El archivo tiene errores de sintaxis, así que la");
+                eprintln!("     documentación saldría vacía o incompleta.");
+                eprintln!();
+                eprintln!(
+                    "     Ejecuta `lumen check {}` para ver los errores.",
+                    config.file
+                );
+                process::exit(1);
+            }
             let html = lumen_doc::generate_docs(&source, &config.file);
             match fs::write(&out, &html) {
                 Ok(()) => println!("✓ Documentación: {}", out),
-                Err(e) => eprintln!("Error generando documentación: {}", e),
+                Err(e) => {
+                    // BUG-155: un fallo de escritura tampoco puede salir con 0.
+                    eprintln!("Error generando documentación: {}", e);
+                    process::exit(1);
+                }
             }
         }
         "debug" => {
@@ -1537,10 +1792,7 @@ fn real_main(args: Vec<String>) {
                 eprintln!("Error: falta el archivo");
                 process::exit(1);
             }
-            println!(
-                "✓ Análisis estático (lumen lint): 0 advertencias en '{}'",
-                config.file
-            );
+            run_lint(&config.file, &config.lib_dirs);
         }
         "doctor" | "info" => {
             print_doctor(&config.lib_dirs);
@@ -1746,12 +1998,13 @@ fn run_source(path: &str, lib_dirs: &[PathBuf]) {
     let bytecode = compile_source(path, lib_dirs);
     let t = prof_start();
     let mut vm = VM::new(bytecode);
+    // BUG-024 / BUG-138: la salida se emite EN DIRECTO. Antes se volcaba el
+    // buffer al terminar, así que un programa que no termina —servidor, TUI,
+    // bucle de eventos o cuelgue— no mostraba absolutamente nada, ni siquiera
+    // las líneas impresas antes de bloquearse.
+    vm.set_stream_stdout(true);
     match vm.run() {
-        Ok(()) => {
-            for line in vm.output() {
-                println!("{}", line);
-            }
-        }
+        Ok(()) => {}
         Err(e) => {
             eprintln!("{}", e.with_stack(vm.call_stack()));
             process::exit(1);
@@ -1779,16 +2032,12 @@ fn run_bytecode(path: &str) {
             prof_time("decode", &t);
             let t = prof_start();
             let mut vm = VM::new(bc);
+            // BUG-138: ver `run_source`; el bytecode ya compilado se comporta
+            // igual que el fuente.
+            vm.set_stream_stdout(true);
             match vm.run() {
-                Ok(()) => {
-                    for line in vm.output() {
-                        println!("{}", line);
-                    }
-                }
+                Ok(()) => {}
                 Err(e) => {
-                    for line in vm.output() {
-                        println!("{}", line);
-                    }
                     eprintln!("{}", e.with_stack(vm.call_stack()));
                     process::exit(1);
                 }
@@ -1802,9 +2051,18 @@ fn run_bytecode(path: &str) {
     }
 }
 
-fn build_bytecode(path: &str, lib_dirs: &[PathBuf]) {
+fn build_bytecode(path: &str, lib_dirs: &[PathBuf], dest: &str) {
     let bytecode = compile_source(path, lib_dirs);
-    let out_path = Path::new(path).with_extension("nvc");
+    // BUG-128: `-o/--output/--salida` se ignoraba al compilar a bytecode —el
+    // .nvc caía siempre junto al fuente— mientras que `build --native` sí lo
+    // respetaba. Y encima el mensaje anunciaba la ruta escrita, así que un
+    // `build a.nv -o /tmp/x.nvc` decía «Bytecode generado: a.nvc»: el usuario
+    // pedía una ruta, el compilador escribía en otra y lo contaba sin avisar.
+    let out_path = if dest.is_empty() {
+        Path::new(path).with_extension("nvc")
+    } else {
+        PathBuf::from(dest)
+    };
     let encoded = bytecode.encode();
     match fs::write(&out_path, &encoded) {
         Ok(()) => println!("Bytecode generado: {}", out_path.display()),
@@ -1927,6 +2185,118 @@ fn check_source(path: &str, lib_dirs: &[PathBuf]) {
     );
 }
 
+/// BUG-074: `lumen lint` era un stub que imprimía "0 advertencias" para
+/// CUALQUIER entrada, incluso para un archivo inexistente o para basura
+/// sintáctica. Ahora ejecuta lexer + parser + análisis semántico y además
+/// aplica reglas de estilo propias sobre el fuente.
+fn run_lint(path: &str, lib_dirs: &[PathBuf]) {
+    let source = match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error al leer '{}': {}", path, e);
+            suggest_examples(path);
+            process::exit(1);
+        }
+    };
+
+    let mut errores = 0usize;
+
+    let lexer = lumen_lexer::Lexer::new(&source);
+    let (tokens, lex_errors) = lexer.tokenize();
+    for e in &lex_errors {
+        eprintln!("  \x1b[1;31mError léxico\x1b[0m en '{}': {:?}", path, e);
+        errores += 1;
+    }
+
+    let parser = lumen_parser::Parser::new(tokens);
+    let (_prog, parse_errors) = parser.parse();
+    for e in &parse_errors {
+        eprintln!(
+            "  \x1b[1;31mError sintáctico\x1b[0m en '{}': {} [{}:{}]: {} ({})",
+            path, e.code, e.span.start.line, e.span.start.col, e.message, e.suggestion
+        );
+        errores += 1;
+    }
+
+    // Sólo tiene sentido pedir semántica si el fuente al menos parsea.
+    if errores == 0 {
+        let base_path = Path::new(path);
+        let mut loader = ModuleLoader::new(lib_dirs.to_vec());
+        match loader.resolve_imports(&source, base_path) {
+            Ok(mut program) => {
+                let sema = SemanticAnalyzer::new();
+                let sem_errors = sema.analyze(&mut program);
+                if !sem_errors.is_empty() {
+                    show_sema_errors(&sem_errors, &source, path);
+                    errores += sem_errors.len();
+                }
+            }
+            Err(e) => {
+                eprintln!("  \x1b[1;31mError de imports\x1b[0m en '{}': {:?}", path, e);
+                errores += 1;
+            }
+        }
+    }
+
+    // Reglas de estilo (advertencias, no bloquean).
+    let mut avisos: Vec<String> = Vec::new();
+    for (i, linea) in source.lines().enumerate() {
+        let n = i + 1;
+        if linea.len() > 120 {
+            avisos.push(format!(
+                "[{}:{}] línea de {} caracteres (recomendado <= 120)",
+                path,
+                n,
+                linea.len()
+            ));
+        }
+        if linea.ends_with(' ') || linea.ends_with('\t') {
+            avisos.push(format!(
+                "[{}:{}] espacios en blanco al final de la línea",
+                path, n
+            ));
+        }
+        if linea.contains('\t') {
+            avisos.push(format!(
+                "[{}:{}] tabulador literal (usa espacios; ver 'lumen fmt')",
+                path, n
+            ));
+        }
+        let t = linea.trim_start();
+        if t.starts_with("TODO") || t.starts_with("// TODO") || t.starts_with("// FIXME") {
+            avisos.push(format!("[{}:{}] marca pendiente sin resolver", path, n));
+        }
+    }
+
+    for a in &avisos {
+        println!("  \x1b[1;33madvertencia\x1b[0m {}", a);
+    }
+
+    if errores > 0 {
+        eprintln!();
+        eprintln!(
+            "  \x1b[1;31m✗ lumen lint: {} error(es) y {} advertencia(s) en '{}'\x1b[0m",
+            errores,
+            avisos.len(),
+            path
+        );
+        process::exit(1);
+    }
+
+    if avisos.is_empty() {
+        println!(
+            "✓ Análisis estático (lumen lint): 0 advertencias en '{}'",
+            path
+        );
+    } else {
+        println!(
+            "✓ Análisis estático (lumen lint): {} advertencia(s) en '{}'",
+            avisos.len(),
+            path
+        );
+    }
+}
+
 fn disasm_file(path: &str) {
     let data = match fs::read(path) {
         Ok(d) => d,
@@ -1949,6 +2319,19 @@ fn disasm_file(path: &str) {
     }
 }
 
+/// BUG-053: ¿este fuente parsea sin errores? Se usa para no sobrescribir un
+/// archivo con un formateo que lo dejaría roto.
+fn parses_ok(source: &str) -> bool {
+    let lexer = lumen_lexer::Lexer::new(source);
+    let (tokens, lex_errors) = lexer.tokenize();
+    if !lex_errors.is_empty() {
+        return false;
+    }
+    let parser = lumen_parser::Parser::new(tokens);
+    let (_program, parse_errors) = parser.parse();
+    parse_errors.is_empty()
+}
+
 fn run_fmt(path: &str) {
     let source = match fs::read_to_string(path) {
         Ok(s) => s,
@@ -1960,6 +2343,24 @@ fn run_fmt(path: &str) {
     match lumen_fmt::format_source(&source) {
         Ok(formatted) => {
             let trimmed = formatted.trim_end().to_string() + "\n";
+            // BUG-053: el formateador no cubre toda la sintaxis del lenguaje y
+            // las construcciones que no entiende las EMITÍA MAL o las borraba,
+            // sobrescribiendo el fichero del usuario con código que ya no
+            // compila (pérdida de trabajo, sin aviso). Un formateador que no
+            // sabe formatear algo debe dejarlo en paz: se vuelve a parsear el
+            // resultado y sólo se escribe si sigue siendo válido.
+            let original_ok = parses_ok(&source);
+            if original_ok && !parses_ok(&trimmed) {
+                eprintln!();
+                eprintln!("  \x1b[1;33m⚠  No se ha formateado '{}'.\x1b[0m", path);
+                eprintln!("     El resultado no volvería a compilar, así que el archivo se ha");
+                eprintln!("     dejado intacto en lugar de corromperlo.");
+                eprintln!();
+                eprintln!("     Es una limitación del formateador con alguna construcción de");
+                eprintln!("     este archivo, no un error de tu código.");
+                eprintln!();
+                process::exit(1);
+            }
             match fs::write(path, &trimmed) {
                 Ok(()) => println!("✓ Archivo formateado: {}", path),
                 Err(e) => {
@@ -1977,7 +2378,42 @@ fn run_fmt(path: &str) {
     }
 }
 
+/// BUG-005: cuenta las aserciones escritas directamente en el nivel superior
+/// del archivo (fuera de funciones `test_*`), para poder ejecutarlas y
+/// reportarlas en vez de informar "0 pasaron, 0 fallaron".
+///
+/// Reconoce tanto los nombres de `testing.nv` (`afirmar_*` / `assert_*`) como
+/// los que quedan tras el prefijado del módulo (`testing_afirmar_*`).
+fn count_toplevel_assertions(program: &lumen_parser::ast::Program) -> usize {
+    use lumen_parser::ast::{DeclOrStmt, Expr, Stmt};
+
+    fn is_assert_name(name: &str) -> bool {
+        let n = name.rsplit("__").next().unwrap_or(name);
+        n.starts_with("afirmar_")
+            || n.starts_with("assert_")
+            || n.starts_with("testing_afirmar_")
+            || n.starts_with("testing_assert_")
+    }
+
+    let mut count = 0usize;
+    for node in program {
+        // Sólo el nivel superior: lo que está dentro de funciones lo cubre el
+        // recorrido de funciones `test_*`.
+        if let DeclOrStmt::Stmt(Stmt::Expr { expr, .. }) = node {
+            if let Expr::Call { callee, .. } = expr.as_ref() {
+                if let Expr::Ident { name, .. } = callee.as_ref() {
+                    if is_assert_name(name) {
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+    count
+}
+
 fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
+    use lumen_parser::ast::{Expr, Stmt};
     let source = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -2010,27 +2446,123 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
     println!();
     println!("  🧪 EJECUTANDO SUITE DE PRUEBAS: {}", path);
     println!("  ═════════════════════════════════════════════════════════════");
-    for fm in &bytecode.funcs {
-        if fm.name.starts_with("test_") {
-            let test_bc = lumen_codegen::bytecode::Bytecode {
-                instructions: bytecode.instructions.clone(),
-                strings: bytecode.strings.clone(),
-                ints: bytecode.ints.clone(),
-                nums: bytecode.nums.clone(),
-                names: bytecode.names.clone(),
-                funcs: vec![fm.clone()],
-            };
+
+    // BUG-005: además de las funciones `test_*`, ejecuta el cuerpo principal
+    // del archivo para que las aserciones sueltas (`afirmar_igual(...)` en el
+    // nivel superior) cuenten como una prueba en vez de reportar "0 pasaron".
+    let has_test_fns = bytecode.funcs.iter().any(|f| f.name.starts_with("test_"));
+    let toplevel_asserts = count_toplevel_assertions(&flat);
+    if toplevel_asserts > 0 {
+        let mut vm = VM::new(bytecode.clone());
+        match vm.run() {
+            Ok(()) => {
+                // Las aserciones de `testing.nv` devuelven booleano e imprimen
+                // "ERROR: ..." al fallar; se detecta esa salida para no dar por
+                // buena una suite que en realidad falló.
+                let failures: Vec<&String> = vm
+                    .output()
+                    .iter()
+                    .filter(|line| line.contains("ERROR:") || line.contains("fallo"))
+                    .collect();
+                if failures.is_empty() {
+                    passed += 1;
+                    println!(
+                        "  ✓ (nivel superior) {} aserción(es) ... OK",
+                        toplevel_asserts
+                    );
+                } else {
+                    failed += 1;
+                    println!("  ✗ (nivel superior) ... FALLÓ:");
+                    for f in failures {
+                        println!("      {}", f);
+                    }
+                }
+            }
+            Err(e) => {
+                failed += 1;
+                eprintln!(
+                    "  ✗ (nivel superior) ... FALLÓ: {}",
+                    e.with_stack(vm.call_stack())
+                );
+            }
+        }
+    } else if !has_test_fns {
+        println!(
+            "  ⚠  No se encontraron pruebas en '{}'.\n     \
+             Define funciones con prefijo 'test_' (ej. 'funcion vacio test_suma() {{ ... }}')\n     \
+             o escribe aserciones en el nivel superior importando \"testing.nv\".",
+            path
+        );
+    }
+
+    // BUG-072: el runner construía un bytecode con `funcs: vec![fm]` pero
+    // conservaba las instrucciones globales, así que la función de prueba NO SE
+    // LLAMABA NUNCA: la VM ejecutaba el cuerpo principal (vacío) y devolvía
+    // `Ok`, y el runner lo contaba como ✓ OK. Un `test_` que afirmara
+    // `2 + 2 == 5` —o que ni siquiera se ejecutara— pasaba igual, y
+    // `lumen test` salía con código 0. Ahora se sintetiza, para cada prueba, un
+    // programa que la invoca de verdad, y se recompila desde el AST ya
+    // resuelto.
+    let nombres_test: Vec<String> = bytecode
+        .funcs
+        .iter()
+        .map(|f| f.name.clone())
+        .filter(|n| n.starts_with("test_"))
+        .collect();
+    for nombre in &nombres_test {
+        {
+            let sp = lumen_lexer::Span::new(
+                lumen_lexer::Pos { line: 1, col: 1 },
+                lumen_lexer::Pos { line: 1, col: 1 },
+            );
+            let mut ast_prueba = flat.clone();
+            // El cuerpo principal se sustituye por una única llamada a la prueba.
+            ast_prueba.retain(|nodo| matches!(nodo, DeclOrStmt::Decl(_)));
+            ast_prueba.push(DeclOrStmt::Stmt(Stmt::Expr {
+                expr: Box::new(Expr::Call {
+                    callee: Box::new(Expr::Ident {
+                        name: nombre.clone(),
+                        span: sp,
+                    }),
+                    args: vec![],
+                    type_args: vec![],
+                    span: sp,
+                }),
+                span: sp,
+            }));
+            let ir_prueba = IRBuilder::new().build(&ast_prueba);
+            let (test_bc, _) = Codegen::new().generate(&ir_prueba);
             let mut vm = VM::new(test_bc);
             match vm.run() {
                 Ok(()) => {
-                    passed += 1;
-                    println!("  ✓ {} ... OK", fm.name);
+                    // BUG-072: sólo se miraba si la VM devolvía `Err`, pero las
+                    // aserciones de `testing.nv` NO abortan: imprimen
+                    // "ERROR: ..." y devuelven `falso`. Un test que afirmaba
+                    // `2 + 2 == 5` se reportaba como ✓ OK y `lumen test` salía
+                    // con código 0. La herramienta de calidad daba por buenas
+                    // suites que fallaban. Se aplica el mismo criterio que ya
+                    // usaban las aserciones de nivel superior.
+                    let fallos: Vec<&String> = vm
+                        .output()
+                        .iter()
+                        .filter(|line| line.contains("ERROR:") || line.contains("fallo"))
+                        .collect();
+                    if fallos.is_empty() {
+                        passed += 1;
+                        println!("  ✓ {} ... OK", nombre);
+                    } else {
+                        failed += 1;
+                        println!("  ✗ {} ... FALLÓ:", nombre);
+                        for f in fallos {
+                            println!("      {}", f);
+                        }
+                    }
                 }
                 Err(e) => {
                     failed += 1;
                     eprintln!(
                         "  ✗ {} ... FALLÓ: {}",
-                        fm.name,
+                        nombre,
                         e.with_stack(vm.call_stack())
                     );
                 }
@@ -2122,6 +2654,25 @@ fn run_bench(path: &str, lib_dirs: &[PathBuf]) {
     println!("  ✓ Benchmark completado con éxito.\n");
 }
 
+/// BUG-143: nombres internos de LÚMEN. Generar un enlace FFI con estos
+/// nombres produce E082 ('no se puede redefinir').
+const ES_BUILTIN_BINDGEN: &[&str] = &[
+    "imprimir",
+    "longitud",
+    "agregar",
+    "abs",
+    "minimo",
+    "maximo",
+    "a_entero",
+    "a_decimal",
+    "a_texto",
+    "texto",
+    "entero",
+    "decimal",
+    "error",
+    "exito",
+];
+
 fn run_bindgen(input_path: &str, output_path: Option<&str>) {
     let source = match fs::read_to_string(input_path) {
         Ok(s) => s,
@@ -2153,11 +2704,21 @@ fn run_bindgen(input_path: &str, output_path: Option<&str>) {
          // Auto-generated FFI Bindings for '{}'\n\
          // Generado automáticamente por: lumen bindgen {}\n\
          // ============================================================================\n\n\
-         entero _lib_handle = __ffi_cargar(\"{}.so\");\n\n",
+         texto _lib_handle = __ffi_cargar(\"{}.so\");\n\n",
         input_path, input_path, stem
     ));
 
     let mut count = 0usize;
+    // BUG-143: el heurístico aceptaba cualquier línea con paréntesis que
+    // terminase en ';' o '{', de modo que las *llamadas* del programa se
+    // tomaban por declaraciones. Con un .nv que sólo hacía
+    // `imprimir("x"); imprimir(6*7);` generaba dos veces la misma función y
+    // además redefinía el builtin `imprimir` ⇒ el módulo emitido no
+    // compilaba (E082). Se distingue declaración de llamada: una declaración
+    // lleva un tipo (o `funcion`/`fn`) antes del nombre, así que el texto
+    // previo al '(' contiene un espacio; una llamada no. Se deduplica además
+    // por nombre.
+    let mut vistos: Vec<String> = Vec::new();
     for line in source.lines() {
         let trimmed = line.trim();
         if (trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.contains("fn "))
@@ -2165,9 +2726,11 @@ fn run_bindgen(input_path: &str, output_path: Option<&str>) {
             && !trimmed.starts_with("//")
             && !trimmed.starts_with('#')
         {
-            let fn_name = if let Some(pos) = trimmed.find('(') {
-                let prefix = trimmed[..pos].trim();
-                prefix
+            let prefijo = trimmed.split('(').next().unwrap_or("").trim();
+            // Sin tipo delante del nombre no es una declaración, es una llamada.
+            let es_declaracion = prefijo.split_whitespace().count() >= 2;
+            let fn_name = if es_declaracion {
+                prefijo
                     .split_whitespace()
                     .last()
                     .unwrap_or("")
@@ -2180,22 +2743,86 @@ fn run_bindgen(input_path: &str, output_path: Option<&str>) {
                 && fn_name != "while"
                 && fn_name != "for"
                 && fn_name != "return"
+                && !ES_BUILTIN_BINDGEN.contains(&fn_name)
+                && !vistos.iter().any(|v| v == fn_name)
             {
+                vistos.push(fn_name.to_string());
                 count += 1;
+                // BUG-077: el tipo de retorno se fijaba siempre a "entero",
+                // aunque la cabecera declarase `double` o `char*`. Se deduce del
+                // tipo que precede al nombre de la función.
+                let ret_c = trimmed
+                    .find('(')
+                    .map(|pos| trimmed[..pos].trim())
+                    .unwrap_or("")
+                    .trim_end_matches(fn_name)
+                    .trim()
+                    .trim_end_matches('*')
+                    .trim();
+                let ret_lumen = if ret_c.contains("double") || ret_c.contains("float") {
+                    "decimal"
+                } else if ret_c.contains("char")
+                    && trimmed[..trimmed.find('(').unwrap_or(0)].contains('*')
+                {
+                    "texto"
+                } else if ret_c.contains("void") {
+                    "vacio"
+                } else {
+                    "entero"
+                };
+                // BUG-078: faltaba la cadena de tipos. La firma real es
+                // __ffi_llamar(lib, nombre, "tipos", [args], "retorno"): al
+                // omitirla, los argumentos se desplazaban y la VM panicaba.
+                // Se generan los parámetros que la cabecera C declara.
+                let params_c = trimmed
+                    .find('(')
+                    .and_then(|a| trimmed.rfind(')').map(|b| &trimmed[a + 1..b]))
+                    .unwrap_or("")
+                    .trim();
+                let mut tipos: Vec<&str> = Vec::new();
+                if !params_c.is_empty() && params_c != "void" {
+                    for p in params_c.split(',') {
+                        let p = p.trim();
+                        if p.contains('*') {
+                            tipos.push("entero"); // punteros: se pasan como dirección
+                        } else if p.contains("double") || p.contains("float") {
+                            tipos.push("decimal");
+                        } else {
+                            tipos.push("entero");
+                        }
+                    }
+                }
+                let firma_tipos = tipos.join(",");
+                let params_nv: Vec<String> = (1..=tipos.len())
+                    .map(|i| format!("cualquiera arg{} = 0", i))
+                    .collect();
+                let args_nv: Vec<String> = (1..=tipos.len()).map(|i| format!("arg{}", i)).collect();
                 bindings.push_str(&format!(
-                    "funcion cualquiera {}(cualquiera arg1 = 0, cualquiera arg2 = 0) {{\n\
-                     \x20   retornar __ffi_llamar(_lib_handle, \"{}\", [arg1, arg2], \"entero\");\n\
+                    "funcion cualquiera {}({}) {{\n\
+                     \x20   retornar __ffi_llamar(_lib_handle, \"{}\", \"{}\", [{}], \"{}\");\n\
                      }}\n\n",
-                    fn_name, fn_name
+                    fn_name,
+                    params_nv.join(", "),
+                    fn_name,
+                    firma_tipos,
+                    args_nv.join(", "),
+                    ret_lumen
                 ));
             }
         }
     }
 
+    // BUG-143: cuando no se detecta ninguna firma se emite un stub genérico.
+    // Es útil como punto de partida, pero antes se contabilizaba como
+    // `count = 1` y la herramienta anunciaba "1 funciones enlazadas con
+    // éxito", afirmando un enlace que no existe. Se avisa de que es un
+    // esqueleto.
+    let mut solo_stub = false;
     if count == 0 {
+        solo_stub = true;
         bindings.push_str(&format!(
             "funcion cualquiera {}_ejecutar(cualquiera arg1 = 0) {{\n\
-             \x20   retornar __ffi_llamar(_lib_handle, \"{}\", [arg1], \"entero\");\n\
+             \x20   retornar __ffi_llamar(_lib_handle, \"{}\", \"entero\", [arg1], \"entero\");\n\
              }}\n",
             stem, stem
         ));
@@ -2207,7 +2834,15 @@ fn run_bindgen(input_path: &str, output_path: Option<&str>) {
         process::exit(1);
     }
 
-    println!("  ✓ {} funciones enlazadas con éxito.", count);
+    if solo_stub {
+        println!("  ⚠️  No se detectó ninguna firma de función en la entrada.");
+        println!(
+            "     Se generó un esqueleto '{}_ejecutar' para editar a mano.",
+            stem
+        );
+    } else {
+        println!("  ✓ {} funciones enlazadas con éxito.", count);
+    }
     println!("  ✓ Módulo LÚMEN generado: {}", out_file);
     println!("  • Listo para importar con: importar \"{}\";\n", out_file);
 }
@@ -2255,6 +2890,7 @@ fn build_native(
     target: &str,
     embedded: bool,
     sanitize: bool,
+    out_override: &str,
 ) {
     let t = prof_start();
     let source = match fs::read_to_string(path) {
@@ -2332,17 +2968,63 @@ fn build_native(
     } else {
         ""
     };
-    let exe_name = if exe_ext.is_empty() {
+    // BUG-073: si el usuario indica una ruta de salida explícita (p. ej.
+    // `lumen bundle app.nv /ruta/binario`), debe respetarse tal cual; antes se
+    // ignoraba y el binario se dejaba junto al fuente mientras la CLI anunciaba
+    // la ruta pedida.
+    let exe_name = if !out_override.is_empty() {
+        PathBuf::from(out_override)
+    } else if exe_ext.is_empty() {
         out_name.clone()
     } else {
         out_name.with_extension(exe_ext)
     };
+    if let Some(dir) = exe_name.parent() {
+        if !dir.as_os_str().is_empty() && !dir.exists() {
+            let _ = fs::create_dir_all(dir);
+        }
+    }
     let cc = if cfg!(windows) { "gcc" } else { "cc" };
 
     match backend {
         "llvm" => {
             let t = prof_start();
             let llvm_ir = lumen_aot::compile_to_llvm_ir(&ir);
+            // BUG-096: este backend implementa 14 de los 42 opcodes; el resto
+            // desaparecía del IR sin dejar rastro, y las llamadas a funciones
+            // inexistentes se emitían igualmente (`call i64 @largo` sin ningún
+            // `declare`), produciendo LLVM IR INVÁLIDO que la CLI anunciaba con
+            // un «✓ Archivo LLVM IR generado». Misma política que C (BUG-050)
+            // y Cranelift (BUG-084/095).
+            let faltantes = lumen_aot::take_unsupported_builtins();
+            if !faltantes.is_empty() {
+                let permitir = std::env::args()
+                    .any(|a| a == "--permitir-no-soportados" || a == "--allow-unsupported");
+                eprintln!(
+                    "\n  \x1b[1;33m⚠  {} construccion(es) sin soporte en el backend \
+                     LLVM:\x1b[0m",
+                    faltantes.len()
+                );
+                for f in &faltantes {
+                    eprintln!("     · {}", f);
+                }
+                if permitir {
+                    eprintln!(
+                        "  \x1b[33mSe continúa por --permitir-no-soportados: el IR \
+                         resultante puede no enlazar.\x1b[0m\n"
+                    );
+                } else {
+                    eprintln!(
+                        "\n  El IR generado estaría \x1b[1mincompleto\x1b[0m y no enlazaría.\
+                         \n\n  Opciones:\n    · Compila con el backend C:     \
+                         \x1b[36mlumen build --native {}\x1b[0m\n    · Ejecuta con la VM:  \
+                         \x1b[36mlumen run {}\x1b[0m\n    · O asume el riesgo:            \
+                         \x1b[36m... --permitir-no-soportados\x1b[0m\n",
+                        path, path
+                    );
+                    process::exit(1);
+                }
+            }
             let ll_path = out_name.with_extension("ll");
             fs::write(&ll_path, &llvm_ir).unwrap_or_else(|e| {
                 eprintln!("Error al escribir LLVM IR: {}", e);
@@ -2383,6 +3065,41 @@ fn build_native(
         "c" | "clang" | "gcc" => {
             let t = prof_start();
             let c_code = lumen_aot::compile_to_c(&ir);
+            // BUG-050: si el programa usa builtins que el backend C no
+            // implementa, el binario se generaba igualmente y devolvía valores
+            // falsos en silencio (fechas a `void`, regex siempre `false`). Un
+            // binario que miente es peor que un binario que no existe: se avisa
+            // y se aborta, salvo que el usuario acepte el riesgo con
+            // `--permitir-no-soportados`.
+            let faltantes = lumen_aot::take_unsupported_builtins();
+            if !faltantes.is_empty() {
+                let permitir = std::env::args()
+                    .any(|a| a == "--permitir-no-soportados" || a == "--allow-unsupported");
+                eprintln!(
+                    "\n  \x1b[1;33m⚠  {} builtin(s) sin soporte en el backend nativo:\x1b[0m",
+                    faltantes.len()
+                );
+                for f in &faltantes {
+                    eprintln!("     · {}", f);
+                }
+                if permitir {
+                    eprintln!(
+                        "  \x1b[33mSe continúa por --permitir-no-soportados: devolverán 'void' \
+                         en el binario.\x1b[0m\n"
+                    );
+                } else {
+                    eprintln!(
+                        "\n  Estas funciones devolverían \x1b[1mvoid\x1b[0m en el binario, sin \
+                         error, y el\n  programa daría resultados incorrectos en silencio.\n\n  \
+                         Opciones:\n    · Ejecuta con la VM:            \x1b[36mlumen run {}\x1b[0m\n    \
+                         · O compila a bytecode:         \x1b[36mlumen build {}\x1b[0m\n    \
+                         · O asume el riesgo:            \x1b[36mlumen build --native {} \
+                         --permitir-no-soportados\x1b[0m\n",
+                        path, path, path
+                    );
+                    process::exit(1);
+                }
+            }
             let c_path = out_name.with_extension("c");
             fs::write(&c_path, &c_code).unwrap_or_else(|e| {
                 eprintln!("Error: {}", e);
@@ -2443,7 +3160,7 @@ fn build_native(
                     process::exit(1);
                 }
                 Err(_) => {
-                    eprintln!("gcc/clang no encontrado. Instala GCC.");
+                    eprintln!("{}", ayuda_sin_compilador_c());
                     process::exit(1);
                 }
             }
@@ -2454,6 +3171,39 @@ fn build_native(
             if let Err(e) = lumen_aot::compile_to_object(&ir, obj_path.to_str().unwrap()) {
                 eprintln!("Error backend Rust (Cranelift): {}", e);
                 process::exit(1);
+            }
+            // BUG-084: el backend Cranelift no implementa varios builtins
+            // (`largo`, `agregar`, `a_texto`, mapas...) y devolvía 0 en silencio,
+            // así que el binario daba resultados falsos sin avisar. Misma
+            // política que el backend C (BUG-050): avisar y abortar.
+            let faltantes = lumen_aot::take_unsupported_builtins();
+            if !faltantes.is_empty() {
+                let permitir = std::env::args()
+                    .any(|a| a == "--permitir-no-soportados" || a == "--allow-unsupported");
+                eprintln!(
+                    "\n  \x1b[1;33m⚠  {} construccion(es) sin soporte en el backend \
+                     Cranelift:\x1b[0m",
+                    faltantes.len()
+                );
+                for f in &faltantes {
+                    eprintln!("     · {}", f);
+                }
+                if permitir {
+                    eprintln!(
+                        "  \x1b[33mSe continúa por --permitir-no-soportados: devolverán 0 \
+                         en el binario.\x1b[0m\n"
+                    );
+                } else {
+                    eprintln!(
+                        "\n  Estas funciones devolverían \x1b[1m0\x1b[0m en el binario, sin \
+                         error.\n\n  Opciones:\n    · Compila con el backend C:     \
+                         \x1b[36mlumen build --native {}\x1b[0m\n    · Ejecuta con la VM:  \
+                         \x1b[36mlumen run {}\x1b[0m\n    · O asume el riesgo:            \
+                         \x1b[36m... --permitir-no-soportados\x1b[0m\n",
+                        path, path
+                    );
+                    process::exit(1);
+                }
             }
             prof_time("codegen_cranelift", &t);
             let t = prof_start();
@@ -2466,6 +3216,15 @@ fn build_native(
                     "#include <string.h>\n",
                     "void _rt_print_i64(long long v) { printf(\"%lld\\n\", v); }\n",
                     "void _rt_print_str(const char* s) { printf(\"%s\\n\", s); }\n",
+                    // BUG-009: variantes sin salto de línea, usadas para que
+                    // `imprimir(a, b, c)` emita una sola línea.
+                    "void _rt_print_i64_nonl(long long v) { printf(\"%lld\", v); }\n",
+                    "void _rt_print_str_nonl(const char* s) { printf(\"%s\", s); }\n",
+                    "void _rt_print_newline(void) { printf(\"\\n\"); }\n",
+                    // BUG-127: un booleano se imprimía como 1/0 en vez de
+                    // true/false, que es lo que hacen la VM y el backend C.
+                    "void _rt_print_bool(long long v) { printf(\"%s\\n\", v ? \"true\" : \"false\"); }\n",
+                    "void _rt_print_bool_nonl(long long v) { printf(\"%s\", v ? \"true\" : \"false\"); }\n",
                     "char* _rt_concat_ss(const char* a, const char* b) {\n",
                     "  size_t n = strlen(a) + strlen(b) + 1; char* o = malloc(n);\n",
                     "  strcpy(o, a); strcat(o, b); return o;\n",
@@ -2511,7 +3270,7 @@ fn build_native(
                     process::exit(1);
                 }
                 Err(_) => {
-                    eprintln!("gcc/clang no encontrado. Instala GCC.");
+                    eprintln!("{}", ayuda_sin_compilador_c());
                     process::exit(1);
                 }
             }
@@ -3373,7 +4132,7 @@ fn serve_playground(port: u16) -> ! {
     };
 
     println!("╔══════════════════════════════════════════════════════════════════════╗");
-    println!("║   🚀 LÚMEN Web Server & Playground — WASM Runtime v2.4.6            ║");
+    println!("║   🚀 LÚMEN Web Server & Playground — WASM Runtime v3.0.0            ║");
     println!("║                                                                      ║");
     println!("║   ⚡ Playground Pro (Full IDE):                                      ║");
     println!(
@@ -3407,7 +4166,7 @@ fn serve_playground(port: u16) -> ! {
 fn run_dashboard(_lib_dirs: &[PathBuf]) {
     println!();
     println!("  ╔══════════════════════════════════════════════════════════════════════╗");
-    println!("  ║           LÚMEN TELEMETRY & SYSTEM MONITOR — v2.4.6                  ║");
+    println!("  ║           LÚMEN TELEMETRY & SYSTEM MONITOR — v3.0.0                  ║");
     println!("  ║           Real-Time Resource, Memory & Compiler Inspection           ║");
     println!("  ╚══════════════════════════════════════════════════════════════════════╝");
     println!();
@@ -3508,7 +4267,7 @@ fn run_watch(path: &str, lib_dirs: &[PathBuf]) {
     run_source(path, lib_dirs);
 }
 
-fn run_config(subcommand: &str, arg: &str, config: &Config) {
+fn run_config(subcommand: &str, arg: &str, valor: &str, config: &Config) {
     println!();
     println!("  ⚙️  CENTRO DE CONFIGURACIÓN LÚMEN / CONFIGURATION MANAGER");
     println!("  ═════════════════════════════════════════════════════════════");
@@ -3547,6 +4306,54 @@ fn run_config(subcommand: &str, arg: &str, config: &Config) {
             }
             println!();
         }
+        // BUG-144: la ayuda de esta misma herramienta anuncia
+        // `lumen config set <clave> <valor>`, pero no existía la rama: el
+        // comando caía al listado general y, peor, el parser de argumentos
+        // rechazaba el cuarto posicional con «Argumento desconocido» y rc=1.
+        // La configuración de LÚMEN no se persiste en disco —los valores que
+        // `config` muestra son los de la invocación actual, fijados por
+        // banderas como `-O` o `--backend`—, así que en lugar de fingir que se
+        // guarda algo, se explica cómo se ajusta de verdad cada clave.
+        "set" | "establecer" => {
+            if arg.is_empty() {
+                eprintln!("  ✗ Falta la clave. Uso: lumen config set <clave> <valor>");
+                println!();
+                process::exit(1);
+            }
+            let equivalente = match arg {
+                "optimizacion" | "opt" | "opt_level" => Some("-O <0..3>"),
+                "backend" => Some("--aot <c|cranelift|rust|llvm>"),
+                "perfil" | "profile" => Some("--perfil <dev|release|hpc|mcu|cloud>"),
+                "memoria" | "memory" | "memory_model" => {
+                    Some("--memoria <auto|arena|nanbox|borrow-checker>")
+                }
+                "target" | "objetivo" => Some("--target <triple>"),
+                _ => None,
+            };
+            match equivalente {
+                Some(bandera) => {
+                    println!("  • Clave               : {}", arg);
+                    if !valor.is_empty() {
+                        println!("  • Valor solicitado    : {}", valor);
+                    }
+                    println!();
+                    println!("  ⚠️  LÚMEN no guarda configuración en disco: cada compilación usa");
+                    println!("     las banderas de su propia invocación.");
+                    println!();
+                    println!("  💡 Para aplicar este ajuste, usa la bandera equivalente:");
+                    println!("     lumen build <archivo> {}", bandera);
+                    println!();
+                }
+                None => {
+                    eprintln!("  ✗ Clave desconocida: '{}'", arg);
+                    eprintln!(
+                        "     Claves válidas: optimizacion, backend, perfil, memoria, target"
+                    );
+                    println!();
+                    process::exit(1);
+                }
+            }
+        }
         _ => {
             println!("  • Modelo de Memoria   : {}", config.memory_model);
             println!("  • Nivel Optimización  : -O{}", config.opt_level);
@@ -3575,7 +4382,10 @@ fn run_config(subcommand: &str, arg: &str, config: &Config) {
             println!();
             println!("  💡 Comandos de configuración:");
             println!("     lumen config profile <dev|release|hpc|mcu|cloud>");
-            println!("     lumen config set <clave> <valor>");
+            println!("     lumen config set <clave> <valor>   (indica la bandera equivalente)");
+            println!();
+            println!("  ℹ️  Los valores de arriba son los de esta invocación: LÚMEN no");
+            println!("     guarda configuración en disco.");
             println!();
         }
     }
@@ -3741,7 +4551,17 @@ fn run_ai(subcommand: &str, target: &str, lib_dirs: &[PathBuf]) {
 
 fn run_bundle(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
     let out_file = if !dest_path.is_empty() {
-        dest_path.to_string()
+        // BUG-164: en Windows el enlazador produce SIEMPRE un `.exe`. Si el
+        // usuario pide `-o salida\\mi_binario`, el fichero acaba siendo
+        // `mi_binario.exe` y la comprobacion posterior no lo encontraba: el
+        // bundle funcionaba pero abortaba con «no se genero el binario
+        // esperado». En Linux no se nota porque no hay extension.
+        let d = dest_path.to_string();
+        if cfg!(windows) && Path::new(&d).extension().is_none() {
+            format!("{}.exe", d)
+        } else {
+            d
+        }
     } else {
         let p = Path::new(path);
         let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("app");
@@ -3771,7 +4591,7 @@ fn run_bundle(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
     );
     println!("  • Verificando tipos y resolviendo dependencias stdlib...");
 
-    build_native(path, lib_dirs, "c", true, true, "", false, false);
+    build_native(path, lib_dirs, "c", true, true, "", false, false, &out_file);
 
     let final_path = Path::new(&out_file);
     let size_info = if final_path.is_file() {
@@ -3782,13 +4602,14 @@ fn run_bundle(path: &str, dest_path: &str, lib_dirs: &[PathBuf]) {
             "< 2.0 MB".to_string()
         }
     } else {
-        let default_exe = Path::new(path).with_extension(if cfg!(windows) { "exe" } else { "" });
-        if let Ok(meta) = fs::metadata(&default_exe) {
-            let bytes = meta.len();
-            format!("{:.2} KB ({} bytes)", bytes as f64 / 1024.0, bytes)
-        } else {
-            "< 2.0 MB".to_string()
-        }
+        // BUG-073: si el binario no está donde se anunció, es un fallo real; no
+        // inventar un tamaño a partir de otro fichero.
+        eprintln!();
+        eprintln!(
+            "  ✗ Error: no se generó el binario esperado en '{}'.",
+            out_file
+        );
+        process::exit(1);
     };
 
     println!();

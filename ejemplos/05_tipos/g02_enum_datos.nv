@@ -1,0 +1,9 @@
+enum Forma { Circulo(decimal), Rect(entero, entero) }
+funcion entero area(Forma f) {
+  elegir (f) {
+    caso Forma::Rect(a, b): retornar a * b;
+    caso Forma::Circulo(r): retornar 0;
+  }
+  retornar -1;
+}
+imprimir(area(Forma::Rect(3,4)));

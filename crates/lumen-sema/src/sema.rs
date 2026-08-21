@@ -6,6 +6,21 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeInfo {
     Numero,
+    /// BUG-102: un mapa. El lenguaje no tiene sintaxis para declararlo, pero
+    /// `__map_nuevo`/`__map_poner` sí devuelven algo perfectamente conocido: un
+    /// mapa. Marcarlo como dinámico (BUG-100) hacía que `m[0] = 9` —que la
+    /// v2.4.6 rechazaba— se aceptara y luego divergiera entre la VM y el
+    /// binario nativo. Es compatible con `numero`/`dinamico` para no romper el
+    /// código que ya pasa mapas por ahí, pero no se puede indexar ni recorrer.
+    Mapa,
+    /// BUG-100: tipo *dinámico*: un valor cuyo tipo real sólo se conoce en
+    /// ejecución. Lo devuelven los builtins que no pueden saberlo estáticamente
+    /// —`__map_obtener` y compañía, porque un mapa admite cualquier cosa—.
+    /// Antes se reutilizaba `Numero` para esto, lo que hacía que el analizador
+    /// leyera «es un número» donde el compilador quería decir «no lo sé»: todo
+    /// lo guardado en un mapa que no fuera escalar quedaba inservible. Es
+    /// compatible con cualquier tipo y no genera errores por sí mismo.
+    Dinamico,
     Entero,
     Decimal,
     Texto,
@@ -35,6 +50,64 @@ pub enum TypeInfo {
     Dueno(Box<TypeInfo>),
 }
 
+/// BUG-059: los mensajes de error usaban `{:?}` sobre `TypeInfo`, así que
+/// escupían la representación interna de Rust —`Lista(Texto)`,
+/// `Struct { name: "P", fields: [("x", Entero)] }`— en lugar de la sintaxis del
+/// propio lenguaje. Este `Display` imprime los tipos tal y como se escriben en
+/// LÚMEN: `lista<texto>`, `P`, `opcion<entero>`.
+impl std::fmt::Display for TypeInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeInfo::Numero => write!(f, "numero"),
+            TypeInfo::Dinamico => write!(f, "dinamico"),
+            TypeInfo::Mapa => write!(f, "mapa"),
+            TypeInfo::Entero => write!(f, "entero"),
+            TypeInfo::Decimal => write!(f, "decimal"),
+            TypeInfo::Texto => write!(f, "texto"),
+            TypeInfo::Booleano => write!(f, "booleano"),
+            TypeInfo::Void => write!(f, "vacio"),
+            TypeInfo::Lista(inner) => write!(f, "lista<{}>", inner),
+            TypeInfo::Func {
+                param_types,
+                return_type,
+            } => {
+                write!(f, "funcion(")?;
+                for (i, p) in param_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", p)?;
+                }
+                write!(f, ") -> {}", return_type)
+            }
+            // El nombre basta: volcar los campos no ayuda a nadie.
+            TypeInfo::Struct { name, .. } => write!(f, "{}", name),
+            TypeInfo::Resultado { ok, err } => write!(f, "resultado<{}, {}>", ok, err),
+            TypeInfo::Opcion(inner) => write!(f, "opcion<{}>", inner),
+            TypeInfo::Enum(name) => write!(f, "{}", name),
+            TypeInfo::Tuple(types) => {
+                write!(f, "(")?;
+                for (i, t) in types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", t)?;
+                }
+                write!(f, ")")
+            }
+            TypeInfo::TypeVar(name) => write!(f, "{}", name),
+            TypeInfo::Prestado { inner, mutable } => {
+                if *mutable {
+                    write!(f, "prestado mut {}", inner)
+                } else {
+                    write!(f, "prestado {}", inner)
+                }
+            }
+            TypeInfo::Dueno(inner) => write!(f, "dueno {}", inner),
+        }
+    }
+}
+
 #[derive(Clone)]
 #[allow(dead_code)]
 struct Symbol {
@@ -52,6 +125,20 @@ impl Scope {
         Self {
             symbols: HashMap::new(),
         }
+    }
+
+    /// BUG-060: sustituye una definición existente sin emitir E032. Se usa para
+    /// afinar el tipo de la firma provisional con la que se predeclara una
+    /// lambda recursiva.
+    fn redefine(&mut self, name: &str, var_type: TypeInfo, span: Span) {
+        self.symbols.insert(
+            name.to_string(),
+            Symbol {
+                var_type,
+                name: name.to_string(),
+                declared: span,
+            },
+        );
     }
 
     fn define(&mut self, name: &str, var_type: TypeInfo, span: Span) -> Result<(), SemError> {
@@ -613,6 +700,7 @@ impl SemanticAnalyzer {
                 params,
                 type_params,
                 type_param_bounds,
+                span,
                 ..
             }) = node
             {
@@ -622,6 +710,51 @@ impl SemanticAnalyzer {
                     .map(|p| self.resolve_type(p.param_type.clone(), type_params))
                     .collect();
                 let default_count = params.iter().filter(|p| p.default.is_some()).count();
+                // BUG-025: dos definiciones con el mismo nombre (típicamente una
+                // local y otra traída por un `importar`) se pisaban en silencio.
+                // Sema se quedaba con la última firma mientras que el generador
+                // de código conservaba otro cuerpo, produciendo un híbrido: se
+                // ejecutaba el cuerpo importado con los parámetros de la local,
+                // y fallaba en runtime con "Variable 'x' no definida".
+                // BUG-103: definir una función con el nombre de un builtin no
+                // sombreable se aceptaba en silencio, y luego el builtin la
+                // suplantaba en ejecución. `funcion vacio push(prestado mut
+                // lista<entero> l)` compilaba y `push(l)` llamaba al `agregar`
+                // interno con un argumento de menos, dejando la variable en
+                // `vacio`: el fallo aparecía después, como «'largo' espera
+                // lista o texto, no Void», sin relación aparente con la causa.
+                // El prefijo `__` no basta para considerarlo interno: la
+                // propia stdlib usa `__factorial`, `__render_mes`… como
+                // convención de «privado del módulo», y son funciones suyas
+                // perfectamente legítimas. Sólo interesan las que el runtime
+                // intercepta de verdad.
+                if !name.starts_with("__")
+                    && crate::loader::is_builtin(name)
+                    && !es_builtin_sombreable(name)
+                {
+                    self.errors.push(SemError {
+                        code: "E082".to_string(),
+                        message: format!(
+                            "'{}' es una función interna y no se puede redefinir",
+                            name
+                        ),
+                        span: *span,
+                        suggestion: format!(
+                            "Ponle otro nombre a tu función; '{}' seguiría llamando a la interna en tiempo de ejecución",
+                            name
+                        ),
+                    });
+                }
+                if self.functions.contains_key(name) {
+                    self.errors.push(SemError {
+                        code: "E081".to_string(),
+                        message: format!("La función '{}' está definida más de una vez", name),
+                        span: *span,
+                        suggestion:
+                            "Renombra una de las definiciones. Si viene de un 'importar', recuerda que las funciones importadas ya llevan el prefijo del módulo"
+                                .to_string(),
+                    });
+                }
                 self.functions.insert(
                     name.clone(),
                     (ret, params_t, default_count, type_params.clone()),
@@ -806,6 +939,32 @@ impl SemanticAnalyzer {
                 init,
                 span,
             } => {
+                let mut predeclarada = false;
+                // BUG-060: una lambda recursiva (`sea fact = funcion(...) { ...
+                // fact(n - 1) ... };`) fallaba con E042 «La función 'fact' no
+                // está definida», porque el cuerpo se analizaba ANTES de
+                // declarar el nombre. La VM ya lo soporta —asignar la lambda a
+                // una variable ya declarada funciona y da 120—, así que era
+                // sólo una limitación del orden de análisis. Se predeclara el
+                // nombre con la firma de la lambda para que su propio cuerpo
+                // pueda verse a sí mismo.
+                if let Some(Expr::Lambda { params, .. }) = init.as_deref() {
+                    let sig = TypeInfo::Func {
+                        param_types: params
+                            .iter()
+                            .map(|p| self.type_to_info(p.param_type.clone()))
+                            .collect(),
+                        return_type: Box::new(
+                            if matches!(var_type, Type::Struct(n) if n == "Infer") {
+                                TypeInfo::Numero
+                            } else {
+                                self.type_to_info(var_type.clone())
+                            },
+                        ),
+                    };
+                    let _ = self.current_scope().define(name, sig, *span);
+                    predeclarada = true;
+                }
                 let inferred_type = init
                     .as_ref()
                     .map(|e| self.analyze_expr(e))
@@ -815,20 +974,60 @@ impl SemanticAnalyzer {
                 } else {
                     self.type_to_info(var_type.clone())
                 };
+                // BUG-016: un tipo declarado que no existe se representaba como
+                // `Struct { name, fields: [] }` y desembocaba en un E031 confuso
+                // que filtraba la representación interna. Diagnostícalo aquí.
+                if let Type::Struct(type_name) = var_type {
+                    if !self.structs.contains_key(type_name)
+                        && !self.enums.contains_key(type_name)
+                        && type_name != "Infer"
+                    {
+                        self.errors.push(SemError {
+                            code: "E062".to_string(),
+                            message: format!("El tipo '{}' no está definido", type_name),
+                            span: *span,
+                            // BUG-105
+                            suggestion: match nombre_mas_parecido(
+                                type_name,
+                                self.structs.keys().chain(self.enums.keys()),
+                            ) {
+                                Some(cerca) => {
+                                    format!("¿Quisiste escribir '{}'?", cerca)
+                                }
+                                None => format!(
+                                    "Define 'estructura {}' o usa un tipo básico (entero, decimal, texto, booleano, lista<T>)",
+                                    type_name
+                                ),
+                            },
+                        });
+                        if let Err(e) =
+                            self.current_scope()
+                                .define(name, declared_type.clone(), *span)
+                        {
+                            self.errors.push(e);
+                        }
+                        return declared_type;
+                    }
+                }
                 if init.is_some() {
                     let init_type = inferred_type;
                     if !can_assign(&declared_type, &init_type) {
                         self.errors.push(SemError {
                             code: "E031".to_string(),
-                            message: format!("No puedes asignar un valor de tipo '{:?}' a una variable de tipo '{:?}'", init_type, declared_type),
+                            message: format!("No puedes asignar un valor de tipo '{}' a una variable de tipo '{}'", init_type, declared_type),
                             span: *span,
-                            suggestion: format!("Usa un valor de tipo '{:?}' en lugar de '{:?}'", declared_type, init_type),
+                            suggestion: format!("Usa un valor de tipo '{}' en lugar de '{}'", declared_type, init_type),
                         });
                     }
                 }
-                if let Err(e) = self
-                    .current_scope()
-                    .define(name, declared_type.clone(), *span)
+                if predeclarada {
+                    // Ya existe por la predeclaración: afinamos su tipo con el
+                    // inferido de verdad, sin denunciar un duplicado que no lo es.
+                    self.current_scope()
+                        .redefine(name, declared_type.clone(), *span);
+                } else if let Err(e) =
+                    self.current_scope()
+                        .define(name, declared_type.clone(), *span)
                 {
                     self.errors.push(e);
                 }
@@ -846,7 +1045,7 @@ impl SemanticAnalyzer {
                         self.errors.push(SemError {
                             code: "E068".to_string(),
                             message: format!(
-                                "La destructuración requiere una tupla, no '{:?}'",
+                                "La destructuración requiere una tupla, no '{}'",
                                 init_type
                             ),
                             span: *span,
@@ -875,9 +1074,9 @@ impl SemanticAnalyzer {
                         if !can_assign(&declared_type, element_type) {
                             self.errors.push(SemError {
                                 code: "E031".to_string(),
-                                message: format!("No puedes asignar un valor de tipo '{:?}' a la variable '{}' de tipo '{:?}'", element_type, target.name, declared_type),
+                                message: format!("No puedes asignar un valor de tipo '{}' a la variable '{}' de tipo '{}'", element_type, target.name, declared_type),
                                 span: target.span,
-                                suggestion: format!("Usa un tipo '{:?}' para la variable '{}'", element_type, target.name),
+                                suggestion: format!("Usa un tipo '{}' para la variable '{}'", element_type, target.name),
                             });
                         }
                         if let Err(e) =
@@ -978,9 +1177,15 @@ impl SemanticAnalyzer {
                 if !can_assign(&declared_type, &value_type) {
                     self.errors.push(SemError {
                         code: "E031".to_string(),
-                        message: format!("No puedes asignar un valor de tipo '{:?}' a una constante de tipo '{:?}'", value_type, declared_type),
+                        message: format!(
+                            "No puedes asignar un valor de tipo '{}' a una constante de tipo '{}'",
+                            value_type, declared_type
+                        ),
                         span: *span,
-                        suggestion: format!("Usa un valor de tipo '{:?}' en lugar de '{:?}'", declared_type, value_type),
+                        suggestion: format!(
+                            "Usa un valor de tipo '{}' en lugar de '{}'",
+                            declared_type, value_type
+                        ),
                     });
                 }
                 if let Err(e) = self
@@ -1108,6 +1313,33 @@ impl SemanticAnalyzer {
                         });
                     }
                 }
+                // BUG-092: sólo se comprobaban las FIRMAS de los métodos; sus
+                // cuerpos no se analizaban nunca. Dentro de un `impl ... para`
+                // cualquier disparate pasaba el análisis: una variable
+                // inexistente, un campo usado sin `este`, tipos incompatibles.
+                // `lumen check` decía «es válido», la VM fallaba en runtime con
+                // «Variable no definida» y el binario nativo IMPRIMÍA 0 sin
+                // avisar. La rama de impl inherente (`trait_name` vacío) sí los
+                // analizaba, así que las dos formas de `impl` no coincidían.
+                for method in methods {
+                    let mut m = method.clone();
+                    if let Decl::Function { params, .. } = &mut m {
+                        for p in params.iter_mut() {
+                            if let Type::Struct(nombre) = &p.param_type {
+                                if nombre == "Self"
+                                    || nombre == "self"
+                                    || nombre == "este"
+                                    || nombre.ends_with("_Self")
+                                    || nombre.ends_with("_self")
+                                    || nombre.ends_with("_este")
+                                {
+                                    p.param_type = target_type.clone();
+                                }
+                            }
+                        }
+                    }
+                    self.analyze_decl(&m);
+                }
                 TypeInfo::Void
             }
         }
@@ -1117,13 +1349,34 @@ impl SemanticAnalyzer {
         match stmt {
             Stmt::Assignment { name, value, span } => {
                 let value_type = self.analyze_expr(value);
+                // BUG-097: si la variable se declaró con un literal vacío
+                // (`sea l = []`), su tipo de elemento es el genérico `numero`.
+                // Al reasignarla con algo más concreto —`l = agregar(l, 1)`— el
+                // tipo NO se refinaba, así que iterar la lista seguía dando
+                // elementos `numero` (que al operar se vuelven `decimal`) y
+                // sumarlos en un `entero` fallaba con un E031 inevitable.
+                if let Some(sym) = self.lookup(name) {
+                    let generica = matches!(&sym.var_type, TypeInfo::Lista(i)
+                        if matches!(**i, TypeInfo::Numero));
+                    let concreta = matches!(&value_type, TypeInfo::Lista(i)
+                        if !matches!(**i, TypeInfo::Numero));
+                    if generica && concreta {
+                        let nuevo = value_type.clone();
+                        for scope in self.scopes.iter_mut().rev() {
+                            if let Some(sym) = scope.symbols.get_mut(name) {
+                                sym.var_type = nuevo;
+                                break;
+                            }
+                        }
+                    }
+                }
                 if let Some(sym) = self.lookup(name) {
                     if !can_assign(&sym.var_type, &value_type) {
                         self.errors.push(SemError {
                             code: "E031".to_string(),
-                            message: format!("No puedes asignar un valor de tipo '{:?}' a la variable '{}' de tipo '{:?}'", value_type, name, sym.var_type),
+                            message: format!("No puedes asignar un valor de tipo '{}' a la variable '{}' de tipo '{}'", value_type, name, sym.var_type),
                             span: *span,
-                            suggestion: format!("Usa un valor de tipo '{:?}' para asignar a '{}'", sym.var_type, name),
+                            suggestion: format!("Usa un valor de tipo '{}' para asignar a '{}'", sym.var_type, name),
                         });
                     }
                 } else if matches!(value_type, TypeInfo::Func { .. }) {
@@ -1147,9 +1400,10 @@ impl SemanticAnalyzer {
                 else_body,
                 span,
             } => {
-                self.analyze_expr(value);
+                let valor_tipo = self.analyze_expr(value);
                 self.scopes.push(Scope::new());
-                self.bind_pattern_vars(pattern, *span);
+                // BUG-065: idem para `si sea P = v { ... }`.
+                self.bind_pattern_vars_tipado(pattern, *span, Some(&valor_tipo));
                 for n in then_body {
                     self.analyze_decl_or_stmt(n);
                 }
@@ -1169,8 +1423,9 @@ impl SemanticAnalyzer {
                 else_body,
                 span,
             } => {
-                self.analyze_expr(value);
-                self.bind_pattern_vars(pattern, *span);
+                let valor_tipo = self.analyze_expr(value);
+                // BUG-065: idem para `guard sea`.
+                self.bind_pattern_vars_tipado(pattern, *span, Some(&valor_tipo));
                 self.scopes.push(Scope::new());
                 for n in else_body {
                     self.analyze_decl_or_stmt(n);
@@ -1185,11 +1440,11 @@ impl SemanticAnalyzer {
                 ..
             } => {
                 let cond_type = self.analyze_expr(condition);
-                if cond_type != TypeInfo::Booleano {
+                if !es_condicion_valida(&cond_type) {
                     self.errors.push(SemError {
                         code: "E034".to_string(),
                         message: format!(
-                            "La condición del 'si' debe ser booleano, no '{:?}'",
+                            "La condición del 'si' debe ser booleano, no '{}'",
                             cond_type
                         ),
                         span: condition.span(),
@@ -1214,11 +1469,11 @@ impl SemanticAnalyzer {
                 condition, body, ..
             } => {
                 let cond_type = self.analyze_expr(condition);
-                if cond_type != TypeInfo::Booleano {
+                if !es_condicion_valida(&cond_type) {
                     self.errors.push(SemError {
                         code: "E034".to_string(),
                         message: format!(
-                            "La condición del 'mientras' debe ser booleano, no '{:?}'",
+                            "La condición del 'mientras' debe ser booleano, no '{}'",
                             cond_type
                         ),
                         span: condition.span(),
@@ -1244,11 +1499,11 @@ impl SemanticAnalyzer {
                 self.scopes.push(Scope::new());
                 self.analyze_decl(init);
                 let cond_type = self.analyze_expr(condition);
-                if cond_type != TypeInfo::Booleano {
+                if !es_condicion_valida(&cond_type) {
                     self.errors.push(SemError {
                         code: "E034".to_string(),
                         message: format!(
-                            "La condición del 'para' debe ser booleano, no '{:?}'",
+                            "La condición del 'para' debe ser booleano, no '{}'",
                             cond_type
                         ),
                         span: condition.span(),
@@ -1339,13 +1594,36 @@ impl SemanticAnalyzer {
 
                 for arm in arms {
                     self.scopes.push(Scope::new());
-                    self.bind_pattern_vars(&arm.value, arm.span);
-                    let arm_val_type = self.analyze_expr(&arm.value);
+                    // BUG-003: un `caso Enum::Variante(x)` es un patrón, no una
+                    // construcción: `x` se liga con el tipo real del dato de la
+                    // variante en vez de analizarse como variable ya existente.
+                    let enum_pattern_arm = self.bind_enum_pattern(&expr_type, &arm.value, arm.span);
+                    for alt in &arm.alt_values {
+                        self.bind_enum_pattern(&expr_type, alt, arm.span);
+                    }
+                    if !enum_pattern_arm {
+                        // BUG-065: el patrón se liga con el tipo real del sujeto.
+                        self.bind_pattern_vars_tipado(&arm.value, arm.span, Some(&expr_type));
+                    }
                     let is_range_arm = matches!(&arm.value, Expr::Range { .. });
                     let is_pattern_arm = matches!(
                         &arm.value,
                         Expr::Algun { .. } | Expr::Exito { .. } | Expr::Error { .. }
                     );
+                    // BUG-101: `caso exito(v)` / `caso error(e)` son *patrones*
+                    // que descomponen el sujeto, no construcciones de un
+                    // `resultado`. Analizarlos como expresión hacía que
+                    // `error(e)` se leyera como una llamada a `error(...)` con
+                    // un argumento de tipo desconocido y disparaba un E064
+                    // («no puedes crear un resultado de error con un valor
+                    // vacío») sobre un `elegir` perfectamente correcto. Sólo
+                    // ocurría sin anotar el tipo —`sea r = exito(1)` deja el
+                    // tipo del error indeterminado—, que es el caso habitual.
+                    let arm_val_type = if enum_pattern_arm || is_pattern_arm {
+                        expr_type.clone()
+                    } else {
+                        self.analyze_expr(&arm.value)
+                    };
                     if !is_range_arm
                         && !is_pattern_arm
                         && arm_val_type != expr_type
@@ -1355,12 +1633,12 @@ impl SemanticAnalyzer {
                         self.errors.push(SemError {
                             code: "E056".to_string(),
                             message: format!(
-                                "El valor del caso debe ser '{:?}', no '{:?}'",
+                                "El valor del caso debe ser '{}', no '{}'",
                                 expr_type, arm_val_type
                             ),
                             span: arm.span,
                             suggestion: format!(
-                                "Usa un valor de tipo '{:?}' en este caso",
+                                "Usa un valor de tipo '{}' en este caso",
                                 expr_type
                             ),
                         });
@@ -1368,11 +1646,11 @@ impl SemanticAnalyzer {
                     // Validate guard type
                     if let Some(ref guard) = arm.guard {
                         let guard_type = self.analyze_expr(guard);
-                        if guard_type != TypeInfo::Booleano {
+                        if !es_condicion_valida(&guard_type) {
                             self.errors.push(SemError {
                                 code: "E034".to_string(),
                                 message: format!(
-                                    "La guardia del 'caso' debe ser booleano, no '{:?}'",
+                                    "La guardia del 'caso' debe ser booleano, no '{}'",
                                     guard_type
                                 ),
                                 span: guard.span(),
@@ -1400,8 +1678,29 @@ impl SemanticAnalyzer {
                 value,
                 span,
             } => {
-                let expr_type = self.analyze_expr(expr);
+                let expr_type_raw = self.analyze_expr(expr);
                 let value_type = self.analyze_expr(value);
+                // BUG-008: `prestado mut T` / `dueno T` son envoltorios de
+                // préstamo; asignar un campo a través de ellos debe validarse
+                // contra el tipo interno, no rechazarse.
+                let expr_type = match &expr_type_raw {
+                    TypeInfo::Prestado { inner, mutable } => {
+                        if !*mutable {
+                            self.errors.push(SemError {
+                                code: "E061".to_string(),
+                                message: "No puedes mutar un préstamo inmutable ('prestado')"
+                                    .to_string(),
+                                span: *span,
+                                suggestion:
+                                    "Declara el parámetro como 'prestado mut T' para poder mutarlo"
+                                        .to_string(),
+                            });
+                        }
+                        (**inner).clone()
+                    }
+                    TypeInfo::Dueno(inner) => (**inner).clone(),
+                    other => other.clone(),
+                };
                 match &expr_type {
                     TypeInfo::Struct { fields, .. } => {
                         let field_type = fields.iter().find(|(name, _)| name == field);
@@ -1410,9 +1709,9 @@ impl SemanticAnalyzer {
                                 if !can_assign(ft, &value_type) {
                                     self.errors.push(SemError {
                                         code: "E031".to_string(),
-                                        message: format!("No puedes asignar un valor de tipo '{:?}' al campo '{}' de tipo '{:?}'", value_type, field, ft),
+                                        message: format!("No puedes asignar un valor de tipo '{}' al campo '{}' de tipo '{}'", value_type, field, ft),
                                         span: *span,
-                                        suggestion: format!("Usa un valor de tipo '{:?}' para el campo '{}'", ft, field),
+                                        suggestion: format!("Usa un valor de tipo '{}' para el campo '{}'", ft, field),
                                     });
                                 }
                             }
@@ -1432,11 +1731,16 @@ impl SemanticAnalyzer {
                             }
                         }
                     }
+                    // BUG-099: el tipo dinámico también llega al lado
+                    // izquierdo. Un struct recuperado de un mapa admite
+                    // `p.x = 9` en ejecución; rechazarlo aquí lo dejaba de
+                    // sólo lectura.
+                    TypeInfo::Numero | TypeInfo::Dinamico | TypeInfo::TypeVar(_) => {}
                     _ => {
                         self.errors.push(SemError {
                             code: "E060".to_string(),
                             message: format!(
-                                "No puedes asignar un campo a un valor de tipo '{:?}'",
+                                "No puedes asignar un campo a un valor de tipo '{}'",
                                 expr_type
                             ),
                             span: *span,
@@ -1452,7 +1756,26 @@ impl SemanticAnalyzer {
                 value,
                 span,
             } => {
-                let arr_type = self.analyze_expr(arr);
+                // BUG-008: `l[i] = v` a través de `prestado mut lista<T>`.
+                let arr_type_raw = self.analyze_expr(arr);
+                let arr_type = match &arr_type_raw {
+                    TypeInfo::Prestado { inner, mutable } => {
+                        if !*mutable {
+                            self.errors.push(SemError {
+                                code: "E061".to_string(),
+                                message: "No puedes mutar un préstamo inmutable ('prestado')"
+                                    .to_string(),
+                                span: *span,
+                                suggestion:
+                                    "Declara el parámetro como 'prestado mut T' para poder mutarlo"
+                                        .to_string(),
+                            });
+                        }
+                        (**inner).clone()
+                    }
+                    TypeInfo::Dueno(inner) => (**inner).clone(),
+                    other => other.clone(),
+                };
                 let _ = self.analyze_expr(index);
                 let value_type = self.analyze_expr(value);
                 match &arr_type {
@@ -1463,7 +1786,7 @@ impl SemanticAnalyzer {
                             self.errors.push(SemError {
                                 code: "E031".to_string(),
                                 message: format!(
-                                    "No puedes asignar un valor de tipo '{:?}' a un elemento de tipo '{:?}'",
+                                    "No puedes asignar un valor de tipo '{}' a un elemento de tipo '{}'",
                                     value_type, inner
                                 ),
                                 span: *span,
@@ -1471,11 +1794,14 @@ impl SemanticAnalyzer {
                             });
                         }
                     }
+                    // BUG-099: idem para `xs[0] = 7` sobre una lista sacada
+                    // de un mapa.
+                    TypeInfo::Numero | TypeInfo::Dinamico | TypeInfo::TypeVar(_) => {}
                     _ => {
                         self.errors.push(SemError {
                             code: "E060".to_string(),
                             message: format!(
-                                "Solo puedes asignar por índice a listas, no a '{:?}'",
+                                "Solo puedes asignar por índice a listas, no a '{}'",
                                 arr_type
                             ),
                             span: *span,
@@ -1514,6 +1840,10 @@ impl SemanticAnalyzer {
                     self.analyze_decl_or_stmt(node);
                 }
                 self.scopes.pop();
+                // BUG-022: `intentar/atrapar` ya captura errores de verdad
+                // (manejadores + desenrollado de pila en la VM), así que el
+                // aviso E071 que advertía de que el `atrapar` era código muerto
+                // ha dejado de tener sentido.
                 TypeInfo::Void
             }
             Stmt::Block { stmts, .. } => {
@@ -1533,19 +1863,29 @@ impl SemanticAnalyzer {
                 let expr_type = self.analyze_expr(expr);
                 let item_type = match &expr_type {
                     TypeInfo::Lista(inner) => *inner.clone(),
+                    // BUG-099: `numero` es el tipo dinámico —lo que devuelven
+                    // builtins como `__map_obtener`, que no pueden saber
+                    // estáticamente qué guardó el usuario—, no un número. Al
+                    // tratarlo como tal, recorrer una lista sacada de un mapa
+                    // se rechazaba con E044 aunque el runtime la maneja
+                    // perfectamente. Se acepta y el elemento queda dinámico.
+                    TypeInfo::Numero | TypeInfo::Dinamico | TypeInfo::TypeVar(_) => {
+                        TypeInfo::Dinamico
+                    }
                     _ => {
                         self.errors.push(SemError {
                             code: "E044".to_string(),
-                            message: format!(
-                                "'para-cada' requiere una lista, no '{:?}'",
-                                expr_type
-                            ),
+                            message: format!("'para-cada' requiere una lista, no '{}'", expr_type),
                             span: *span,
                             suggestion: "Usa una lista en el ciclo 'para-cada'".to_string(),
                         });
                         TypeInfo::Void
                     }
                 };
+                // BUG-015: 'para-cada' también es un ciclo. Sin incrementar
+                // `loop_depth`, 'romper'/'continuar' en su cuerpo se rechazaban
+                // con E070/E055 pese a estar dentro de un bucle.
+                self.loop_depth += 1;
                 self.scopes.push(Scope::new());
                 if let Err(e) = self.current_scope().define(var_name, item_type, *span) {
                     self.errors.push(e);
@@ -1554,6 +1894,7 @@ impl SemanticAnalyzer {
                     self.analyze_decl_or_stmt(node);
                 }
                 self.scopes.pop();
+                self.loop_depth -= 1;
                 TypeInfo::Void
             }
             Stmt::Import { .. } => TypeInfo::Void,
@@ -1569,7 +1910,7 @@ impl SemanticAnalyzer {
                         self.errors.push(SemError {
                             code: "E068".to_string(),
                             message: format!(
-                                "La destructuración requiere una tupla, no '{:?}'",
+                                "La destructuración requiere una tupla, no '{}'",
                                 value_type
                             ),
                             span: *span,
@@ -1597,9 +1938,9 @@ impl SemanticAnalyzer {
                         if !can_assign(&sym.var_type, element_type) {
                             self.errors.push(SemError {
                                 code: "E031".to_string(),
-                                message: format!("No puedes asignar un valor de tipo '{:?}' a la variable '{}' de tipo '{:?}'", element_type, target.name, sym.var_type),
+                                message: format!("No puedes asignar un valor de tipo '{}' a la variable '{}' de tipo '{}'", element_type, target.name, sym.var_type),
                                 span: target.span,
-                                suggestion: format!("Usa un valor de tipo '{:?}' para '{}'", sym.var_type, target.name),
+                                suggestion: format!("Usa un valor de tipo '{}' para '{}'", sym.var_type, target.name),
                             });
                         }
                     } else {
@@ -1707,7 +2048,7 @@ impl SemanticAnalyzer {
                                 self.errors.push(SemError {
                                     code: "E035".to_string(),
                                     message: format!(
-                                        "No se puede concatenar listas de tipos diferentes: {:?} y {:?}",
+                                        "No se puede concatenar listas de tipos diferentes: {} y {}",
                                         lt, rt
                                     ),
                                     span: *span,
@@ -1720,7 +2061,7 @@ impl SemanticAnalyzer {
                             self.errors.push(SemError {
                                 code: "E035".to_string(),
                                 message: format!(
-                                    "El operador ++ requiere texto o listas: {:?} y {:?}",
+                                    "El operador ++ requiere texto o listas: {} y {}",
                                     lt, rt
                                 ),
                                 span: *span,
@@ -1751,6 +2092,19 @@ impl SemanticAnalyzer {
                             TypeInfo::Texto
                         } else if lt == TypeInfo::Entero && rt == TypeInfo::Entero {
                             TypeInfo::Entero
+                        } else if (lt == TypeInfo::Numero
+                            || rt == TypeInfo::Numero
+                            || lt == TypeInfo::Dinamico
+                            || rt == TypeInfo::Dinamico)
+                            && is_numeric(&lt)
+                            && is_numeric(&rt)
+                        {
+                            // BUG-099: operar con el tipo dinámico `numero` daba
+                            // `decimal`, así que acumular en un `entero` algo
+                            // sacado de un mapa fallaba con E031. Si un operando
+                            // es dinámico el resultado también lo es: no hay
+                            // información para afirmar que sea decimal.
+                            TypeInfo::Dinamico
                         } else if is_numeric(&lt) && is_numeric(&rt) {
                             TypeInfo::Decimal
                         } else if has_op_overload(&lt, op) {
@@ -1778,7 +2132,7 @@ impl SemanticAnalyzer {
                         } else {
                             self.errors.push(SemError {
                                 code: "E035".to_string(),
-                                message: format!("Operador aritmético requiere números, no '{:?}' y '{:?}'", lt, rt),
+                                message: format!("Operador aritmético requiere números, no '{}' y '{}'", lt, rt),
                                 span: *span,
                                 suggestion: "Ambos operandos deben ser numéricos o usar '+' para concatenar textos".to_string(),
                             });
@@ -1796,7 +2150,7 @@ impl SemanticAnalyzer {
                         } else {
                             self.errors.push(SemError {
                                 code: "E036".to_string(),
-                                message: format!("No puedes comparar '{:?}' con '{:?}'", lt, rt),
+                                message: format!("No puedes comparar '{}' con '{}'", lt, rt),
                                 span: *span,
                                 suggestion: "Ambos operandos deben ser del mismo tipo".to_string(),
                             });
@@ -1814,7 +2168,7 @@ impl SemanticAnalyzer {
                             self.errors.push(SemError {
                                 code: "E035".to_string(),
                                 message: format!(
-                                    "Comparación requiere números, no '{:?}' y '{:?}'",
+                                    "Comparación requiere números, no '{}' y '{}'",
                                     lt, rt
                                 ),
                                 span: *span,
@@ -1837,7 +2191,7 @@ impl SemanticAnalyzer {
                         if !is_numeric(&ot) {
                             self.errors.push(SemError {
                                 code: "E038".to_string(),
-                                message: format!("No puedes negar un valor de tipo '{:?}'", ot),
+                                message: format!("No puedes negar un valor de tipo '{}'", ot),
                                 span: *span,
                                 suggestion: "La negación solo aplica a números".to_string(),
                             });
@@ -1845,11 +2199,11 @@ impl SemanticAnalyzer {
                         ot
                     }
                     UnOp::Not => {
-                        if ot != TypeInfo::Booleano {
+                        if !es_condicion_valida(&ot) {
                             self.errors.push(SemError {
                                 code: "E039".to_string(),
                                 message: format!(
-                                    "No puedes aplicar '!' a un valor de tipo '{:?}'",
+                                    "No puedes aplicar '!' a un valor de tipo '{}'",
                                     ot
                                 ),
                                 span: *span,
@@ -1863,7 +2217,7 @@ impl SemanticAnalyzer {
                             self.errors.push(SemError {
                                 code: "E038".to_string(),
                                 message: format!(
-                                    "No puedes aplicar '~' a un valor de tipo '{:?}'",
+                                    "No puedes aplicar '~' a un valor de tipo '{}'",
                                     ot
                                 ),
                                 span: *span,
@@ -1972,9 +2326,19 @@ impl SemanticAnalyzer {
                                     if !can_assign(expected, got) {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
-                                            message: format!("El argumento {} de '{}' debe ser '{:?}', no '{:?}'", i + 1, callee, expected, got),
+                                            message: format!(
+                                                "El argumento {} de '{}' debe ser '{}', no '{}'",
+                                                i + 1,
+                                                callee,
+                                                expected,
+                                                got
+                                            ),
                                             span: *span,
-                                            suggestion: format!("Pasa un valor de tipo '{:?}' en el argumento {}", expected, i + 1),
+                                            suggestion: format!(
+                                                "Pasa un valor de tipo '{}' en el argumento {}",
+                                                expected,
+                                                i + 1
+                                            ),
                                         });
                                     }
                                 }
@@ -1992,6 +2356,85 @@ impl SemanticAnalyzer {
                                     || callee == "__str_from"
                                 {
                                     TypeInfo::Texto
+                                } else if callee == "a_entero"
+                                    || callee == "to_int"
+                                    || callee == "to_entero"
+                                {
+                                    // BUG-007: `a_entero` es la inversa pública de `a_texto`.
+                                    self.check_conv_arity(&callee, args.len(), *span);
+                                    TypeInfo::Entero
+                                } else if callee == "a_decimal"
+                                    || callee == "to_float"
+                                    || callee == "a_numero"
+                                    || callee == "to_number"
+                                {
+                                    self.check_conv_arity(&callee, args.len(), *span);
+                                    TypeInfo::Decimal
+                                } else if callee == "a_entero_seguro" || callee == "to_int_safe" {
+                                    self.check_conv_arity(&callee, args.len(), *span);
+                                    TypeInfo::Resultado {
+                                        ok: Box::new(TypeInfo::Entero),
+                                        err: Box::new(TypeInfo::Texto),
+                                    }
+                                } else if callee == "a_decimal_seguro" || callee == "to_float_safe"
+                                {
+                                    self.check_conv_arity(&callee, args.len(), *span);
+                                    TypeInfo::Resultado {
+                                        ok: Box::new(TypeInfo::Decimal),
+                                        err: Box::new(TypeInfo::Texto),
+                                    }
+                                } else if callee == "es_numero" || callee == "is_number" {
+                                    self.check_conv_arity(&callee, args.len(), *span);
+                                    TypeInfo::Booleano
+                                } else if callee == "abs" || callee == "absoluto" {
+                                    // BUG-001: `abs` preserva el tipo del argumento.
+                                    self.check_conv_arity(&callee, args.len(), *span);
+                                    match arg_types.first() {
+                                        Some(TypeInfo::Entero) => TypeInfo::Entero,
+                                        Some(TypeInfo::Decimal) => TypeInfo::Decimal,
+                                        _ => TypeInfo::Numero,
+                                    }
+                                } else if callee == "minimo"
+                                    || callee == "min"
+                                    || callee == "maximo"
+                                    || callee == "max"
+                                {
+                                    if args.len() != 2 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 2 argumentos, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: format!("Usa {}(a, b)", callee),
+                                        });
+                                    }
+                                    if arg_types.iter().all(|t| matches!(t, TypeInfo::Entero)) {
+                                        TypeInfo::Entero
+                                    } else {
+                                        TypeInfo::Decimal
+                                    }
+                                } else if callee == "raiz" || callee == "sqrt" {
+                                    self.check_conv_arity(&callee, args.len(), *span);
+                                    TypeInfo::Decimal
+                                } else if callee == "piso"
+                                    || callee == "floor"
+                                    || callee == "techo"
+                                    || callee == "ceil"
+                                    || callee == "redondear"
+                                    || callee == "round"
+                                {
+                                    // BUG-091: se tipaban como `decimal` aunque redondear al
+                                    // entero más cercano es justamente lo que hacen: el runtime
+                                    // devuelve 3, 4 y 4 para piso(3.7), techo(3.2) y
+                                    // redondear(3.5). Guardar el resultado en un campo entero
+                                    // —el uso natural— fallaba con E031.
+                                    self.check_conv_arity(&callee, args.len(), *span);
+                                    TypeInfo::Entero
+                                } else if callee == "potencia" || callee == "pow" {
+                                    TypeInfo::Decimal
                                 } else if callee == "__str_len" || callee == "__str_longitud" {
                                     if args.len() != 1 {
                                         self.errors.push(SemError {
@@ -2011,7 +2454,7 @@ impl SemanticAnalyzer {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
                                                 message: format!(
-                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    "'{}' espera 'texto', no '{}'",
                                                     callee, got
                                                 ),
                                                 span: *span,
@@ -2046,7 +2489,7 @@ impl SemanticAnalyzer {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
                                                 message: format!(
-                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    "'{}' espera 'texto', no '{}'",
                                                     callee, got
                                                 ),
                                                 span: *span,
@@ -2074,7 +2517,7 @@ impl SemanticAnalyzer {
                                         if !can_assign(&TypeInfo::Texto, got) {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
-                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{:?}'", i + 1, callee, got),
+                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{}'", i + 1, callee, got),
                                                 span: *span,
                                                 suggestion: "Pasa valores de tipo texto".to_string(),
                                             });
@@ -2099,7 +2542,7 @@ impl SemanticAnalyzer {
                                         if !can_assign(&TypeInfo::Texto, got) {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
-                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{:?}'", i + 1, callee, got),
+                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{}'", i + 1, callee, got),
                                                 span: *span,
                                                 suggestion: "Pasa valores de tipo texto".to_string(),
                                             });
@@ -2125,7 +2568,7 @@ impl SemanticAnalyzer {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
                                                 message: format!(
-                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    "'{}' espera 'texto', no '{}'",
                                                     callee, got
                                                 ),
                                                 span: *span,
@@ -2160,7 +2603,7 @@ impl SemanticAnalyzer {
                                         if !can_assign(&TypeInfo::Texto, got) {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
-                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{:?}'", i + 1, callee, got),
+                                                message: format!("El argumento {} de '{}' debe ser 'texto', no '{}'", i + 1, callee, got),
                                                 span: *span,
                                                 suggestion: "Pasa valores de tipo texto".to_string(),
                                             });
@@ -2191,7 +2634,10 @@ impl SemanticAnalyzer {
                                     {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
-                                            message: format!("El argumento 1 de '{}' debe ser 'texto', no '{:?}'", callee, arg_types[0]),
+                                            message: format!(
+                                                "El argumento 1 de '{}' debe ser 'texto', no '{}'",
+                                                callee, arg_types[0]
+                                            ),
                                             span: *span,
                                             suggestion: "Pasa un valor de tipo texto".to_string(),
                                         });
@@ -2204,7 +2650,7 @@ impl SemanticAnalyzer {
                                     {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
-                                            message: format!("El argumento 2 de '{}' debe ser 'Array<Int>', no '{:?}'", callee, arg_types[1]),
+                                            message: format!("El argumento 2 de '{}' debe ser 'Array<Int>', no '{}'", callee, arg_types[1]),
                                             span: *span,
                                             suggestion: "Pasa un valor de tipo Array<Int>".to_string(),
                                         });
@@ -2265,7 +2711,10 @@ impl SemanticAnalyzer {
                                     {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
-                                            message: format!("El argumento 1 de '{}' debe ser 'texto', no '{:?}'", callee, arg_types[0]),
+                                            message: format!(
+                                                "El argumento 1 de '{}' debe ser 'texto', no '{}'",
+                                                callee, arg_types[0]
+                                            ),
                                             span: *span,
                                             suggestion: "Pasa una ruta de tipo texto".to_string(),
                                         });
@@ -2289,7 +2738,10 @@ impl SemanticAnalyzer {
                                     {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
-                                            message: format!("El argumento 1 de '{}' debe ser 'numero', no '{:?}'", callee, arg_types[0]),
+                                            message: format!(
+                                                "El argumento 1 de '{}' debe ser 'numero', no '{}'",
+                                                callee, arg_types[0]
+                                            ),
                                             span: *span,
                                             suggestion: "Pasa un mapa de codegen".to_string(),
                                         });
@@ -2315,7 +2767,7 @@ impl SemanticAnalyzer {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
                                                 message: format!(
-                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    "'{}' espera 'texto', no '{}'",
                                                     callee, got
                                                 ),
                                                 span: *span,
@@ -2360,12 +2812,16 @@ impl SemanticAnalyzer {
                                     }
                                     if let Some(got) = arg_types.first() {
                                         match got {
-                                            TypeInfo::Lista(_) => {}
+                                            // BUG-100: una lista sacada de un
+                                            // mapa llega como dinámica.
+                                            TypeInfo::Lista(_)
+                                            | TypeInfo::Dinamico
+                                            | TypeInfo::Numero => {}
                                             _ => {
                                                 self.errors.push(SemError {
                                                     code: "E041".to_string(),
                                                     message: format!(
-                                                        "'{}' espera 'lista', no '{:?}'",
+                                                        "'{}' espera 'lista', no '{}'",
                                                         callee, got
                                                     ),
                                                     span: *span,
@@ -2430,12 +2886,13 @@ impl SemanticAnalyzer {
                                         match base_got {
                                             TypeInfo::Lista(_)
                                             | TypeInfo::Texto
-                                            | TypeInfo::Numero => {}
+                                            | TypeInfo::Numero
+                                            | TypeInfo::Dinamico => {}
                                             _ => {
                                                 self.errors.push(SemError {
                                                     code: "E041".to_string(),
                                                     message: format!(
-                                                        "'{}' espera 'lista', no '{:?}'",
+                                                        "'{}' espera 'lista', no '{}'",
                                                         callee, got
                                                     ),
                                                     span: *span,
@@ -2460,7 +2917,51 @@ impl SemanticAnalyzer {
                                                 .to_string(),
                                         });
                                     }
-                                    TypeInfo::Void
+                                    // BUG-090: se declaraba `Void`, pero `agregar` es funcional y
+                                    // devuelve la lista nueva. Al asignar el resultado a un campo
+                                    // (`c.items = agregar(c.items, x)`) saltaba un E031 «no puedes
+                                    // asignar un valor de tipo 'vacio'», que es justo la forma
+                                    // documentada de usarlo. Con una variable suelta colaba porque
+                                    // `sea` infiere sin comprobar. Se devuelve el tipo de la lista
+                                    // recibida, cayendo a `lista<numero>` si no se puede deducir.
+                                    // BUG-097: si la lista viene de un literal vacío (`sea l = []`)
+                                    // su elemento es el tipo genérico `numero`, y al propagarlo tal
+                                    // cual, iterarla daba elementos `decimal`: `t = t + x` sobre un
+                                    // `entero` fallaba con un E031 imposible de evitar sin anotar el
+                                    // tipo a mano. Cuando el elemento aún es indeterminado se toma
+                                    // el del valor que se está añadiendo, que es la única
+                                    // información real disponible.
+                                    let tipo_valor = args.get(1).map(|a| self.analyze_expr(a));
+                                    let refinar = |elem: TypeInfo| -> TypeInfo {
+                                        match (&elem, &tipo_valor) {
+                                            (TypeInfo::Numero, Some(v))
+                                                if matches!(
+                                                    v,
+                                                    TypeInfo::Entero
+                                                        | TypeInfo::Texto
+                                                        | TypeInfo::Booleano
+                                                        | TypeInfo::Struct { .. }
+                                                        | TypeInfo::Lista(_)
+                                                ) =>
+                                            {
+                                                v.clone()
+                                            }
+                                            _ => elem,
+                                        }
+                                    };
+                                    match args.first().map(|a| self.analyze_expr(a)) {
+                                        Some(TypeInfo::Lista(inner)) => {
+                                            TypeInfo::Lista(Box::new(refinar(*inner)))
+                                        }
+                                        Some(TypeInfo::Prestado { inner, .. })
+                                        | Some(TypeInfo::Dueno(inner)) => match *inner {
+                                            TypeInfo::Lista(i) => {
+                                                TypeInfo::Lista(Box::new(refinar(*i)))
+                                            }
+                                            _ => TypeInfo::Lista(Box::new(TypeInfo::Numero)),
+                                        },
+                                        _ => TypeInfo::Lista(Box::new(TypeInfo::Numero)),
+                                    }
                                 } else if callee == "__tarea_lanzar" || callee == "__task_spawn" {
                                     if args.is_empty() {
                                         self.errors.push(SemError {
@@ -2493,9 +2994,16 @@ impl SemanticAnalyzer {
                                     TypeInfo::Entero
                                 } else if callee == "__ffi_cargar" || callee == "__ffi_load" {
                                     TypeInfo::Texto
+                                } else if callee == "__ffi_llamar_nv" {
+                                    // BUG-136: se le asignaba `entero`, pero el
+                                    // valor devuelto depende del argumento
+                                    // `ret` ("texto" devuelve texto, "void" no
+                                    // devuelve nada, …). Con el tipo fijo, un
+                                    // `box_str(__ffi_llamar_nv(..., "texto", ...))`
+                                    // —código correcto— disparaba E041.
+                                    TypeInfo::Dinamico
                                 } else if callee == "__ffi_llamar"
                                     || callee == "__ffi_call"
-                                    || callee == "__ffi_llamar_nv"
                                     || callee == "__ffi_asignar"
                                     || callee == "__ffi_alloc"
                                     || callee == "__ffi_liberar"
@@ -2674,13 +3182,42 @@ impl SemanticAnalyzer {
                                 } else if callee == "__tipo_de" || callee == "__typeof" {
                                     TypeInfo::Texto
                                 } else if callee == "__str_ord" || callee == "__str_codigo" {
+                                    // BUG-119: mismo descuadre que BUG-098, que
+                                    // sólo se cerró para `__str_concat_list`. La
+                                    // rama del backend C desapila UN argumento;
+                                    // con dos, se quedaba con el último y usaba
+                                    // un entero como puntero a texto =>
+                                    // SEGFAULT en el binario nativo, mientras
+                                    // que la VM ignoraba el sobrante.
+                                    self.check_builtin_arity(&callee, args.len(), 1, *span);
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
+                                } else if callee == "__str_concat_list"
+                                    || callee == "__str_concatenar_lista"
+                                {
+                                    // BUG-098: sólo recibe la lista a unir. Con
+                                    // argumentos de más la VM los ignoraba y el
+                                    // backend C desapilaba uno solo, quedándose
+                                    // con el último argumento en vez de con la
+                                    // lista: el mismo programa imprimía "abc" en
+                                    // la VM y una cadena vacía ya compilado.
+                                    if args.len() != 1 {
+                                        self.errors.push(SemError {
+                                            code: "E040".to_string(),
+                                            message: format!(
+                                                "'{}' espera 1 argumento, no {}",
+                                                callee,
+                                                args.len()
+                                            ),
+                                            span: *span,
+                                            suggestion: "Pasa sólo la lista a concatenar; para unir con un separador usa 'unir' de la biblioteca de texto"
+                                                .to_string(),
+                                        });
+                                    }
+                                    TypeInfo::Texto
                                 } else if callee == "__str_chr"
                                     || callee == "__str_caracter"
                                     || callee == "__str_slice"
                                     || callee == "__str_subcadena"
-                                    || callee == "__str_concat_list"
-                                    || callee == "__str_concatenar_lista"
                                     || callee == "__str_reemplazar"
                                     || callee == "__str_replace"
                                     || callee == "__str_subcadena_chars"
@@ -2690,23 +3227,41 @@ impl SemanticAnalyzer {
                                 } else if callee == "__str_starts_with"
                                     || callee == "__str_empieza_con"
                                 {
+                                    // BUG-119: la rama C desapila exactamente 2.
+                                    self.check_builtin_arity(&callee, args.len(), 2, *span);
                                     TypeInfo::Booleano
                                 } else if callee == "__str_to_chars"
                                     || callee == "__str_a_caracteres"
                                 {
+                                    // BUG-119: la rama C desapila exactamente 1.
+                                    self.check_builtin_arity(&callee, args.len(), 1, *span);
                                     TypeInfo::Lista(Box::new(TypeInfo::Texto))
+                                } else if callee == "__map_longitud"
+                                    || callee == "__map_len"
+                                    || callee == "__map_length"
+                                {
+                                    // BUG-091: no estaba registrado, así que caía al tipo por
+                                    // defecto `decimal` pese a devolver SIEMPRE un entero. Asignar
+                                    // `s.n = __map_longitud(m)` a un campo entero daba un E031
+                                    // «no puedes asignar un valor de tipo 'decimal'».
+                                    TypeInfo::Entero
                                 } else if callee == "__map_contiene" || callee == "__map_contains" {
                                     TypeInfo::Booleano
                                 } else if callee == "__map_claves" || callee == "__map_keys" {
                                     TypeInfo::Lista(Box::new(TypeInfo::Numero))
-                                } else if callee == "__map_obtener"
-                                    || callee == "__map_get"
-                                    || callee == "__map_nuevo"
+                                } else if callee == "__map_obtener" || callee == "__map_get" {
+                                    // BUG-100: un mapa admite cualquier valor;
+                                    // lo que se saca de él sólo se conoce en
+                                    // ejecución.
+                                    TypeInfo::Dinamico
+                                } else if callee == "__map_nuevo"
                                     || callee == "__map_new"
                                     || callee == "__map_poner"
                                     || callee == "__map_set"
                                 {
-                                    TypeInfo::Numero
+                                    // BUG-102: esto, en cambio, sí se conoce:
+                                    // es un mapa.
+                                    TypeInfo::Mapa
                                 } else if callee == "__encoding_utf8"
                                     || callee == "__codificacion_utf8"
                                 {
@@ -2728,7 +3283,7 @@ impl SemanticAnalyzer {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
                                                 message: format!(
-                                                    "'{}' espera 'texto', no '{:?}'",
+                                                    "'{}' espera 'texto', no '{}'",
                                                     callee, got
                                                 ),
                                                 span: *span,
@@ -2762,7 +3317,7 @@ impl SemanticAnalyzer {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
                                                 message: format!(
-                                                    "'{}' espera 'Array<Int>', no '{:?}'",
+                                                    "'{}' espera 'Array<Int>', no '{}'",
                                                     callee, got
                                                 ),
                                                 span: *span,
@@ -2838,25 +3393,59 @@ impl SemanticAnalyzer {
                                                     if !can_assign(expected, got) {
                                                         self.errors.push(SemError {
                                                             code: "E041".to_string(),
-                                                            message: format!("El argumento {} de '{}' debe ser '{:?}', no '{:?}'", i + 1, callee, expected, got),
+                                                            message: format!("El argumento {} de '{}' debe ser '{}', no '{}'", i + 1, callee, expected, got),
                                                             span: *span,
-                                                            suggestion: format!("Pasa un valor de tipo '{:?}' en el argumento {}", expected, i + 1),
+                                                            suggestion: format!("Pasa un valor de tipo '{}' en el argumento {}", expected, i + 1),
                                                         });
                                                     }
                                                 }
                                             }
                                             *return_type
                                         }
+                                        // BUG-100: una lambda guardada en un mapa
+                                        // vuelve con el tipo dinámico `numero` y
+                                        // llamarla se rechazaba, aunque el runtime
+                                        // la invoca sin problema (desde una lista sí
+                                        // funcionaba). No se puede verificar la
+                                        // llamada, así que se acepta y el resultado
+                                        // queda dinámico.
+                                        Some(TypeInfo::Numero)
+                                        | Some(TypeInfo::Dinamico)
+                                        | Some(TypeInfo::TypeVar(_)) => TypeInfo::Dinamico,
                                         Some(other) => {
                                             self.errors.push(SemError {
                                                 code: "E058".to_string(),
-                                                message: format!("'{}' no es una función, es de tipo '{:?}'", callee, other),
+                                                message: format!("'{}' no es una función, es de tipo '{}'", callee, other),
                                                 span: *span,
                                                 suggestion: format!("'{}' no se puede llamar porque no es una función", callee),
                                             });
                                             TypeInfo::Void
                                         }
                                         None => {
+                                            // BUG-002: usar el nombre del tipo como
+                                            // conversión (`texto(x)`, `entero(s)`) es el
+                                            // error más común; sugerimos `a_<tipo>()`.
+                                            let suggestion = match suggest_conversion(&callee) {
+                                                Some(correct) => format!(
+                                                    "Las conversiones usan el prefijo 'a_': escribe '{}(...)' en vez de '{}(...)'",
+                                                    correct, callee
+                                                ),
+                                                // BUG-105: antes de rendirse, buscar el
+                                                // nombre conocido más parecido.
+                                                None => match nombre_mas_parecido(
+                                                    &callee,
+                                                    self.functions.keys(),
+                                                ) {
+                                                    Some(cerca) => format!(
+                                                        "¿Quisiste escribir '{}(...)'?",
+                                                        cerca
+                                                    ),
+                                                    None => format!(
+                                                        "Define la función '{}' antes de llamarla",
+                                                        callee
+                                                    ),
+                                                },
+                                            };
                                             self.errors.push(SemError {
                                                 code: "E042".to_string(),
                                                 message: format!(
@@ -2864,10 +3453,7 @@ impl SemanticAnalyzer {
                                                     callee
                                                 ),
                                                 span: *span,
-                                                suggestion: format!(
-                                                    "Define la función '{}' antes de llamarla",
-                                                    callee
-                                                ),
+                                                suggestion,
                                             });
                                             TypeInfo::Void
                                         }
@@ -2922,20 +3508,34 @@ impl SemanticAnalyzer {
                                         if !can_assign(expected, got) {
                                             self.errors.push(SemError {
                                                 code: "E041".to_string(),
-                                                message: format!("El argumento {} debe ser '{:?}', no '{:?}'", i + 1, expected, got),
+                                                message: format!(
+                                                    "El argumento {} debe ser '{}', no '{}'",
+                                                    i + 1,
+                                                    expected,
+                                                    got
+                                                ),
                                                 span: *span,
-                                                suggestion: format!("Pasa un valor de tipo '{:?}' en el argumento {}", expected, i + 1),
+                                                suggestion: format!(
+                                                    "Pasa un valor de tipo '{}' en el argumento {}",
+                                                    expected,
+                                                    i + 1
+                                                ),
                                             });
                                         }
                                     }
                                 }
                                 *return_type
                             }
+                            // BUG-100: idem cuando lo que se llama es una
+                            // expresión dinámica, no un identificador.
+                            TypeInfo::Numero | TypeInfo::Dinamico | TypeInfo::TypeVar(_) => {
+                                TypeInfo::Dinamico
+                            }
                             _ => {
                                 self.errors.push(SemError {
                                     code: "E058".to_string(),
                                     message: format!(
-                                        "Solo puedes llamar funciones, no valores de tipo '{:?}'",
+                                        "Solo puedes llamar funciones, no valores de tipo '{}'",
                                         callee_type
                                     ),
                                     span: *span,
@@ -2973,7 +3573,7 @@ impl SemanticAnalyzer {
                         self.errors.push(SemError {
                             code: "E044".to_string(),
                             message: format!(
-                                "Los límites de un rango deben ser numéricos, no '{:?}'",
+                                "Los límites de un rango deben ser numéricos, no '{}'",
                                 t
                             ),
                             span: *span,
@@ -2985,20 +3585,23 @@ impl SemanticAnalyzer {
                 TypeInfo::Lista(Box::new(TypeInfo::Entero))
             }
             Expr::Index { expr, index, span } => {
-                let expr_type = self.analyze_expr(expr);
+                // BUG-008: indexar a través de un préstamo opera sobre el valor prestado.
+                let expr_type = match self.analyze_expr(expr) {
+                    TypeInfo::Prestado { inner, .. } | TypeInfo::Dueno(inner) => (*inner).clone(),
+                    other => other,
+                };
                 let index_type = self.analyze_expr(index);
                 let is_range_slice = matches!(index.as_ref(), Expr::Range { .. })
                     || matches!(index_type, TypeInfo::Lista(_));
                 if !is_range_slice
                     && index_type != TypeInfo::Entero
                     && index_type != TypeInfo::Numero
+                    // BUG-100: el índice también puede venir de un mapa.
+                    && index_type != TypeInfo::Dinamico
                 {
                     self.errors.push(SemError {
                         code: "E043".to_string(),
-                        message: format!(
-                            "El índice debe ser entero o rango, no '{:?}'",
-                            index_type
-                        ),
+                        message: format!("El índice debe ser entero o rango, no '{}'", index_type),
                         span: *span,
                         suggestion: "Usa un valor de tipo 'entero' o un rango como índice"
                             .to_string(),
@@ -3015,11 +3618,15 @@ impl SemanticAnalyzer {
                         TypeInfo::Lista(inner) => *inner,
                         TypeInfo::Texto => TypeInfo::Texto,
                         TypeInfo::Numero => TypeInfo::Numero,
+                        // BUG-100: indexar un valor dinámico (una lista sacada
+                        // de un mapa) es legítimo; el elemento sigue siendo
+                        // dinámico.
+                        TypeInfo::Dinamico => TypeInfo::Dinamico,
                         _ => {
                             self.errors.push(SemError {
                                 code: "E044".to_string(),
                                 message: format!(
-                                    "No puedes indexar un valor de tipo '{:?}'",
+                                    "No puedes indexar un valor de tipo '{}'",
                                     expr_type
                                 ),
                                 span: *span,
@@ -3038,7 +3645,12 @@ impl SemanticAnalyzer {
                 resolved_func: _,
                 span,
             } => {
-                let expr_type = self.analyze_expr(expr);
+                // BUG-008: los métodos de colección funcionan igual sobre un
+                // préstamo (`prestado mut lista<T>`) que sobre el valor.
+                let expr_type = match self.analyze_expr(expr) {
+                    TypeInfo::Prestado { inner, .. } | TypeInfo::Dueno(inner) => (*inner).clone(),
+                    other => other,
+                };
                 let mut arg_types = Vec::new();
                 for arg in args {
                     arg_types.push(self.analyze_expr(arg));
@@ -3067,12 +3679,12 @@ impl SemanticAnalyzer {
                                 self.errors.push(SemError {
                                     code: "E046".to_string(),
                                     message: format!(
-                                        "'{}' espera un valor de tipo '{:?}', no '{:?}'",
+                                        "'{}' espera un valor de tipo '{}', no '{}'",
                                         method, inner, arg_types[0]
                                     ),
                                     span: *span,
                                     suggestion: format!(
-                                        "Pasa un valor de tipo '{:?}' a '{}'",
+                                        "Pasa un valor de tipo '{}' a '{}'",
                                         inner, method
                                     ),
                                 });
@@ -3083,7 +3695,7 @@ impl SemanticAnalyzer {
                             self.errors.push(SemError {
                                 code: "E047".to_string(),
                                 message: format!(
-                                    "No puedes llamar '{}' en un valor de tipo '{:?}'",
+                                    "No puedes llamar '{}' en un valor de tipo '{}'",
                                     method, expr_type
                                 ),
                                 span: *span,
@@ -3107,7 +3719,7 @@ impl SemanticAnalyzer {
                                 self.errors.push(SemError {
                                     code: "E047".to_string(),
                                     message: format!(
-                                        "No puedes llamar '{}' en un valor de tipo '{:?}'",
+                                        "No puedes llamar '{}' en un valor de tipo '{}'",
                                         method, expr_type
                                     ),
                                     span: *span,
@@ -3128,7 +3740,7 @@ impl SemanticAnalyzer {
                         self.errors.push(SemError {
                             code: "E050".to_string(),
                             message: format!(
-                                "El método '{}' no existe para el tipo '{:?}'",
+                                "El método '{}' no existe para el tipo '{}'",
                                 method, expr_type
                             ),
                             span: *span,
@@ -3179,6 +3791,32 @@ impl SemanticAnalyzer {
                                 map.insert(tp.clone(), self.type_to_info(ta.clone()));
                             }
                             Some(map)
+                        } else if !st_type_params.is_empty() {
+                            // BUG-093: sin `type_args` EXPLÍCITOS no se sustituía nada, así que
+                            // los campos conservaban el parámetro sin resolver (`T`). Con un solo
+                            // nivel colaba porque `can_assign` acepta cualquier cosa contra una
+                            // variable de tipo, pero al anidar —`Caja{v: Caja{v: 7}}`— leer
+                            // `a.v.v` daba «E060 No puedes acceder a un campo de un valor de tipo
+                            // 'T'»: los structs genéricos eran inanidables. Se infiere el
+                            // argumento de tipo a partir del valor de cada campo.
+                            let mut map: HashMap<String, TypeInfo> = HashMap::new();
+                            for (fname, fval) in fields {
+                                if let Some((_, TypeInfo::TypeVar(tv))) =
+                                    expected_fields.iter().find(|(n, _)| n == fname)
+                                {
+                                    if st_type_params.contains(tv) {
+                                        let vt = self.analyze_expr(fval);
+                                        if vt != TypeInfo::Void {
+                                            map.entry(tv.clone()).or_insert(vt);
+                                        }
+                                    }
+                                }
+                            }
+                            if map.is_empty() {
+                                None
+                            } else {
+                                Some(map)
+                            }
                         } else {
                             None
                         };
@@ -3198,9 +3836,9 @@ impl SemanticAnalyzer {
                                     if !can_assign(ft, &val_type) {
                                         self.errors.push(SemError {
                                             code: "E031".to_string(),
-                                            message: format!("El campo '{}' espera un valor de tipo '{:?}', no '{:?}'", fname, ft, val_type),
+                                            message: format!("El campo '{}' espera un valor de tipo '{}', no '{}'", fname, ft, val_type),
                                             span: *span,
-                                            suggestion: format!("Usa un valor de tipo '{:?}' para el campo '{}'", ft, fname),
+                                            suggestion: format!("Usa un valor de tipo '{}' para el campo '{}'", ft, fname),
                                         });
                                     }
                                 }
@@ -3247,17 +3885,35 @@ impl SemanticAnalyzer {
                             code: "E062".to_string(),
                             message: format!("El struct '{}' no está definido", struct_name),
                             span: *span,
-                            suggestion: format!(
-                                "Define el struct '{}' antes de usarlo",
-                                struct_name
-                            ),
+                            // BUG-105
+                            suggestion: match nombre_mas_parecido(struct_name, self.structs.keys())
+                            {
+                                Some(cerca) => {
+                                    format!("¿Quisiste escribir '{}'?", cerca)
+                                }
+                                None => {
+                                    format!("Define el struct '{}' antes de usarlo", struct_name)
+                                }
+                            },
                         });
-                        TypeInfo::Void
+                        // BUG-123: se devolvía `Void`, así que el primer uso del
+                        // valor soltaba un segundo error en cascada («no puedes
+                        // acceder a un campo de un valor de tipo 'vacio'») que
+                        // no aporta nada y despista: el error real ya está
+                        // arriba, con su sugerencia del nombre correcto.
+                        // `Dinamico` significa «no lo sé» y no genera errores
+                        // por sí mismo.
+                        TypeInfo::Dinamico
                     }
                 }
             }
             Expr::FieldAccess { expr, field, span } => {
-                let expr_type = self.analyze_expr(expr);
+                // BUG-008: leer un campo a través de `prestado`/`dueno` es
+                // válido; se desenvuelve el préstamo antes de buscar el campo.
+                let expr_type = match self.analyze_expr(expr) {
+                    TypeInfo::Prestado { inner, .. } | TypeInfo::Dueno(inner) => (*inner).clone(),
+                    other => other,
+                };
                 match &expr_type {
                     TypeInfo::Struct { fields, .. } => {
                         let field_type = fields.iter().find(|(name, _)| name == field);
@@ -3280,11 +3936,18 @@ impl SemanticAnalyzer {
                             }
                         }
                     }
+                    // BUG-099: idem para el acceso a campos. Un struct
+                    // guardado en un mapa vuelve con el tipo dinámico
+                    // `numero`, y leer `p.x` se rechazaba con E060 pese a
+                    // funcionar en ejecución. El campo queda dinámico.
+                    TypeInfo::Numero | TypeInfo::Dinamico | TypeInfo::TypeVar(_) => {
+                        TypeInfo::Dinamico
+                    }
                     _ => {
                         self.errors.push(SemError {
                             code: "E060".to_string(),
                             message: format!(
-                                "No puedes acceder a un campo de un valor de tipo '{:?}'",
+                                "No puedes acceder a un campo de un valor de tipo '{}'",
                                 expr_type
                             ),
                             span: *span,
@@ -3340,7 +4003,11 @@ impl SemanticAnalyzer {
                 }
                 TypeInfo::Resultado {
                     ok: Box::new(inner),
-                    err: Box::new(TypeInfo::Void),
+                    // BUG-101: `sea r = exito(1)` no dice nada sobre el tipo
+                    // del error. Marcarlo `vacio` hacía que `caso error(e)`
+                    // ligara `e` a un valor vacío y usarlo —`"e=" + e`— diera
+                    // un E035 absurdo. Es desconocido, no inexistente.
+                    err: Box::new(TypeInfo::Dinamico),
                 }
             }
             Expr::Error { expr, span } => {
@@ -3355,7 +4022,9 @@ impl SemanticAnalyzer {
                     });
                 }
                 TypeInfo::Resultado {
-                    ok: Box::new(TypeInfo::Void),
+                    // BUG-101: idem para `error(e)`: el tipo del éxito queda
+                    // sin determinar, no vacío.
+                    ok: Box::new(TypeInfo::Dinamico),
                     err: Box::new(inner),
                 }
             }
@@ -3366,7 +4035,7 @@ impl SemanticAnalyzer {
                     _ => {
                         self.errors.push(SemError {
                             code: "E065".to_string(),
-                            message: format!("'intentar' solo funciona con expresiones de tipo 'resultado', no '{:?}'", inner),
+                            message: format!("'intentar' solo funciona con expresiones de tipo 'resultado', no '{}'", inner),
                             span: *span,
                             suggestion: "Usa 'intentar' solo con valores de tipo 'resultado'.".to_string(),
                         });
@@ -3418,7 +4087,7 @@ impl SemanticAnalyzer {
                         self.errors.push(SemError {
                             code: "E060".to_string(),
                             message: format!(
-                                "No puedes acceder por índice a un valor de tipo '{:?}'",
+                                "No puedes acceder por índice a un valor de tipo '{}'",
                                 expr_type
                             ),
                             span: *span,
@@ -3449,12 +4118,12 @@ impl SemanticAnalyzer {
                                         self.errors.push(SemError {
                                                 code: "E031".to_string(),
                                                 message: format!(
-                                                    "El argumento {} de la variante '{}' espera un tipo '{:?}', no '{:?}'",
+                                                    "El argumento {} de la variante '{}' espera un tipo '{}', no '{}'",
                                                     i + 1, variant, expected_types[i], arg_type
                                                 ),
                                                 span: *span,
                                                 suggestion: format!(
-                                                    "Usa un valor de tipo '{:?}' en el argumento {}",
+                                                    "Usa un valor de tipo '{}' en el argumento {}",
                                                     expected_types[i], i + 1
                                                 ),
                                             });
@@ -3484,10 +4153,15 @@ impl SemanticAnalyzer {
                             code: "E062".to_string(),
                             message: format!("La enumeración '{}' no está definida", enum_name),
                             span: *span,
-                            suggestion: format!(
-                                "Define la enumeración '{}' antes de usarla",
-                                enum_name
-                            ),
+                            // BUG-105
+                            suggestion: match nombre_mas_parecido(enum_name, self.enums.keys()) {
+                                Some(cerca) => {
+                                    format!("¿Quisiste escribir '{}'?", cerca)
+                                }
+                                None => {
+                                    format!("Define la enumeración '{}' antes de usarla", enum_name)
+                                }
+                            },
                         });
                         TypeInfo::Void
                     }
@@ -3500,11 +4174,11 @@ impl SemanticAnalyzer {
                 span,
             } => {
                 let cond_type = self.analyze_expr(condition);
-                if cond_type != TypeInfo::Booleano {
+                if !es_condicion_valida(&cond_type) {
                     self.errors.push(SemError {
                         code: "E034".to_string(),
                         message: format!(
-                            "La condición del operador ternario debe ser booleano, no '{:?}'",
+                            "La condición del operador ternario debe ser booleano, no '{}'",
                             cond_type
                         ),
                         span: *span,
@@ -3520,7 +4194,7 @@ impl SemanticAnalyzer {
                     self.errors.push(SemError {
                         code: "E031".to_string(),
                         message: format!(
-                            "El operador ternario requiere que ambas ramas tengan el mismo tipo, no '{:?}' y '{:?}'",
+                            "El operador ternario requiere que ambas ramas tengan el mismo tipo, no '{}' y '{}'",
                             true_type, false_type
                         ),
                         span: *span,
@@ -3706,39 +4380,247 @@ impl SemanticAnalyzer {
 
     // Vincula las variables capturadas por un patrón de if-let / arm de match
     // en el scope actual (tipo dinámico `Numero` — acepta cualquier valor).
-    fn bind_pattern_vars(&mut self, pattern: &Expr, span: Span) {
+    /// BUG-003: liga los datos capturados por un patrón de enum
+    /// (`caso Figura::Circulo(r):`) en el ámbito del brazo, usando el tipo
+    /// declarado de cada dato de la variante. Devuelve `true` si el patrón era
+    /// efectivamente un patrón de enum (y por tanto ya quedó analizado).
+    fn bind_enum_pattern(&mut self, scrutinee: &TypeInfo, pattern: &Expr, span: Span) -> bool {
+        let (enum_name, variant, args, pat_span) = match pattern {
+            Expr::EnumCtor {
+                enum_name,
+                variant,
+                args,
+                span,
+            } => (enum_name.clone(), variant.clone(), args, *span),
+            _ => return false,
+        };
+
+        // Coherencia: el enum del patrón debe ser el del valor examinado.
+        if let TypeInfo::Enum(scrut_name) = scrutinee {
+            if scrut_name != &enum_name {
+                self.errors.push(SemError {
+                    code: "E056".to_string(),
+                    message: format!(
+                        "El caso pertenece a la enumeración '{}', pero se está examinando '{}'",
+                        enum_name, scrut_name
+                    ),
+                    span: pat_span,
+                    suggestion: format!("Usa un caso de '{}'", scrut_name),
+                });
+                return true;
+            }
+        }
+
+        let variants = match self.enums.get(&enum_name).cloned() {
+            Some(v) => v,
+            None => {
+                self.errors.push(SemError {
+                    code: "E062".to_string(),
+                    message: format!("La enumeración '{}' no está definida", enum_name),
+                    span: pat_span,
+                    // BUG-105
+                    suggestion: match nombre_mas_parecido(&enum_name, self.enums.keys()) {
+                        Some(cerca) => format!("¿Quisiste escribir '{}'?", cerca),
+                        None => {
+                            format!("Define la enumeración '{}' antes de usarla", enum_name)
+                        }
+                    },
+                });
+                return true;
+            }
+        };
+
+        let payload_types = match variants.iter().find(|(n, _)| n == &variant) {
+            Some((_, types)) => types.clone(),
+            None => {
+                self.errors.push(SemError {
+                    code: "E066".to_string(),
+                    message: format!(
+                        "La enumeración '{}' no tiene una variante llamada '{}'",
+                        enum_name, variant
+                    ),
+                    span: pat_span,
+                    suggestion: format!(
+                        "Revisa las variantes de '{}', '{}' no existe",
+                        enum_name, variant
+                    ),
+                });
+                return true;
+            }
+        };
+
+        // Aridad: capturar menos/más datos de los que lleva la variante es un
+        // error explícito, no un binding silencioso a un valor vacío.
+        if !args.is_empty() && args.len() != payload_types.len() {
+            self.errors.push(SemError {
+                code: "E067".to_string(),
+                message: format!(
+                    "La variante '{}::{}' lleva {} dato(s), pero el patrón captura {}",
+                    enum_name,
+                    variant,
+                    payload_types.len(),
+                    args.len()
+                ),
+                span: pat_span,
+                suggestion: if payload_types.is_empty() {
+                    format!("Escribe 'caso {}::{}:' sin paréntesis", enum_name, variant)
+                } else {
+                    format!(
+                        "Captura {} variable(s): 'caso {}::{}({}):'",
+                        payload_types.len(),
+                        enum_name,
+                        variant,
+                        (0..payload_types.len())
+                            .map(|i| format!("v{}", i + 1))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                },
+            });
+            return true;
+        }
+
+        for (i, arg) in args.iter().enumerate() {
+            let ty = payload_types.get(i).cloned().unwrap_or(TypeInfo::Numero);
+            match arg {
+                Expr::Ident { name, .. } if name == "_" => {}
+                Expr::Ident { name, .. } => {
+                    let _ = self.current_scope().define(name, ty, span);
+                }
+                // Patrón literal anidado (`caso Estado::Codigo(404):`).
+                other => {
+                    let got = self.analyze_expr(other);
+                    if !can_assign(&ty, &got) {
+                        self.errors.push(SemError {
+                            code: "E056".to_string(),
+                            message: format!(
+                                "El dato {} de '{}::{}' es '{}', no '{}'",
+                                i + 1,
+                                enum_name,
+                                variant,
+                                ty,
+                                got
+                            ),
+                            span: pat_span,
+                            suggestion: format!("Usa un valor de tipo '{}'", ty),
+                        });
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// Valida que un builtin de conversión/matemática de 1 argumento reciba
+    /// exactamente uno, con un mensaje uniforme.
+    /// BUG-119: comprueba que un builtin reciba EXACTAMENTE los argumentos que
+    /// su rama del backend C desapila. Un descuadre no es inocuo: el C se queda
+    /// con el argumento equivocado y puede tratar un entero como puntero.
+    fn check_builtin_arity(&mut self, callee: &str, got: usize, esperados: usize, span: Span) {
+        if got != esperados {
+            self.errors.push(SemError {
+                code: "E040".to_string(),
+                message: format!(
+                    "'{}' espera {} argumento{}, no {}",
+                    callee,
+                    esperados,
+                    if esperados == 1 { "" } else { "s" },
+                    got
+                ),
+                span,
+                suggestion: format!(
+                    "Pasa {} argumento{}",
+                    esperados,
+                    if esperados == 1 { "" } else { "s" }
+                ),
+            });
+        }
+    }
+
+    fn check_conv_arity(&mut self, callee: &str, got: usize, span: Span) {
+        if got != 1 {
+            self.errors.push(SemError {
+                code: "E040".to_string(),
+                message: format!("'{}' espera 1 argumento, no {}", callee, got),
+                span,
+                suggestion: format!("Usa {}(valor)", callee),
+            });
+        }
+    }
+
+    /// BUG-065: liga las variables de un patrón usando el tipo REAL del valor
+    /// examinado. Antes todo identificador se ligaba como `numero`, así que
+    /// `elegir (o) { caso algun(p): p.campo }` sobre un `opcion<Contacto>`
+    /// fallaba con «E060: no puedes acceder a un campo de un valor de tipo
+    /// numero». En la práctica `opcion<T>` y `resultado<T,E>` sólo servían con
+    /// números. `sujeto` es el tipo del valor que se está examinando, si se
+    /// conoce.
+    fn bind_pattern_vars_tipado(&mut self, pattern: &Expr, span: Span, sujeto: Option<&TypeInfo>) {
+        // Desenvuelve `prestado`/`dueno` para mirar el tipo de dentro.
+        let sujeto = sujeto.map(pelar_envoltorios);
         match pattern {
             Expr::Ident { name, .. } => {
-                let _ = self.current_scope().define(name, TypeInfo::Numero, span);
+                let ty = sujeto.cloned().unwrap_or(TypeInfo::Numero);
+                let _ = self.current_scope().define(name, ty, span);
             }
             Expr::Call { args, .. } => {
                 for a in args.iter() {
-                    self.bind_pattern_vars(a, span);
+                    self.bind_pattern_vars_tipado(a, span, None);
                 }
             }
             Expr::Algun { expr, .. } => {
-                self.bind_pattern_vars(expr, span);
+                // `algun(x)` sobre `opcion<T>` liga `x` con `T`.
+                let dentro = match sujeto {
+                    Some(TypeInfo::Opcion(inner)) => Some(inner.as_ref()),
+                    _ => None,
+                };
+                self.bind_pattern_vars_tipado(expr, span, dentro);
             }
             Expr::Exito { expr, .. } => {
-                self.bind_pattern_vars(expr, span);
+                // `exito(x)` sobre `resultado<T,E>` liga `x` con `T`.
+                let dentro = match sujeto {
+                    Some(TypeInfo::Resultado { ok, .. }) => Some(ok.as_ref()),
+                    _ => None,
+                };
+                self.bind_pattern_vars_tipado(expr, span, dentro);
             }
             Expr::Error { expr, .. } => {
-                self.bind_pattern_vars(expr, span);
+                // `error(e)` sobre `resultado<T,E>` liga `e` con `E`.
+                let dentro = match sujeto {
+                    Some(TypeInfo::Resultado { err, .. }) => Some(err.as_ref()),
+                    _ => None,
+                };
+                self.bind_pattern_vars_tipado(expr, span, dentro);
             }
             Expr::Ninguno { .. } | Expr::EnumCtor { .. } => {}
             Expr::Tuple { items, .. } => {
-                for it in items.iter() {
-                    self.bind_pattern_vars(it, span);
+                // Una tupla reparte sus tipos posición a posición.
+                for (i, it) in items.iter().enumerate() {
+                    let dentro = match sujeto {
+                        Some(TypeInfo::Tuple(ts)) => ts.get(i),
+                        _ => None,
+                    };
+                    self.bind_pattern_vars_tipado(it, span, dentro);
                 }
             }
             Expr::StructInit { fields, .. } => {
-                for (_name, val) in fields.iter() {
-                    self.bind_pattern_vars(val, span);
+                for (fname, val) in fields.iter() {
+                    let dentro = match sujeto {
+                        Some(TypeInfo::Struct { fields: fs, .. }) => {
+                            fs.iter().find(|(n, _)| n == fname).map(|(_, t)| t)
+                        }
+                        _ => None,
+                    };
+                    self.bind_pattern_vars_tipado(val, span, dentro);
                 }
             }
             Expr::List { items, .. } => {
+                let dentro = match sujeto {
+                    Some(TypeInfo::Lista(inner)) => Some(inner.as_ref()),
+                    _ => None,
+                };
                 for it in items.iter() {
-                    self.bind_pattern_vars(it, span);
+                    self.bind_pattern_vars_tipado(it, span, dentro);
                 }
             }
             _ => {}
@@ -3778,6 +4660,45 @@ impl SemanticAnalyzer {
                     }
                 }
             }
+            // BUG-058: los tipos COMPUESTOS también pueden contener parámetros
+            // de tipo. Antes caían en `type_to_info`, que no conoce
+            // `type_params`, así que la `T` de `lista<T>` se resolvía como un
+            // struct vacío llamado "T" en vez de `TypeVar("T")`. Resultado:
+            // `funcion entero cuantos<T>(lista<T> l)` rechazaba una
+            // `lista<entero>` con un E041 que además filtraba el `Debug` de
+            // Rust: «debe ser 'Lista(Struct { name: "T", fields: [] })'».
+            // Con `T` a secas sí funcionaba, de ahí lo desconcertante.
+            Type::Lista(inner) => TypeInfo::Lista(Box::new(self.resolve_type(*inner, type_params))),
+            Type::Opcion(inner) => {
+                TypeInfo::Opcion(Box::new(self.resolve_type(*inner, type_params)))
+            }
+            Type::Resultado { ok, err } => TypeInfo::Resultado {
+                ok: Box::new(self.resolve_type(*ok, type_params)),
+                err: Box::new(self.resolve_type(*err, type_params)),
+            },
+            Type::Tuple(types) => TypeInfo::Tuple(
+                types
+                    .into_iter()
+                    .map(|x| self.resolve_type(x, type_params))
+                    .collect(),
+            ),
+            Type::Func {
+                param_types,
+                return_type,
+            } => TypeInfo::Func {
+                param_types: param_types
+                    .into_iter()
+                    .map(|x| self.resolve_type(x, type_params))
+                    .collect(),
+                return_type: Box::new(self.resolve_type(*return_type, type_params)),
+            },
+            // Se conserva el envoltorio: `prestado mut` es lo que implementa el
+            // paso por referencia (BUG-008); descartarlo aquí lo rompería.
+            Type::Prestado { inner, mutable } => TypeInfo::Prestado {
+                inner: Box::new(self.resolve_type(*inner, type_params)),
+                mutable,
+            },
+            Type::Dueno(inner) => TypeInfo::Dueno(Box::new(self.resolve_type(*inner, type_params))),
             _ => self.type_to_info(t),
         }
     }
@@ -3881,6 +4802,9 @@ fn type_info_to_impl_name(t: &TypeInfo) -> Option<String> {
         TypeInfo::Texto => Some("texto".to_string()),
         TypeInfo::Booleano => Some("booleano".to_string()),
         TypeInfo::Numero => Some("numero".to_string()),
+        // BUG-100: el tipo dinámico no identifica ningún `impl` concreto.
+        TypeInfo::Dinamico => None,
+        TypeInfo::Mapa => Some("mapa".to_string()),
         TypeInfo::Lista(_) => Some("lista".to_string()),
         TypeInfo::Resultado { .. } => Some("resultado".to_string()),
         TypeInfo::Opcion(_) => Some("opcion".to_string()),
@@ -3888,6 +4812,90 @@ fn type_info_to_impl_name(t: &TypeInfo) -> Option<String> {
         TypeInfo::Prestado { inner, .. } => type_info_to_impl_name(inner),
         TypeInfo::Dueno(inner) => type_info_to_impl_name(inner),
         TypeInfo::Void | TypeInfo::Func { .. } | TypeInfo::TypeVar(_) => None,
+    }
+}
+
+/// BUG-002: mapea el nombre de un tipo usado como función de conversión al
+/// builtin real con prefijo `a_`. Devuelve `None` si no es un nombre de tipo.
+/// BUG-105: distancia de edición (Levenshtein) acotada, para sugerir el nombre
+/// que el programador probablemente quiso escribir.
+fn distancia_edicion(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let (n, m) = (a.len(), b.len());
+    if n == 0 {
+        return m;
+    }
+    if m == 0 {
+        return n;
+    }
+    let mut prev: Vec<usize> = (0..=m).collect();
+    let mut fila = vec![0usize; m + 1];
+    for i in 1..=n {
+        fila[0] = i;
+        for j in 1..=m {
+            let coste = usize::from(a[i - 1] != b[j - 1]);
+            fila[j] = (prev[j] + 1).min(fila[j - 1] + 1).min(prev[j - 1] + coste);
+        }
+        std::mem::swap(&mut prev, &mut fila);
+    }
+    prev[m]
+}
+
+/// BUG-105: busca entre los nombres conocidos el más parecido a `buscado`.
+///
+/// Prioriza el caso del **módulo importado**: si existe un nombre que termina en
+/// `_<buscado>` (p. ej. `util_Color` cuando se escribió `Color`), esa es casi
+/// siempre la intención real, porque LÚMEN prefija lo que se importa. Si no,
+/// cae a la coincidencia por distancia de edición, con un umbral proporcional a
+/// la longitud para no sugerir disparates en nombres cortos.
+fn nombre_mas_parecido<'a, I>(buscado: &str, candidatos: I) -> Option<&'a str>
+where
+    I: IntoIterator<Item = &'a String>,
+{
+    let sufijo = format!("_{}", buscado);
+    let mut mejor: Option<(usize, &str)> = None;
+    let mut por_modulo: Option<&str> = None;
+
+    for cand in candidatos {
+        if cand == buscado {
+            continue;
+        }
+        // Nombre importado con prefijo de módulo: `util_Color` para `Color`.
+        if cand.ends_with(&sufijo) && por_modulo.is_none_or(|p| cand.len() < p.len()) {
+            por_modulo = Some(cand.as_str());
+        }
+        let d = distancia_edicion(buscado, cand);
+        if mejor.is_none_or(|(bd, _)| d < bd) {
+            mejor = Some((d, cand.as_str()));
+        }
+    }
+
+    if let Some(m) = por_modulo {
+        return Some(m);
+    }
+    // Umbral: 1 error en nombres cortos, hasta 2 a partir de 5 caracteres.
+    let umbral = if buscado.chars().count() >= 5 { 2 } else { 1 };
+    mejor.filter(|(d, _)| *d <= umbral).map(|(_, n)| n)
+}
+
+fn suggest_conversion(callee: &str) -> Option<&'static str> {
+    match callee {
+        "texto" | "string" | "str" => Some("a_texto"),
+        "entero" | "int" | "integer" => Some("a_entero"),
+        "decimal" | "float" | "flotante" | "double" => Some("a_decimal"),
+        "numero" | "number" => Some("a_numero"),
+        _ => None,
+    }
+}
+
+/// BUG-065: `prestado T` / `dueno T` envuelven al tipo real; para ligar un
+/// patrón hay que mirar lo que hay dentro.
+fn pelar_envoltorios(t: &TypeInfo) -> &TypeInfo {
+    match t {
+        TypeInfo::Prestado { inner, .. } => pelar_envoltorios(inner),
+        TypeInfo::Dueno(inner) => pelar_envoltorios(inner),
+        otro => otro,
     }
 }
 
@@ -3931,7 +4939,68 @@ fn substitute_typevars(typ: &TypeInfo, subst: &HashMap<String, TypeInfo>) -> Typ
 }
 
 fn is_numeric(t: &TypeInfo) -> bool {
-    matches!(t, TypeInfo::Entero | TypeInfo::Decimal | TypeInfo::Numero)
+    matches!(
+        t,
+        TypeInfo::Entero | TypeInfo::Decimal | TypeInfo::Numero | TypeInfo::Dinamico
+    )
+}
+
+/// BUG-100: ¿puede este tipo usarse donde se espera un booleano?
+///
+/// `numero` es el tipo *dinámico* del analizador (lo que devuelven builtins como
+/// `__map_obtener`, que no pueden saber estáticamente qué guardó el usuario), no
+/// sólo el de los números. Un booleano recuperado de un mapa volvía como
+/// `numero` y usarlo en un `si`, un `mientras` o con `!` se rechazaba, aunque el
+/// runtime lo evalúa perfectamente. Se acepta el tipo dinámico; el booleano
+/// mal usado de verdad (un texto, una lista) se sigue rechazando.
+fn es_condicion_valida(t: &TypeInfo) -> bool {
+    matches!(
+        t,
+        TypeInfo::Booleano | TypeInfo::Dinamico | TypeInfo::TypeVar(_)
+    )
+}
+
+/// BUG-103: builtins que el usuario SÍ puede redefinir. Es la misma lista que
+/// aplica la VM al despachar (`is_shadowable_builtin`): nombres tan naturales
+/// —`abs`, `minimo`, `leer`…— que reservarlos sería más molesto que útil, y
+/// para los que el intérprete ya da prioridad a la definición del programa. El
+/// resto (`largo`, `agregar`, `push`, `imprimir`…) los intercepta el runtime,
+/// así que redefinirlos no puede funcionar y conviene decirlo al compilar.
+fn es_builtin_sombreable(name: &str) -> bool {
+    matches!(
+        name,
+        "abs"
+            | "absoluto"
+            | "minimo"
+            | "min"
+            | "maximo"
+            | "max"
+            | "raiz"
+            | "sqrt"
+            | "potencia"
+            | "pow"
+            | "piso"
+            | "floor"
+            | "techo"
+            | "ceil"
+            | "redondear"
+            | "round"
+            | "es_numero"
+            | "is_number"
+            | "a_entero"
+            | "to_int"
+            | "to_entero"
+            | "a_decimal"
+            | "to_float"
+            | "a_numero"
+            | "to_number"
+            | "a_entero_seguro"
+            | "to_int_safe"
+            | "a_decimal_seguro"
+            | "to_float_safe"
+            | "leer"
+            | "read"
+    )
 }
 
 fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
@@ -3940,6 +5009,18 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
     }
     // Numero (dynamic type) accepts any value AND can be assigned from any type
     if *target == TypeInfo::Numero || *value == TypeInfo::Numero {
+        return true;
+    }
+    // BUG-100: el tipo dinámico es compatible con cualquier cosa en ambos
+    // sentidos: no sabemos qué contiene, así que no podemos rechazarlo.
+    if *target == TypeInfo::Dinamico || *value == TypeInfo::Dinamico {
+        return true;
+    }
+    // BUG-102: un mapa se sigue pudiendo pasar donde se espera `numero`, que
+    // es como lo declaraba el código existente al no haber sintaxis propia.
+    if (*target == TypeInfo::Mapa && *value == TypeInfo::Numero)
+        || (*target == TypeInfo::Numero && *value == TypeInfo::Mapa)
+    {
         return true;
     }
     // TypeVar matches any type
@@ -4178,6 +5259,74 @@ mod tests {
         let errors = analyze("foo(1);");
         assert!(!errors.is_empty());
         assert_eq!(errors[0].code, "E042");
+    }
+
+    // ── BUG-105: el diagnóstico sugiere el nombre parecido ─────────────────
+
+    #[test]
+    fn bug105_sugiere_funcion_por_erratas() {
+        let errors = analyze("funcion entero sumar(entero a) { retornar a; } sumr(1);");
+        assert_eq!(errors[0].code, "E042");
+        assert!(
+            errors[0].suggestion.contains("sumar"),
+            "debería sugerir 'sumar': {}",
+            errors[0].suggestion
+        );
+    }
+
+    #[test]
+    fn bug105_sugiere_struct_por_erratas() {
+        let errors = analyze("estructura Caja { n: entero, } sea c = Caj{n: 1};");
+        assert!(errors
+            .iter()
+            .any(|e| e.code == "E062" && e.suggestion.contains("Caja")));
+    }
+
+    #[test]
+    fn bug105_sugiere_el_nombre_prefijado_del_modulo() {
+        // LÚMEN prefija lo que se importa: si existe `util_Color` y se escribió
+        // `Color`, esa es la intención real, no una errata.
+        let errors = analyze("enum util_Color { Rojo, Verde } sea c = Color::Verde;");
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.code == "E062" && e.suggestion.contains("util_Color")),
+            "debería sugerir el nombre con prefijo de módulo: {:?}",
+            errors.iter().map(|e| &e.suggestion).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn bug105_no_inventa_sugerencias_sin_candidato_parecido() {
+        let errors = analyze(
+            "funcion entero sumar(entero a) { retornar a; } calcular_otra_cosa_distinta(1);",
+        );
+        assert_eq!(errors[0].code, "E042");
+        assert!(
+            !errors[0].suggestion.contains("Quisiste"),
+            "no debe sugerir nada para un nombre sin parecido: {}",
+            errors[0].suggestion
+        );
+    }
+
+    #[test]
+    fn bug105_la_sugerencia_de_conversion_tiene_prioridad() {
+        // BUG-002 no debe quedar tapado por la nueva heurística.
+        let errors = analyze("texto(1);");
+        assert_eq!(errors[0].code, "E042");
+        assert!(
+            errors[0].suggestion.contains("a_texto"),
+            "BUG-002 debe seguir ganando: {}",
+            errors[0].suggestion
+        );
+    }
+
+    #[test]
+    fn bug105_distancia_edicion_es_correcta() {
+        assert_eq!(distancia_edicion("sumar", "sumar"), 0);
+        assert_eq!(distancia_edicion("sumr", "sumar"), 1);
+        assert_eq!(distancia_edicion("", "abc"), 3);
+        assert_eq!(distancia_edicion("kitten", "sitting"), 3);
     }
 
     #[test]

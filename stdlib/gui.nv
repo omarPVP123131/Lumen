@@ -81,11 +81,11 @@ funcion entero __crear_control(texto clase, texto texto_ctrl, entero estilo, ent
     entero ctrl_id = __nuevo_id();
     // Write text to buffer for FFI call
     entero tlen = __str_longitud(texto_ctrl);
-    entero text_buf = __ffi_asignar(tlen + 1);
+    entero text_buf = __ffi_asignar(tlen * 4 + 1);
     __ffi_escribir(text_buf, 0, texto_ctrl);
     __ffi_poke(text_buf, tlen, 0);
     entero clen = __str_longitud(clase);
-    entero class_buf = __ffi_asignar(clen + 1);
+    entero class_buf = __ffi_asignar(clen * 4 + 1);
     __ffi_escribir(class_buf, 0, clase);
     __ffi_poke(class_buf, clen, 0);
     entero style_final = estilo | WS_CHILD | WS_VISIBLE;
@@ -122,7 +122,7 @@ funcion booleano texto_control(texto ventana_id, entero ctrl_id, texto nuevo_tex
     entero padre = __gui_id(ventana_id);
     si padre == 0 { retornar falso; }
     entero nlen = __str_longitud(nuevo_texto);
-    entero text_buf = __ffi_asignar(nlen + 1);
+    entero text_buf = __ffi_asignar(nlen * 4 + 1);
     __ffi_escribir(text_buf, 0, nuevo_texto);
     __ffi_poke(text_buf, nlen, 0);
     entero hctrl = __ffi_llamar(__user32, "GetDlgItem", "entero,entero", [padre, ctrl_id], "entero");

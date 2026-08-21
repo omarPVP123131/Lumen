@@ -1,0 +1,190 @@
+name: Release
+
+# Publica binarios al empujar un tag `vX.Y.Z`. Sólo empaqueta: la verificación
+# es cosa de ci.yml. Aun así se exige que la suite pase en cada runner antes de
+# subir nada — publicar un binario que no pasa sus propios tests no es una
+# opción, y es barato comprobarlo aquí.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag a publicar (p. ej. v3.0.0)"
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write # necesario para crear el release y subir assets
+
+jobs:
+  build:
+    name: ${{ matrix.nombre }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux: musl y estático. Con glibc, el binario hereda el piso de la
+          # imagen del runner (GLIBC_2.34+) y NO arranca en Ubuntu 20.04,
+          # Debian 11, RHEL 8 ni Amazon Linux 2. musl corre en cualquier distro.
+          - nombre: Linux x86_64 (estático)
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            archivo: lumen-x86_64-unknown-linux-musl.tar.gz
+
+          - nombre: Linux ARM64 (estático)
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            archivo: lumen-aarch64-unknown-linux-musl.tar.gz
+            cross: true
+
+          # macOS: `macos-latest` es ARM64. Compilamos ambas arquitecturas y las
+          # unimos con `lipo`, para no dejar fuera a los Intel.
+          - nombre: macOS universal
+            os: macos-latest
+            target: universal-apple-darwin
+            archivo: lumen-universal-apple-darwin.tar.gz
+
+          - nombre: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archivo: lumen-x86_64-pc-windows-msvc.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target != 'universal-apple-darwin' && matrix.target || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # ── Linux estático: musl necesita su propio enlazador.
+      - name: Herramientas musl (x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Herramientas cross (ARM64)
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross --locked
+
+      # ── Compilación
+      - name: Compilar (nativo)
+        if: "!matrix.cross && matrix.target != 'universal-apple-darwin'"
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CC: ${{ matrix.target == 'x86_64-unknown-linux-musl' && 'musl-gcc' || '' }}
+
+      - name: Compilar (cross ARM64)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Compilar (macOS universal)
+        if: matrix.target == 'universal-apple-darwin'
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create -output target/universal-apple-darwin/release/lumen \
+            target/x86_64-apple-darwin/release/lumen \
+            target/aarch64-apple-darwin/release/lumen
+          lipo -info target/universal-apple-darwin/release/lumen
+
+      # ── Verificación del artefacto que REALMENTE se publica, no de otro.
+      - name: Pruebas
+        if: "!matrix.cross" # en cross no hay emulación: se verifica en CI
+        run: cargo test --release --workspace
+
+      - name: La stdlib viaja dentro del binario (BUG-152)
+        if: "!matrix.cross && runner.os != 'Windows'"
+        shell: bash
+        run: |
+          # Se copia FUERA del repo: si el import funciona, es por la embebida.
+          mkdir -p /tmp/aislado && cp target/${{ matrix.target }}/release/lumen /tmp/aislado/
+          cd /tmp/aislado
+          printf 'importar "texto";\nfuncion vacio main() { imprimir(texto_longitud("hola")); }\n' > p.nv
+          test "$(./lumen run p.nv)" = "4"
+
+      - name: La stdlib viaja dentro del binario (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p /tmp/aislado && cp target/${{ matrix.target }}/release/lumen.exe /tmp/aislado/
+          cd /tmp/aislado
+          printf 'importar "texto";\nfuncion vacio main() { imprimir(texto_longitud("hola")); }\n' > p.nv
+          test "$(./lumen.exe run p.nv)" = "4"
+
+      - name: Comprobar que el binario Linux es estático
+        if: startsWith(matrix.target, 'x86_64-unknown-linux-musl')
+        run: |
+          file target/${{ matrix.target }}/release/lumen | grep -q "static"
+          # Cero referencias a glibc: eso es lo que lo hace portable.
+          test "$(strings target/${{ matrix.target }}/release/lumen | grep -c GLIBC_)" -eq 0
+
+      # ── Empaquetado. Se incluye la stdlib como fuente aunque vaya embebida:
+      # sirve de referencia y permite `-L stdlib/` para sobrescribirla.
+      - name: Empaquetar (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist/lumen
+          cp target/${{ matrix.target }}/release/lumen dist/lumen/
+          strip dist/lumen/lumen || true
+          cp README.md LICENSE CHANGELOG.md dist/lumen/ 2>/dev/null || true
+          cp -r stdlib dist/lumen/ 2>/dev/null || true
+          tar czf ${{ matrix.archivo }} -C dist/lumen .
+          shasum -a 256 ${{ matrix.archivo }} > ${{ matrix.archivo }}.sha256
+
+      - name: Empaquetar (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist/lumen
+          cp target/${{ matrix.target }}/release/lumen.exe dist/lumen/
+          cp README.md LICENSE CHANGELOG.md dist/lumen/ 2>/dev/null || true
+          cp -r stdlib dist/lumen/ 2>/dev/null || true
+          cd dist/lumen && 7z a -tzip ../../${{ matrix.archivo }} . && cd ../..
+          certutil -hashfile ${{ matrix.archivo }} SHA256 | sed -n 2p | tr -d ' \r' > ${{ matrix.archivo }}.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archivo }}
+          path: |
+            ${{ matrix.archivo }}
+            ${{ matrix.archivo }}.sha256
+          if-no-files-found: error
+
+  publicar:
+    name: Publicar release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefactos
+          merge-multiple: true
+
+      - name: Un solo SHA256SUMS.txt
+        run: |
+          cd artefactos
+          cat *.sha256 > SHA256SUMS.txt
+          rm -f *.sha256
+          echo "── Artefactos ──"
+          ls -lh
+          cat SHA256SUMS.txt
+
+      - name: Crear el release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: artefactos/*
+          generate_release_notes: true
+          body_path: RELEASE-v3.0.0.md
+          fail_on_unmatched_files: true

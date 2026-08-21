@@ -1,0 +1,61 @@
+// v3.0 — Listas: copia por valor y mutación explícita
+//
+// LÚMEN pasa las listas POR VALOR: lo que una función modifica no se ve fuera,
+// salvo que el parámetro se declare `prestado mut`. Este ejemplo muestra las
+// dos semánticas una al lado de la otra.
+
+// Por valor: el llamador no ve el cambio.
+funcion entero cuenta_tras_anadir(lista<entero> l, entero v) {
+    agregar(l, v);
+    retornar largo(l);
+}
+
+// Por referencia mutable: el cambio SÍ vuelve al llamador.
+funcion entero anade_de_verdad(prestado mut lista<entero> l, entero v) {
+    agregar(l, v);
+    retornar largo(l);
+}
+
+lista<entero> numeros = [1, 2, 3];
+
+imprimir("longitud inicial      : ", largo(numeros));
+imprimir("dentro (por valor)    : ", cuenta_tras_anadir(numeros, 99));
+imprimir("fuera  (por valor)    : ", largo(numeros), "  <- no cambió");
+
+imprimir("dentro (prestado mut) : ", anade_de_verdad(numeros, 99));
+imprimir("fuera  (prestado mut) : ", largo(numeros), "  <- sí cambió");
+
+// Las dos sintaxis de `agregar` son equivalentes.
+lista<texto> a = ["x"];
+lista<texto> b = ["x"];
+agregar(a, "y");    // forma función
+b.agregar("y");     // forma método
+imprimir("función=", largo(a), " método=", largo(b), " (deben coincidir)");
+
+// Asignar una lista a otra variable también copia.
+lista<entero> origen = [1, 2];
+lista<entero> copia = origen;
+agregar(copia, 3);
+imprimir("origen=", largo(origen), " copia=", largo(copia));
+
+// Recorridos y acumulación.
+lista<entero> valores = [5, 10, 15, 20];
+entero suma = 0;
+entero maximo = 0;
+para v en valores {
+    suma = suma + v;
+    si (v > maximo) {
+        maximo = v;
+    }
+}
+imprimir("suma=", suma, " maximo=", maximo, " media=", suma / largo(valores));
+
+// Listas anidadas.
+lista<lista<entero>> matriz = [[1, 2], [3, 4], [5, 6]];
+entero total = 0;
+para fila en matriz {
+    para celda en fila {
+        total = total + celda;
+    }
+}
+imprimir("matriz ", largo(matriz), "x", largo(matriz[0]), " suma=", total);

@@ -1,0 +1,37 @@
+// Una agenda sencilla: lista de estructuras + búsqueda.
+
+estructura Contacto {
+    nombre: texto,
+    telefono: texto,
+    edad: entero
+}
+
+funcion vacio mostrar(Contacto c) {
+    imprimir("  ", c.nombre, " | ", c.telefono, " | ", c.edad, " anios");
+}
+
+funcion opcion<Contacto> buscar(lista<Contacto> agenda, texto nombre) {
+    para c en agenda {
+        si (c.nombre == nombre) { retornar algun(c); }
+    }
+    retornar ninguno;
+}
+
+lista<Contacto> agenda = [];
+agenda.agregar(Contacto { nombre: "Ana",  telefono: "600111222", edad: 34 });
+agenda.agregar(Contacto { nombre: "Luis", telefono: "600333444", edad: 28 });
+agenda.agregar(Contacto { nombre: "Sara", telefono: "600555666", edad: 41 });
+
+imprimir("=== Agenda (", largo(agenda), " contactos) ===");
+para c en agenda { mostrar(c); }
+
+imprimir("");
+elegir (buscar(agenda, "Luis")) {
+    caso algun(c): imprimir("Encontrado:"); mostrar(c);
+    caso ninguno:  imprimir("No esta en la agenda");
+}
+
+elegir (buscar(agenda, "Pedro")) {
+    caso algun(c): imprimir("Encontrado:"); mostrar(c);
+    caso ninguno:  imprimir("Pedro no esta en la agenda");
+}

@@ -552,7 +552,7 @@ imprimir(dataframe_df_a_csv(df));
 
 # CAPÍTULO 18: Concurrencia Masiva M:N, Autograd & Alto Rendimiento SIMD (v2.4.6)
 
-En este capítulo exploramos las tecnologías más avanzadas introducidas en LÚMEN v2.4.6:
+En este capítulo exploramos las tecnologías más avanzadas introducidas en LÚMEN v3.0:
 
 ## 18.1 Álgebra Lineal 2D & Tiled GEMM (`matriz_simd.nv`)
 Multiplicación matricial $N 	imes N$ de alto rendimiento optimizada para la jerarquía de memoria caché L1/L2 con paralelismo vectorial 4-way / 8-way FMA (*Fused Multiply-Add*):

@@ -112,9 +112,10 @@ funcion ArbolSupervision supervision_crear(texto nombre, texto estrategia = "uno
 funcion ArbolSupervision supervision_new(texto name, texto strategy = "one_for_one", entero max_restarts = 3) {
     retornar supervision_crear(name, strategy, max_restarts);
 }
-funcion ArbolSupervision actor_supervision_crear(texto nombre, texto estrategia = "uno_para_uno", entero max_reinicios = 3) {
-    retornar supervision_crear(nombre, estrategia, max_reinicios);
-}
+// BUG-025: el alias 'actor_<nombre>' se eliminó porque el cargador ya
+// antepone el prefijo del módulo, generando ese mismo nombre a partir de
+// la función de arriba. Tenerlo escrito a mano creaba una definición
+// duplicada que rompía cualquier programa que importara este módulo.
 
 funcion ArbolSupervision supervision_agregar(ArbolSupervision arbol, Actor a) {
     lista<Actor> acts = arbol.actores;
@@ -123,9 +124,6 @@ funcion ArbolSupervision supervision_agregar(ArbolSupervision arbol, Actor a) {
     retornar arbol;
 }
 funcion ArbolSupervision supervision_add_actor(ArbolSupervision arbol, Actor a) {
-    retornar supervision_agregar(arbol, a);
-}
-funcion ArbolSupervision actor_supervision_agregar(ArbolSupervision arbol, Actor a) {
     retornar supervision_agregar(arbol, a);
 }
 
@@ -149,8 +147,5 @@ funcion ArbolSupervision supervision_sanar(ArbolSupervision arbol) {
     retornar arbol;
 }
 funcion ArbolSupervision supervision_heal(ArbolSupervision arbol) {
-    retornar supervision_sanar(arbol);
-}
-funcion ArbolSupervision actor_supervision_sanar(ArbolSupervision arbol) {
     retornar supervision_sanar(arbol);
 }

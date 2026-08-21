@@ -1,6 +1,6 @@
 # LÚMEN — Guía Completa de Herramientas y Ecosistema (DX)
 
-**v2.4.6 — Herramientas Oficiales de Desarrollo, Depuración y Despliegue**
+**v3.0 — Herramientas Oficiales de Desarrollo, Depuración y Despliegue**
 
 ---
 
@@ -34,8 +34,49 @@ lumen <comando> [opciones] <archivo.nv>
 * `lumen fmt <archivo>`: Formateador automático de código fuente.
 * `lumen test <archivo>`: Ejecución de suites de pruebas unitarias.
 * `lumen bench <archivo>`: Micro-benchmarking de rendimiento y throughput.
+* `lumen lint <archivo>`: Análisis estático (errores + avisos de estilo).
+* `lumen fuzz <archivo>`: Mutación de literales y detección de fallos en ejecución.
 
 ---
+
+## 1.1. Escribir pruebas (`lumen test`)
+
+Una prueba es una **función sin parámetros cuyo nombre empieza por `test_`**. El
+runner las descubre y las ejecuta una a una, cada una en su propio entorno.
+
+```lumen
+importar "testing.nv";
+
+funcion void test_suma() {
+    testing_afirmar_igual(2 + 2, 4);
+}
+
+funcion void test_lista_crece() {
+    lista<entero> l = [1];
+    agregar(l, 2);
+    testing_afirmar_igual(largo(l), 2);
+}
+```
+
+```console
+$ lumen test tests/mis_pruebas.nv
+  ✓ test_lista_crece ... OK
+  ✓ test_suma ... OK
+  Resultado: 2 pasaron, 0 fallaron
+```
+
+Las aserciones disponibles en `testing.nv` (con alias en inglés):
+
+| Función | Comprueba |
+|---|---|
+| `testing_afirmar_verdadero(v)` | que `v` sea verdadero |
+| `testing_afirmar_falso(v)` | que `v` sea falso |
+| `testing_afirmar_igual(a, b)` | que `a == b` |
+| `testing_afirmar_distinto(a, b)` | que `a != b` |
+
+Cuando una prueba falla, el runner la marca con ✗, muestra el motivo y **el
+proceso termina con código de salida 1**, de modo que se puede encadenar en un
+CI. Las aserciones sueltas en el nivel superior del archivo también cuentan.
 
 ## 2. Centro de Configuración y Perfiles (`lumen config`)
 
@@ -61,6 +102,141 @@ Genera un único ejecutable binario autónomo que incluye el código compilado, 
 lumen bundle src/main.nv -o mi_servicio
 ./mi_servicio
 ```
+
+La ruta de salida acepta las dos formas, `-o mi_servicio` y posicional
+(`lumen bundle src/main.nv mi_servicio`), y puede incluir directorios que aún no
+existan: se crean. Si por cualquier motivo el binario no llega a generarse, el
+comando termina con código de salida 1 en vez de informar de un éxito falso
+(BUG-073).
+
+---
+
+## 3.1. Análisis estático (`lumen lint`)
+
+Ejecuta el análisis léxico, sintáctico y semántico completo —los mismos
+diagnósticos que `lumen check`— y añade reglas de estilo:
+
+| Regla | Descripción |
+|---|---|
+| Línea larga | Más de 120 caracteres |
+| Espacios finales | Espacios o tabuladores al final de la línea |
+| Tabulador literal | Sangría con tabuladores (usa `lumen fmt`) |
+| Marca pendiente | Comentarios `TODO` / `FIXME` sin resolver |
+
+```bash
+lumen lint src/main.nv
+# ✓ Análisis estático (lumen lint): 0 advertencias en 'src/main.nv'
+```
+
+Los **errores** hacen salir con código 1; las **advertencias** de estilo se
+informan pero no rompen la compilación, de modo que se puede usar en CI.
+
+---
+
+## 3.2. Fuzzing (`lumen fuzz`)
+
+Localiza los literales enteros del programa, genera mutaciones a valores límite
+(`0`, `-1`, `1`, `i64::MIN`, `i64::MAX`, `2147483647`), y **compila y ejecuta
+cada variante en la VM**, informando de los fallos reproducibles:
+
+```bash
+lumen fuzz src/main.nv
+#   • Mutaciones generadas   : 114
+#   • Ejecutadas en la VM    : 114
+#   • Fallos detectados      : 0
+```
+
+Cuando encuentra un fallo lo muestra con la mutación que lo provoca y termina
+con código 1:
+
+```
+✗ literal #2 → 0 → Error: División por cero
+```
+
+Las mutaciones que no compilan (porque cambian el significado del programa) se
+descartan y se contabilizan aparte.
+
+---
+
+## 3.3. Bindings FFI (`lumen bindgen`)
+
+Genera un módulo LÚMEN a partir de una cabecera C:
+
+```bash
+lumen bindgen mini.h        # → mini_bindings.nv
+```
+
+Para `int suma(int a, int b);` produce:
+
+```lumen
+texto _lib_handle = __ffi_cargar("mini.so");
+
+funcion cualquiera suma(cualquiera arg1 = 0, cualquiera arg2 = 0) {
+    retornar __ffi_llamar(_lib_handle, "suma", "entero,entero", [arg1, arg2], "entero");
+}
+```
+
+El tipo de retorno se deduce de la cabecera (`double` → `decimal`, `void` →
+`vacio`), y la cadena de tipos de los parámetros es **obligatoria**: la firma es
+`__ffi_llamar(lib, nombre, "tipos", [args], "retorno")`.
+
+Dos detalles al usarlo:
+
+* **La ruta de la biblioteca.** Se genera como `"<nombre>.so"`; ajústala a la
+  ruta real (absoluta o resoluble por el enlazador) antes de ejecutar.
+* **Los módulos importados se prefijan con su nombre.** Tras
+  `importar "mini_bindings.nv";` la función se llama `mini_bindings_suma(...)`,
+  igual que `testing.nv` expone `testing_afirmar_igual`.
+
+```lumen
+importar "mini_bindings.nv";
+imprimir("suma via FFI: ", mini_bindings_suma(20, 22));   // → 42
+```
+
+Memoria manual: `__ffi_asignar(tam)` / `__ffi_escribir` / `__ffi_leer` /
+`__ffi_liberar`. Liberar dos veces el mismo puntero devuelve un error normal —ya
+no aborta el proceso (BUG-079)—, pero sigue siendo un fallo del programa.
+
+---
+
+## 3.4. Compilación nativa y elección de backend (`lumen build`)
+
+```bash
+lumen build --native app.nv              # backend C (por defecto, recomendado)
+lumen build --native --aot rust app.nv   # backend Cranelift
+lumen build --native --aot llvm app.nv   # backend LLVM
+```
+
+### Qué backend usar
+
+| Backend | Bandera | Cobertura del lenguaje | Cuándo usarlo |
+|---|---|---|---|
+| **C** | `--native` (defecto) | Completa | Uso general. Es el único con runtime completo. |
+| **Cranelift** | `--aot rust` | **Parcial** | Compilación rápida de código numérico. |
+| **LLVM** | `--aot llvm` | **Muy parcial** (12/42 opcodes) | Experimental: sólo código escalar. |
+
+> ⚠️ **Limitación del backend Cranelift.** No implementa los builtins de
+> colecciones y texto (`largo`, `agregar`, `a_texto`, `leer`, `__map_*`…) ni las
+> construcciones de datos compuestos (structs, listas, tuplas, enums,
+> `opcion`/`resultado`, llamadas indirectas).
+> Hasta la v3.0 esas llamadas se compilaban como la constante `0` **sin ningún
+> aviso**, así que el binario devolvía resultados incorrectos en silencio
+> (BUG-084). Ahora la compilación se detiene y enumera lo que falta:
+>
+> ```
+> ⚠  1 builtin(s) sin soporte en el backend Cranelift:
+>      · largo
+>
+>   Estas funciones devolverían 0 en el binario, sin error.
+>
+>   Opciones:
+>     · Compila con el backend C:     lumen build --native app.nv
+>     · Ejecuta con la VM:            lumen run app.nv
+>     · O asume el riesgo:            ... --permitir-no-soportados
+> ```
+>
+> `--permitir-no-soportados` fuerza la compilación conservando el `0`; úsalo
+> sólo si sabes que esas rutas no se ejecutan.
 
 ---
 
@@ -128,4 +304,4 @@ Inicia un servidor local en `http://localhost:8080` con:
 
 ---
 
-*LÚMEN v2.4.6 — Documentación de Herramientas Sincronizada.*
+*LÚMEN v3.0 — Documentación de Herramientas Sincronizada.*

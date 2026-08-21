@@ -1,0 +1,30 @@
+// `opcion<T>` para "puede que no haya valor" y `resultado<T,E>` para "pudo fallar".
+
+funcion opcion<entero> indice_de(lista<entero> l, entero buscado) {
+    entero i = 0;
+    para v en l {
+        si (v == buscado) { retornar algun(i); }
+        i = i + 1;
+    }
+    retornar ninguno;
+}
+
+funcion resultado<decimal, texto> dividir(decimal a, decimal b) {
+    si (b == 0.0) { retornar error("division por cero"); }
+    retornar exito(a / b);
+}
+
+lista<entero> datos = [10, 20, 30];
+
+elegir (indice_de(datos, 20)) {
+    caso algun(i): imprimir("20 esta en la posicion ", i);
+    caso ninguno:  imprimir("20 no aparece");
+}
+
+elegir (indice_de(datos, 99)) {
+    caso algun(i): imprimir("99 esta en la posicion ", i);
+    caso ninguno:  imprimir("99 no aparece");
+}
+
+imprimir(dividir(10.0, 4.0));
+imprimir(dividir(1.0, 0.0));

@@ -7,15 +7,15 @@ texto src = "entero x = 42; imprimir(x);";
 imprimir("Source: ", src);
 
 // 1. Lexer (prefijo de import: lexer_)
-numero tk = lexer_lexer_tokenizar(src);
+numero tk = lexer_tokenizar(src);
 imprimir("Tokens: ", __map_obtener(tk, "cnt"));
 
 // 2. Parser (prefijo de import: parser_)
-numero ast = parser_parser_parsear(tk);
+numero ast = parser_parse(tk);
 imprimir("AST tipo: ", __map_obtener(ast, "tipo"));
 
 // 3. Codegen (prefijo de import: codegen_)
-numero cg = codegen_codegen_generar(ast);
+numero cg = codegen_generar(ast);
 imprimir("Instructions: ", __map_obtener(cg, "pos"));
 
 // 4. Serialize to .nvc using builtin
