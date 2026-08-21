@@ -1,6 +1,6 @@
 # 📜 Especificación Formal del Lenguaje LÚMEN (ISO/IEC-Style)
 
-**Estándar Internacional LÚMEN-2026 — v3.0**
+**Estándar Internacional LÚMEN-2026 — v2.4.6**
 
 ---
 

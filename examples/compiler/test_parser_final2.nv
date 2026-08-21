@@ -9,7 +9,7 @@ funcion booleano _dg(entero cp) { retornar cp >= 48 && cp <= 57; }
 funcion booleano _an(entero cp) { retornar _al(cp) || _dg(cp); }
 funcion texto _chr(entero cp) { retornar a_texto(cp); }
 
-funcion numero mi_lexer_tokenizar(texto src) {
+funcion numero lexer_tokenizar(texto src) {
     numero kw = __map_nuevo();
     kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1);
     kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1);
@@ -90,7 +90,7 @@ funcion numero mi_lexer_tokenizar(texto src) {
 funcion void probar(texto nm, texto src) {
     imprimir(""); imprimir("=== ", nm, " ===");
     imprimir("Source: ", src);
-    numero toks = mi_lexer_tokenizar(src);
+    numero toks = lexer_tokenizar(src);
     numero ast = parser_parse(toks);
     texto sal = parser_ast_a_texto(ast, 0);
     imprimir(sal);

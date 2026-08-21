@@ -10,9 +10,6 @@ repository = "https://github.com/omarPVP123131/Lumen"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# `wasm` y `wasi` son EXCLUYENTES: son dos backends del mismo API, no capas que
-# se sumen. Si se activan a la vez gana `wasm` (ver los `cfg` de src/lib.rs);
-# así `--all-features` compila en vez de romper con símbolos duplicados.
 default = ["wasm"]
 wasm = ["wasm-bindgen", "js-sys", "console_error_panic_hook"]
 wasi = []

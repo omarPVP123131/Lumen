@@ -1,4 +1,4 @@
-# Referencia CLI de LÚMEN — v3.0
+# Referencia CLI de LÚMEN — v2.4.6
 
 ## Uso General
 
@@ -121,7 +121,7 @@ lumen lsp                              # Inicia servidor LSP Pro para VS Code / 
 
 ---
 
-*LÚMEN v3.0 — Documentación CLI Oficial Sincronizada.*
+*LÚMEN v2.4.6 — Documentación CLI Oficial Sincronizada.*
 
 
 ---

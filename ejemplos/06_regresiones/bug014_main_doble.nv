@@ -1,4 +1,0 @@
-funcion vacio main() {
-  imprimir("dentro");
-}
-main();

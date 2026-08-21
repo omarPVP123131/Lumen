@@ -1,5 +1,0 @@
-imprimir(1 < 2);
-imprimir(2 <= 2);
-imprimir(3 > 4);
-imprimir("a" == "a");
-imprimir("a" != "b");

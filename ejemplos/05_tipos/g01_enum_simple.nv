@@ -1,7 +1,0 @@
-enum Color { Rojo, Verde, Azul }
-Color c = Color::Verde;
-elegir (c) {
-  caso Color::Rojo: imprimir("rojo");
-  caso Color::Verde: imprimir("verde");
-  caso Color::Azul: imprimir("azul");
-}

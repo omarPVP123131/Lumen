@@ -26,12 +26,8 @@ funcion entero longitud(texto s) {
 }
 /// Return the length of a string (English alias)
 funcion entero length(texto s) { retornar longitud(s); }
-/// Longitud de un texto (alias). Se declara ya con el prefijo del módulo:
-/// `largo` es un builtin NO sombreable y declararlo aquí disparaba E082
-/// (`lumen check stdlib/texto.nv` fallaba). Al llamarlo `texto_largo`, el
-/// aplanador de módulos no lo vuelve a prefijar —ya empieza por un prefijo
-/// conocido— así que la API pública sigue siendo exactamente `texto_largo`.
-funcion entero texto_largo(texto s) { retornar longitud(s); }
+/// Longitud de un texto (alias)
+funcion entero largo(texto s) { retornar longitud(s); }
 
 /// Convierte un texto a mayúsculas
 /// Convert a string to uppercase

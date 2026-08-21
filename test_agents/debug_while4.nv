@@ -1,5 +1,0 @@
-entero i = 0;
-mientras i < 3 {
-    imprimir(100);
-    i = i + 1;
-}

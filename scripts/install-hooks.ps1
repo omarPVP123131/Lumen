@@ -1,17 +1,24 @@
-#!/usr/bin/env pwsh
-# install-hooks.ps1 — Instala post-commit hook para auto-tag
-# Uso: ./scripts/install-hooks.ps1
+# ============================================================================
+# LÚMEN — Instalador de Git Hooks para Windows PowerShell (install-hooks.ps1)
+# ============================================================================
 
 $RepoRoot = git rev-parse --show-toplevel 2>$null
 if (-not $RepoRoot) {
-    Write-Error "No estás en un repositorio git"
+    Write-Error "No estás en un repositorio Git"
     exit 1
 }
 
 $HooksDir = Join-Path $RepoRoot ".git\hooks"
-$Source = Join-Path $RepoRoot "scripts\git-hooks\post-commit"
-$Dest = Join-Path $HooksDir "post-commit"
+$SourceDir = Join-Path $RepoRoot "scripts\git-hooks"
 
-Copy-Item -Path $Source -Destination $Dest -Force
-Write-Host "[install-hooks] Instalado: $Dest"
-Get-ChildItem $HooksDir | Where-Object { $_.Name -notlike "*.sample" } | ForEach-Object { Write-Host "  ✓ $($_.Name)" }
+if (-not (Test-Path $HooksDir)) {
+    New-Item -ItemType Directory -Path $HooksDir -Force | Out-Null
+}
+
+Get-ChildItem $SourceDir | ForEach-Object {
+    $Dest = Join-Path $HooksDir $_.Name
+    Copy-Item -Path $_.FullName -Destination $Dest -Force
+    Write-Host "  ✓ Hook instalado: $($_.Name)" -ForegroundColor Green
+}
+
+Write-Host "🎉 ¡Git hooks de LÚMEN (pre-commit, pre-push, post-commit) instalados con éxito!" -ForegroundColor Cyan

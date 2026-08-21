@@ -11,7 +11,7 @@ cualquiera _metricas = __map_nuevo();
 funcion void contador_incrementar(texto nombre) {
     cualquiera actual = __map_obtener(_metricas, nombre + "_counter");
     entero valor = 0;
-    si __map_contiene(_metricas, nombre + "_counter") {
+    si actual != nulo {
         valor = a_entero(actual);
     }
     valor = valor + 1;
@@ -23,7 +23,7 @@ funcion void counter_inc(texto name) { contador_incrementar(name); }
 funcion void contador_decrementar(texto nombre) {
     cualquiera actual = __map_obtener(_metricas, nombre + "_counter");
     entero valor = 0;
-    si __map_contiene(_metricas, nombre + "_counter") {
+    si actual != nulo {
         valor = a_entero(actual);
     }
     valor = valor - 1;
@@ -34,7 +34,7 @@ funcion void counter_dec(texto name) { contador_decrementar(name); }
 // Obtiene el valor de un contador / Get counter value
 funcion entero contador_obtener(texto nombre) {
     cualquiera actual = __map_obtener(_metricas, nombre + "_counter");
-    si __map_contiene(_metricas, nombre + "_counter") {
+    si actual != nulo {
         retornar a_entero(actual);
     }
     retornar 0;
@@ -52,7 +52,7 @@ funcion void gauge_set(texto name, decimal value) { medidor_asignar(name, value)
 // Obtiene el valor de un medidor / Get a gauge value
 funcion decimal medidor_obtener(texto nombre) {
     cualquiera actual = __map_obtener(_metricas, nombre + "_gauge");
-    si __map_contiene(_metricas, nombre + "_gauge") {
+    si actual != nulo {
         retornar a_decimal(actual);
     }
     retornar 0.0;
@@ -75,7 +75,7 @@ funcion void temporizador_registrar(texto nombre, entero ms) {
     // Actualizar contador de llamadas / Update call count
     cualquiera cuenta_actual = __map_obtener(_metricas, nombre + "_timer_count");
     entero cuenta = 0;
-    si __map_contiene(_metricas, nombre + "_timer_count") {
+    si cuenta_actual != nulo {
         cuenta = a_entero(cuenta_actual);
     }
     cuenta = cuenta + 1;
@@ -84,7 +84,7 @@ funcion void temporizador_registrar(texto nombre, entero ms) {
     // Actualizar total acumulado / Update accumulated total
     cualquiera total_actual = __map_obtener(_metricas, nombre + "_timer_total");
     entero total = 0;
-    si __map_contiene(_metricas, nombre + "_timer_total") {
+    si total_actual != nulo {
         total = a_entero(total_actual);
     }
     total = total + ms;
@@ -98,8 +98,8 @@ funcion decimal temporizador_promedio(texto nombre) {
     cualquiera cuenta_actual = __map_obtener(_metricas, nombre + "_timer_count");
     entero total = 0;
     entero cuenta = 0;
-    si __map_contiene(_metricas, nombre + "_timer_total") { total = a_entero(total_actual); }
-    si __map_contiene(_metricas, nombre + "_timer_count") { cuenta = a_entero(cuenta_actual); }
+    si total_actual != nulo { total = a_entero(total_actual); }
+    si cuenta_actual != nulo { cuenta = a_entero(cuenta_actual); }
     si cuenta == 0 { retornar 0.0; }
     retornar a_decimal(total) / a_decimal(cuenta);
 }

@@ -1,2 +1,0 @@
-entero r = funcion(entero x) { retornar x * x; }(7);
-imprimir(r);

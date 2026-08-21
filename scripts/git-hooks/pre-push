@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# ============================================================================
+# LÚMEN — Git Pre-Push Hook Blindado
+# Ejecuta validación completa de todo el workspace antes de empujar a GitHub.
+# ============================================================================
+
+echo "🚀 [LÚMEN Hook: pre-push] Ejecutando suite completa de integración..."
+
+if ! cargo test --workspace; then
+    echo "❌ ERROR: cargo test falló antes del push. Abortando."
+    exit 1
+fi
+
+if ! cargo run --bin lumen -- check examples; then
+    echo "❌ ERROR: Falló la verificación de ejemplos. Abortando push."
+    exit 1
+fi
+
+echo "✅ [LÚMEN Hook: pre-push] ¡Verificación completada! Listo para empujar a GitHub."
+exit 0

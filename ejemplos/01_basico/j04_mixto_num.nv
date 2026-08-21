@@ -1,4 +1,0 @@
-imprimir(1 + 2.5);
-imprimir(10 / 4);
-imprimir(10.0 / 4.0);
-imprimir(7 % 3);

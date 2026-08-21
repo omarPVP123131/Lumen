@@ -1,3 +1,0 @@
-texto s = "Hola Mundo";
-imprimir(largo(s));
-imprimir(s + "!");

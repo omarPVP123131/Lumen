@@ -1,6 +1,0 @@
-estructura P { x: entero }
-P a = P { x: 1 };
-P b = a;
-b.x = 99;
-imprimir(a.x);
-imprimir(b.x);

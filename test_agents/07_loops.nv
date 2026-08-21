@@ -1,6 +1,0 @@
-// Sub-agent 7: Loops - corregido
-entero i = 0;
-mientras (i < 5) {
-    imprimir(i);
-    i = i + 1;
-}

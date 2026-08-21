@@ -1,7 +1,0 @@
-funcion lista<entero> rango(entero n) {
-  lista<entero> r = [];
-  entero i = 0;
-  mientras (i < n) { r.agregar(i); i = i + 1; }
-  retornar r;
-}
-imprimir(rango(5));

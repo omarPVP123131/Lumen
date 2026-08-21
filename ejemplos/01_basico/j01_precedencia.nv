@@ -1,5 +1,0 @@
-imprimir(2 + 3 * 4);
-imprimir((2 + 3) * 4);
-imprimir(10 - 2 - 3);
-imprimir(2 * 3 % 4);
-imprimir(-2 * 3);

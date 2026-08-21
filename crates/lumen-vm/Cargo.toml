@@ -31,7 +31,7 @@ lumen-parser = { path = "../lumen-parser" }
 lumen-sema = { path = "../lumen-sema" }
 lumen-ir = { path = "../lumen-ir" }
 lumen-aot = { path = "../lumen-aot", optional = true }
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "http2"], optional = true }
+reqwest = { version = "0.12", features = ["blocking"], optional = true }
 unicode-normalization = "0.1"
 libloading = { version = "0.8", optional = true }
 base64 = { version = "0.22", optional = true }
@@ -41,9 +41,9 @@ hex = { version = "0.4", optional = true }
 im = "15"
 
 [dev-dependencies]
-lumen-aot = { path = "../lumen-aot" }
-lumen-fmt = { path = "../lumen-fmt" }
 lumen-lexer = { path = "../lumen-lexer" }
 lumen-parser = { path = "../lumen-parser" }
 lumen-sema = { path = "../lumen-sema" }
 lumen-ir = { path = "../lumen-ir" }
+lumen-aot = { path = "../lumen-aot" }
+lumen-fmt = { path = "../lumen-fmt" }

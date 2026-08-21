@@ -1,4 +1,4 @@
-# 🚀 Guía Rápida de Experiencia de Usuario (DX / UX) — LÚMEN v3.0
+# 🚀 Guía Rápida de Experiencia de Usuario (DX / UX) — LÚMEN v2.4.6
 ### *The Ultimate LÚMEN Developer Experience & Cheat Sheet*
 
 Bienvenido a **LÚMEN**, el lenguaje de programación nativo bilingüe de ultra-alto rendimiento. Esta guía resume todo lo que necesitas para dominar el ecosistema en minutos.
@@ -101,4 +101,4 @@ Dentro del REPL interactivo puedes usar:
 
 ---
 
-*LÚMEN v3.0 — Diseñado con la mejor Experiencia de Usuario (DX) del mercado.*
+*LÚMEN v2.4.6 — Diseñado con la mejor Experiencia de Usuario (DX) del mercado.*

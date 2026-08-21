@@ -1,4 +1,0 @@
-estructura Punto { x: entero, y: entero }
-funcion Punto crear(entero a, entero b) { retornar Punto { x: a, y: b }; }
-Punto p = crear(3, 4);
-imprimir(p.x + p.y);

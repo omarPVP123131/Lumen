@@ -1,3 +1,0 @@
-// Sub-agent 1: Hello World
-// Esperado: "Hola desde LUMEN!"
-imprimir("Hola desde LUMEN!");

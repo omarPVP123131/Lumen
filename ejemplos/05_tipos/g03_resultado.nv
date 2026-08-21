@@ -1,6 +1,0 @@
-funcion resultado<entero, texto> dividir(entero a, entero b) {
-  si (b == 0) { retornar error("division por cero"); }
-  retornar exito(a / b);
-}
-imprimir(dividir(10, 2));
-imprimir(dividir(1, 0));

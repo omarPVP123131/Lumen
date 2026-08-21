@@ -1,6 +1,0 @@
-clasificar = funcion(entero x) {
-  si (x < 0) { retornar "negativo"; }
-  retornar "positivo";
-};
-imprimir(clasificar(-5));
-imprimir(clasificar(5));

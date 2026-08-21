@@ -1,6 +1,0 @@
-// recursion profunda
-funcion entero fib(entero n) {
-  si (n < 2) { retornar n; }
-  retornar fib(n-1) + fib(n-2);
-}
-imprimir(fib(20));

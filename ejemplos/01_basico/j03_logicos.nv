@@ -1,4 +1,0 @@
-imprimir(verdadero && falso);
-imprimir(verdadero || falso);
-imprimir(!verdadero);
-imprimir(!(1 > 2));

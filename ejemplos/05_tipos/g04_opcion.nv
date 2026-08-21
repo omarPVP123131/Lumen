@@ -1,6 +1,0 @@
-funcion opcion<entero> buscar(entero n, lista<entero> v) {
-  para e en v { si (e == n) { retornar algun(e); } }
-  retornar ninguno;
-}
-imprimir(buscar(2, [1,2,3]));
-imprimir(buscar(9, [1,2,3]));

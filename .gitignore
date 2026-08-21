@@ -65,21 +65,6 @@ Cargo.lock.bak
 *.snap
 *.flatpak
 
-# Binarios compilados SIN extensión (AOT/C/standalone/baremetal — se regeneran)
-examples/hello
-examples/demo_fases_completas
-examples/demo_fronteras_totales
-examples/demo_matriz_simd_ia
-examples/demo_scheduler_concurrencia
-examples/test_cross_compile
-examples/test_neuro_self_healing
-stdlib/compiler/bench_fib
-
-# C transpilado por el backend AOT (fuentes generados, no se versionan)
-examples/demo_mobile_compilation.c
-examples/test_cross_compile.c
-*.temp.c
-
 # macOS / iOS Dynamic Libraries & Frameworks
 *.dylib
 *.framework/
@@ -96,14 +81,8 @@ credentials.json
 .credentials.json
 .registry_cache/
 
-# Salida de `lumen pack` / empaquetado de distribución
-dist_test/
-dist_test2/
-dist_test3/
-
 # ── 5. WEBASSEMBLY, NODE.JS & WEB PLAYGROUND ─────────────────────────────
 crates/lumen-wasm/pkg/
-crates/lumen-wasm/web/pkg/
 crates/lumen-wasm/target/
 node_modules/
 npm-debug.log*
@@ -129,9 +108,7 @@ captures/
 .cxx/
 android_build/
 bin/
-# `gen/` a secas excluia tambien gen/ del repo raiz, donde viven los fuzzers
-# que usa el CI. Se acota al directorio generado por Android.
-android/gen/
+gen/
 
 # ── 7. APPLE (macOS / iOS / Xcode) ───────────────────────────────────────
 .DS_Store
@@ -215,24 +192,6 @@ target.txt
 *.tmp.nv
 *.temp.c
 
-# Ficheros que los propios ejemplos de examples/ escriben al ejecutarse.
-# Aparecian como "untracked" tras cada barrido y se colaban en los commits.
-__test_*
-test_jr_*.txt
-test_big_sr.txt
-test_buffer_sr.csv
-test_s13_output.txt
-temp_log_real.txt
-temp_rot_real.txt*
-stream_data_real.txt
-source_real.txt
-destino_real.txt
-part_a.txt
-part_b.txt
-test.db
-sz
-sz.nv
-
 # ── 12. VARIABLES DE ENTORNO Y SECRETOS ──────────────────────────────────
 .env
 .env.*
@@ -243,8 +202,3 @@ sz.nv
 *.keystore
 id_rsa
 id_ed25519
-
-# ── 13. CORPUS DE FUZZING (se regeneran con gen/fuzz*.py) ────────────────
-# Los generadores llevan semilla fija: el corpus es reproducible, versionarlo
-# solo aniade miles de ficheros al repo.
-gen/fz*/

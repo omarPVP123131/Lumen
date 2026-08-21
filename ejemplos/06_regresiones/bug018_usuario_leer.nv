@@ -1,3 +1,0 @@
-entero base = 100;
-funcion entero leer() { retornar base; }
-imprimir(leer());

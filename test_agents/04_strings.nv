@@ -1,7 +1,0 @@
-// Sub-agent 4: Strings
-// Operaciones con cadenas de texto
-texto a = "Hola ";
-texto b = "Mundo";
-texto c = a + b;
-imprimir(c);
-imprimir(c == "Hola Mundo");

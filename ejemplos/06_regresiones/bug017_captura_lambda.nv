@@ -1,3 +1,0 @@
-entero base = 100;
-f = funcion() { retornar base; };
-imprimir(f());

@@ -19,6 +19,3 @@ path = "src/lib.rs"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-# BUG-145: el "Checksum SHA-256" que publish mostraba era un DefaultHasher
-# (SipHash de 64 bits), no SHA-256.
-sha2 = "0.10"

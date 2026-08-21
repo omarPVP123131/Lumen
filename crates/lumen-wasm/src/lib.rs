@@ -67,12 +67,7 @@ fn try_registered_call(js: &str) -> Option<String> {
 }
 
 // ── WASI eval stub ─────────────────────────────────────────────────────────
-// BUG-160: `wasm` y `wasi` son backends ALTERNATIVOS (cada uno define su propio
-// `LumenRuntime`, `js_eval`, etc.), pero los `cfg` sólo decían `feature = "wasi"`.
-// Con los dos activos —que es justo lo que hace `--all-features`, y lo que corre
-// el CI— el crate no compilaba: 14 errores de definición duplicada. La
-// exclusión mutua estaba en la cabeza de quien lo escribió, no en el código.
-#[cfg(all(feature = "wasi", not(feature = "wasm")))]
+#[cfg(feature = "wasi")]
 fn js_eval(_js: &str) -> String {
     "WASI: JS eval no disponible".to_string()
 }
@@ -227,12 +222,12 @@ impl LumenRuntime {
 }
 
 // ── LumenRuntime (WASI target — sin wasm-bindgen) ─────────────────────────
-#[cfg(all(feature = "wasi", not(feature = "wasm")))]
+#[cfg(feature = "wasi")]
 pub struct LumenRuntime {
     output: String,
 }
 
-#[cfg(all(feature = "wasi", not(feature = "wasm")))]
+#[cfg(feature = "wasi")]
 impl LumenRuntime {
     pub fn new() -> Self {
         let _ = lumen_vm::vm::JS_EVAL.set(js_eval);

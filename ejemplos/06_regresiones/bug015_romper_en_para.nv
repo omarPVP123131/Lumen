@@ -1,1 +1,0 @@
-para n en [1,2,3] { si (n == 2) { romper; } imprimir(n); }

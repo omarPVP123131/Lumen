@@ -11,11 +11,6 @@ pub struct Parser {
     pending_greater: bool,
     // Dentro de un arm de `elegir`, `|` separa patrones (OR) — nunca BinOp::BitOr.
     match_arm_pipe: bool,
-    // BUG-161: prototipos `funcion T f(...);` vistos, con su span. No emiten
-    // `Decl` (lo hace su definicion real), pero se guardan para comprobar que
-    // esa definicion existe: un prototipo huerfano debe ser un error, no un
-    // silencio — que es exactamente la leccion de BUG-151.
-    forward_decls: Vec<(String, Span)>,
 }
 
 impl Parser {
@@ -24,7 +19,6 @@ impl Parser {
             tokens,
             pos: 0,
             errors: Vec::new(),
-            forward_decls: Vec::new(),
             no_struct_init: false,
             type_params_stack: Vec::new(),
             pending_greater: false,
@@ -38,57 +32,19 @@ impl Parser {
             if self.check(&[TokenKind::Eof]) {
                 break;
             }
-            // BUG-161: un prototipo devuelve `None` sin ser un error, asi que
-            // hay que distinguirlo de un fallo real. Si el contador de
-            // prototipos crecio, no se sincroniza: `synchronize()` se comeria
-            // la declaracion siguiente.
-            let fwd_antes = self.forward_decls.len();
             match self.parse_decl_or_stmt() {
                 Some(node) => program.push(node),
                 None => {
-                    let era_prototipo = self.forward_decls.len() > fwd_antes;
-                    if !era_prototipo && !self.is_at_end() && !self.check(&[TokenKind::Eof]) {
+                    if !self.is_at_end() && !self.check(&[TokenKind::Eof]) {
                         self.synchronize();
                     }
                 }
             }
         }
-
-        // BUG-161: un prototipo sin definicion real es un error, no un silencio.
-        // Sin esto, `funcion entero f(entero x);` a secas desapareceria del AST
-        // y la llamada a `f` fallaria mucho mas tarde con un mensaje peor.
-        let definidas: std::collections::HashSet<&str> = program
-            .iter()
-            .filter_map(|n| match n {
-                DeclOrStmt::Decl(Decl::Function { name, .. }) => Some(name.as_str()),
-                _ => None,
-            })
-            .collect();
-        let huerfanos: Vec<(String, Span)> = self
-            .forward_decls
-            .iter()
-            .filter(|(n, _)| !definidas.contains(n.as_str()))
-            .cloned()
-            .collect();
-        for (nombre, span) in huerfanos {
-            self.error(
-                "E084",
-                format!("La función '{}' se declara pero nunca se define", nombre),
-                span,
-                format!(
-                    "Añade el cuerpo: 'funcion ... {}(...) {{ ... }}', o borra la declaración adelantada",
-                    nombre
-                ),
-            );
-        }
-
         (program, self.errors)
     }
 
     fn parse_decl_or_stmt(&mut self) -> Option<DeclOrStmt> {
-        // BUG-006: `resultado`/`opcion` sólo abren una declaración de tipo si
-        // van seguidos de `<`; en otro caso son identificadores normales y la
-        // línea se parsea como sentencia (asignación, llamada, etc.).
         if self.check(&[
             TokenKind::Numero,
             TokenKind::Entero,
@@ -97,13 +53,16 @@ impl Parser {
             TokenKind::Booleano,
             TokenKind::Lista,
             TokenKind::Array,
+            TokenKind::Resultado,
+            TokenKind::Result,
+            TokenKind::Opcion,
+            TokenKind::Option,
             TokenKind::Number,
             TokenKind::Integer,
             TokenKind::Float,
             TokenKind::String,
             TokenKind::Boolean,
-        ]) || self.check_generic_type_kw()
-            || (self.check_ident() && self.check_ident_next())
+        ]) || (self.check_ident() && self.check_ident_next())
             || self.check_next_is_tuple_type()
             || self.check_ident_next_is_generic_type()
         {
@@ -401,24 +360,6 @@ impl Parser {
             return None;
         }
         self.advance();
-
-        // BUG-161: declaracion adelantada (`funcion numero f(numero x);`), el
-        // patron habitual para recursion mutua. Antes de BUG-151 "funcionaba"
-        // por accidente: `parse_block` devolvia `None` en silencio y el
-        // prototipo se descartaba sin mas. Al volver ese `None` un error real
-        // (E017), 8 ejemplos que llevaban anios en el repo dejaron de parsear.
-        // El prototipo es sintaxis legitima: se acepta y se representa como una
-        // funcion de cuerpo vacio, que es justo lo que era antes.
-        if self.check(&[TokenKind::Semicolon]) {
-            self.advance();
-            // No se emite ningun `Decl`: la definicion REAL viene despues en el
-            // fichero y es la que vale. Emitir tambien el prototipo provocaria
-            // un E081 «definida mas de una vez» contra su propia definicion.
-            // Se anota el nombre para poder exigir que esa definicion exista.
-            self.forward_decls
-                .push((name, Span::merge(&start, &self.previous().span)));
-            return None;
-        }
 
         // Push type params into stack for body parsing
         let saved_type_params = self.type_params_stack.clone();
@@ -1231,20 +1172,6 @@ impl Parser {
     fn parse_block(&mut self) -> Option<Vec<DeclOrStmt>> {
         let mut stmts = Vec::new();
         if !self.check(&[TokenKind::LeftBrace]) {
-            // BUG-151: este `return None` era MUDO. El llamador (`parse_if`,
-            // `parse_while`, ...) lo propagaba con `?`, descartando la
-            // sentencia entera sin registrar ningun error; despues el bloque
-            // `{ ... }` se reparseaba como bloque suelto y se ejecutaba SIN su
-            // condicion. `si (1 == 2) basura { imprimir("x"); }` imprimia "x"
-            // y `lumen check` lo daba por valido. El unico sitio que usa esto
-            // como sondeo (`parse_block_stmt`) ya comprueba `LeftBrace` antes
-            // de llamar, asi que aqui la ausencia de `{` es siempre un error.
-            self.error(
-                "E017",
-                "Se esperaba '{' para abrir el bloque",
-                self.peek().span,
-                "Agrega '{' para abrir el bloque",
-            );
             return None;
         }
         self.advance();
@@ -1740,15 +1667,11 @@ impl Parser {
             return self.parse_destructure_assign_stmt(start);
         }
 
-        // Incluye soft keywords: `resultado = 5;` es una asignación válida.
-        if self.check_ident_soft() && self.check_next(&[TokenKind::Equal]) {
+        if self.check_ident() && self.check_next(&[TokenKind::Equal]) {
             let t = self.advance()?;
             let name = match t.kind {
                 TokenKind::Ident(s) => s,
-                ref kind => match Self::soft_keyword_name(kind) {
-                    Some(s) => s.to_string(),
-                    None => unreachable!(),
-                },
+                _ => unreachable!(),
             };
             self.advance();
             let value = Box::new(self.parse_expression()?);
@@ -2092,24 +2015,6 @@ impl Parser {
             };
             let op_span = self.peek().span;
             self.advance();
-
-            // BUG-108: `-9223372036854775808` es el entero más pequeño que cabe
-            // en 64 bits, pero su valor absoluto NO cabe. Como el signo es un
-            // operador unario aparte, parsear el literal por su cuenta lo
-            // rechazaría. Se reconoce aquí `-<literal entero>` como una unidad.
-            if op == UnOp::Negate {
-                if let TokenKind::NumLiteral(lit) = &self.peek().kind {
-                    if !lit.contains('.') {
-                        if let Ok(value) = format!("-{}", lit).parse::<i64>() {
-                            let lit_span = self.peek().span;
-                            self.advance();
-                            let span = Span::merge(&op_span, &lit_span);
-                            return Some(Expr::Int { value, span });
-                        }
-                    }
-                }
-            }
-
             let operand = self.parse_unary()?;
             let span = Span::merge(&op_span, &operand.span());
             Some(Expr::Unary {
@@ -2299,33 +2204,8 @@ impl Parser {
                     let value: f64 = s.parse().unwrap_or(0.0);
                     Some(Expr::Float { value, span })
                 } else {
-                    // BUG-108: un literal que no cabe en `entero` (64 bits con
-                    // signo) se convertía en 0 con `unwrap_or(0)`. El programa
-                    // compilaba y ejecutaba con un valor que nadie escribió:
-                    // `imprimir(9223372036854775808)` imprimía `0`. Ahora se
-                    // avisa al analizar en vez de inventar un número.
-                    match s.parse::<i64>() {
-                        Ok(value) => Some(Expr::Int { value, span }),
-                        Err(_) => {
-                            let s = s.clone();
-                            self.error(
-                                "E083",
-                                format!(
-                                    "El número '{}' no cabe en un 'entero' (64 bits con signo)",
-                                    s
-                                ),
-                                span,
-                                format!(
-                                    "El rango de 'entero' va de -9223372036854775808 a 9223372036854775807. Si necesitas ese valor, usa 'decimal' escribiendo '{}.0'",
-                                    s
-                                ),
-                            );
-                            // Se sigue analizando con 0 para poder reportar el
-                            // resto de errores del fichero; el programa no se
-                            // ejecutará porque el error ya está registrado.
-                            Some(Expr::Int { value: 0, span })
-                        }
-                    }
+                    let value: i64 = s.parse().unwrap_or(0);
+                    Some(Expr::Int { value, span })
                 }
             }
             TokenKind::StrLiteral(s) => Some(Expr::Str {
@@ -2337,14 +2217,6 @@ impl Parser {
             TokenKind::Falso | TokenKind::False => Some(Expr::Bool { value: false, span }),
             TokenKind::Ident(name) => {
                 let name = name.clone();
-                self.parse_call_or_ident(name, span)
-            }
-            // BUG-006: `resultado` / `opcion` como valor (lectura de la
-            // variable) cuando no van seguidos de `<`.
-            kind if Self::soft_keyword_name(kind).is_some()
-                && !matches!(self.peek().kind, TokenKind::Less) =>
-            {
-                let name = Self::soft_keyword_name(kind).unwrap().to_string();
                 self.parse_call_or_ident(name, span)
             }
             TokenKind::Funcion | TokenKind::Function => self.parse_lambda(span),
@@ -3585,52 +3457,6 @@ impl Parser {
         matches!(self.peek().kind, TokenKind::Ident(_))
     }
 
-    /// BUG-006: `resultado` / `opcion` son *soft keywords*: sólo introducen un
-    /// tipo cuando van seguidos de `<` (`resultado<entero, texto>`). En
-    /// cualquier otra posición son identificadores válidos, para que
-    /// `entero resultado = 0;` no rompa el parser (y no genere errores en
-    /// cascada en las líneas siguientes).
-    fn soft_keyword_name(kind: &TokenKind) -> Option<&'static str> {
-        match kind {
-            TokenKind::Resultado => Some("resultado"),
-            TokenKind::Result => Some("result"),
-            TokenKind::Opcion => Some("opcion"),
-            TokenKind::Option => Some("option"),
-            _ => None,
-        }
-    }
-
-    /// ¿El token en `pos` es un soft keyword usado como identificador?
-    /// Lo es cuando no va seguido de `<` (que lo convertiría en tipo genérico).
-    fn is_soft_ident_at(&self, pos: usize) -> bool {
-        let Some(tok) = self.tokens.get(pos) else {
-            return false;
-        };
-        if Self::soft_keyword_name(&tok.kind).is_none() {
-            return false;
-        }
-        !matches!(
-            self.tokens.get(pos + 1).map(|t| &t.kind),
-            Some(TokenKind::Less)
-        )
-    }
-
-    /// ¿El token actual es un identificador, contando soft keywords?
-    fn check_ident_soft(&self) -> bool {
-        self.check_ident() || self.is_soft_ident_at(self.pos)
-    }
-
-    /// ¿El token actual inicia un tipo genérico que exige `<`?
-    /// (`resultado<...>` / `opcion<...>` — no el uso como identificador).
-    fn check_generic_type_kw(&self) -> bool {
-        self.check(&[
-            TokenKind::Resultado,
-            TokenKind::Result,
-            TokenKind::Opcion,
-            TokenKind::Option,
-        ]) && self.check_next(&[TokenKind::Less])
-    }
-
     fn is_keyword(kind: &TokenKind) -> bool {
         matches!(
             kind,
@@ -3876,32 +3702,16 @@ impl Parser {
     }
 
     fn expect_ident(&mut self) -> Option<String> {
-        // BUG-006: acepta soft keywords (`resultado`, `opcion`) como nombre de
-        // variable siempre que no estén iniciando un tipo genérico.
-        let is_soft = self.is_soft_ident_at(self.pos);
         let token = self.advance()?;
         match token.kind {
             TokenKind::Ident(s) => Some(s),
-            ref kind if is_soft => Self::soft_keyword_name(kind).map(|s| s.to_string()),
-            ref kind => {
-                // Mensaje específico cuando el choque es con un tipo builtin:
-                // así el usuario ve la causa real en vez de un error genérico.
-                let kw = kind.as_str();
-                let (msg, help) = if kw.is_empty() {
-                    (
-                        "Se esperaba un nombre de variable".to_string(),
-                        "Escribe un identificador".to_string(),
-                    )
-                } else {
-                    (
-                        format!(
-                            "'{}' es una palabra reservada y no puede usarse como nombre",
-                            kw
-                        ),
-                        format!("Renombra la variable (por ejemplo '{}_valor')", kw),
-                    )
-                };
-                self.error("E011", &msg, token.span, &help);
+            _ => {
+                self.error(
+                    "E011",
+                    "Se esperaba un nombre de variable",
+                    token.span,
+                    "Escribe un identificador",
+                );
                 None
             }
         }

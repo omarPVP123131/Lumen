@@ -1,5 +1,0 @@
-// J01: Hello World (Junior)
-// Novato: Solo quiere ver algo en pantalla
-imprimir("Hola, mundo!");
-imprimir("Bienvenido a LÚMEN");
-imprimir(2024);

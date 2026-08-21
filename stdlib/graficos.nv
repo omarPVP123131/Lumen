@@ -50,7 +50,7 @@ funcion texto delay(entero ms) { retornar dormir(ms); }
 
 funcion entero ventana(texto titulo, entero x, entero y, entero w, entero h, entero flags) {
     si !__cargar() { retornar 0; }
-    entero buf = __ffi_asignar(titulo.largo() * 4 + 1);
+    entero buf = __ffi_asignar(titulo.largo() + 1);
     __ffi_escribir(buf, 0, titulo);
     __ffi_poke(buf, titulo.largo(), 0);
     entero win = __ffi_llamar(__sdl, "SDL_CreateWindow", "entero,entero,entero,entero,entero,entero",
@@ -184,7 +184,7 @@ funcion texto main_loop(entero win, entero ren, entero r, entero g, entero b) { 
 // ============================================================
 
 funcion entero cargar_textura(entero ren, texto archivo) {
-    entero buf = __ffi_asignar(archivo.largo() * 4 + 1);
+    entero buf = __ffi_asignar(archivo.largo() + 1);
     __ffi_escribir(buf, 0, archivo);
     __ffi_poke(buf, archivo.largo(), 0);
     entero surf = __ffi_llamar(__sdl, "SDL_LoadBMP_RW", "entero,entero", [buf, 0], "entero");

@@ -1,0 +1,25 @@
+git commit -F - <<'FIN'
+v3.0.0: 167 bugs corregidos, unificación y verificación en tres plataformas
+
+Unifica en una sola entrega el trabajo iniciado sobre la v2.4.6: los 8 bugs
+del reporte original y 159 más encontrados de forma activa.
+
+Correcciones de más impacto:
+- BUG-166/167: el regex nativo devolvía "false" a todo en Windows y macOS
+  (stubs en la rama no-POSIX) y desbordaba al reemplazar con patrones que
+  casan la cadena vacía. Motor propio por backtracking, sin dependencias.
+- BUG-165: <sys/resource.h> fuera de su guarda impedía TODA compilación
+  nativa en Windows.
+- BUG-152/154: la stdlib no viajaba en la instalación y el prefijo de
+  paquete se aplicaba mal.
+- BUG-151/161: bloques sin llave se ejecutaban en silencio; el arreglo
+  rompió las declaraciones adelantadas, restauradas con E084.
+- BUG-147/148/149/150: semántica de closures, structs y `prestado mut`.
+
+Verificación: 720 pruebas en verde en Linux y Windows, 393/393 en
+`lumen check`, 372 ejemplos ejecutados sin fallos, clippy sin avisos y
+cuatro fuzzers diferenciales (structs/listas, closures, rechazo y regex)
+sin divergencias.
+
+Detalle completo en INFORME-BUGS-LUMEN.md y CHANGELOG.md.
+FIN

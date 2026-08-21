@@ -1,8 +1,0 @@
-// Mapas: se construyen con los builtins __map_* (no hay literal {clave: valor})
-sea m = __map_nuevo();
-m = __map_poner(m, "a", 1);
-m = __map_poner(m, "b", 2);
-imprimir("obtener a  -> ", __map_obtener(m, "a"));
-imprimir("longitud   -> ", __map_longitud(m));
-imprimir("contiene z -> ", __map_contiene(m, "z"));
-imprimir("claves     -> ", __map_claves(m));

@@ -1,8 +1,0 @@
-// para-cada dentro de funcion con retorno
-funcion entero primero_par(lista<entero> l) {
-  para n en l {
-    si (n % 2 == 0) { retornar n; }
-  }
-  retornar -1;
-}
-imprimir(primero_par([1,3,4,5]));

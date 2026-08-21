@@ -1,4 +1,0 @@
-estructura P { nombre: texto, edad: entero }
-lista<P> ps = [P{nombre:"Ana", edad:30}, P{nombre:"Luis", edad:25}];
-para p en ps { imprimir(p.nombre); }
-imprimir(ps[1].edad);

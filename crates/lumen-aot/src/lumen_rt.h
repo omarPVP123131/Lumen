@@ -1,7 +1,6 @@
 #ifndef LUMEN_RT_H
 #define LUMEN_RT_H
 
-#include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,11 +10,6 @@
 
 /* POSIX headers for non-Windows (Linux + macOS) */
 #if !defined(_WIN32)
-/* BUG-165: <sys/resource.h> estaba incluido ARRIBA, fuera de este bloque, asi
- * que TODO binario nativo generado en Windows fallaba a compilar con
- * "fatal error: sys/resource.h: No such file or directory". Solo se necesita
- * para getrlimit/setrlimit, que son POSIX. */
-#include <sys/resource.h>
 #include <unistd.h>
 #include <pthread.h>
 #if !defined(__APPLE__)
@@ -41,21 +35,7 @@ typedef struct Val {
   struct Val (*fp)(void);
   const char* en;
   const char* vr;
-  /* BUG-032: entorno capturado por la closure (nombres + valores). Se llena
-   * al crear la referencia a funcion y se vuelca en las globales justo antes
-   * de invocarla, para que la closure siga siendo valida cuando el marco que
-   * la creo ya no existe y dos instancias no compartan estado. */
-  struct _Env* env;
-  /* BUG-083: copy-on-write. 1 = `items` puede estar compartido con otro Val,
-   * asi que hay que materializar una copia privada antes de mutarlo. */
-  int shared;
 } Val;
-
-typedef struct _Env {
-  int n;
-  const char** names;
-  struct Val* vals;
-} _Env;
 
 #define T_INT 0
 #define T_FLT 1
@@ -73,184 +53,9 @@ typedef struct _Env {
 #define T_STT 13
 #define T_MAP 14
 
-/* BUG-051: la pila de valores no tenia comprobacion de limites y las funciones
- * LUMEN se emiten como funciones C recursivas, asi que una recursion infinita
- * desbordaba la pila del proceso y moria por SEGFAULT silencioso (rc=139, sin
- * ningun mensaje). La VM ya aborta con un error legible (BUG-049); el binario
- * nativo debe comportarse igual. Se vigilan las dos cosas: el tope de ST[] y
- * la profundidad de la pila de C. */
-/* La pila de valores crece bajo demanda: un programa con recursion legitima
- * profunda (p.ej. suma(100000)) necesita mucho mas de 16384 ranuras, y la VM
- * lo admite. Un tope fijo aqui habria roto la paridad VM/AOT. */
-/* BUG-081: la pila de operandos y el control de profundidad eran globales
- * COMPARTIDOS entre hilos. Las corrutinas del backend C corren en hilos
- * pthread propios, asi que el hilo de la corrutina pisaba `SP` del principal y
- * medía su profundidad contra `_stack_base` de OTRA pila: el binario abortaba
- * con "pila agotada / recursion infinita" en cuanto se reanudaba una corrutina,
- * mientras la VM ejecutaba el programa entero sin problema. Cada hilo necesita
- * su propia pila de operandos y su propio contador. */
-#if defined(_WIN32)
-#define _LTLS __declspec(thread)
-#else
-#define _LTLS __thread
-#endif
-static _LTLS Val *ST = 0;
-static _LTLS int ST_CAP = 0;
-static _LTLS int SP = 0;
-#define MAX_CALL_DEPTH 250000
-static _LTLS int _depth = 0;
-static _LTLS char *_stack_base = 0;
-/* Margen de seguridad respecto al limite real de pila del hilo. */
-static _LTLS size_t _stack_limit = 0;
-
-/* BUG-022: manejadores de `intentar/atrapar`. El backend C usa `goto`, que no
- * puede saltar entre funciones, asi que el desenrollado se hace con
- * setjmp/longjmp: `_hnd_push` marca el punto de retorno y cualquier error del
- * runtime salta ahi en vez de llamar a exit(). */
-#define MAX_HND 256
-typedef struct {
-  jmp_buf env;
-  int sp;    /* altura de la pila de valores al instalarlo */
-  int depth; /* profundidad de llamadas al instalarlo */
-} _Hnd;
-static _Hnd _hnd[MAX_HND];
-static int _hnd_n = 0;
-/* Mensaje del error en curso, para ligarlo a la variable del `atrapar`. */
-static char _hnd_msg[512];
-
-/* BUG-104: variante de `_rt_fatal` para division por cero, indice fuera de rango
- * y campo inexistente. Historicamente salia con codigo 3 mientras la VM salia
- * con 1 para EL MISMO error, asi que un script que comprobara el codigo de
- * salida veia dos lenguajes distintos segun el backend. Ahora ambos usan 1;
- * se conserva la funcion aparte porque su semantica de `atrapar` difiere
- * (liga el mensaje sin el prefijo "Error: "). */
-static void _rt_error3(const char *msg) __attribute__((noreturn));
-
-static void _rt_fatal(const char *msg) {
-  /* Si hay un `atrapar` vigente, esto no es fatal: se desenrolla hasta el. */
-  if (_hnd_n > 0) {
-    snprintf(_hnd_msg, sizeof(_hnd_msg), "%s", msg);
-    _Hnd *h = &_hnd[_hnd_n - 1];
-    longjmp(h->env, 1);
-  }
-  fflush(stdout);
-  fprintf(stderr, "Error: %s\n", msg);
-  exit(1);
-}
-
-static void _rt_error3(const char *msg) {
-  if (_hnd_n > 0) {
-    /* Atrapado: el mensaje se liga tal cual a la variable del `atrapar`, igual
-       que en la VM (sin el prefijo "Error: "). */
-    snprintf(_hnd_msg, sizeof(_hnd_msg), "%s", msg);
-    _Hnd *h = &_hnd[_hnd_n - 1];
-    longjmp(h->env, 1);
-  }
-  fflush(stdout);
-  fprintf(stderr, "Error: %s\n", msg);
-  exit(1);
-}
-
-/* Duplica la capacidad de la pila de valores. Se aborta si el SO no puede dar
- * mas memoria, en vez de corromper el heap en silencio. */
-static void _st_grow(void) {
-  int _n = ST_CAP ? ST_CAP * 2 : 16384;
-  Val *_p = (Val *)realloc(ST, (size_t)_n * sizeof(Val));
-  if (!_p) {
-    _rt_fatal("Sin memoria para la pila de valores. "
-              "\xc2\xbfHay una recursi\xc3\xb3n infinita?");
-  }
-  ST = _p;
-  ST_CAP = _n;
-}
-/* BUG-081: init de la pila de operandos para hilos secundarios (corrutinas).
-   Un hilo pthread tiene una pila mucho menor que la del principal (8 MiB por
-   defecto y sin crecimiento bajo demanda), asi que el margen se fija mas bajo. */
-static void _coro_stack_init(void) {
-  char _probe;
-  _stack_base = &_probe;
-  _depth = 0;
-  if (!ST) _st_grow();
-  _stack_limit = 4UL * 1024 * 1024;
-}
-
-#ifdef _WIN32
-/* BUG-165: en Windows no hay getrlimit/RLIMIT_STACK. El tamano de pila se fija
- * al enlazar (1 MiB por defecto, no los 8 MiB tipicos de Linux), asi que aqui
- * se consulta el rango real del hilo en vez de intentar ampliarlo. Sin esto el
- * limite quedaba sin inicializar y la deteccion de desbordamiento —lo que
- * convierte un segfault mudo en un mensaje— no protegia nada. */
-static void _stack_init(void) {
-  char _probe;
-  _stack_base = &_probe;
-  if (!ST) _st_grow();
-  _stack_limit = 1UL * 1024 * 1024 - 256UL * 1024; /* conservador por defecto */
-#if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0602
-  {
-    ULONG_PTR _low = 0, _high = 0;
-    GetCurrentThreadStackLimits(&_low, &_high);
-    if (_high > _low) {
-      size_t _total = (size_t)(_high - _low);
-      /* Deja ~256 KiB de reserva para poder formatear el error e imprimirlo. */
-      _stack_limit = _total > 512UL * 1024 ? _total - 256UL * 1024 : _total / 2;
-    }
-  }
-#endif
-}
-#else
-static void _stack_init(void) {
-  char _probe;
-  struct rlimit _rl;
-  _stack_base = &_probe;
-  if (!ST) _st_grow();
-  /* Un marco de funcion C gasta bastante mas pila que un marco de la VM, asi
-   * que con los 8 MiB por defecto un programa con recursion legitima profunda
-   * (suma(100000)) abortaba en nativo aunque la VM lo resolviera. Se sube el
-   * limite blando hasta el duro: en Linux la pila del hilo principal crece
-   * bajo demanda hasta RLIMIT_STACK, de modo que subirlo aqui ya da margen. */
-  if (getrlimit(RLIMIT_STACK, &_rl) == 0) {
-    rlim_t _want = (rlim_t)1024 * 1024 * 1024; /* 1 GiB */
-    if (_rl.rlim_max != RLIM_INFINITY && _want > _rl.rlim_max) {
-      _want = _rl.rlim_max;
-    }
-    if (_rl.rlim_cur != RLIM_INFINITY && _want > _rl.rlim_cur) {
-      _rl.rlim_cur = _want;
-      if (setrlimit(RLIMIT_STACK, &_rl) != 0) {
-        (void)getrlimit(RLIMIT_STACK, &_rl);
-      }
-    }
-  }
-  _stack_limit = 6UL * 1024 * 1024;
-  if (getrlimit(RLIMIT_STACK, &_rl) == 0) {
-    if (_rl.rlim_cur == RLIM_INFINITY) {
-      _stack_limit = (size_t)1024 * 1024 * 1024;
-    } else if (_rl.rlim_cur > 2UL * 1024 * 1024) {
-      /* Deja ~1 MiB de reserva para poder formatear el error e imprimirlo. */
-      _stack_limit = (size_t)_rl.rlim_cur - 1024UL * 1024;
-    }
-  }
-}
-#endif /* _WIN32 */
-
-/* Se llama al entrar en cada funcion LUMEN. */
-static void _ckdepth(void) {
-  char _probe;
-  size_t _used;
-  if (++_depth > MAX_CALL_DEPTH) {
-    _rt_fatal("Profundidad m\xc3\xa1xima de llamadas superada (250000). "
-              "\xc2\xbfHay una recursi\xc3\xb3n infinita?");
-  }
-  if (_stack_base) {
-    _used = (size_t)(_stack_base > &_probe ? _stack_base - &_probe
-                                           : &_probe - _stack_base);
-    if (_used > _stack_limit) {
-      _rt_fatal("Profundidad m\xc3\xa1xima de llamadas superada "
-                "(pila agotada). \xc2\xbfHay una recursi\xc3\xb3n infinita?");
-    }
-  }
-}
-
-#define PUSH(v) (((SP) >= ST_CAP ? _st_grow() : (void)0), ST[(SP)++] = (v))
+static Val ST[16384];
+static int SP = 0;
+#define PUSH(v) (ST[(SP)++] = (v))
 #define POP() (ST[--(SP)])
 #define TOP() (ST[SP - 1])
 
@@ -314,169 +119,15 @@ static Val _vfref(const char* n, Val (*fp)(void)) {
   v.t = T_FRE;
   v.s = n;
   v.fp = fp;
-  v.env = 0;
   return v;
 }
-
-/* BUG-032: captura por valor de los nombres indicados, en el momento de crear
- * la closure. Cada `_vfclos` produce un entorno propio. */
-static Val _vfclos(const char* n, Val (*fp)(void), const char** names, int cnt) {
-  Val v = _vfref(n, fp);
-  if (cnt > 0) {
-    _Env* e = (_Env*)malloc(sizeof(_Env));
-    e->n = cnt;
-    e->names = (const char**)malloc((size_t)cnt * sizeof(char*));
-    e->vals = (Val*)malloc((size_t)cnt * sizeof(Val));
-    for (int i = 0; i < cnt; i++) {
-      e->names[i] = names[i];
-      e->vals[i] = gv[_fv(names[i])];
-    }
-    v.env = e;
-  }
-  return v;
-}
-
-/* BUG-149: al volver de una closure, el llamador restaura sus propias
- * variables (BUG-061) para que una lambda recursiva no se pise a si misma.
- * Esa restauracion tambien deshacia, sin querer, la mutacion que la closure
- * acababa de hacer sobre una variable CAPTURADA: `inc(5)` dejaba x=5 y el
- * restore lo devolvia a 0. Para las variables que la closure capturo, el
- * valor bueno es el de su entorno, no el que el llamador guardo. */
-static Val _env_or(Val cf, const char* name, Val saved) {
-  if (cf.env) {
-    _Env* e = cf.env;
-    for (int i = 0; i < e->n; i++)
-      if (!strcmp(e->names[i], name)) return e->vals[i];
-  }
-  return saved;
-}
-
 static Val _fref_call(Val v) {
   if (!v.fp) return _v_void();
-  if (v.env) {
-    /* Restaura el entorno capturado y lo deshace al volver, para no pisar las
-     * variables homonimas del llamador. */
-    _Env* e = v.env;
-    Val* saved = (Val*)malloc((size_t)e->n * sizeof(Val));
-    int* slots = (int*)malloc((size_t)e->n * sizeof(int));
-    Val r;
-    for (int i = 0; i < e->n; i++) {
-      slots[i] = _fv(e->names[i]);
-      saved[i] = gv[slots[i]];
-      gv[slots[i]] = e->vals[i];
-    }
-    r = v.fp();
-    /* BUG-052: antes de deshacer, guarda el valor final en el entorno de ESTA
-     * closure, para que `n = n + 1` persista de una llamada a la siguiente. El
-     * entorno es propio de cada instancia, asi que no se contaminan entre si. */
-    for (int i = 0; i < e->n; i++) e->vals[i] = gv[slots[i]];
-    /* BUG-149: la restauracion incondicional del valor previo descartaba la
-     * mutacion de cara al entorno que declara la variable: la closure veia su
-     * propio estado avanzar (5, 10, 15) mientras la variable original seguia
-     * en 0. La captura es UNA sola variable, no dos copias divergentes, asi
-     * que el valor final se propaga a la global, igual que hace la VM. El
-     * aislamiento entre instancias que introdujo BUG-032 lo sigue dando
-     * `e->vals`, que es propio de cada closure: al entrar, cada una reinstala
-     * su estado, de modo que dos closures de la misma factoria no se pisan.
-     * `saved` deja de usarse para restaurar, pero se conserva para las
-     * variables que la closure NO capturo. */
-    for (int i = 0; i < e->n; i++) gv[slots[i]] = e->vals[i];
-    (void)saved;
-    free(saved);
-    free(slots);
-    return r;
-  }
   return v.fp();
 }
 
 static int _isnum(Val v) { return v.t == T_INT || v.t == T_FLT || v.t == T_BOL; }
 static double _asf(Val v) { return v.t == T_FLT ? v.f : (double)v.i; }
-
-/* ── Conversiones y matemáticas públicas (BUG-001 / BUG-002 / BUG-007) ──
-   Réplica exacta de parse_int_value / parse_float_value de la VM para que el
-   binario nativo y el intérprete den el mismo resultado. */
-static int _parse_f64(Val v, double* out) {
-  if (v.t == T_FLT) { *out = v.f; return 1; }
-  if (v.t == T_INT || v.t == T_BOL) { *out = (double)v.i; return 1; }
-  if (v.t == T_STR && v.s) {
-    const char* p = v.s;
-    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
-    if (!*p) return 0;
-    char* end = NULL;
-    double d = strtod(p, &end);
-    if (end == p) return 0;
-    while (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r') end++;
-    if (*end) return 0;
-    *out = d;
-    return 1;
-  }
-  return 0;
-}
-
-/* BUG-114: convertir a int64 un `double` que no cabe en el rango es
-   comportamiento indefinido en C: `a_entero(1.0e300)` devolvia
-   -9223372036854775808 en el binario nativo mientras la VM devolvia
-   9223372036854775807. El `as i64` de Rust —que el comentario original decia
-   imitar— SATURA a los extremos y convierte NaN en 0. Se replica aqui. */
-static int64_t _f2i_sat(double d) {
-  if (isnan(d)) return 0;
-  if (d >= 9223372036854775808.0) return INT64_MAX;
-  if (d <= -9223372036854775808.0) return INT64_MIN;
-  return (int64_t)d; /* trunca hacia cero */
-}
-
-static Val _b_a_entero(Val v) {
-  double d;
-  if (!_parse_f64(v, &d)) return _v_int(0);
-  return _v_int(_f2i_sat(d));
-}
-
-static Val _b_a_decimal(Val v) {
-  double d;
-  if (!_parse_f64(v, &d)) return _v_flt(0.0);
-  return _v_flt(d);
-}
-
-static Val _b_es_numero(Val v) {
-  double d;
-  return _v_bool(_parse_f64(v, &d));
-}
-
-static Val _b_abs(Val v) {
-  if (v.t == T_INT) return _v_int(v.i < 0 ? -v.i : v.i);
-  double d;
-  if (!_parse_f64(v, &d)) return _v_int(0);
-  return _v_flt(fabs(d));
-}
-
-/* want_max != 0 → maximo(); preserva entero cuando ambos lo son. */
-static Val _b_minmax(Val a, Val b, int want_max) {
-  if (a.t == T_INT && b.t == T_INT)
-    return _v_int(((a.i > b.i) == (want_max != 0)) ? a.i : b.i);
-  double x = 0.0, y = 0.0;
-  _parse_f64(a, &x);
-  _parse_f64(b, &y);
-  return _v_flt(((x > y) == (want_max != 0)) ? x : y);
-}
-
-/* modo: 0 = raiz, 1 = piso, 2 = techo, 3 = redondear */
-static Val _b_math1(Val v, int mode) {
-  double d = 0.0;
-  _parse_f64(v, &d);
-  switch (mode) {
-    case 0: return _v_flt(sqrt(d));
-    case 1: return _v_flt(floor(d));
-    case 2: return _v_flt(ceil(d));
-    default: return _v_flt(round(d));
-  }
-}
-
-static Val _b_potencia(Val b, Val e) {
-  double x = 0.0, y = 0.0;
-  _parse_f64(b, &x);
-  _parse_f64(e, &y);
-  return _v_flt(pow(x, y));
-}
 
 static inline int _eq(Val a, Val b) {
   if (__builtin_expect(a.t == T_INT && b.t == T_INT, 1)) return a.i == b.i;
@@ -498,32 +149,6 @@ static inline int _eq(Val a, Val b) {
       for (int i = 0; i < a.argc; i++)
         if (!_eq(a.items[i], b.items[i])) return 0;
       return 1;
-    /* BUG-038: los structs no tenían rama y caían en `default`, que compara
-       `a.i` — basura para un struct — dando `true` para structs distintos.
-       La VM sí los compara por contenido (BUG-030). Los campos se guardan
-       intercalados nombre/valor, de ahí el paso de 2 en 2. */
-    case T_STT: {
-      if (a.en && b.en && strcmp(a.en, b.en) != 0) return 0;
-      if (a.argc != b.argc) return 0;
-      for (int i = 0; i < a.argc; i++) {
-        if (strcmp(a.items[2 * i].s, b.items[2 * i].s) != 0) return 0;
-        if (!_eq(a.items[2 * i + 1], b.items[2 * i + 1])) return 0;
-      }
-      return 1;
-    }
-    /* BUG-038: `ninguno == ninguno` y `error(x) == error(y)`. */
-    case T_NON:
-      return 1;
-    case T_ERR:
-      return _eq(a.items[0], b.items[0]);
-    case T_MAP: {
-      if (a.argc != b.argc) return 0;
-      for (int i = 0; i < a.argc; i++) {
-        if (!_eq(a.items[2 * i], b.items[2 * i])) return 0;
-        if (!_eq(a.items[2 * i + 1], b.items[2 * i + 1])) return 0;
-      }
-      return 1;
-    }
     default:
       return a.i == b.i;
   }
@@ -558,19 +183,6 @@ static int _truthy(Val v) {
   }
 }
 
-/* BUG-110: la VM rechaza los desplazamientos fuera de 0-63, pero en C
- * `x << 64` es comportamiento indefinido: el binario nativo devolvia basura
- * (o 0, o el propio operando) mientras la VM daba un error claro. Se valida
- * igual que la VM para que ambos backends coincidan. */
-static int64_t _shift_amt(int64_t y) {
-  if (y < 0 || y > 63) {
-    char _m[96];
-    snprintf(_m, sizeof(_m), "Desplazamiento %lld fuera de rango (0-63)", (long long)y);
-    _rt_error3(_m);
-  }
-  return y;
-}
-
 static Val _arith(int op, Val a, Val b) {
   int isf = a.t == T_FLT || b.t == T_FLT;
   if (!isf) {
@@ -579,8 +191,8 @@ static Val _arith(int op, Val a, Val b) {
       case 1: return _v_int(x + y);
       case 3: return _v_int(x - y);
       case 4: return _v_int(x * y);
-      case 5: if (!y) { _rt_error3("División por cero"); } return _v_int(x / y);
-      case 6: if (!y) { _rt_error3("División por cero"); } return _v_int(x % y);
+      case 5: if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return _v_int(x / y);
+      case 6: if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return _v_int(x % y);
     }
     return _v_int(0);
   }
@@ -589,11 +201,8 @@ static Val _arith(int op, Val a, Val b) {
     case 1: return _v_flt(x + y);
     case 3: return _v_flt(x - y);
     case 4: return _v_flt(x * y);
-    /* BUG-089: la division decimal por cero daba `inf`/`nan` en el binario
-       nativo mientras que la VM aborta con "Division por cero". El mismo
-       programa terminaba bien compilado e imprimia inf, o fallaba con la VM. */
-    case 5: if (y == 0.0) { _rt_error3("División por cero"); } return _v_flt(x / y);
-    case 6: if (y == 0.0) { _rt_error3("División por cero"); } return _v_flt(fmod(x, y));
+    case 5: return _v_flt(x / y);
+    case 6: return _v_flt(fmod(x, y));
   }
   return _v_flt(0);
 }
@@ -607,8 +216,8 @@ static inline Val _bin(int op, Val a, Val b) {
       case 1:  return (Val){.i = x + y, .t = T_INT};
       case 3:  return (Val){.i = x - y, .t = T_INT};
       case 4:  return (Val){.i = x * y, .t = T_INT};
-      case 5:  if (!y) { _rt_error3("División por cero"); } return (Val){.i = x / y, .t = T_INT};
-      case 6:  if (!y) { _rt_error3("División por cero"); } return (Val){.i = x % y, .t = T_INT};
+      case 5:  if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return (Val){.i = x / y, .t = T_INT};
+      case 6:  if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return (Val){.i = x % y, .t = T_INT};
       case 7:  return (Val){.i = (x == y), .t = T_BOL};
       case 8:  return (Val){.i = (x != y), .t = T_BOL};
       case 9:  return (Val){.i = (x < y), .t = T_BOL};
@@ -619,8 +228,8 @@ static inline Val _bin(int op, Val a, Val b) {
       case 14: return (Val){.i = (x != 0 || y != 0), .t = T_BOL};
       case 15: return (Val){.i = x | y, .t = T_INT};
       case 16: return (Val){.i = x & y, .t = T_INT};
-      case 17: return (Val){.i = x << _shift_amt(y), .t = T_INT};
-      case 18: return (Val){.i = x >> _shift_amt(y), .t = T_INT};
+      case 17: return (Val){.i = x << y, .t = T_INT};
+      case 18: return (Val){.i = x >> y, .t = T_INT};
       case 19: return (Val){.i = x ^ y, .t = T_INT};
     }
   }
@@ -646,8 +255,8 @@ static inline Val _bin(int op, Val a, Val b) {
     case 14: return _v_bool(_truthy(a) || _truthy(b));
     case 15: return _v_int((int64_t)_asf(a) | (int64_t)_asf(b));
     case 16: return _v_int((int64_t)_asf(a) & (int64_t)_asf(b));
-    case 17: return _v_int((int64_t)_asf(a) << _shift_amt((int64_t)_asf(b)));
-    case 18: return _v_int((int64_t)_asf(a) >> _shift_amt((int64_t)_asf(b)));
+    case 17: return _v_int((int64_t)_asf(a) << (int64_t)_asf(b));
+    case 18: return _v_int((int64_t)_asf(a) >> (int64_t)_asf(b));
     case 19: return _v_int((int64_t)_asf(a) ^ (int64_t)_asf(b));
   }
   return _v_int(0);
@@ -658,53 +267,28 @@ static Val _neg(Val a) {
   return _v_int(-a.i);
 }
 static Val _not(Val a) { return _v_bool(!_truthy(a)); }
-/* BUG-112: `_asf` convierte a `double`, y un `double` no puede representar
-   todos los int64: `~9223372036854775807` daba 9223372036854775807 en el
-   binario nativo (el valor se redondeaba al pasar por coma flotante) mientras
-   la VM daba -9223372036854775808. El complemento a uno es una operación
-   entera; no debe pasar por `double`. */
-static Val _bnot(Val a) {
-  int64_t x = (a.t == T_FLT) ? (int64_t)a.f : a.i;
-  return _v_int(~x);
-}
+static Val _bnot(Val a) { return _v_int(~(int64_t)_asf(a)); }
 
-/* BUG-083: `_dcp` clonaba en PROFUNDIDAD en cada paso de argumento. Un bucle
-   que acumulaba en una lista de structs (el patron `b = f(b, ...)`, habitual en
-   la stdlib grafica) copiaba la lista entera en cada vuelta: coste O(n^2) en
-   tiempo Y en memoria, porque ademas ninguna copia se liberaba nunca. Con 400
-   elementos el binario ya gastaba 534 MB y con 800 lo mataba el OOM killer,
-   mientras la VM ejecutaba lo mismo sin despeinarse.
-
-   Ahora la copia es PEREZOSA (copy-on-write): `_dcp` comparte el buffer y lo
-   marca como compartido; solo los dos puntos que mutan in situ (`_arr_set` y
-   `_st_set`) materializan una copia privada antes de escribir. La semantica de
-   valor se conserva: nadie observa una escritura ajena. */
-static inline Val _cow_unshare(Val v);
 static inline Val _dcp(Val v) {
   if (__builtin_expect(v.t <= T_BOL || v.t == T_STR || v.t == T_NON || v.t == T_VOD, 1)) return v;
-  if (v.t == T_ARR || v.t == T_TUP || v.t == T_ENM || v.t == T_MAP || v.t == T_STT) {
+  if (v.t == T_ARR || v.t == T_TUP || v.t == T_ENM) {
     Val nv = v;
-    nv.shared = 1;
+    nv.items = (Val*)malloc(sizeof(Val) * (v.argc > 0 ? v.argc : 1));
+    for (int i = 0; i < v.argc; i++) nv.items[i] = _dcp(v.items[i]);
     return nv;
   }
-
-  return v;
-}
-
-/* BUG-083: materializa una copia privada del buffer si estaba compartido.
-   Solo se llama desde los puntos que mutan `items` in situ. */
-static inline Val _cow_unshare(Val v) {
-  if (!v.shared || !v.items) { v.shared = 0; return v; }
-  int n = (v.t == T_MAP || v.t == T_STT) ? v.argc * 2 : v.argc;
-  Val* ni = (Val*)malloc(sizeof(Val) * (size_t)(n > 0 ? n : 1));
-  for (int i = 0; i < n; i++) {
-    ni[i] = v.items[i];
-    /* Los hijos quedan referenciados por DOS padres (el original y esta
-       copia), asi que pasan a estar compartidos ellos tambien. */
-    if (ni[i].items) ni[i].shared = 1;
+  if (v.t == T_MAP) {
+    Val nv = v;
+    nv.items = (Val*)malloc(sizeof(Val) * (v.argc > 0 ? v.argc * 2 : 2));
+    for (int i = 0; i < v.argc * 2; i++) nv.items[i] = _dcp(v.items[i]);
+    return nv;
   }
-  v.items = ni;
-  v.shared = 0;
+  if (v.t == T_STT) {
+    Val nv = v;
+    nv.items = (Val*)malloc(sizeof(Val) * (v.argc > 0 ? v.argc * 2 : 2));
+    for (int i = 0; i < v.argc * 2; i++) nv.items[i] = _dcp(v.items[i]);
+    return nv;
+  }
   return v;
 }
 
@@ -727,85 +311,24 @@ static Val _arr_push(Val a, Val x) {
   ns[a.argc] = x;
   a.argc++;
   a.items = ns;
-  a.shared = 0; /* BUG-083: buffer recien creado, es privado */
   return a;
 }
-/* BUG-041: indexar un texto (`s[0]`) reventaba con "Indice 0 fuera de rango
-   (largo: 0)" en los binarios nativos, porque `_arr_get` sólo miraba `argc`,
-   que en un texto vale 0. La VM devuelve el CARÁCTER en esa posición (no el
-   byte), así que aquí recorremos la cadena respetando UTF-8. */
-static Val _str_idx(Val a, int64_t ix) {
-  const char* p = a.s ? a.s : "";
-  int64_t n = 0;
-  while (*p) {
-    const unsigned char* q = (const unsigned char*)p;
-    int len = 1;
-    if ((*q & 0x80) != 0) {
-      if ((*q & 0xE0) == 0xC0) len = 2;
-      else if ((*q & 0xF0) == 0xE0) len = 3;
-      else if ((*q & 0xF8) == 0xF0) len = 4;
-    }
-    if (n == ix) {
-      char* b = (char*)malloc((size_t)len + 1);
-      for (int i = 0; i < len; i++) b[i] = p[i];
-      b[len] = 0;
-      return _v_str(b);
-    }
-    p += len;
-    n++;
-  }
-  { char _m[128]; snprintf(_m, sizeof(_m), "Índice %lld fuera de rango (largo: %lld)", (long long)ix, (long long)n); _rt_error3(_m); }
-  return _v_void();
-}
-
 static Val _arr_get(Val a, int64_t ix) {
-  if (a.t == T_STR) return _str_idx(a, ix);
-  if (a.t == T_MAP) {
-    /* BUG-041: `m[k]` con clave entera sobre un mapa debe buscar la clave,
-       no tratar el mapa como un array posicional. */
-    for (int i = 0; i < a.argc; i++)
-      if (_eq(a.items[2 * i], _v_int(ix))) return a.items[2 * i + 1];
-    return _v_void();
-  }
   if (ix < 0 || ix >= a.argc) {
-    { char _m[128]; snprintf(_m, sizeof(_m), "Índice %lld fuera de rango (largo: %d)", (long long)ix, a.argc); _rt_error3(_m); }
+    fprintf(stderr, "Indice %lld fuera de rango (largo: %d)\n", (long long)ix, a.argc);
+    exit(3);
   }
-  {
-    /* BUG-083: si el contenedor esta compartido, el hijo tambien lo esta:
-       mutarlo in situ escribiria en el buffer del original. */
-    Val _c = a.items[ix];
-    if (a.shared && _c.items) _c.shared = 1;
-    return _c;
-  }
+  return a.items[ix];
 }
 static Val _arr_set(Val a, int64_t ix, Val x) {
   if (ix < 0 || ix >= a.argc) {
-    { char _m[128]; snprintf(_m, sizeof(_m), "Índice %lld fuera de rango (largo: %d)", (long long)ix, a.argc); _rt_error3(_m); }
+    fprintf(stderr, "Indice %lld fuera de rango (largo: %d)\n", (long long)ix, a.argc);
+    exit(3);
   }
-  a = _cow_unshare(a); /* BUG-083 */
   a.items[ix] = x;
   return a;
 }
-/* BUG-035: `largo(texto)` debe contar CARACTERES, como hace la VM
-   (`chars().count()`), no bytes. `strlen` daba 13 donde la VM decía 7 para
-   "áéíóú ñ", así que el mismo programa producía resultados distintos según el
-   backend. Contamos los bytes que no son continuación UTF-8 (10xxxxxx). */
-static int64_t _utf8_len(const char* s) {
-  if (!s) return 0;
-  int64_t n = 0;
-  for (const unsigned char* p = (const unsigned char*)s; *p; p++) {
-    if ((*p & 0xC0) != 0x80) n++;
-  }
-  return n;
-}
-/* BUG-048: `s.largo()` sobre un texto devolvía 0 (los textos no usan `argc`),
-   así que un `mientras i < s.largo()` no entraba nunca y la función devolvía
-   "" sin error. La forma `largo(s)` sí funcionaba: dos caminos, un solo
-   resultado esperado. */
-static Val _arr_len(Val a) {
-  if (a.t == T_STR) return _v_int(_utf8_len(a.s));
-  return _v_int(a.argc);
-}
+static Val _arr_len(Val a) { return _v_int(a.argc); }
 static Val _arr_rev(Val a) {
   Val* ns = (Val*)malloc(sizeof(Val) * (a.argc + 1));
   for (int i = 0; i < a.argc; i++) ns[i] = a.items[a.argc - 1 - i];
@@ -842,42 +365,6 @@ static Val _some(Val x) {
 }
 static Val _none(void) { Val v = _v_int(0); v.t = T_NON; return v; }
 
-/* BUG-037: soporte de `__frame_param`, que implementa el write-back de
-   `prestado mut` (BUG-020). La VM guarda el marco recién retornado en
-   `last_frame`; aquí hacemos lo mismo copiando los parámetros del callee a
-   `_fp` JUSTO al volver de la llamada, antes de que el llamador restaure sus
-   propias variables (si comparten nombre, la restauración los pisaría). */
-#define MAX_FP 32
-static Val _fp[MAX_FP];
-static int _fpc = 0;
-static Val _frame_param(int64_t i) {
-  if (i >= 0 && i < _fpc) return _fp[i];
-  return _v_void();
-}
-
-/* BUG-039: `a_entero_seguro` / `a_decimal_seguro` estaban declaradas como
-   builtins ensombrecibles pero NO implementadas en el backend C: la llamada
-   caía en el camino de función desconocida, devolvía void y el `elegir` sobre
-   el `resultado` no casaba con ningún caso, así que no se imprimía nada.
-   Se replica la semántica de la VM, incluido el texto del error. */
-static Val _b_a_entero_seguro(Val v) {
-  double d;
-  if (!_parse_f64(v, &d)) {
-    char* b = (char*)malloc(512);
-    snprintf(b, 512, "no se puede convertir '%s' a entero", _fmt(v));
-    return _res(_v_str(b), 0);
-  }
-  return _res(_v_int((int64_t)d), 1);
-}
-static Val _b_a_decimal_seguro(Val v) {
-  double d;
-  if (!_parse_f64(v, &d)) {
-    char* b = (char*)malloc(512);
-    snprintf(b, 512, "no se puede convertir '%s' a decimal", _fmt(v));
-    return _res(_v_str(b), 0);
-  }
-  return _res(_v_flt(d), 1);
-}
 static Val _enm(const char* en, const char* vr, int argc, Val* xs) {
   Val v = _v_int(0);
   v.t = T_ENM;
@@ -887,37 +374,6 @@ static Val _enm(const char* en, const char* vr, int argc, Val* xs) {
   v.items = (Val*)malloc(sizeof(Val) * (argc > 0 ? argc : 1));
   for (int i = 0; i < argc; i++) v.items[i] = xs[i];
   return v;
-}
-/* BUG-036: el patrón de `elegir` sobre enums se compila a llamadas a
-   `__enum_variante` / `__enum_campo` / `__enum_aridad`. Existían en la VM pero
-   NO en el backend C, donde caían en el camino de "función desconocida" y
-   devolvían void: ningún caso casaba y el `elegir` entero no imprimía nada.
-   Se replica aquí la semántica exacta de la VM, incluidos `algun/ninguno` y
-   `exito/error`, que usan el mismo protocolo. */
-static const char* _enum_variante(Val v) {
-  switch (v.t) {
-    case T_ENM: return v.vr ? v.vr : "";
-    case T_SOM: return "algun";
-    case T_NON: return "ninguno";
-    case T_OK:  return "exito";
-    case T_ERR: return "error";
-    default:    return "";
-  }
-}
-static Val _enum_campo(Val v, int64_t i) {
-  if (v.t == T_ENM) {
-    if (i >= 0 && i < v.argc) return v.items[i];
-    return _v_void();
-  }
-  if ((v.t == T_SOM || v.t == T_OK || v.t == T_ERR) && i == 0) {
-    return v.argc > 0 ? v.items[0] : _v_void();
-  }
-  return _v_void();
-}
-static int64_t _enum_aridad(Val v) {
-  if (v.t == T_ENM) return v.argc;
-  if (v.t == T_SOM || v.t == T_OK || v.t == T_ERR) return 1;
-  return 0;
 }
 static Val _st_new(const char* nm, int n, Val* vs, const char** ns) {
   Val v = _v_int(0);
@@ -933,24 +389,21 @@ static Val _st_new(const char* nm, int n, Val* vs, const char** ns) {
 }
 static Val _st_get(Val s, const char* f) {
   for (int i = 0; i < s.argc; i++) {
-    if (!strcmp(s.items[2 * i].s, f)) {
-      Val _c = s.items[2 * i + 1];
-      if (s.shared && _c.items) _c.shared = 1; /* BUG-083 */
-      return _c;
-    }
+    if (!strcmp(s.items[2 * i].s, f)) return s.items[2 * i + 1];
   }
-  { char _m[160]; snprintf(_m, sizeof(_m), "Campo '%s' no encontrado en struct", f); _rt_error3(_m); }
+  fprintf(stderr, "Campo '%s' no encontrado en struct\n", f);
+  exit(3);
   return _v_int(0);
 }
 static Val _st_set(Val s, const char* f, Val x) {
   for (int i = 0; i < s.argc; i++) {
     if (!strcmp(s.items[2 * i].s, f)) {
-      s = _cow_unshare(s); /* BUG-083 */
       s.items[2 * i + 1] = x;
       return s;
     }
   }
-  { char _m[160]; snprintf(_m, sizeof(_m), "Campo '%s' no encontrado en struct", f); _rt_error3(_m); }
+  fprintf(stderr, "Campo '%s' no encontrado en struct\n", f);
+  exit(3);
   return s;
 }
 
@@ -963,48 +416,16 @@ static char* _fmt(Val v) {
       break;
     case T_FLT: {
       double d = v.f;
-      /* BUG-113: `isinf` estaba contemplado pero `isnan` no, asi que el NaN
-         caia al `%g` de abajo y salia como "-nan" (o "nan" segun el signo del
-         bit), mientras la VM imprime "NaN". Mismo calculo, dos textos. */
-      if (isnan(d)) { snprintf(b, 8192, "NaN"); break; }
-      if (isinf(d)) { snprintf(b, 8192, d < 0 ? "-inf" : "inf"); break; }
-      /* BUG-115: el guard `fabs(d) < 1e16` mandaba los decimales grandes al
-         `%g` de abajo, que cambia a NOTACION CIENTIFICA: `1000000000000000.0 *
-         1000` se imprimia como "1e+18" en el binario nativo y como
-         "1000000000000000000" en la VM. Igual por abajo: 0.000001 salia como
-         "1e-06". El `Display` de Rust para f64 nunca usa notacion cientifica,
-         asi que aqui tampoco. El limite real es el rango en que un double
-         representa enteros de forma exacta (2^63); mas alla no cabe en
-         `long long` y hay que formatear con `%.1f`, que tampoco la usa. */
-      /* El limite es ESTRICTO: 9223372036854775807.0 se redondea a 2^63 al
-         guardarse en un double, y ahi `(int64_t)d` vuelve a ser UB. Se usa el
-         mayor double que cabe con seguridad en int64. */
-      if (fabs(d) < 9223372036854775296.0 && d == (double)(int64_t)d) {
+      if (isinf(d)) { snprintf(b, 8192, "inf"); break; }
+      if (d == (double)(int64_t)d && fabs(d) < 1e16) {
         snprintf(b, 8192, "%lld", (long long)d);
-      } else if (d == floor(d) && isfinite(d)) {
-        snprintf(b, 8192, "%.1f", d);
-        /* "%.1f" deja un ".0" final que la VM no imprime para enteros. */
-        { size_t _n = strlen(b);
-          if (_n > 2 && b[_n - 2] == '.' && b[_n - 1] == '0') b[_n - 2] = '\0'; }
       } else {
-        int _p; char _t[512];
+        int _p; char _t[64];
         for (_p = 1; _p <= 17; _p++) {
           snprintf(_t, sizeof _t, "%.*g", _p, d);
-          if (strtod(_t, NULL) == d) break;
+          if (strtod(_t, NULL) == d) { snprintf(b, 8192, "%s", _t); break; }
         }
-        if (_p > 17) snprintf(_t, sizeof _t, "%.17g", d);
-        /* Si `%g` eligio notacion cientifica, reformatear en decimal plano con
-           los digitos significativos que hagan falta para no perder precision. */
-        if (strchr(_t, 'e') || strchr(_t, 'E')) {
-          int _q;
-          for (_q = 1; _q <= 30; _q++) {
-            snprintf(b, 8192, "%.*f", _q, d);
-            if (strtod(b, NULL) == d) break;
-          }
-          if (_q > 30) snprintf(b, 8192, "%.17f", d);
-        } else {
-          snprintf(b, 8192, "%s", _t);
-        }
+        if (_p > 17) snprintf(b, 8192, "%.17g", d);
       }
       break;
     }
@@ -1021,8 +442,7 @@ static char* _fmt(Val v) {
       snprintf(b, 8192, "<funcion %s>", v.s ? v.s : "?");
       break;
     case T_VOD:
-      /* BUG-159: paridad con la VM; `__tipo_de` ya decia "nulo". */
-      snprintf(b, 8192, "nulo");
+      snprintf(b, 8192, "void");
       break;
     case T_NON:
       snprintf(b, 8192, "ninguno");
@@ -1151,20 +571,6 @@ static Val _map_new(void) { Val v = _v_int(0); v.t = T_MAP; v.argc = 0; v.items 
 static Val _map_set(Val m, Val k, Val x) {
   Val nv = m;
   int n = m.argc;
-  /* BUG-040: siempre se añadía al final, sin mirar si la clave ya estaba.
-     Volver a poner una clave existente dejaba DOS entradas y `_map_get`
-     devolvía la vieja (recorre desde el principio), así que el valor nunca
-     parecía actualizarse y `_map_longitud` crecía de más. La VM usa un mapa
-     persistente real, donde `insert` reemplaza. */
-  for (int i = 0; i < n; i++) {
-    if (_eq(m.items[2 * i], k)) {
-      Val* ri = (Val*)malloc(sizeof(Val) * (size_t)(n > 0 ? n : 1) * 2);
-      for (int j = 0; j < n * 2; j++) ri[j] = m.items[j];
-      ri[2 * i + 1] = x;
-      nv.items = ri; nv.argc = n;
-      return nv;
-    }
-  }
   Val* ni = (Val*)malloc(sizeof(Val) * ((size_t)n + 1) * 2);
   for (int i = 0; i < n * 2; i++) ni[i] = m.items[i];
   ni[2 * n] = k; ni[2 * n + 1] = x;
@@ -1180,26 +586,9 @@ static Val _map_has(Val m, Val k) {
   return _v_bool(0);
 }
 static Val _map_len(Val m) { return _v_int(m.argc); }
-/* BUG-088: el orden de las claves difería entre la VM (orden de hash) y el
-   binario nativo (orden de inserción), asi que imprimir __map_claves daba
-   resultados distintos segun el backend. Ninguno de los dos ordenes era
-   significativo, asi que ambos ordenan ahora de forma estable: numeros por
-   valor y el resto por su representacion textual. */
-static int _key_cmp(const void* pa, const void* pb) {
-  const Val* a = (const Val*)pa; const Val* b = (const Val*)pb;
-  int na = (a->t == T_INT || a->t == T_FLT), nb = (b->t == T_INT || b->t == T_FLT);
-  if (na && nb) {
-    double da = (a->t == T_INT) ? (double)a->i : a->f;
-    double db = (b->t == T_INT) ? (double)b->i : b->f;
-    return (da < db) ? -1 : (da > db) ? 1 : 0;
-  }
-  if (na != nb) return na ? -1 : 1;
-  return strcmp(_fmt(*a), _fmt(*b));
-}
 static Val _map_keys(Val m) {
   Val* ns = (Val*)malloc(sizeof(Val) * (m.argc + 1));
   for (int i = 0; i < m.argc; i++) ns[i] = m.items[2 * i];
-  if (m.argc > 1) qsort(ns, (size_t)m.argc, sizeof(Val), _key_cmp);
   return _arrn(ns, m.argc);
 }
 
@@ -1265,364 +654,45 @@ static Val _heap_agregar(Val h, Val x) {
 }
 
 #if !defined(_WIN32) && !defined(__APPLE__)
-/* BUG-080: la VM usa sintaxis tipo Perl (\d, \w, \s, \D, \W, \S) pero POSIX
-   REG_EXTENDED no la conoce: regcomp fallaba y _regex_m devolvia 0, de modo que
-   el binario nativo decia "false" donde la VM decia "true". Se traducen esas
-   clases a sus equivalentes POSIX antes de compilar el patron. */
-static char* _regex_posix(const char* pat) {
-  size_t n = strlen(pat);
-  size_t cap = n * 12 + 16;
-  char* out = (char*)malloc(cap);
-  if (!out) return NULL;
-  size_t o = 0;
-  for (size_t i = 0; i < n; i++) {
-    if (pat[i] == '\\' && i + 1 < n) {
-      const char* rep = NULL;
-      switch (pat[i + 1]) {
-        case 'd': rep = "[0-9]"; break;
-        case 'D': rep = "[^0-9]"; break;
-        case 'w': rep = "[a-zA-Z0-9_]"; break;
-        case 'W': rep = "[^a-zA-Z0-9_]"; break;
-        case 's': rep = "[ \t\n\r\f\v]"; break;
-        case 'S': rep = "[^ \t\n\r\f\v]"; break;
-        default: break;
-      }
-      if (rep) {
-        size_t rl = strlen(rep);
-        memcpy(out + o, rep, rl);
-        o += rl;
-        i++;
-        continue;
-      }
-      /* escape que POSIX si entiende: se copia tal cual */
-      out[o++] = pat[i];
-      out[o++] = pat[i + 1];
-      i++;
-      continue;
-    }
-    out[o++] = pat[i];
-  }
-  out[o] = 0;
-  return out;
-}
+/* regex functions only on Linux (glibc) */
 static int _regex_m(const char* pat, const char* s) {
   regex_t re;
-  char* tp = _regex_posix(pat);
-  const char* use = tp ? tp : pat;
-  if (regcomp(&re, use, REG_EXTENDED) != 0) { if (tp) free(tp); return 0; }
-  if (tp) free(tp);
+  if (regcomp(&re, pat, REG_EXTENDED) != 0) return 0;
   int r = regexec(&re, s, 0, NULL, 0);
   regfree(&re);
   return r == 0;
 }
 static char* _regex_rep(const char* pat, const char* s, const char* rep) {
   regex_t re;
-  char* tp = _regex_posix(pat);
-  const char* use = tp ? tp : pat;
-  if (regcomp(&re, use, REG_EXTENDED) != 0) { if (tp) free(tp); return (char*)s; }
-  if (tp) free(tp);
-  size_t sn = strlen(s), rn = strlen(rep);
-  /* Peor caso: una sustitucion vacia entre cada caracter, mas una al final. */
-  size_t cap = sn + (rn + 1) * (sn + 2) + 16;
+  if (regcomp(&re, pat, REG_EXTENDED) != 0) return (char*)s;
+  size_t cap = strlen(s) + strlen(rep) * 8 + 64;
   char* out = (char*)malloc(cap);
-  if (!out) { regfree(&re); return (char*)s; }
-  size_t oi = 0, i = 0;
-  /* BUG-167: el bucle antiguo hacia `p += 1` ante una coincidencia vacia sin
-     comprobar si ya estaba en el terminador, asi que se salia de la cadena y
-     seguia copiando memoria ajena: `__regex_reemplazar("[a-z]?|a","x_y","#")`
-     terminaba en SIGSEGV. Ahora se recorre por indice con `i <= sn` y se para
-     en el limite. `ultimo_fin` replica la regla de la VM: una coincidencia
-     vacia justo donde acabo la anterior no cuenta, de modo que "a?" sobre
-     "bab" da "#b#b#" y no "#b##b#". */
-  size_t ultimo_fin = (size_t)-1;
+  size_t oi = 0;
+  const char* p = s;
   regmatch_t m;
-  while (i <= sn) {
-    int flags = (i == 0) ? 0 : REG_NOTBOL;
-    if (regexec(&re, s + i, 1, &m, flags) != 0) break;
-    size_t ini_m = i + (size_t)m.rm_so;
-    size_t fin_m = i + (size_t)m.rm_eo;
-    if (ini_m == fin_m && ini_m == ultimo_fin) {
-      /* Coincidencia vacia pegada a la anterior: se ignora y se avanza. */
-      if (i >= sn) break;
-      out[oi++] = s[i];
-      i++;
-      continue;
-    }
-    memcpy(out + oi, s + i, ini_m - i);
-    oi += ini_m - i;
-    memcpy(out + oi, rep, rn);
-    oi += rn;
-    ultimo_fin = fin_m;
-    if (fin_m == ini_m) {
-      if (ini_m >= sn) { i = sn + 1; break; }
-      out[oi++] = s[ini_m];
-      i = ini_m + 1;
-    } else {
-      i = fin_m;
-    }
+  int first = 1;
+  while (regexec(&re, p, 1, &m, 0) == 0) {
+    size_t pre = (size_t)m.rm_so;
+    if (oi + pre + strlen(rep) + 32 > cap) { cap = oi + pre + strlen(rep) + 64; out = (char*)realloc(out, cap); }
+    memcpy(out + oi, p, pre); oi += pre;
+    memcpy(out + oi, rep, strlen(rep)); oi += strlen(rep);
+    size_t step = (size_t)m.rm_eo;
+    if (step == 0 && first) break;
+    first = 0;
+    if (step == 0) step = 1;
+    p += step;
   }
-  if (i <= sn) {
-    memcpy(out + oi, s + i, sn - i);
-    oi += sn - i;
-  }
-  out[oi] = 0;
+  size_t rest = strlen(p);
+  if (oi + rest + 1 > cap) { cap = oi + rest + 16; out = (char*)realloc(out, cap); }
+  memcpy(out + oi, p, rest);
+  out[oi + rest] = 0;
   regfree(&re);
   return out;
 }
 #else
-/* Rama Windows/macOS: <regex.h> POSIX no esta disponible.
-
-   BUG-166: aqui habia un stub que devolvia SIEMPRE 0. En Windows y macOS
-   `__regex_coincide` respondia "false" a cualquier patron mientras la VM
-   respondia "true": el mismo BUG-080 que se arreglo para Linux, pero vivo en
-   las otras dos plataformas. Un binario que contesta que no a todo es peor que
-   uno que falla, porque parece que funciona.
-
-   POSIX <regex.h> no esta disponible ahi, asi que se implementa un motor
-   propio por backtracking que cubre lo que la VM acepta y este runtime usa:
-   literales, `.`, clases `[...]` con rangos y negacion, las clases Perl
-   \d \D \w \W \s \S, los cuantificadores `*` `+` `?`, anclas `^` `$`,
-   alternacion `|` y grupos `(...)`. Sin capturas: `_regex_m` solo necesita
-   saber si casa, y `_regex_rep` sustituye la porcion encontrada. */
-typedef struct { const char* p; const char* pend; } _rxpat;
-
-static int _rx_alt(const char* p, const char* pend, const char* s,
-                   const char* sbeg, const char* send, const char** mend);
-
-/* Devuelve el final del elemento que empieza en `p` (atomo + cuantificador). */
-static const char* _rx_atom_end(const char* p, const char* pend) {
-  if (p >= pend) return p;
-  if (*p == '\\' && p + 1 < pend) {
-    p += 2;
-  } else if (*p == '[') {
-    p++;
-    if (p < pend && *p == '^') p++;
-    if (p < pend && *p == ']') p++;
-    while (p < pend && *p != ']') p++;
-    if (p < pend) p++;
-  } else if (*p == '(') {
-    int d = 1;
-    p++;
-    while (p < pend && d > 0) {
-      if (*p == '\\' && p + 1 < pend) { p += 2; continue; }
-      if (*p == '(') d++;
-      else if (*p == ')') d--;
-      p++;
-    }
-  } else {
-    p++;
-  }
-  return p;
-}
-
-/* Cuantificador `{n}`, `{n,}` o `{n,m}`. `q` apunta a la llave de apertura.
-   Devuelve 0 si no es un cuantificador valido: entonces la llave se trata como
-   un caracter literal, que es lo que hace la VM. */
-static int _rx_llaves(const char* q, const char* pend, int* min, int* max,
-                      const char** after) {
-  if (q >= pend || *q != '{') return 0;
-  const char* r = q + 1;
-  int lo = 0, hi = -1, ndig = 0;
-  while (r < pend && *r >= '0' && *r <= '9') { lo = lo * 10 + (*r - '0'); r++; ndig++; }
-  if (ndig == 0) return 0;
-  if (r < pend && *r == '}') { hi = lo; }
-  else if (r < pend && *r == ',') {
-    r++;
-    int mdig = 0, v = 0;
-    while (r < pend && *r >= '0' && *r <= '9') { v = v * 10 + (*r - '0'); r++; mdig++; }
-    if (r >= pend || *r != '}') return 0;
-    hi = mdig ? v : -1;
-  } else {
-    return 0;
-  }
-  if (hi >= 0 && hi < lo) return 0;
-  *min = lo;
-  *max = hi;
-  *after = r + 1;
-  return 1;
-}
-
-static int _rx_cls(char c, char k) {
-  switch (k) {
-    case 'd': return c >= '0' && c <= '9';
-    case 'D': return !(c >= '0' && c <= '9');
-    case 'w': return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                     (c >= '0' && c <= '9') || c == '_';
-    case 'W': return !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                       (c >= '0' && c <= '9') || c == '_');
-    case 's': return c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
-                     c == '\f' || c == '\v';
-    case 'S': return !(c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
-                       c == '\f' || c == '\v');
-    default: return c == k;
-  }
-}
-
-/* ¿Casa el atomo simple [p,ae) con el caracter *s? (no vale para grupos) */
-static int _rx_one(const char* p, const char* ae, char c) {
-  if (*p == '.') return 1;
-  if (*p == '\\' && p + 1 < ae) return _rx_cls(c, p[1]);
-  if (*p == '[') {
-    const char* q = p + 1;
-    int neg = 0, hit = 0;
-    if (q < ae && *q == '^') { neg = 1; q++; }
-    const char* cend = ae - 1; /* apunta a ']' */
-    while (q < cend) {
-      if (*q == '\\' && q + 1 < cend) {
-        if (_rx_cls(c, q[1])) hit = 1;
-        q += 2;
-        continue;
-      }
-      if (q + 2 < cend && q[1] == '-') {
-        if ((unsigned char)c >= (unsigned char)q[0] &&
-            (unsigned char)c <= (unsigned char)q[2]) hit = 1;
-        q += 3;
-        continue;
-      }
-      if (*q == c) hit = 1;
-      q++;
-    }
-    return neg ? !hit : hit;
-  }
-  return *p == c;
-}
-
-/* Secuencia (sin `|` de primer nivel). */
-static int _rx_seq(const char* p, const char* pend, const char* s,
-                   const char* sbeg, const char* send, const char** mend) {
-  if (p >= pend) { if (mend) *mend = s; return 1; }
-
-  if (*p == '^') {
-    if (s != sbeg) return 0;
-    return _rx_seq(p + 1, pend, s, sbeg, send, mend);
-  }
-  if (*p == '$' && p + 1 == pend) {
-    if (s != send) return 0;
-    if (mend) *mend = s;
-    return 1;
-  }
-
-  const char* ae = _rx_atom_end(p, pend);
-  char q = (ae < pend) ? *ae : 0;
-  const char* rest = (q == '*' || q == '+' || q == '?') ? ae + 1 : ae;
-  int grupo = (*p == '(');
-  int min = -1, max = -1;
-  if (q == '*') { min = 0; max = -1; }
-  else if (q == '+') { min = 1; max = -1; }
-  else if (q == '?') { min = 0; max = 1; }
-  else if (q == '{') {
-    const char* tras = NULL;
-    if (_rx_llaves(ae, pend, &min, &max, &tras)) rest = tras;
-    else min = -1;
-  }
-
-  if (min >= 0) {
-    /* Voraz con retroceso: se prueban las repeticiones de mas a menos. */
-    const char* puntos[4096];
-    int n = 0;
-    const char* cur = s;
-    puntos[n++] = cur;
-    while ((max < 0 || n - 1 < max) && n < 4096) {
-      const char* nx = NULL;
-      if (grupo) {
-        if (!_rx_alt(p + 1, ae - 1, cur, sbeg, send, &nx)) break;
-        if (nx == cur) break; /* grupo vacio: evita bucle infinito */
-      } else {
-        if (cur >= send || !_rx_one(p, ae, *cur)) break;
-        nx = cur + 1;
-      }
-      cur = nx;
-      puntos[n++] = cur;
-    }
-    while (n - 1 >= min) {
-      if (_rx_seq(rest, pend, puntos[n - 1], sbeg, send, mend)) return 1;
-      n--;
-    }
-    return 0;
-  }
-
-  if (grupo) {
-    /* Sin cuantificador: probar cada final posible del grupo. */
-    const char* nx = NULL;
-    if (!_rx_alt(p + 1, ae - 1, s, sbeg, send, &nx)) return 0;
-    return _rx_seq(rest, pend, nx, sbeg, send, mend);
-  }
-
-  if (s >= send || !_rx_one(p, ae, *s)) return 0;
-  return _rx_seq(rest, pend, s + 1, sbeg, send, mend);
-}
-
-/* Alternacion de primer nivel: divide por `|` fuera de grupos y clases. */
-static int _rx_alt(const char* p, const char* pend, const char* s,
-                   const char* sbeg, const char* send, const char** mend) {
-  const char* ini = p;
-  const char* q = p;
-  int d = 0;
-  while (q < pend) {
-    if (*q == '\\' && q + 1 < pend) { q += 2; continue; }
-    if (*q == '[') { q = _rx_atom_end(q, pend); continue; }
-    if (*q == '(') d++;
-    else if (*q == ')') d--;
-    else if (*q == '|' && d == 0) {
-      if (_rx_seq(ini, q, s, sbeg, send, mend)) return 1;
-      ini = q + 1;
-    }
-    q++;
-  }
-  return _rx_seq(ini, pend, s, sbeg, send, mend);
-}
-
-static int _regex_m(const char* pat, const char* s) {
-  size_t pn = strlen(pat), sn = strlen(s);
-  const char* pend = pat + pn;
-  const char* send = s + sn;
-  for (const char* st = s; st <= send; st++) {
-    if (_rx_alt(pat, pend, st, s, send, NULL)) return 1;
-    if (pn > 0 && pat[0] == '^') break; /* anclado: solo desde el inicio */
-  }
-  return 0;
-}
-
-static char* _regex_rep(const char* pat, const char* s, const char* rep) {
-  size_t pn = strlen(pat), sn = strlen(s), rn = strlen(rep);
-  const char* pend = pat + pn;
-  const char* send = s + sn;
-  size_t cap = sn + (rn + 1) * (sn + 2) + 16;
-  char* out = (char*)malloc(cap);
-  if (!out) return (char*)s;
-  size_t o = 0;
-  const char* cur = s;
-  /* BUG-167: misma regla que la rama POSIX. Una coincidencia vacia pegada al
-     final de la anterior no se sustituye, para que ambas ramas y la VM den
-     exactamente el mismo texto. */
-  const char* ultimo_fin = NULL;
-  while (cur <= send) {
-    const char* fin = NULL;
-    if (_rx_alt(pat, pend, cur, s, send, &fin) && fin) {
-      if (fin == cur && cur == ultimo_fin) {
-        if (cur >= send) break;
-        out[o++] = *cur;
-        cur++;
-        continue;
-      }
-      memcpy(out + o, rep, rn);
-      o += rn;
-      ultimo_fin = fin;
-      if (fin == cur) { /* coincidencia vacia: avanza uno para no colgarse */
-        if (cur >= send) { cur = send + 1; break; }
-        out[o++] = *cur;
-        cur++;
-      } else {
-        cur = fin;
-      }
-      continue;
-    }
-    if (cur < send) out[o++] = *cur;
-    cur++;
-  }
-  out[o] = 0;
-  return out;
-}
+/* Stubs for Windows/macOS */
+static int _regex_m(const char* pat, const char* s) { (void)pat; (void)s; return 0; }
+static char* _regex_rep(const char* pat, const char* s, const char* rep) { (void)pat; (void)s; (void)rep; return (char*)s; }
 #endif
 
 static const uint32_t _dec_tab[][3] = {
@@ -1731,31 +801,14 @@ static const char* _tipo_de_b(Val v) {
     default: return "opcion";
   }
 }
-/* BUG-043: sólo cambiaba de caja el ASCII, así que `mayusculas("Lúmen")`
-   devolvía "LúMEN" (la `ú` intacta) mientras la VM daba "LÚMEN". Se añaden
-   las vocales acentuadas y la eñe del bloque Latin-1, que en UTF-8 ocupan dos
-   bytes (0xC3 0xA0..0xBE); la conversión allí es restar/sumar 0x20 al segundo
-   byte, salvo 0xC3 0xB7 (÷), que no es una letra. */
 static char* _case_str(const char* s, int up) {
   size_t n = strlen(s);
   char* m = (char*)malloc(n + 1);
-  size_t i = 0;
-  while (i < n) {
-    unsigned char c = (unsigned char)s[i];
-    if (c == 0xC3 && i + 1 < n) {
-      unsigned char d = (unsigned char)s[i + 1];
-      if (up && d >= 0xA0 && d <= 0xBE && d != 0xB7) d = (unsigned char)(d - 0x20);
-      else if (!up && d >= 0x80 && d <= 0x9E && d != 0x97) d = (unsigned char)(d + 0x20);
-      m[i] = (char)c;
-      m[i + 1] = (char)d;
-      i += 2;
-      continue;
-    }
-    char e = s[i];
-    if (up && e >= 'a' && e <= 'z') e = e - 32;
-    else if (!up && e >= 'A' && e <= 'Z') e = e + 32;
-    m[i] = e;
-    i++;
+  for (size_t i = 0; i < n; i++) {
+    char c = s[i];
+    if (up && c >= 'a' && c <= 'z') c = c - 32;
+    else if (!up && c >= 'A' && c <= 'Z') c = c + 32;
+    m[i] = c;
   }
   m[n] = 0;
   return m;
@@ -1782,14 +835,18 @@ static int64_t _time_parse(const char* s) {
   return (int64_t)timegm(&tmv);
 #endif
 }
-static Val _to_chars(const char* s); /* BUG-122: se usa antes de definirse */
 static Val _str_split(const char* s, const char* delim) {
   if (!s) return _arrn(NULL, 0);
   if (!delim || !delim[0]) {
-    /* BUG-122: misma familia que BUG-087. Con separador vacio se partia por
-       BYTES, asi que "\xc3\xb1o\xc3\xb1o" daba 6 trozos rotos en el binario
-       nativo y 4 caracteres en la VM. `_to_chars` ya decodifica UTF-8. */
-    return _to_chars(s);
+    size_t n = strlen(s);
+    Val* xs = (Val*)malloc(sizeof(Val) * (n + 1));
+    for (size_t i = 0; i < n; i++) {
+      char c[2] = { s[i], 0 };
+      xs[i] = _v_str(c);
+    }
+    Val v = _arrn(xs, n);
+    free(xs);
+    return v;
   }
   size_t dl = strlen(delim), n = 0;
   Val* xs = NULL;
@@ -1876,95 +933,31 @@ static char* _trim(const char* s) {
   memcpy(m, p, n); m[n] = 0;
   return m;
 }
-/* BUG-082: `_sub` y `_to_chars` indexaban por BYTES mientras la VM (y `largo`,
-   que ya usaba _utf8_len) cuentan CARACTERES. Con acentos el binario nativo
-   cortaba en distinto sitio que la VM y podia partir un caracter por la mitad,
-   emitiendo UTF-8 invalido ("áé\xef\xbf\xbd"). Se convierte el indice de
-   caracter a offset de byte antes de cortar. */
-static size_t _utf8_off(const char* s, int64_t chars) {
-  size_t i = 0;
-  int64_t c = 0;
-  while (s[i] && c < chars) {
-    unsigned char b = (unsigned char)s[i];
-    i += (b < 0x80) ? 1 : ((b >> 5) == 0x6) ? 2 : ((b >> 4) == 0xE) ? 3 : ((b >> 3) == 0x1E) ? 4 : 1;
-    c++;
-  }
-  return i;
-}
-/* BUG-120: los indices negativos NO cuentan desde el final. La VM convierte el
-   entero a `usize` (un negativo pasa a ser un numero enorme) y luego lo recorta
-   a la longitud, asi que un inicio negativo da SIEMPRE cadena vacia. El C hacia
-   `if (st < 0) st = 0`, o sea tomaba desde el principio: `__str_slice("hola",
-   -2, -1)` daba "" en la VM y "hola" ya compilado. Se replica la VM.
-   El unico negativo con significado es `en == -1`, que la VM trata como "hasta
-   el final" de forma explicita. */
 static char* _sub(const char* s, int64_t st, int64_t en) {
-  int64_t n = _utf8_len(s);
-  if (st < 0) st = n; if (st > n) st = n;
-  if (en == -1) en = n; else if (en < 0) en = n; if (en > n) en = n;
+  int64_t n = (int64_t)strlen(s);
+  if (st < 0) st = 0; if (st > n) st = n;
+  if (en < 0) en = n; if (en > n) en = n;
   if (en < st) en = st;
-  size_t bs = _utf8_off(s, st);
-  size_t be = _utf8_off(s, en);
-  char* m = (char*)malloc(be - bs + 1);
-  memcpy(m, s + bs, be - bs); m[be - bs] = 0;
+  char* m = (char*)malloc((size_t)(en - st) + 1);
+  memcpy(m, s + st, (size_t)(en - st)); m[en - st] = 0;
   return m;
 }
 static Val _to_chars(const char* s) {
-  int64_t n = _utf8_len(s);
-  Val* xs = (Val*)malloc(sizeof(Val) * (size_t)(n + 1));
-  size_t off = 0;
-  for (int64_t i = 0; i < n; i++) {
-    unsigned char b = (unsigned char)s[off];
-    size_t w = (b < 0x80) ? 1 : ((b >> 5) == 0x6) ? 2 : ((b >> 4) == 0xE) ? 3 : ((b >> 3) == 0x1E) ? 4 : 1;
-    char c[5]; memcpy(c, s + off, w); c[w] = 0;
-    xs[i] = _v_str(c);
-    off += w;
-  }
-  Val v = _arrn(xs, (size_t)n); free(xs);
+  size_t n = strlen(s);
+  Val* xs = (Val*)malloc(sizeof(Val) * (n + 1));
+  for (size_t i = 0; i < n; i++) { char c[2] = { s[i], 0 }; xs[i] = _v_str(c); }
+  Val v = _arrn(xs, n); free(xs);
   return v;
 }
-/* BUG-087: devolvia un byte por elemento, asi que "an~b" daba
-   [97,195,177,98] en el binario nativo y [97,241,98] en la VM. Ahora decodifica
-   UTF-8 y devuelve puntos de codigo, igual que la VM. */
 static Val _str_codes(const char* s) {
-  size_t nb = strlen(s);
-  Val* xs = (Val*)malloc(sizeof(Val) * (nb + 1));
-  size_t i = 0, k = 0;
-  while (i < nb) {
-    unsigned char b = (unsigned char)s[i];
-    uint32_t cp; size_t w;
-    if (b < 0x80) { cp = b; w = 1; }
-    else if ((b >> 5) == 0x6 && i + 1 < nb) { cp = ((uint32_t)(b & 0x1F) << 6) | ((unsigned char)s[i+1] & 0x3F); w = 2; }
-    else if ((b >> 4) == 0xE && i + 2 < nb) { cp = ((uint32_t)(b & 0x0F) << 12) | (((unsigned char)s[i+1] & 0x3F) << 6) | ((unsigned char)s[i+2] & 0x3F); w = 3; }
-    else if ((b >> 3) == 0x1E && i + 3 < nb) { cp = ((uint32_t)(b & 0x07) << 18) | (((unsigned char)s[i+1] & 0x3F) << 12) | (((unsigned char)s[i+2] & 0x3F) << 6) | ((unsigned char)s[i+3] & 0x3F); w = 4; }
-    else { cp = b; w = 1; }
-    xs[k++] = _v_int((int64_t)cp);
-    i += w;
-  }
-  Val v = _arrn(xs, k); free(xs);
+  size_t n = strlen(s);
+  Val* xs = (Val*)malloc(sizeof(Val) * (n + 1));
+  for (size_t i = 0; i < n; i++) xs[i] = _v_int((unsigned char)s[i]);
+  Val v = _arrn(xs, n); free(xs);
   return v;
-}
-/* BUG-121: con patron vacio el C devolvia el texto intacto, pero `str::replace`
-   de Rust (que es lo que hace la VM) inserta el reemplazo en cada frontera de
-   caracter, incluidos los extremos: "aaa".replace("", "X") == "XaXaXaX". */
-static char* _replace_vacio(const char* s, const char* to) {
-  size_t n = strlen(s), tl = strlen(to);
-  size_t nc = _utf8_len(s);
-  char* out = (char*)malloc(n + tl * (nc + 1) + 1);
-  size_t ln = 0, i = 0;
-  memcpy(out + ln, to, tl); ln += tl;
-  while (i < n) {
-    unsigned char b = (unsigned char)s[i];
-    size_t w = (b < 0x80) ? 1 : ((b >> 5) == 0x6) ? 2 : ((b >> 4) == 0xE) ? 3 : ((b >> 3) == 0x1E) ? 4 : 1;
-    if (i + w > n) w = n - i;
-    memcpy(out + ln, s + i, w); ln += w; i += w;
-    memcpy(out + ln, to, tl); ln += tl;
-  }
-  out[ln] = 0;
-  return out;
 }
 static char* _replace(const char* s, const char* from, const char* to) {
-  if (!from || !from[0]) { return _replace_vacio(s, to); }
+  if (!from || !from[0]) { char* m = (char*)malloc(strlen(s) + 1); strcpy(m, s); return m; }
   size_t fl = strlen(from), tl = strlen(to), n = strlen(s), cap = n + 1, ln = 0;
   char* out = (char*)malloc(cap);
   const char* p = s;
@@ -2051,7 +1044,6 @@ static HANDLE _coro_ev_resume[256];
 static HANDLE _coro_ev_cede[256];
 static DWORD WINAPI _coro_thread(LPVOID p) {
   int i = (int)(intptr_t)p;
-  _coro_stack_init();
   for (;;) {
     WaitForSingleObject(_coro_ev_resume[i], INFINITE);
     ResetEvent(_coro_ev_resume[i]);
@@ -2112,10 +1104,6 @@ static volatile int _coro_want[256];
 static volatile int _coro_yielded[256];
 static void* _coro_thread(void* p) {
   int i = (int)(intptr_t)p;
-  /* BUG-081: cada corrutina corre en su propio hilo y necesita inicializar SU
-     pila de operandos y SU base de pila; antes heredaba los globales del hilo
-     principal y el control de profundidad daba "pila agotada" al instante. */
-  _coro_stack_init();
   for (;;) {
     pthread_mutex_lock(&_coro_mx[i]);
     while (!_coro_want[i]) pthread_cond_wait(&_coro_cv_resume[i], &_coro_mx[i]);

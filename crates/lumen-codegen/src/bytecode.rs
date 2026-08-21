@@ -1,5 +1,5 @@
 pub const CHUNK_MAGIC: &[u8; 4] = b"LUMN";
-pub const CHUNK_VERSION: u32 = 7;
+pub const CHUNK_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Opcode {
@@ -59,19 +59,6 @@ pub enum Opcode {
     MatchPayload = 53,
     BitXor = 54,
     BitNot = 55,
-    /// BUG-023: como `Store`, pero SIEMPRE liga en el marco actual.
-    /// Lo emiten las declaraciones de variable para que una local no
-    /// sobrescriba una global del mismo nombre.
-    StoreLocal = 56,
-    /// BUG-027: descarta la cima de la pila.
-    Drop = 57,
-    /// BUG-022: instala un manejador de excepciones. El operando es el índice
-    /// de instrucción del bloque `atrapar`. La VM apila el destino junto con la
-    /// profundidad de pila y de marcos, para poder desenrollar al saltar.
-    PushHandler = 58,
-    /// BUG-022: desinstala el manejador instalado por `PushHandler` (el
-    /// bloque `intentar` terminó sin lanzar).
-    PopHandler = 59,
 }
 
 impl Opcode {
@@ -133,10 +120,6 @@ impl Opcode {
             53 => Some(Opcode::MatchPayload),
             54 => Some(Opcode::BitXor),
             55 => Some(Opcode::BitNot),
-            56 => Some(Opcode::StoreLocal),
-            57 => Some(Opcode::Drop),
-            58 => Some(Opcode::PushHandler),
-            59 => Some(Opcode::PopHandler),
             _ => None,
         }
     }
@@ -160,8 +143,6 @@ pub struct FuncMeta {
     pub name: String,
     pub params: Vec<String>,
     pub start: usize,
-    /// BUG-032: nombres del entorno que la lambda captura por valor.
-    pub captures: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -224,12 +205,6 @@ impl Bytecode {
                 buf.extend_from_slice(p.as_bytes());
             }
             buf.extend_from_slice(&(func.start as u64).to_le_bytes());
-            // BUG-032 (formato v7): lista de capturas de la closure.
-            buf.extend_from_slice(&(func.captures.len() as u32).to_le_bytes());
-            for c in &func.captures {
-                buf.extend_from_slice(&(c.len() as u32).to_le_bytes());
-                buf.extend_from_slice(c.as_bytes());
-            }
         }
         buf.extend_from_slice(&(self.instructions.len() as u32).to_le_bytes());
         for instr in &self.instructions {
@@ -424,36 +399,10 @@ impl Bytecode {
                 data[pos + 7],
             ]) as usize;
             pos += 8;
-            // BUG-032 (formato v7): capturas de la closure.
-            let mut captures = Vec::new();
-            if pos + 4 <= data.len() {
-                let num_caps =
-                    u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]])
-                        as usize;
-                pos += 4;
-                for _ in 0..num_caps {
-                    if pos + 4 > data.len() {
-                        break;
-                    }
-                    let clen = u32::from_le_bytes([
-                        data[pos],
-                        data[pos + 1],
-                        data[pos + 2],
-                        data[pos + 3],
-                    ]) as usize;
-                    pos += 4;
-                    if pos + clen > data.len() {
-                        break;
-                    }
-                    captures.push(String::from_utf8_lossy(&data[pos..pos + clen]).to_string());
-                    pos += clen;
-                }
-            }
             funcs.push(FuncMeta {
                 name,
                 params,
                 start,
-                captures,
             });
         }
 

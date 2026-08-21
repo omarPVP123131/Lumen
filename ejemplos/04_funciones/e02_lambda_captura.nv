@@ -1,3 +1,0 @@
-entero base = 100;
-suma_base = funcion(entero x) { retornar x + base; };
-imprimir(suma_base(5));

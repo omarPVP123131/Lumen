@@ -113,16 +113,10 @@ impl Codegen {
                 .get(name)
                 .map(|f| f.params.clone())
                 .unwrap_or_default();
-            let captures = program
-                .funcs
-                .get(name)
-                .map(|f| f.captures.clone())
-                .unwrap_or_default();
             self.bytecode.funcs.push(FuncMeta {
                 name: name.clone(),
                 params,
                 start: *start,
-                captures,
             });
         }
 
@@ -165,17 +159,6 @@ impl Codegen {
                 self.bytecode
                     .instructions
                     .push(Instruction::WithIdx(Opcode::Store, idx));
-            }
-            Instr::Drop => {
-                self.bytecode
-                    .instructions
-                    .push(Instruction::Simple(Opcode::Drop));
-            }
-            Instr::StoreLocal(name) => {
-                let idx = self.intern_name(name);
-                self.bytecode
-                    .instructions
-                    .push(Instruction::WithIdx(Opcode::StoreLocal, idx));
             }
             Instr::Binary(op) => {
                 let opcode = match op {
@@ -256,20 +239,6 @@ impl Codegen {
                 self.bytecode
                     .instructions
                     .push(Instruction::WithIdx(Opcode::JmpIf, idx));
-            }
-            // BUG-022: el destino se resuelve como en `Jmp`, con el mapa de
-            // etiquetas de la primera pasada.
-            Instr::PushHandler(label) => {
-                let offset = self.label_map.get(label).copied().unwrap_or(0);
-                let idx = self.intern_num(offset as f64);
-                self.bytecode
-                    .instructions
-                    .push(Instruction::WithIdx(Opcode::PushHandler, idx));
-            }
-            Instr::PopHandler => {
-                self.bytecode
-                    .instructions
-                    .push(Instruction::Simple(Opcode::PopHandler));
             }
             Instr::Halt => {
                 self.bytecode

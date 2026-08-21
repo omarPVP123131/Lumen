@@ -1,5 +1,5 @@
 // ============================================================================
-// LÚMEN Language Server Protocol (LSP Pro) — v3.0.0
+// LÚMEN Language Server Protocol (LSP Pro) — v2.4.6
 // Soporte Completo: Semantic Tokens, Inlay Hints, Signature Help, Code Actions,
 // Diagnóstico en Tiempo Real, Hover, Definición y Autocompletado Inteligente
 // ============================================================================
@@ -7,12 +7,12 @@
 use lumen_lexer::token::TokenKind;
 use lumen_lexer::Lexer;
 use lumen_parser::Parser;
-use lumen_sema::{ModuleLoader, SemanticAnalyzer};
+use lumen_sema::SemanticAnalyzer;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Read, Write};
 
 pub fn run_lsp() {
-    eprintln!("LÚMEN LSP Server Pro v3.0.0 — Semantic Tokens, Inlay Hints & Code Actions");
+    eprintln!("LÚMEN LSP Server Pro v2.4.6 — Semantic Tokens, Inlay Hints & Code Actions");
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -23,26 +23,10 @@ pub fn run_lsp() {
         let mut header = String::new();
         let mut content_length = 0usize;
 
-        // BUG-139: `read_line` devuelve Ok(0) —no un error— cuando stdin llega
-        // a EOF. La cabecera quedaba vacía, se salía del bucle interno con
-        // `content_length == 0` y el bucle externo hacía `continue`: un bucle
-        // infinito girando a tope de CPU sobre un stdin ya cerrado. Le pasa a
-        // cualquier editor que cierre la tubería sin mandar `exit` (un cierre
-        // brusco, un crash del cliente), y deja un proceso `lumen lsp`
-        // quemando un núcleo hasta que alguien lo mata a mano.
-        let mut eof = false;
         loop {
             header.clear();
-            match stdin.lock().read_line(&mut header) {
-                Ok(0) => {
-                    eof = true;
-                    break;
-                }
-                Ok(_) => {}
-                Err(_) => {
-                    eof = true;
-                    break;
-                }
+            if stdin.lock().read_line(&mut header).is_err() {
+                break;
             }
             let trimmed = header.trim();
             if trimmed.is_empty() {
@@ -51,10 +35,6 @@ pub fn run_lsp() {
             if let Some(len) = trimmed.strip_prefix("Content-Length: ") {
                 content_length = len.trim().parse().unwrap_or(0);
             }
-        }
-
-        if eof {
-            break;
         }
 
         if content_length == 0 {
@@ -112,7 +92,7 @@ pub fn run_lsp() {
                                 "workspaceDiagnostics": false
                             }
                         },
-                        "serverInfo": {"name": "lumen-lsp-pro", "version": "3.0.0"}
+                        "serverInfo": {"name": "lumen-lsp-pro", "version": "2.4.6"}
                     }
                 });
                 send_response(&mut stdout, &response);
@@ -542,25 +522,7 @@ pub fn compute_code_actions(
 
 // ── 5. Diagnósticos y Análisis Semántico ──────────────────────────────
 
-/// BUG-157: convierte un `file://` en ruta de disco, para resolver los imports
-/// relativos al fichero que se esta editando. Si la URI no es un fichero local
-/// (documento sin guardar, esquema desconocido) se devuelve `None` y el
-/// analisis usa solo la stdlib embebida, que sigue siendo mejor que nada.
-fn ruta_de_uri(uri: &str) -> Option<std::path::PathBuf> {
-    let resto = uri.strip_prefix("file://")?;
-    if resto.is_empty() {
-        return None;
-    }
-    // Windows: `file:///C:/x` deja `/C:/x`.
-    let limpio = if resto.len() > 2 && resto.starts_with('/') && resto.as_bytes()[2] == b':' {
-        &resto[1..]
-    } else {
-        resto
-    };
-    Some(std::path::PathBuf::from(limpio.replace("%20", " ")))
-}
-
-fn analyze(source: &str, uri: &str) -> Vec<serde_json::Value> {
+fn analyze(source: &str, _uri: &str) -> Vec<serde_json::Value> {
     let mut diagnostics = Vec::new();
 
     let lexer = Lexer::new(source);
@@ -583,7 +545,7 @@ fn analyze(source: &str, uri: &str) -> Vec<serde_json::Value> {
     }
 
     let parser = Parser::new(tokens);
-    let (_program_parseado, parse_errors) = parser.parse();
+    let (mut program, parse_errors) = parser.parse();
     for e in &parse_errors {
         diagnostics.push(serde_json::json!({
             "range": {
@@ -600,53 +562,6 @@ fn analyze(source: &str, uri: &str) -> Vec<serde_json::Value> {
     if !parse_errors.is_empty() {
         return diagnostics;
     }
-
-    // BUG-157: el LSP analizaba el fichero AISLADO, sin resolver sus imports,
-    // asi que todo lo que viniera de un modulo se marcaba como «no definida».
-    // Un fichero que `lumen check` acepta salia subrayado en rojo en el editor:
-    // el diagnostico contradecia al compilador, que es el peor fallo posible en
-    // un servidor de lenguaje —ensena a ignorar los avisos—. Se resuelven los
-    // imports igual que en `run`/`check`; si fallan, el propio fallo es el
-    // diagnostico util (modulo que no existe) en vez de una cascada de E042.
-    let ruta = ruta_de_uri(uri);
-    let base = ruta
-        .clone()
-        .unwrap_or_else(|| std::path::PathBuf::from("<lsp>.nv"));
-    let dirs: Vec<std::path::PathBuf> = ruta
-        .as_ref()
-        .and_then(|p| p.parent())
-        .map(|d| vec![d.to_path_buf()])
-        .unwrap_or_default();
-    let mut loader = ModuleLoader::new(dirs);
-    // `resolve_imports` reparsea y devuelve el programa ya aplanado, asi que
-    // sustituye al que acaba de salir del parser; aquel solo sirve para los
-    // errores de sintaxis reportados mas arriba.
-    let mut program = match loader.resolve_imports(source, &base) {
-        Ok(p) => p,
-        Err(e) => {
-            let (msg, code) = match &e {
-                lumen_sema::ModuleError::Circular { path, .. } => {
-                    (format!("Import circular: {}", path.display()), "E063")
-                }
-                lumen_sema::ModuleError::Io { path, message } => (
-                    format!("No se pudo cargar '{}': {}", path.display(), message),
-                    "E064",
-                ),
-                otro => (format!("Error de import: {:?}", otro), "E064"),
-            };
-            diagnostics.push(serde_json::json!({
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 0, "character": 0}
-                },
-                "severity": 1,
-                "code": code,
-                "source": "lumen-sema",
-                "message": msg
-            }));
-            return diagnostics;
-        }
-    };
 
     let sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);

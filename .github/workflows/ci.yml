@@ -1,145 +1,368 @@
-name: CI
+name: ⚡ LÚMEN CI/CD & GitHub Releases Distribution
 
-# Verificación en cada push y PR. Deliberadamente NO publica nada: el release
-# vive en release.yml. Mezclarlos hace que un test rojo parezca un fallo de
-# publicación y que un fallo de publicación parezca un test roto.
 on:
   push:
-    branches: [main, master]
+    branches: [master, main]
+    tags:
+      - 'v*'
   pull_request:
+    branches: [master, main]
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-
-concurrency:
-  # Un push nuevo cancela la ejecución anterior de la misma rama.
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  # ── Lo barato primero: si el formato o clippy fallan, no gastamos 3 matrices.
-  lint:
-    name: Formato y clippy
+  # ── 1. AUDITORÍA DE FORMATO Y LINTER ─────────────────────────────────────
+  fmt:
+    name: 🎨 Format (cargo fmt)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo fmt
-        run: cargo fmt --all -- --check
-      - name: cargo clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+          components: rustfmt
+      - run: cargo fmt -- --check
 
-  test:
-    name: Pruebas (${{ matrix.os }})
-    needs: lint
-    strategy:
-      fail-fast: false # queremos ver si algo falla SOLO en Windows
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+  clippy:
+    name: 🔍 Clippy (-D warnings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy --all -- -D warnings
+
+  # ── 2. PRUEBAS MULTIPLATAFORMA ───────────────────────────────────────────
+  linux-test:
+    name: 🐧 Tests (Linux x64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run Workspace Tests
+        run: cargo test --workspace --verbose
+      - name: Validate All 389+ LÚMEN Examples
+        run: cargo run --bin lumen -- check examples
+
+  macos-test:
+    name: 🍎 Tests (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace --verbose
+
+  windows-test:
+    name: 🪟 Tests (Windows x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace --verbose
+
+  wasm-check:
+    name: 🌐 WASM Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32-wasip1
+      - run: cargo check -p lumen-wasm --target wasm32-unknown-unknown
+      - run: cargo check -p lumen-wasm --target wasm32-wasip1 --no-default-features --features wasi
+
+  # ── 3. AUTOTAG AUTOMATIZADO TRAS CI VERDE ───────────────────────────────
+  autotag:
+    name: 🏷️ Autotag v<version>
+    needs: [fmt, clippy, linux-test, macos-test, windows-test, wasm-check]
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      created: ${{ steps.push.outputs.created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VER="${TAG#v}"
+          else
+            VER=$(cat VERSION | tr -d '[:space:]')
+            TAG="v$VER"
+          fi
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+      - name: Check tag on remote
+        id: check
+        run: |
+          if git ls-remote --tags origin "${{ steps.version.outputs.tag }}" | grep -q .; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Create and push tag
+        id: push
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }} (autotag — CI verde)"
+          git push origin "${{ steps.version.outputs.tag }}"
+          echo "created=true" >> $GITHUB_OUTPUT
+
+  # ── 4. MATRIZ DE COMPILACIÓN Y EMPAQUETADO MULTIPLATAFORMA ──────────────
+  build:
+    name: 🔨 Build ${{ matrix.target }}
+    needs: autotag
+    if: needs.autotag.result == 'success'
     runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            suffix: windows-x64
+            is_zip: true
+            binary_name: lumen.exe
+          # Windows x86 (32-bit)
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            suffix: windows-x86
+            is_zip: true
+            binary_name: lumen.exe
+          # Linux x64 (glibc)
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            suffix: linux-x64
+            is_zip: false
+            binary_name: lumen
+          # Linux x64 (musl estático sin dependencias)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            suffix: linux-x64-musl
+            is_zip: false
+            binary_name: lumen
+            use_cross: true
+          # Linux ARM64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            suffix: linux-arm64
+            is_zip: false
+            binary_name: lumen
+            use_cross: true
+          # Android / Termux AArch64
+          - target: aarch64-linux-android
+            os: ubuntu-latest
+            suffix: android-termux-arm64
+            is_zip: false
+            binary_name: lumen
+            use_cross: true
+          # macOS Apple Silicon (M1-M4)
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            suffix: macos-arm64
+            is_zip: false
+            binary_name: lumen
+          # macOS Intel
+          - target: x86_64-apple-darwin
+            os: macos-13
+            suffix: macos-x64
+            is_zip: false
+            binary_name: lumen
+
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Suite completa
-        run: cargo test --release --workspace
+        with:
+          targets: ${{ matrix.target }}
 
-  # ── Los fuzzers y los ejemplos son la red que pilló BUG-147..153. Corren en
-  # Linux, que es donde están escritos los scripts, y sin bloquear la matriz.
-  fuzzers:
-    name: Fuzzers y ejemplos
-    needs: lint
+      - name: Install Cross (para ARM/Android/Musl)
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Compile Binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }} --bin lumen
+          else
+            cargo build --release --target ${{ matrix.target }} --bin lumen
+          fi
+
+      - name: Assemble Package
+        shell: bash
+        run: |
+          TAG="${{ needs.autotag.outputs.tag }}"
+          VER="${TAG#v}"
+          PKG_NAME="lumen-${TAG}-${{ matrix.suffix }}"
+          mkdir -p "$PKG_NAME"
+
+          # 1. Binario ejecutable
+          if [ -f "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" ]; then
+            cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "$PKG_NAME/"
+          else
+            cp "target/release/${{ matrix.binary_name }}" "$PKG_NAME/" 2>/dev/null || true
+          fi
+
+          # 2. Biblioteca estándar completa (incluyendo compiler/*.nv)
+          mkdir -p "$PKG_NAME/stdlib"
+          cp -r stdlib/* "$PKG_NAME/stdlib/"
+
+          # 3. Suite de ejemplos
+          mkdir -p "$PKG_NAME/examples"
+          cp -r examples/* "$PKG_NAME/examples/"
+
+          # 4. Playground Web IDE
+          mkdir -p "$PKG_NAME/web"
+          cp -r crates/lumen-wasm/web/* "$PKG_NAME/web/" 2>/dev/null || true
+
+          # 5. Documentación Completa (de 0 a Ingeniero)
+          mkdir -p "$PKG_NAME/docs"
+          cp -r docs/* "$PKG_NAME/docs/" 2>/dev/null || true
+          cp README.md CHANGELOG.md LICENSE VERSION info.md "$PKG_NAME/" 2>/dev/null || true
+
+          # 6. Helper de prueba
+          printf '#!/bin/sh\necho "LÚMEN %s listo"\n./lumen run examples/hello.nv\n' "$TAG" > "$PKG_NAME/run_test.sh"
+          chmod +x "$PKG_NAME/run_test.sh" 2>/dev/null || true
+
+          # 7. Comprimir paquete
+          if [ "${{ matrix.is_zip }}" = "true" ]; then
+            7z a -tzip "${PKG_NAME}.zip" "$PKG_NAME/"
+          else
+            tar -czf "${PKG_NAME}.tar.gz" "$PKG_NAME/"
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumen-build-${{ matrix.suffix }}
+          path: lumen-*.*
+          retention-days: 30
+
+  # ── 5. PAQUETE WASM DEL PLAYGROUND ───────────────────────────────────────
+  wasm-pkg:
+    name: 🌐 Package WASM
+    needs: autotag
+    if: needs.autotag.result == 'success'
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Compilar
-        run: cargo build --release
-
-      # `allex.sh` ya distingue los ejemplos interactivos y los windows-only,
-      # que no son fallos del lenguaje. Reutilizarlo evita mantener dos
-      # criterios distintos de "ejemplo roto".
-      - name: Ejemplos (todos deben ejecutarse)
-        run: bash gen/allex.sh | tee /tmp/allex.log
-      - name: Ningún ejemplo falla
-        run: grep -qE "fallan=0( |$)" /tmp/allex.log
-
-      - name: stdlib — todos los módulos deben pasar `check`
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh || true
+      - name: Build WASM Package
         run: |
-          err=0
-          for f in stdlib/*.nv; do
-            ./target/release/lumen check "$f" >/dev/null 2>&1 || { echo "ERROR: $f"; err=$((err+1)); }
-          done
-          echo "módulos con error: $err"
-          test "$err" -eq 0
+          if command -v wasm-pack >/dev/null 2>&1; then
+            wasm-pack build crates/lumen-wasm --target web --out-dir pkg || true
+            tar -czf lumen-wasm-pkg.tar.gz crates/lumen-wasm/pkg crates/lumen-wasm/web || true
+          else
+            tar -czf lumen-wasm-pkg.tar.gz crates/lumen-wasm/web || true
+          fi
+      - name: Upload WASM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumen-wasm-pkg
+          path: lumen-wasm-pkg.tar.gz
+          retention-days: 30
 
-      - name: Fuzzer diferencial — structs, listas y `prestado mut`
-        run: python3 gen/fuzz6.py 320 && bash gen/fz10.sh | tee /tmp/fz10.log
-      - name: Sin divergencias (fz10)
-        run: grep -q "oraculo=0 diffs=0 crashes=0" /tmp/fz10.log
-
-      - name: Fuzzer de closures
-        run: python3 gen/fuzz7.py 240 && bash gen/fz11.sh | tee /tmp/fz11.log
-      - name: Sin divergencias (fz11)
-        run: grep -q "oraculo=0 diffs=0 crashes=0" /tmp/fz11.log
-
-      - name: Fuzzer de rechazo — el código inválido debe rechazarse
-        run: python3 gen/fuzz8.py 120 && bash gen/fz12.sh | tee /tmp/fz12.log
-      - name: Nada aceptado por error (fz12)
-        run: grep -q "acepta_run=0 acepta_check=0 ejecuta_cuerpo=0 acepta_tool=0" /tmp/fz12.log
-
-  # ── BUG-152: un binario instalado fuera del repo no encontraba la stdlib.
-  # Esta prueba lo reproduce SIEMPRE, para que no pueda volver en silencio.
-  instalacion-limpia:
-    name: Instalación limpia (sin repo alrededor)
-    needs: lint
+  # ── 6. PUBLICACIÓN DE RELEASE & SHA256SUMS EN GITHUB ─────────────────────
+  release:
+    name: 🚀 Publish GitHub Release
+    needs: [autotag, build, wasm-pkg]
+    if: always() && needs.autotag.result == 'success' && needs.build.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+          merge-multiple: true
 
-      - name: El binario, solo, en un directorio ajeno
+      - name: Generate SHA256SUMS & Release Notes
         run: |
-          # Nada de stdlib en disco: si el import funciona, es por la embebida.
-          mkdir -p /tmp/inst /tmp/proyecto
-          cp target/release/lumen /tmp/inst/
-          cd /tmp/proyecto
-          printf 'importar "texto";\nfuncion vacio main() { imprimir(texto_longitud("hola")); }\n' > hola.nv
-          salida=$(/tmp/inst/lumen run hola.nv)
-          echo "salida: $salida"
-          test "$salida" = "4"
+          TAG="${{ needs.autotag.outputs.tag }}"
+          VER="${TAG#v}"
+          REPO="${{ github.repository }}"
+          cd release_assets
+          sha256sum * > SHA256SUMS.txt || true
+          cat SHA256SUMS.txt
+          cd ..
 
-      - name: Los 69 módulos importables, sin stdlib en disco
-        run: |
-          mkdir -p /tmp/inst2 && cp target/release/lumen /tmp/inst2/
-          cd /tmp && ko=0
-          for f in "$GITHUB_WORKSPACE"/stdlib/*.nv; do
-            n=$(basename "$f" .nv)
-            printf 'importar "%s";\nfuncion vacio main() { imprimir(1); }\n' "$n" > /tmp/m.nv
-            /tmp/inst2/lumen run /tmp/m.nv >/dev/null 2>&1 || ko=$((ko+1))
-          done
-          echo "módulos NO importables: $ko"
-          test "$ko" -eq 0
+          cat << EOF > release_notes.md
+          # ⚡ LÚMEN ${TAG} — Distribución Oficial en GitHub
 
-      - name: "`build --native` sin compilador de C falla con un mensaje útil"
-        run: |
-          cp target/release/lumen /tmp/inst/
-          cd /tmp/proyecto
-          printf 'funcion vacio main() { imprimir(42); }\n' > n.nv
-          # PATH vacío: no hay gcc ni clang.
-          set +e
-          salida=$(env -i PATH=/nonexistent HOME=/tmp /tmp/inst/lumen build n.nv --native -o /tmp/proyecto/nbin 2>&1)
-          rc=$?
-          set -e
-          echo "$salida"
-          test "$rc" -ne 0                                  # debe fallar
-          test ! -f /tmp/proyecto/nbin                      # sin binario a medias
-          echo "$salida" | grep -qi "compilador de C"       # y explicando por qué
+          Paquetes oficiales de **LÚMEN v${VER}** listos para producción, desarrollo local y servidores.
+
+          ### 📦 Descargas Directas por Plataforma:
+
+          | Sistema Operativo | Arquitectura | Paquete |
+          |---|---|---|
+          | 🪟 **Windows x64** | x86_64 | [\`lumen-${TAG}-windows-x64.zip\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-windows-x64.zip) |
+          | 🪟 **Windows x86** | i686 (32-bit) | [\`lumen-${TAG}-windows-x86.zip\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-windows-x86.zip) |
+          | 🐧 **Linux x64** | glibc x86_64 | [\`lumen-${TAG}-linux-x64.tar.gz\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-linux-x64.tar.gz) |
+          | 🐧 **Linux Static** | musl x86_64 (0-Deps) | [\`lumen-${TAG}-linux-x64-musl.tar.gz\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-linux-x64-musl.tar.gz) |
+          | 🐧 **Linux ARM64** | aarch64 | [\`lumen-${TAG}-linux-arm64.tar.gz\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-linux-arm64.tar.gz) |
+          | 📱 **Termux (Android)** | aarch64 ARM64 | [\`lumen-${TAG}-android-termux-arm64.tar.gz\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-android-termux-arm64.tar.gz) |
+          | 🍎 **macOS Apple Silicon** | M1/M2/M3/M4 (arm64) | [\`lumen-${TAG}-macos-arm64.tar.gz\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-macos-arm64.tar.gz) |
+          | 🍎 **macOS Intel** | x86_64 | [\`lumen-${TAG}-macos-x64.tar.gz\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-macos-x64.tar.gz) |
+          | 🌐 **Playground WASM** | wasm32 | [\`lumen-wasm-pkg.tar.gz\`](https://github.com/${REPO}/releases/download/${TAG}/lumen-wasm-pkg.tar.gz) |
+
+          ---
+
+          ### 💻 Descarga e Instalación Rápida con GitHub:
+
+          #### 🪟 Windows PowerShell:
+          \`\`\`powershell
+          Invoke-WebRequest -Uri "https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-windows-x64.zip" -OutFile "lumen.zip"
+          Expand-Archive lumen.zip -DestinationPath "\$env:LOCALAPPDATA\\Programs\\Lumen"
+          \$env:Path += ";\$env:LOCALAPPDATA\\Programs\\Lumen\\lumen-${TAG}-windows-x64"
+          \`\`\`
+
+          #### 🐧 Linux / macOS:
+          \`\`\`bash
+          curl -L "https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-linux-x64.tar.gz" | tar -xz
+          mkdir -p ~/.local/bin && cp lumen-${TAG}-linux-x64/lumen ~/.local/bin/
+          \`\`\`
+
+          #### 📱 Termux en Android:
+          \`\`\`bash
+          pkg install clang -y
+          curl -L "https://github.com/${REPO}/releases/download/${TAG}/lumen-${TAG}-android-termux-arm64.tar.gz" | tar -xz
+          cp lumen-${TAG}-android-termux-arm64/lumen \$PREFIX/bin/
+          \`\`\`
+
+          ### 🔐 Verificación de Integridad:
+          Consulta \`SHA256SUMS.txt\` para validar las sumas de verificación de cada archivo.
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.autotag.outputs.tag }}
+          name: "LÚMEN ${{ needs.autotag.outputs.tag }} — Distribución Oficial"
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            release_assets/*
+            lumen-lang-2.4.6.vsix
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

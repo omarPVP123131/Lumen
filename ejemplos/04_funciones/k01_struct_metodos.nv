@@ -1,9 +1,0 @@
-estructura Contador { valor: entero }
-impl Contador {
-  funcion vacio incrementar(prestado mut Contador self) { self.valor = self.valor + 1; }
-  funcion entero obtener(prestado Contador self) { retornar self.valor; }
-}
-Contador c = Contador { valor: 0 };
-c.incrementar();
-c.incrementar();
-imprimir(c.obtener());

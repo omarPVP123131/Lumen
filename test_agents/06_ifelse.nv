@@ -1,7 +1,0 @@
-// Sub-agent 6: If/Else - corregido
-entero edad = 18;
-si (edad >= 18) {
-    imprimir("Mayor de edad");
-} sino {
-    imprimir("Menor de edad");
-}

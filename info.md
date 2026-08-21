@@ -1,6 +1,6 @@
 # 📖 LÚMEN — Compendio Técnico Integral y Enciclopedia Oficial (info.md)
 
-**Versión del Ecosistema: v3.0 — Compilación Unificada de Todos los Documentos del Proyecto**
+**Versión del Ecosistema: v2.4.6 — Compilación Unificada de Todos los Documentos del Proyecto**
 
 ---
 

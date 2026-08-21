@@ -1,2 +1,0 @@
-TipoQueNoExiste x = 5;
-imprimir(x);

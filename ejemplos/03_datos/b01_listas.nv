@@ -1,6 +1,0 @@
-lista<entero> l = [5,3,8];
-imprimir(l[0]);
-imprimir(l[2]);
-imprimir(largo(l));
-l[1] = 99;
-imprimir(l);

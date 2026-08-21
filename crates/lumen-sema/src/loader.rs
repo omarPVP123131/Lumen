@@ -38,21 +38,6 @@ pub struct ModuleLoader {
     memory_files: HashMap<String, String>,
 }
 
-// Stdlib embebida en el binario, generada por `build.rs` a partir de
-// `stdlib/*.nv`. BUG-152: sin esto, un binario instalado fuera del repo no
-// encontraba NINGUNO de los 69 modulos importables y `importar "texto";`
-// fallaba nada mas instalar. Viaja dentro del ejecutable, asi que no hay que
-// distribuir la stdlib aparte ni acertar con una ruta de instalacion.
-include!(concat!(env!("OUT_DIR"), "/embedded_stdlib.rs"));
-
-/// La stdlib embebida como mapa `nombre -> fuente`, lista para el loader.
-fn stdlib_embebida() -> HashMap<String, String> {
-    STDLIB_FILES
-        .iter()
-        .map(|(n, src)| ((*n).to_string(), (*src).to_string()))
-        .collect()
-}
-
 impl ModuleLoader {
     pub fn new(search_paths: Vec<PathBuf>) -> Self {
         Self {
@@ -60,12 +45,7 @@ impl ModuleLoader {
             visited: HashSet::new(),
             emitted: HashSet::new(),
             known_prefixes: HashSet::new(),
-            // BUG-152: la stdlib embebida se precarga SIEMPRE. Es el ultimo
-            // recurso de `resolve_path`: el disco sigue teniendo prioridad, de
-            // modo que `-L` y una stdlib local siguen ganando y quien la edite
-            // en el repo la ve al instante. Lo que cambia es que dejar de
-            // encontrarla ya no es posible.
-            memory_files: stdlib_embebida(),
+            memory_files: HashMap::new(),
         }
     }
 
@@ -79,9 +59,7 @@ impl ModuleLoader {
     /// si la clave no existe. Usado por el runtime WASM (playground).
     pub fn with_memory_files(memory_files: HashMap<String, String>) -> Self {
         let mut loader = Self::with_default_search_paths();
-        // Los ficheros del llamador se superponen a la stdlib embebida: el
-        // playground puede sobrescribir un modulo, pero no pierde el resto.
-        loader.memory_files.extend(memory_files);
+        loader.memory_files = memory_files;
         loader
     }
 
@@ -188,19 +166,6 @@ impl ModuleLoader {
                     let flat = self.flatten(imported_program, &resolved)?;
                     self.visited.remove(&resolved);
                     let prefix = alias.unwrap_or_else(|| {
-                        // BUG-154: cuando el import resuelve a un PAQUETE (un
-                        // directorio con `lumen.toml`), el prefijo debe ser el
-                        // nombre por el que se importa, no el del fichero de
-                        // entrada. `importar "libreria";` sobre un paquete cuya
-                        // entrada es `src/main.nv` producia funciones
-                        // `main_sumar` en vez de `libreria_sumar`, justo lo que
-                        // `lumen install` promete al terminar. El nombre del
-                        // fichero de entrada es un detalle interno del paquete:
-                        // renombrar `main.nv` a `lib.nv` no puede cambiar la API
-                        // que ven sus consumidores.
-                        if let Some(nombre) = self.nombre_de_paquete(&resolved, &path) {
-                            return nombre;
-                        }
                         resolved
                             .file_stem()
                             .and_then(|s| s.to_str())
@@ -216,45 +181,6 @@ impl ModuleLoader {
             }
         }
         Ok(result)
-    }
-
-    /// BUG-154: si `resolved` es el fichero de entrada de un paquete (un
-    /// directorio con `lumen.toml`), devuelve el nombre por el que se importa.
-    /// Se toma del propio texto del `importar` —su ultimo segmento—, que es lo
-    /// que el usuario escribe y lo que `lumen install` le dijo que escribiera.
-    /// Solo se aplica si ese directorio es realmente un paquete resuelto por
-    /// `check_package_dir`; para un `.nv` suelto el prefijo sigue siendo el
-    /// nombre del fichero, como siempre.
-    fn nombre_de_paquete(&self, resolved: &Path, texto_import: &str) -> Option<String> {
-        // El nombre que escribio el usuario, sin ruta ni extension.
-        let pedido = Path::new(texto_import).file_stem()?.to_str()?.to_string();
-        if pedido.is_empty() {
-            return None;
-        }
-        // ¿Hay un directorio-paquete, entre los sitios donde se busca, cuya
-        // entrada sea exactamente este fichero?
-        let mut bases: Vec<PathBuf> = self.search_paths.clone();
-        if let Some(padre) = resolved.parent() {
-            bases.push(padre.to_path_buf());
-            if let Some(abuelo) = padre.parent() {
-                bases.push(abuelo.to_path_buf());
-            }
-        }
-        for base in bases {
-            let dir = base.join(&pedido);
-            if !dir.is_dir() {
-                continue;
-            }
-            if let Some(entrada) = self.check_package_dir(&dir) {
-                let entrada_norm = fs::canonicalize(&entrada).unwrap_or(entrada);
-                let resolved_norm =
-                    fs::canonicalize(resolved).unwrap_or_else(|_| resolved.to_path_buf());
-                if entrada_norm == resolved_norm {
-                    return Some(pedido);
-                }
-            }
-        }
-        None
     }
 
     fn check_package_dir(&self, dir: &Path) -> Option<PathBuf> {
@@ -809,17 +735,9 @@ fn prefix_stmt(
         }
         Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Import { .. } => {}
         Stmt::GuardLet {
-            pattern,
-            value,
-            else_body,
-            ..
+            value, else_body, ..
         } => {
             prefix_expr(value, prefix, locals, known, module_decls);
-            // BUG-134: idem para `guard sea`; además el binding sigue vivo
-            // DESPUÉS del bloque, así que se registra también en `locals`.
-            let mut bound = HashSet::new();
-            collect_pattern_bindings(pattern, &mut bound);
-            locals.extend(bound);
             let mut guard_locals = locals.clone();
             for node in else_body.iter_mut() {
                 prefix_node(node, prefix, &mut guard_locals, false, known, module_decls);
@@ -878,18 +796,13 @@ fn prefix_stmt(
             prefix_expr(value, prefix, locals, known, module_decls);
         }
         Stmt::IfLet {
-            pattern,
             value,
             then_body,
             else_body,
             ..
         } => {
             prefix_expr(value, prefix, locals, known, module_decls);
-            // BUG-134: las variables que liga el patrón son LOCALES del cuerpo.
-            let mut bound = HashSet::new();
-            collect_pattern_bindings(pattern, &mut bound);
             let mut then_locals = locals.clone();
-            then_locals.extend(bound);
             for node in then_body.iter_mut() {
                 prefix_node(node, prefix, &mut then_locals, false, known, module_decls);
             }
@@ -923,41 +836,6 @@ fn prefix_stmt(
             }
         }
         Stmt::InlineAsm { .. } | Stmt::InlineC { .. } | Stmt::InlineRust { .. } => {}
-    }
-}
-
-/// BUG-134: recoge los nombres que un patrón de `si sea` / `guard sea`
-/// introduce como variables locales (`si sea exito(datos) = r`, `algun(v)`,
-/// `error(e)`, y las variantes de enum con carga). Sin esto el aplanador de
-/// módulos los tomaba por identificadores globales y les ponía el prefijo del
-/// módulo (`m_datos`), de modo que el cuerpo referenciaba una variable que no
-/// existía: E033 en cuanto alguien importaba el módulo.
-fn collect_pattern_bindings(pattern: &Expr, out: &mut HashSet<String>) {
-    match pattern {
-        Expr::Ident { name, .. } => {
-            out.insert(name.clone());
-        }
-        Expr::Call { args, .. } => {
-            for a in args.iter() {
-                collect_pattern_bindings(a, out);
-            }
-        }
-        Expr::EnumCtor { args, .. } => {
-            for a in args.iter() {
-                collect_pattern_bindings(a, out);
-            }
-        }
-        Expr::Tuple { items, .. } => {
-            for it in items.iter() {
-                collect_pattern_bindings(it, out);
-            }
-        }
-        // `exito(v)`, `error(e)`, `algun(v)` tienen nodo propio en el AST, no
-        // son llamadas genéricas: sin estos brazos el binding se escapaba.
-        Expr::Exito { expr, .. } | Expr::Error { expr, .. } | Expr::Algun { expr, .. } => {
-            collect_pattern_bindings(expr, out);
-        }
-        _ => {}
     }
 }
 
@@ -1063,17 +941,7 @@ fn prefix_expr(
             type_args,
             ..
         } => {
-            // BUG-133: este era el único sitio que prefijaba un nombre de
-            // struct SIN comprobar `is_known_prefixed`. En una cadena de
-            // importaciones (`app` -> `nn` -> `tensor`), un literal
-            // `GrafoAutograd { ... }` escrito dentro de `tensor.nv` ya había
-            // recibido su prefijo al aplanar `tensor`, y al aplanar `nn` se le
-            // volvía a aplicar: `nn_tensor_GrafoAutograd`, un tipo que no
-            // existe (E062). La declaración sí estaba protegida, así que
-            // declaración y uso dejaban de coincidir.
-            if !is_known_prefixed(struct_name, known) {
-                *struct_name = format!("{}_{}", prefix, struct_name);
-            }
+            *struct_name = format!("{}_{}", prefix, struct_name);
             for (_, value) in fields.iter_mut() {
                 prefix_expr(value, prefix, locals, known, module_decls);
             }
@@ -1290,9 +1158,7 @@ fn is_known_prefixed(name: &str, known: &HashSet<String>) -> bool {
         .any(|p| !p.is_empty() && name.starts_with(&format!("{}_", p)))
 }
 
-/// BUG-103: expuesto para que el analizador pueda avisar cuando una función
-/// del usuario choca con un builtin.
-pub fn is_builtin(name: &str) -> bool {
+fn is_builtin(name: &str) -> bool {
     if name.starts_with("__") {
         return true;
     }
@@ -1318,33 +1184,10 @@ pub fn is_builtin(name: &str) -> bool {
             | "to_texto"
             | "a_entero"
             | "to_int"
-            | "to_entero"
             | "a_decimal"
             | "to_float"
             | "a_numero"
             | "to_number"
-            | "a_entero_seguro"
-            | "to_int_safe"
-            | "a_decimal_seguro"
-            | "to_float_safe"
-            | "es_numero"
-            | "is_number"
-            | "abs"
-            | "absoluto"
-            | "minimo"
-            | "min"
-            | "maximo"
-            | "max"
-            | "raiz"
-            | "sqrt"
-            | "potencia"
-            | "pow"
-            | "piso"
-            | "floor"
-            | "techo"
-            | "ceil"
-            | "redondear"
-            | "round"
             | "intentar"
             | "try"
     )

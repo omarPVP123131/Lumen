@@ -11,13 +11,13 @@ texto salida = "stdlib/compiler/mini_fn_out.nvc";
 texto codigo = intentar __leer_archivo(entrada);
 imprimir("Source: ", largo(codigo), " bytes");
 
-numero tk = lexer_tokenizar(codigo);
+numero tk = lexer_lexer_tokenizar(codigo);
 imprimir("Tokens: ", __map_obtener(tk, "cnt"));
 
-numero ast = parser_parse(tk);
+numero ast = parser_parser_parsear(tk);
 imprimir("AST: ", __map_obtener(ast, "tipo"));
 
-numero cg = codegen_generar(ast);
+numero cg = codegen_codegen_generar(ast);
 imprimir("Instrs: ", __map_obtener(cg, "pos"));
 
 lista<entero> bytes = __codegen_a_nvc(cg);

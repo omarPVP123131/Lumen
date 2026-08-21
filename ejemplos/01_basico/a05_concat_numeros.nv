@@ -1,2 +1,0 @@
-imprimir("n=" + a_texto(42));
-imprimir(a_texto(3.5) + "|" + a_texto(verdadero));

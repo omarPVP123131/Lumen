@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-3.0.0-brightgreen)
+![Version](https://img.shields.io/badge/version-2.4.6-orange)
 ![Tests](https://img.shields.io/badge/tests-385%20passing-brightgreen)
 ![Fases](https://img.shields.io/badge/fases-1--25%20completadas-blueviolet)
 
@@ -31,7 +31,7 @@ lumen bundle src/main.nv -o mi_app
 
 ---
 
-## 💡 Características Principales de LÚMEN v3.0
+## 💡 Características Principales de LÚMEN v2.4.6
 
 ### 1. Paridad Bilingüe 100% Nativa (Español / English)
 ```lumen
@@ -97,9 +97,7 @@ function integer calculate_fibonacci(integer n) {
 * **[Manual del Lenguaje](LENGUAJE.md)** — Especificación técnica completa de la gramática.
 * **[Guía de Herramientas](HERRAMIENTAS.md)** — CLI, REPL, Debugger, LSP y AOT.
 * **[Roadmap y Arquitectura](docs/roadmap.md)** — Plan de evolución del ecosistema.
-* **[Migrar de la v2.4.x a la v3.0](docs/MIGRACION-v3.md)** — Qué se rompe y cómo arreglarlo.
-* **[Distribución](docs/DISTRIBUCION.md)** — Cómo se construyen y publican los binarios.
 
 ---
 
-*LÚMEN v3.0 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v2.4.6 — © 2026 LÚMEN Core Team & Comunidad.*
