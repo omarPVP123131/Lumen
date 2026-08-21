@@ -4527,4 +4527,290 @@ para a en nums {
             panic!("Expected Variable declaration with Query init");
         }
     }
+
+    #[test]
+    fn test_new_parser_for_with_type() {
+        let source = "para (entero i = 0; i < 5; i = i + 1) { imprimir(i); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+        assert!(matches!(&program[0], DeclOrStmt::Stmt(Stmt::For { .. })));
+    }
+
+    #[test]
+    fn test_new_parser_for_without_type() {
+        let source = "para (i = 0; i < 10; i = i + 1) { imprimir(i); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert!(matches!(&program[0], DeclOrStmt::Stmt(Stmt::For { .. })));
+    }
+
+    #[test]
+    fn test_new_parser_for_without_type_inferred() {
+        let source = "para (i = 0; i < 5; i = i + 1) { }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Stmt(Stmt::For { init, .. }) = &program[0] {
+            if let Decl::Variable { var_type, name, .. } = init.as_ref() {
+                assert_eq!(name, "i");
+                assert_eq!(*var_type, Type::Struct("Infer".to_string()));
+            } else {
+                panic!("Expected Infer variable");
+            }
+        }
+    }
+
+    #[test]
+    fn test_new_parser_elegir_or_pattern_simple() {
+        let source = "elegir (x) { caso 1 | 2: imprimir(\"a\"); defecto: imprimir(\"b\"); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
+            assert_eq!(arms.len(), 1);
+            assert_eq!(arms[0].alt_values.len(), 1);
+        } else {
+            panic!("Expected Match");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_elegir_or_pattern_enum() {
+        let source = "elegir (c) { caso Color::Rojo | Color::Verde: imprimir(\"calido\"); caso Color::Azul: imprimir(\"frio\"); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
+            assert_eq!(arms.len(), 2);
+            assert_eq!(arms[0].alt_values.len(), 1);
+            assert!(matches!(&arms[0].alt_values[0], Expr::EnumCtor { .. }));
+        } else {
+            panic!("Expected Match");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_elegir_range_exclusive() {
+        let source = "elegir (n) { caso 0..5: imprimir(\"bajo\"); defecto: imprimir(\"alto\"); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
+            assert!(matches!(&arms[0].value, Expr::Range { inclusive: false, .. }));
+        } else {
+            panic!("Expected Match");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_elegir_range_inclusive() {
+        let source = "elegir (n) { caso 0..=5: imprimir(\"bajo\"); defecto: imprimir(\"alto\"); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
+            assert!(matches!(&arms[0].value, Expr::Range { inclusive: true, .. }));
+        } else {
+            panic!("Expected Match");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_if_let_algun() {
+        let source = "opcion<entero> opt = algun(1); si sea algun(x) = opt { imprimir(x); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 2);
+        assert!(matches!(&program[1], DeclOrStmt::Stmt(Stmt::IfLet { .. })));
+    }
+
+    #[test]
+    fn test_new_parser_if_let_exito() {
+        let source = "resultado<entero, texto> r = exito(5); si sea exito(v) = r { imprimir(v); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert!(matches!(&program[1], DeclOrStmt::Stmt(Stmt::IfLet { .. })));
+    }
+
+    #[test]
+    fn test_new_parser_funcion_vacio_principal() {
+        let source = "funcion vacio principal() { imprimir(\"hola\"); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+        assert!(matches!(&program[0], DeclOrStmt::Decl(Decl::Function { .. })));
+    }
+
+    #[test]
+    fn test_new_parser_funcion_entero_principal() {
+        let source = "funcion entero principal() { retornar 0; }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Function { name, return_type, .. }) = &program[0] {
+            assert_eq!(name, "principal");
+            assert_eq!(*return_type, Type::Entero);
+        } else {
+            panic!("Expected Function");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_array_index_assign() {
+        let source = "lista<entero> arr = [1,2,3]; arr[0] = 5;";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 2);
+        assert!(matches!(&program[1], DeclOrStmt::Stmt(Stmt::ArraySet { .. })));
+    }
+
+    #[test]
+    fn test_new_parser_cstyle_array_decl() {
+        let source = "entero arr[] = [1,2,3];";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { var_type, name, .. }) = &program[0] {
+            assert_eq!(name, "arr");
+            assert_eq!(*var_type, Type::Lista(Box::new(Type::Entero)));
+        } else {
+            panic!("Expected Variable");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_como_cast_entero() {
+        let source = "numero x = 5; entero y = x como entero;";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[1] {
+            assert!(matches!(init.as_ref(), Expr::Cast { .. }));
+            if let Expr::Cast { cast_type, .. } = init.as_ref() {
+                assert_eq!(*cast_type, Type::Entero);
+            }
+        } else {
+            panic!("Expected Cast");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_como_cast_texto() {
+        let source = "numero x = 5; texto t = x como texto;";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[1] {
+            assert!(matches!(init.as_ref(), Expr::Cast { .. }));
+        } else {
+            panic!("Expected Cast");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_pipe_simple() {
+        let source = "entero r = 10 |> duplicar();";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_new_parser_pipe_chain() {
+        let source = "entero r = 10 |> duplicar() |> sumar(5);";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+            assert!(matches!(init.as_ref(), Expr::Call { .. }));
+        } else {
+            panic!("Expected Call chain");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_fstring_simple() {
+        let source = r#"texto s = f"hola mundo";"#;
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_new_parser_fstring_with_expr() {
+        let source = r#"texto nombre = "Lumen"; texto s = f"hola {nombre}";"#;
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 2);
+        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[1] {
+            assert!(matches!(init.as_ref(), Expr::Binary { .. } | Expr::Call { .. } | Expr::Str { .. }));
+        } else {
+            panic!("Expected Variable with fstring");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_generic_nested_lista() {
+        let source = "lista<lista<entero>> matriz = [[1,2],[3,4]];";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { var_type, .. }) = &program[0] {
+            assert_eq!(*var_type, Type::Lista(Box::new(Type::Lista(Box::new(Type::Entero)))));
+        } else {
+            panic!("Expected nested lista");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_generic_opcion_resultado_nested() {
+        let source = "opcion<resultado<entero, texto>> r = algun(exito(42));";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { var_type, .. }) = &program[0] {
+            assert!(matches!(var_type, Type::Opcion(_)));
+        } else {
+            panic!("Expected opcion<resultado>");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_generic_struct_nested() {
+        let source = "Par<lista<entero>, texto> p = Par<lista<entero>, texto> { primero: [1,2], segundo: \"hola\" };";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_new_parser_elegir_or_multiple() {
+        let source = "elegir (x) { caso 1 | 2 | 3: imprimir(\"a\"); caso 4 | 5: imprimir(\"b\"); defecto: imprimir(\"c\"); }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Stmt(Stmt::Match { arms, default, .. }) = &program[0] {
+            assert_eq!(arms.len(), 2);
+            assert_eq!(arms[0].alt_values.len(), 2);
+            assert_eq!(arms[1].alt_values.len(), 1);
+            assert!(default.is_some());
+        } else {
+            panic!("Expected Match");
+        }
+    }
+
+    #[test]
+    fn test_new_parser_range_expr_simple() {
+        let source = "lista<entero> r = 0..10; lista<entero> r2 = 0..=10;";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        assert_eq!(program.len(), 2);
+        for prog in &program {
+            if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = prog {
+                assert!(matches!(init.as_ref(), Expr::Range { .. }));
+            } else {
+                panic!("Expected Range");
+            }
+        }
+    }
+
+    #[test]
+    fn test_new_parser_cstyle_array_empty() {
+        let source = "entero vacio[] = [];";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "Parse errors: {:?}", errors);
+        if let DeclOrStmt::Decl(Decl::Variable { var_type, .. }) = &program[0] {
+            assert_eq!(*var_type, Type::Lista(Box::new(Type::Entero)));
+        } else {
+            panic!("Expected Variable");
+        }
+    }
 }

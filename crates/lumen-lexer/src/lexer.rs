@@ -788,4 +788,270 @@ imprimir(res)"#;
         let (_, errors) = tokenize_with_errors(r#""hola\"#);
         assert!(!errors.is_empty());
     }
+
+    #[test]
+    fn test_new_lexer_range_dotdot() {
+        let kinds = tokenize("1..5");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_range_dotdotequal() {
+        let kinds = tokenize("1..=5");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDotEqual,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_float_vs_range_simple() {
+        let kinds = tokenize("1..5 1.5");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::NumLiteral("1.5".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_float_literal() {
+        let kinds = tokenize("3.14 0.5 100.0");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("3.14".to_string()),
+                TokenKind::NumLiteral("0.5".to_string()),
+                TokenKind::NumLiteral("100.0".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_mixed_float_range() {
+        let kinds = tokenize("1.5..5 1.0..=3.0");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1.5".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::NumLiteral("1.0".to_string()),
+                TokenKind::DotDotEqual,
+                TokenKind::NumLiteral("3.0".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_pipe_single() {
+        let kinds = tokenize("|");
+        assert_eq!(kinds, vec![TokenKind::Pipe, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_pipe_oror_distinction() {
+        let kinds = tokenize("| || |");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Pipe,
+                TokenKind::OrOr,
+                TokenKind::Pipe,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_pipe_greater() {
+        let kinds = tokenize("|> |> 5 |> foo");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::PipeGreater,
+                TokenKind::PipeGreater,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::PipeGreater,
+                TokenKind::Ident("foo".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_ampersand_single() {
+        let kinds = tokenize("&");
+        assert_eq!(kinds, vec![TokenKind::Ampersand, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_andand() {
+        let kinds = tokenize("&& & &&");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::AndAnd,
+                TokenKind::Ampersand,
+                TokenKind::AndAnd,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_shift_left() {
+        let kinds = tokenize("<<");
+        assert_eq!(kinds, vec![TokenKind::ShiftLeft, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_shift_right() {
+        let kinds = tokenize(">>");
+        assert_eq!(kinds, vec![TokenKind::ShiftRight, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_algun() {
+        let kinds = tokenize("algun");
+        assert_eq!(kinds, vec![TokenKind::Algun, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_ninguno() {
+        let kinds = tokenize("ninguno");
+        assert_eq!(kinds, vec![TokenKind::Ninguno, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_exito_error() {
+        let kinds = tokenize("exito error");
+        assert_eq!(
+            kinds,
+            vec![TokenKind::Exito, TokenKind::ErrKeyword, TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_sea_para_elegir() {
+        let kinds = tokenize("sea para elegir");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Sea,
+                TokenKind::Para,
+                TokenKind::Elegir,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_caso_defecto_como() {
+        let kinds = tokenize("caso defecto como");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Caso,
+                TokenKind::Defecto,
+                TokenKind::Como,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_opcion() {
+        let kinds = tokenize("opcion");
+        assert_eq!(kinds, vec![TokenKind::Opcion, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_resultado() {
+        let kinds = tokenize("resultado");
+        assert_eq!(kinds, vec![TokenKind::Resultado, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_numero() {
+        let kinds = tokenize("numero");
+        assert_eq!(kinds, vec![TokenKind::Numero, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_ident_abs_min_max() {
+        let kinds = tokenize("abs min max");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident("abs".to_string()),
+                TokenKind::Ident("min".to_string()),
+                TokenKind::Ident("max".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_string_escape_newline() {
+        let kinds = tokenize(r#""a\nb""#);
+        assert_eq!(
+            kinds,
+            vec![TokenKind::StrLiteral("a\nb".to_string()), TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_string_escape_tab() {
+        let kinds = tokenize(r#""a\tb""#);
+        assert_eq!(
+            kinds,
+            vec![TokenKind::StrLiteral("a\tb".to_string()), TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_string_escape_backslash_quote() {
+        let kinds = tokenize(r#""a\"b" "c\\d""#);
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::StrLiteral("a\"b".to_string()),
+                TokenKind::StrLiteral("c\\d".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_string_unicode() {
+        let kinds = tokenize(r#""¡Hola, LÚMEN! 🚀""#);
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::StrLiteral("¡Hola, LÚMEN! 🚀".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
 }

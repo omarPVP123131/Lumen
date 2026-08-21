@@ -8,21 +8,21 @@
 
 | Crate | Tests | Tipo |
 |-------|-------|------|
-| lumen-lexer | 27 | unit |
-| lumen-parser | 50 | unit |
+| lumen-lexer | 52 | unit |
+| lumen-parser | 75 | unit |
 | lumen-sema | 56 | unit |
 | lumen-ir | 20 | unit + folding |
 | lumen-codegen | 13 | unit |
 | lumen-vm | 48 | unit |
-| lumen-vm | 172 | e2e |
+| lumen-vm | 612 | e2e |
 | lumen-fmt | 2 | unit |
-| lumen-repl | 1 | unit |
-| lumen-project | 1 | unit |
-| lumen-aot | 1+ | unit |
+| lumen-repl | 3 | unit |
+| lumen-project | 2 | unit |
+| lumen-aot | 6 | unit |
 | lumen-api | 5 | unit |
-| **Total** | **~720** | |
+| **Total** | **~904** | |
 
-**v3.0.0: 720 pruebas en verde (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos sin fallos, clippy sin avisos, 4 fuzzers diferenciales sin divergencias.**
+**v3.0.0: 904 pruebas en verde (Linux y Windows), 389/389 en `lumen check`, 389 `run` OK con `CI=1`, clippy sin avisos, 4 fuzzers diferenciales sin divergencias.**
 
 ---
 

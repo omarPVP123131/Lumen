@@ -3,7 +3,7 @@
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-3.0.0-orange)
-![Tests](https://img.shields.io/badge/tests-720%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-904%20passing-brightgreen)
 ![Fases](https://img.shields.io/badge/fases-0--185%20+%20self--hosting-blueviolet)
 
 > **El primer lenguaje de programación moderno de sistemas y aplicaciones con el español y el inglés como ciudadanos de primera clase.**
@@ -103,7 +103,7 @@ function integer calculate_fibonacci(integer n) {
 | **Self-Hosting (Compilador + VM en LÚMEN)** | ✅ Bootstrapping doble certificado — fixpoint byte-idéntico |
 | **AI/ML (Fases 186-200)** | 🔜 Próximo hito |
 
-**Verificación v3.0.0:** 720 pruebas en verde (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos ejecutados sin fallos, clippy sin avisos y cuatro fuzzers diferenciales (structs/listas, closures, rechazo y regex) sin divergencias.
+**Verificación v3.0.0:** 904 pruebas en verde (Linux y Windows), 389/389 en `lumen check`, 389 ejemplos `run` OK con `CI=1`, clippy sin avisos y cuatro fuzzers diferenciales (structs/listas, closures, rechazo y regex) sin divergencias.
 
 ---
 
