@@ -181,6 +181,8 @@ lcov.info
 tmp/
 temp/
 benchmarks_output/
+bench_fib
+stdlib/compiler/bench_fib
 test_async.txt
 test_salida.txt
 test_ffi_io.txt
@@ -191,6 +193,7 @@ entrada_vm.txt
 target.txt
 *.tmp.nv
 *.temp.c
+3,0,0.txt
 
 # ── 12. VARIABLES DE ENTORNO Y SECRETOS ──────────────────────────────────
 .env

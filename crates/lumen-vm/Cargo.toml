@@ -14,7 +14,7 @@ default = ["full"]
 # corutinas, streams, generadores). "full" añade los que requieren SO
 # (reqwest/libloading — NO compilan en wasm32-unknown-unknown).
 extra = ["base64", "hmac", "sha2", "hex"]
-full = ["extra", "reqwest", "libloading", "aot"]
+full = ["extra", "ureq", "libloading", "aot"]
 aot = ["lumen-aot"]
 
 [lints.rust]
@@ -31,7 +31,7 @@ lumen-parser = { path = "../lumen-parser" }
 lumen-sema = { path = "../lumen-sema" }
 lumen-ir = { path = "../lumen-ir" }
 lumen-aot = { path = "../lumen-aot", optional = true }
-reqwest = { version = "0.12", features = ["blocking"], optional = true }
+ureq = { version = "2.10", optional = true }
 unicode-normalization = "0.1"
 libloading = { version = "0.8", optional = true }
 base64 = { version = "0.22", optional = true }

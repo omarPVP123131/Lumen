@@ -1868,9 +1868,9 @@ impl VM {
         #[cfg(feature = "full")]
         if name == "__http_get" || name == "__http_obtener" {
             let url = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            match reqwest::blocking::get(&url) {
+            match ureq::get(&url).call() {
                 Ok(resp) => {
-                    let body = resp.text().unwrap_or_default();
+                    let body = resp.into_string().unwrap_or_default();
                     self.push(Value::str(body));
                 }
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
@@ -1882,13 +1882,9 @@ impl VM {
         if name == "__http_post" || name == "__http_enviar" {
             let url = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let body = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-            match reqwest::blocking::Client::new()
-                .post(&url)
-                .body(body)
-                .send()
-            {
+            match ureq::post(&url).send_string(&body) {
                 Ok(resp) => {
-                    let text = resp.text().unwrap_or_default();
+                    let text = resp.into_string().unwrap_or_default();
                     self.push(Value::str(text));
                 }
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),

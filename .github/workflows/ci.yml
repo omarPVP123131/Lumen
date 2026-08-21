@@ -48,7 +48,7 @@ jobs:
 
   macos-test:
     name: 🍎 Tests (macOS)
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -170,7 +170,7 @@ jobs:
             use_cross: true
           # macOS Apple Silicon (M1-M4)
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-13
             suffix: macos-arm64
             is_zip: false
             binary_name: lumen
