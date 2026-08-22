@@ -75,10 +75,28 @@ jobs:
       - run: cargo check -p lumen-wasm --target wasm32-unknown-unknown
       - run: cargo check -p lumen-wasm --target wasm32-wasip1 --no-default-features --features wasi
 
+  headless-check:
+    name: 🖥️ Headless (LUMEN_HEADLESS=1 + es_headless)
+    runs-on: ubuntu-latest
+    env:
+      LUMEN_HEADLESS: 1
+      CI: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Workspace tests (headless)
+        run: cargo test --workspace --verbose
+      - name: Check 389+ examples (headless)
+        run: cargo run --bin lumen -- check examples
+      - name: Production suite (headless)
+        run: cargo test --test production -- --nocapture
+      - name: Bench smoke (headless)
+        run: cargo bench -p lumen-bench -- --quick 2>&1 | head -n 30
+
   # ── 3. AUTOTAG AUTOMATIZADO TRAS CI VERDE ───────────────────────────────
   autotag:
     name: 🏷️ Autotag v<version>
-    needs: [fmt, clippy, linux-test, windows-test, wasm-check]
+    needs: [fmt, clippy, linux-test, windows-test, wasm-check, headless-check]
     if: (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

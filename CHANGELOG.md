@@ -1,3 +1,25 @@
+## [3.0.0] - 2026-08-21 — Producción Real (fixes escalables + bench + headless)
+
+### ⚡ v3.0.0 Producción: listo para deploy real (escalable, sin parches temporales)
+
+**Fixes escalables (no parches por demo):**
+- **Builder fallthrough `Variable 'a'/'n'`:** `last_significant()` ignora `Label/Nop/Phi` para decidir terminador; `needs_return()`/`emit_return_if_needed()` en `Function`, `ImplRasgo`, `compile_lambda`, `build()` (`Halt`). `label_counter` global (no reseteo por función) evita colisión `Label(0)` en `codegen` global `label_map` que rompía `matematicas.nv` (`Variable 'n'`). Commits `64db441`, `730e74d`, `f83964f`.
+- **Aridad `pop()` corrupto:** `bind_args` unificado — `Call`/`CallValue`/`run_function` (hilos) ahora comparten `args.get(i).cloned().unwrap_or(Void)` + `defaults` reales en vez de `self.pop()` divergente.
+- **Defaults persistidos `FuncMeta.defaults` + `CHUNK_VERSION 7`:** `ir::Func.defaults: Vec<Option<Value>>` → `codegen::FuncMeta.defaults: Vec<Option<DefaultValue>>` (`Int/Float/Str/Bool`) serializado en `Bytecode` v7 (compat v6 → `vec![None; params.len()]`). `VM bind_args` usa `DefaultValue` cuando `i>=args.len()`. `decode` acepta 6 y 7 para compat con `.nvc` antiguos.
+- **Headless centralizado `stdlib/graficos.nv:es_headless()`:** usa `getenv("CI"/"LUMEN_HEADLESS")` vía `__ffi` (`msvcrt/libc/libSystem`) y chequea `peek!=0`. `iniciar()` y `ventana()` retornan `false/0` sin `SDL_Init`/`SDL_CreateWindow`. Demos con `si !iniciar() { retornar; }` ya son suficientes; guard per-demo redundante pero compatible.
+
+**Suite y bench formal:**
+- **Tests:** 616 e2e (incluye 4 regresión: fallthrough early return, matematicas `potencia(2,10)==1024`, defaults `CallValue`, lambda) + 9 production (aceptación 3 + performance 2 + integración) = **673 vm tests**, **917 workspace** (`cargo test --workspace` 0 FAILED).
+- **Bench 8** (`cargo bench -p lumen-bench`): `lexer_tokenize`, `parser_parse`, `pipeline_full`, `vm_fib_20` + 4 prod nuevos `prod_fallthrough_early_return`, `prod_defaults_callvalue`, `prod_matematicas_potencia`, `prod_graficos_headless` (reporte `target/criterion/report/index.html`, `--quick` en CI).
+- **Barrido:** `cargo run --bin lumen -- check examples` 389/389 OK (con `CI=1`), `LUMEN_HEADLESS=1 lumen run examples/graficos_*` → `init_fail_ok` sin `Variable 'a'`.
+
+**CI `headless-check` nuevo:**
+- Job Linux `env: LUMEN_HEADLESS=1 CI=1` corre `cargo test --workspace`, `cargo run --bin lumen -- check examples`, `cargo test --test production`, `cargo bench -p lumen-bench -- --quick`. Ver `.github/workflows/ci.yml` y `docs/produccion.md`.
+
+**Versionado:** `Cargo.toml`/`VERSION` `3.0.0` · `CHUNK_VERSION 7` (decode v6+7) · `is_known_prefixed` con `_` single · docs actualizadas (`README`, `AGENTS`, `roadmap`, `produccion.md`, etc.).
+
+---
+
 ## [3.0.0] - 2026-08-20
 
 ### ⚡ v3.0.0: 167 bugs corregidos, unificación y verificación en tres plataformas

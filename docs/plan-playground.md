@@ -1,8 +1,9 @@
-# Plan del Playground Web — LÚMEN v3.0.0+
+# Plan del Playground Web — LÚMEN v3.0.0 Producción Real+
 
-> Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026
+> Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026 · **Actualizado 21 Ago 2026: v3.0.0 Producción Real (917 tests, bench 8, headless `es_headless()`, CHUNK_VERSION 7)**
 > Estructura: **9 features × 3 niveles (L1 funcional → L2 pulido → L3 avanzado) = 27 fases**, cada una con criterios de aceptación verificables.
 > ✅ **Ronda L1 COMPLETADA (14 Ago):** F1.1, F2.1, F3.1, F3.2, F4.1, F9.1 — ver "Estado actual".
+> ✅ **v3.0.0 Producción (21 Ago):** bench 8 y headless `stdlib/graficos.nv:es_headless()` validados en CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Playground usa `es_headless()` para demos gráficas en `LUMEN_HEADLESS=1`. Ver [docs/produccion.md](produccion.md).
 
 ---
 
@@ -18,7 +19,7 @@
 | Descargar .nvc | `compile_to_bytes(source)` → `Uint8Array` → Blob descargable (F9.1). |
 | Build WASM | `wasm-pack build crates/lumen-wasm --target web` + `pkg/` en .gitignore (regenerable). |
 | Batería F4.1 | 128 ejemplos embebidos en `embedded_examples.js` (autogenerado por `gen-embedded-examples.ps1`). |
-| Tests | cargo test en verde con ~720 pruebas (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos sin fallos, clippy sin avisos. |
+| Tests | cargo test en verde con **917 pruebas** (616 e2e + 9 production, 673 vm tests), 389/389 en `lumen check`, 389 ejemplos sin fallos, **8 benches** (`cargo bench -p lumen-bench`), headless `es_headless()` CI=1, clippy sin avisos. Ver `docs/produccion.md`. |
 
 ## 2. Gaps que el plan resuelve
 

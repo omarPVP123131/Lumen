@@ -101,4 +101,21 @@ Dentro del REPL interactivo puedes usar:
 
 ---
 
-*LÚMEN v3.0.0 — Diseñado con la mejor Experiencia de Usuario (DX) del mercado.*
+---
+
+## ⚡ 6. Producción Real v3.0.0 — Checklist Rápido
+
+> Detalle: [docs/produccion.md](produccion.md)
+
+```bash
+cargo test --workspace                          # 917 (616 e2e + 9 production)
+cargo bench -p lumen-bench                      # 8 benches
+cargo bench -p lumen-bench -- --quick           # smoke CI
+LUMEN_HEADLESS=1 CI=1 cargo test --workspace
+LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
+```
+
+- **Fixes escalables:** `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` + `bind_args` unificado, `es_headless()` centralizado (`stdlib/graficos.nv`).
+- **CI `headless-check`:** `LUMEN_HEADLESS=1 CI=1` con `cargo test`, `lumen check`, `cargo test --test production`, `cargo bench -- --quick`.
+
+*LÚMEN v3.0.0 Producción Real — Diseñado con la mejor Experiencia de Usuario (DX) del mercado (917 tests, bench 8, headless `LUMEN_HEADLESS`).*

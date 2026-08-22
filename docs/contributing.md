@@ -1,9 +1,12 @@
-# Guía de Contribución
+# Guía de Contribución — LÚMEN v3.0.0 Producción Real
 
 ## Requisitos
 
-- Rust 1.70+
-- `cargo test --all` debe pasar completo
+- Rust 1.70+ (MSRV 1.82 para CI)
+- `cargo test --workspace` debe pasar: **917 tests** (616 e2e + 9 production + resto) — ver `docs/produccion.md`
+- `cargo bench -p lumen-bench` compila 8 benches (4 prod: fallthrough, defaults, matematicas, headless)
+- `cargo fmt -- --check` + `cargo clippy --all -- -D warnings` limpios
+- `LUMEN_HEADLESS=1 CI=1` para validación headless (`stdlib/graficos.nv:es_headless()`)
 - 0 warnings de compilación
 
 ## Configuración
@@ -12,7 +15,9 @@
 git clone https://github.com/omarPVP123131/Lumen.git
 cd Lumen
 cargo build --all
-cargo test --all
+cargo test --workspace          # 917 tests (ver docs/produccion.md)
+cargo bench -p lumen-bench -- --quick   # 8 benches smoke
+LUMEN_HEADLESS=1 CI=1 cargo test --workspace   # valida headless (es_headless)
 ```
 
 ## Desarrollo
@@ -65,9 +70,14 @@ El compilador está organizado en 16 crates dentro de `crates/`:
 3. Documentación actualizada
 4. Sin regresiones (todos los tests existentes deben pasar)
 
+## Producción Real v3.0.0
+
+Ver `docs/produccion.md` para checklist: `CHUNK_VERSION 7` (defaults persistidos), `builder last_significant()` + `label_counter` global, `vm bind_args` unificado, `stdlib/graficos.nv es_headless()` centralizado, bench 8, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). `VERSION` 3.0.0 es source of truth.
+
 ## Reportar Issues
 
 Incluir:
 - Código mínimo que reproduce el problema
 - Comportamiento esperado vs actual
-- Versión de LÚMEN (`lumen --version`)
+- Versión de LÚMEN (`lumen --version` → debe coincidir con `VERSION` 3.0.0 y `CHUNK_VERSION 7`)
+- Si es gráfico/headless: `LUMEN_HEADLESS=1` repro y `docs/produccion.md` §1.4

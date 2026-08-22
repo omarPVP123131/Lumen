@@ -216,6 +216,27 @@ funcion vacio hardware_directo() {
 
 *LÚMEN v3.0.0 — Documentación Oficial Sincronizada.*
 
+> **Producción Real v3.0.0 (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` (`LUMEN_HEADLESS`/`CI`), bench 8 (`cargo bench -p lumen-bench`), 616 e2e + 9 production = 673 vm tests (917 workspace), CI `headless-check`. Ver [docs/produccion.md](produccion.md).
+
+---
+
+## 15. Producción Real v3.0.0 — Fixes Escalables, Bench y Headless
+
+> Checklist único: [docs/produccion.md](produccion.md)
+
+**Fixes escalables (21 Ago 2026):**
+- **Fallthrough `Variable 'a'/'n'`:** `crates/lumen-ir/src/builder.rs` `last_significant()` ignora `Label/Nop/Phi` para decidir terminador + `label_counter` global (evita colisión `Label(0)` en `codegen` global que rompía `matematicas.nv`).
+- **Defaults persistidos `CHUNK_VERSION 7`:** `ir::Func.defaults` → `codegen::FuncMeta.defaults` (`Int/Float/Str/Bool`) serializado en `Bytecode` v7 (decode v6+7). `VM bind_args` usa `DefaultValue` en `Call`/`CallValue`/`run_function`.
+- **Headless centralizado:** `stdlib/graficos.nv:es_headless()` con `getenv("CI"/"LUMEN_HEADLESS")` vía `__ffi` (`msvcrt`/`libc`/`libSystem`) → `iniciar()`/`ventana()` retornan `false/0` sin `SDL_Init`.
+
+**Verificación producción:**
+```bash
+cargo test --workspace                          # 917 (616 e2e + 9 production)
+cargo bench -p lumen-bench                      # 8 benches (4 prod nuevos)
+cargo bench -p lumen-bench -- --quick           # smoke CI
+LUMEN_HEADLESS=1 CI=1 cargo test --workspace
+LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
+```
 
 ---
 

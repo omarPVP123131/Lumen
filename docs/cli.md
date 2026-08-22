@@ -121,7 +121,32 @@ lumen lsp                              # Inicia servidor LSP Pro para VS Code / 
 
 ---
 
-*LÚMEN v3.0.0 — Documentación CLI Oficial Sincronizada.*
+---
+
+## Producción Real v3.0.0 — Bench, Headless y CI
+
+> Checklist completo en [docs/produccion.md](produccion.md) — `CHUNK_VERSION 7` + `es_headless()` + `label_counter` global.
+
+```bash
+# Tests: 917 workspace (616 e2e + 9 production) + bench 8
+cargo test --workspace
+cargo test -p lumen-vm --test e2e          # 616 e2e (4 regresión)
+cargo test --test production               # 9 production
+cargo bench -p lumen-bench                 # 8 benches
+cargo bench -p lumen-bench -- --quick      # smoke CI
+
+# Headless (sin display/SDL) — usar en CI y local sin ventana
+LUMEN_HEADLESS=1 CI=1 cargo test --workspace
+LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
+LUMEN_HEADLESS=1 cargo test --test production -- --nocapture
+# stdlib/graficos.nv:es_headless() usa getenv("CI"/"LUMEN_HEADLESS") vía __ffi
+```
+
+**CI `headless-check`:** job Linux `env: LUMEN_HEADLESS=1 CI=1` con los 4 comandos anteriores. `cargo bench` reporta `target/criterion/report/index.html`.
+
+**Fixes escalables v3.0.0:** `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`), `vm bind_args` unificado + `FuncMeta.defaults` persistidos `CHUNK_VERSION 7`, `stdlib/graficos.nv es_headless()` centralizado.
+
+*LÚMEN v3.0.0 — Documentación CLI Oficial Sincronizada (Producción Real).*
 
 
 ---

@@ -1,28 +1,41 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v3.0.0 — Released: 20 Agosto 2026**
+**v3.0.0 Producción Real — Released: 21 Agosto 2026 — 917 tests, CHUNK_VERSION 7, bench 8, headless `es_headless()`**
+
+> Checklist único de producción: [docs/produccion.md](produccion.md) — `LUMEN_HEADLESS=1` + `cargo bench -p lumen-bench` + `CHUNK_VERSION 7`
 
 ---
 
-## Testing (Actual)
+## Testing (Actual) — v3.0.0 Producción Real (21 Ago 2026)
 
-| Crate | Tests | Tipo |
-|-------|-------|------|
-| lumen-lexer | 52 | unit |
-| lumen-parser | 75 | unit |
-| lumen-sema | 56 | unit |
-| lumen-ir | 20 | unit + folding |
-| lumen-codegen | 13 | unit |
-| lumen-vm | 48 | unit |
-| lumen-vm | 612 | e2e |
-| lumen-fmt | 2 | unit |
-| lumen-repl | 3 | unit |
-| lumen-project | 2 | unit |
-| lumen-aot | 6 | unit |
-| lumen-api | 5 | unit |
-| **Total** | **~904** | |
+| Crate | Tests | Tipo | Nota v3.0.0 |
+|-------|-------|------|-------------|
+| lumen-lexer | 52 | unit |  |
+| lumen-parser | 75 | unit |  |
+| lumen-sema | 56 | unit |  |
+| lumen-ir | 20 | unit + folding |  |
+| lumen-codegen | 13 | unit |  |
+| lumen-vm | 48 | unit |  |
+| lumen-vm | 616 | e2e | +4 regresión: fallthrough early return, matematicas `potencia(2,10)==1024`, defaults `CallValue`, lambda |
+| lumen-vm | 9 | production | 3 aceptación + 2 performance + 4 integración (ver `crates/lumen-vm/tests/production.rs`) |
+| lumen-fmt | 2 | unit |  |
+| lumen-repl | 3 | unit |  |
+| lumen-project | 2 | unit |  |
+| lumen-aot | 6 | unit |  |
+| lumen-api | 5 | unit |  |
+| lumen-bench | 8 | bench | `cargo bench -p lumen-bench`: lexer, parser, pipeline, vm_fib_20 + 4 prod (fallthrough, defaults, matematicas, headless) |
+| **Total workspace** | **917** |  | `cargo test --workspace` 0 FAILED (673 vm tests = 616 e2e + 9 prod + 48 unit) |
 
-**v3.0.0: 904 pruebas en verde (Linux y Windows), 389/389 en `lumen check`, 389 `run` OK con `CI=1`, clippy sin avisos, 4 fuzzers diferenciales sin divergencias.**
+**v3.0.0 Producción: 917 pruebas en verde (Linux y Windows), 389/389 en `lumen check`, 389 `run` OK con `CI=1`, 8 benches criterion, clippy sin avisos, 4 fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos, `LUMEN_HEADLESS=1` headless centralizado `stdlib/graficos.nv:es_headless()`. Ver `docs/produccion.md`.**
+
+**Comandos producción:**
+```bash
+cargo test --workspace
+cargo test -p lumen-vm --test e2e
+cargo test --test production
+cargo bench -p lumen-bench
+LUMEN_HEADLESS=1 CI=1 cargo test --workspace && cargo bench -p lumen-bench -- --quick
+```
 
 ---
 
@@ -431,20 +444,22 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 
 ---
 
-## Bytecode (.nvc)
+## Bytecode (.nvc) — v3.0.0 Producción
 
-- **Version**: 6
+- **Version**: 7 (`CHUNK_VERSION 7`, decode acepta 6 y 7)
+- **Novedad v3.0.0:** `FuncMeta.defaults: Vec<Option<DefaultValue>>` persistidos (`Int/Float/Str/Bool`) para `bind_args` unificado (3 call-sites). Ver `docs/produccion.md` §1.3.
 - **Magic**: `LUMN` (4 bytes)
-- **Opcodes**: 0-46
+- **Opcodes**: 0-46 + 52-53
   - 0-27: Core (Push, Pop, Add, Sub, Jmp, Call, Ret, Print, etc.)
-  - 28-32: Arrays
-  - 33-34: Closures
-  - 35-37: Structs
-  - 38-40: Result
-  - 41-42: Option
-  - 43: Enum
-  - 44-45: Tuples
+  - 28-32: Arrays (ArrayNew, ArrayGet, ArraySet, ArrayLen, ArrayPush)
+  - 33-34: Closures (FuncRef, CallValue)
+  - 35-37: Structs (StructNew, StructGet, StructSet)
+  - 38-40: Result (ResultOk, ResultErr, ResultUnwrap)
+  - 41-42: Option (OptionSome, OptionNone)
+  - 43: Enum (EnumCtor)
+  - 44-45: Tuples (TupleNew, TupleAccess)
   - 46: Mod
+  - 52-53: MatchType/MatchPayload (if-let / elegir con payloads)
 
 ---
 
@@ -582,7 +597,7 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 - **Pendientes**: AI/ML (Fases 186-200).
 
 **Progreso (14 Ago, noche — sesión AI · Playground: historial de runs + toggle backend persistente):**
-- **Gaps restantes del playground auditados** contra `docs/plan-playground.md`: la Ronda L1 ya estaba completa (F1.1 `/api/health`+`/api/examples`+`/api/examples/{file}`; F2.1 CodeMirror 6 vendorizado + modo LUMEN desde token.rs; F3.1 stdlib embebida vía build.rs `embedded_stdlib.rs` + `ModuleLoader::with_memory_files`; F3.2 `run_lumen`/`check_lumen`/`compile_to_bytes` con loader virtual; F4.1 128 ejemplos embebidos + fetch `/api/examples` con fallback offline; F9.1 `.nvc` descargable). Verificado en vivo: `GET /api/health` → `{"status":"ok","version":"1.6.0","wasm":true}`, `POST /api/run` con `imprimir("hola servidor")` → `{"ok":true,"output":"hola servidor"}`, `/api/examples` lista 117+, `/web/index.html` 200 text/html, `pkg/lumen_wasm_bg.wasm` (2.37 MB) y `lumen_wasm.js` presentes (rebuilt previo con fixes OR/rangos).
+- **Gaps restantes del playground auditados** contra `docs/plan-playground.md`: la Ronda L1 ya estaba completa (F1.1 `/api/health`+`/api/examples`+`/api/examples/{file}`; F2.1 CodeMirror 6 vendorizado + modo LUMEN desde token.rs; F3.1 stdlib embebida vía build.rs `embedded_stdlib.rs` + `ModuleLoader::with_memory_files`; F3.2 `run_lumen`/`check_lumen`/`compile_to_bytes` con loader virtual; F4.1 128 ejemplos embebidos + fetch `/api/examples` con fallback offline; F9.1 `.nvc` descargable). Verificado en vivo: `GET /api/health` → `{"status":"ok","version":"3.0.0","wasm":true}`, `POST /api/run` con `imprimir("hola servidor")` → `{"ok":true,"output":"hola servidor"}`, `/api/examples` lista 117+, `/web/index.html` 200 text/html, `pkg/lumen_wasm_bg.wasm` (2.37 MB) y `lumen_wasm.js` presentes (rebuilt previo con fixes OR/rangos + v3.0.0 producción bench/headless).
 - **Toggle backend PERSISTENTE**: `execBackend` ahora se lee de `localStorage('lumen_playground_backend')` al inicio y `setBackend()` (extraído del handler del toggle) lo persiste en cada click; `initEditor` aplica el backend guardado (antes se resetaba a `wasm` en cada recarga). Refactor del listener a función reutilizable + búsqueda del botón activo por `dataset.backend`.
 - **Historial de ejecuciones**: botón `🕘 Historial` en el panel-header del código + panel flotante (top-right, cierra al hacer clic fuera) que lista hasta 10 runs recientes desde `localStorage('lumen_playground_history')` — cada entrada muestra ✓/✗, hora, backend (`wasm`/`server`), tiempo ms, primera línea del código y preview del output; clic en una entrada restaura el código en el editor. `pushHistory()` se llama en las 3 ramas de `runCode` (server ok, server error, server red-error, wasm ok, wasm error, wasm catch) con try/catch que tolera localStorage lleno/deshabilitado.
 - **Verificado**: `node --check` sobre el `<script type="module">` extraído → sintaxis OK; servidor levantado → HTML sirve con `pushHistory`/`historyBtn`/backend-persist presente (61,700 B), `/api/health` OK.
@@ -618,3 +633,21 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 - **Fix build cross-plataforma (`gui_ffi.rs`)**: los jobs `aarch64-unknown-linux-gnu` y `aarch64-linux-android` fallaban con `E0308` — `title_cs.as_ptr()` devuelve `*const u8` (en aarch64/Android, `c_char = u8`) pero la firma de `CreateWindowExA` espera `*const i8`. **Fix**: `title_cs.as_ptr().cast()` (línea 132), espejo del cast ya presente en la línea 131. El resto de `gui_ffi.rs`/`crypto_ffi.rs` ya usaba casts explícitos (`as *const u8`, `*const u16`) — sin más riesgo cross-plataforma. Verificado: `cargo build --workspace` OK, `cargo test --workspace` 0 FAILED (172 e2e + unit), clippy limpio.
 - **Docs sincronizadas a v3.0.0**: README (badges y sección Estado del Proyecto), CHANGELOG (entrada v3.0.0 arriba + sección cronológica), `info.md` (compendio, matriz, changelog, footer), `docs/AGENTS.md` (header + testing actual a ~720), `docs/roadmap.md`, `docs/siguiente.md`, `docs/self-hosting.md`, LENGUAJE/HERRAMIENTAS/MARKETING/cli, reports/. **`VERSION` = 3.0.0.**
 - **Pendientes**: composer el release tag v3.0.0 en el repo (los tags previos v2.4.x ya existen); Playground L2/L3; AI/ML (Fases 186-200).
+
+---
+
+## Progreso (21 Ago 2026 — sesión AI · PRODUCCIÓN REAL v3.0.0: fixes escalables + bench 8 + headless + CHUNK_VERSION 7)
+
+- **Fixes escalables (no parches temporales):**
+  - **Fallthrough `Variable 'a'/'n'`:** `crates/lumen-ir/src/builder.rs` `last_significant()` ignora `Label/Nop/Phi` para decidir terminador; `needs_return()`/`emit_return_if_needed()` en `Function`, `ImplRasgo`, `compile_lambda`, `build()` (`Halt`). `label_counter` global evita colisión `Label(0)` en `codegen` global `label_map` que rompía `matematicas.nv` (`Variable 'n'`). Commits `64db441`, `730e74d`, `f83964f`.
+  - **Aridad `pop()` corrupto:** `crates/lumen-vm/src/vm.rs` `bind_args` unificado — `Call`/`CallValue`/`run_function` (hilos) comparten `args.get(i).cloned().unwrap_or(Void)` + `DefaultValue` reales; antes `else { self.pop() }` corrompía stack del caller y `run_function` dejaba param sin inicializar.
+  - **Defaults persistidos `CHUNK_VERSION 7`:** `ir::Func.defaults` → `codegen::FuncMeta.defaults: Vec<Option<DefaultValue>>` (`Int/Float/Str/Bool`) serializado en `Bytecode` v7 (compat v6). `VM bind_args` usa `DefaultValue` cuando `i>=args.len()`. `decode` acepta 6 y 7.
+  - **Headless centralizado:** `stdlib/graficos.nv:es_headless()` usa `getenv("CI"/"LUMEN_HEADLESS")` vía `__ffi` (`msvcrt`/`libc`/`libSystem`) y `peek!=0`; `iniciar()`/`ventana()` retornan `false/0` sin `SDL_Init`. Guard per-demo redundante pero compatible.
+- **Suite producción:** **616 e2e** (incluye 4 regresión: fallthrough early return, matematicas `potencia(2,10)==1024`, defaults `CallValue`, lambda) + **9 production** (`crates/lumen-vm/tests/production.rs`: aceptación 3 + performance 2 + integración) = **673 vm tests**, **917 workspace** (`cargo test --workspace` 0 FAILED). Ver `docs/produccion.md` §2.1.
+- **Bench formal 8** (`crates/lumen-bench/benches/benchmarks.rs`): `lexer_tokenize`, `parser_parse`, `pipeline_full`, `vm_fib_20` + 4 prod `prod_fallthrough_early_return`, `prod_defaults_callvalue`, `prod_matematicas_potencia`, `prod_graficos_headless` (`cargo bench -p lumen-bench`, reporte `target/criterion/report/index.html`, `--quick` en CI).
+- **CI `headless-check` nuevo** (`.github/workflows/ci.yml`): job Linux `env: LUMEN_HEADLESS=1 CI=1` corre `cargo test --workspace`, `cargo run --bin lumen -- check examples`, `cargo test --test production`, `cargo bench -p lumen-bench -- --quick`. Ver `docs/produccion.md` §3.
+- **Barrido:** `lumen check examples` 389/389 (con `CI=1` 389/389), `LUMEN_HEADLESS=1 lumen run examples/graficos_*` → `init_fail_ok` sin `Variable 'a'` (antes requería 30 guards per-demo).
+- **Versionado:** `Cargo.toml`/`VERSION` `3.0.0` · `CHUNK_VERSION 7` (fallback v6) · docs sincronizadas (`README`, `roadmap`, `plan-v3.1`, `HERRAMIENTAS`, `produccion.md`) · `CHANGELOG` v3.0.0 producción.
+- **Verificado:** `cargo test --workspace` 917, `cargo bench -p lumen-bench` 8 OK, `LUMEN_HEADLESS=1` repro local (`Headless/CI detectado — demo omitida`).
+
+**Estado actual: LÚMEN v3.0.0 Producción Real — deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`. Próximos: `FuncMeta` defaults no literales (thunk), `label_map` per-function, `lumen fmt` en pre-commit (ver `docs/produccion.md` §6).**

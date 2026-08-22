@@ -1,6 +1,8 @@
 # 🎓 Aprende LÚMEN en 7 Días: De Principiante a Ingeniero de Sistemas
 
-**Plan Oficial de Formación Acelerada — LÚMEN v3.0.0**
+**Plan Oficial de Formación Acelerada — LÚMEN v3.0.0 Producción Real (21 Ago 2026) — 917 tests, bench 8, headless `es_headless()`, `CHUNK_VERSION 7`**
+
+> **Producción Real:** checklist en [docs/produccion.md](produccion.md) — `cargo test --workspace` (917), `cargo bench -p lumen-bench` (8), `LUMEN_HEADLESS=1 CI=1` para CI/headless, `VERSION` 3.0.0.
 
 ---
 
@@ -89,17 +91,23 @@ db = vector_db_insertar(db, "d1", "LÚMEN y compiladores AOT", [0.9, 0.1, 0.2]);
 
 ---
 
-## 📅 Día 7: Compilación Cruzada, Shaders GPU y Empaquetado Standalone
-* **Objetivo**: Distribuir tu aplicación para producción en cualquier sistema operativo.
-* **Comandos Clave**: `lumen bundle -o app`, `lumen build --target aarch64-apple-darwin`.
-* **Práctica**: Empaquetar un binario nativo independiente con cero dependencias.
+## 📅 Día 7: Producción Real, Bench y Compilación Cruzada
+* **Objetivo**: Distribuir tu aplicación para producción en cualquier sistema operativo con checklist y bench.
+* **Comandos Clave**: `lumen bundle -o app`, `lumen build --target aarch64-apple-darwin`, `cargo bench -p lumen-bench`, `LUMEN_HEADLESS=1`.
+* **Práctica**: Verificar producción, bench 8 y headless, y empaquetar binario nativo independiente con cero dependencias.
 
 ```bash
+# Checklist producción v3.0.0 (docs/produccion.md):
+cargo test --workspace                          # 917 (616 e2e + 9 production)
+cargo bench -p lumen-bench                      # 8 benches
+LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
+
 # ¡Felicidades! Has completado el currículum de 7 días:
 lumen bundle src/main.nv -o produccion_final
 ./produccion_final
+# Headless CI: stdlib/graficos.nv:es_headless() con LUMEN_HEADLESS=1 evita SDL_Init
 ```
 
 ---
 
-*LÚMEN Curriculum — De 0 a Ingeniero de Software Certificado.*
+*LÚMEN Curriculum — De 0 a Ingeniero de Software Certificado — v3.0.0 Producción Real (917 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`).*

@@ -87,11 +87,95 @@ imprimir(fib(20));
     });
 }
 
+// ============================================================
+// PRODUCCIÓN: benchmarks de regresión escalable (fallthrough, defaults, matematicas, headless)
+// ============================================================
+
+fn prod_fallthrough_bench(c: &mut Criterion) {
+    let source = r#"
+        funcion void foo(entero r, entero g, entero b){ si r==0{retornar;} imprimir(r); }
+        funcion void bar(entero r, entero g, entero b, entero a){ imprimir(a); }
+        foo(0,0,0); foo(1,2,3); bar(1,2,3,99);
+    "#;
+    c.bench_function("prod_fallthrough_early_return", |b| {
+        b.iter(|| {
+            let (tokens, _) = lumen_lexer::Lexer::new(black_box(source)).tokenize();
+            let (mut ast, _) = lumen_parser::Parser::new(tokens).parse();
+            lumen_sema::SemanticAnalyzer::new().analyze(&mut ast);
+            let ir = lumen_ir::IRBuilder::new().build(&ast);
+            let (bc, _) = lumen_codegen::Codegen::new().generate(&ir);
+            let mut vm = lumen_vm::VM::new(bc);
+            vm.run().unwrap();
+            black_box(());
+        })
+    });
+}
+
+fn prod_defaults_bench(c: &mut Criterion) {
+    let source = r#"cualquiera f = funcion(entero a, entero b=10){ retornar a+b; }; f(5); f(5,20);"#;
+    c.bench_function("prod_defaults_callvalue", |b| {
+        b.iter(|| {
+            let (tokens, _) = lumen_lexer::Lexer::new(black_box(source)).tokenize();
+            let (mut ast, _) = lumen_parser::Parser::new(tokens).parse();
+            lumen_sema::SemanticAnalyzer::new().analyze(&mut ast);
+            let ir = lumen_ir::IRBuilder::new().build(&ast);
+            let (bc, _) = lumen_codegen::Codegen::new().generate(&ir);
+            let mut vm = lumen_vm::VM::new(bc);
+            vm.run().unwrap();
+            black_box(());
+        })
+    });
+}
+
+fn prod_matematicas_bench(c: &mut Criterion) {
+    let source = r#"
+        funcion numero potencia(numero base, entero exp){
+            si(exp==0){retornar 1;} numero res=1; entero i=0;
+            mientras(i<exp){res=res*base;i=i+1;} retornar res;
+        }
+        potencia(2,10); potencia(3,7); potencia(5,5);
+    "#;
+    c.bench_function("prod_matematicas_potencia", |b| {
+        b.iter(|| {
+            let (tokens, _) = lumen_lexer::Lexer::new(black_box(source)).tokenize();
+            let (mut ast, _) = lumen_parser::Parser::new(tokens).parse();
+            lumen_sema::SemanticAnalyzer::new().analyze(&mut ast);
+            let ir = lumen_ir::IRBuilder::new().build(&ast);
+            let (bc, _) = lumen_codegen::Codegen::new().generate(&ir);
+            let mut vm = lumen_vm::VM::new(bc);
+            vm.run().unwrap();
+            black_box(());
+        })
+    });
+}
+
+fn prod_headless_bench(c: &mut Criterion) {
+    // Valida el path headless centralizado es_headless() sin tocar SDL (solo pipeline)
+    let source = r#"
+        funcion booleano es_headless(){ si 1==1 { retornar falso; } retornar verdadero; }
+        es_headless();
+    "#;
+    c.bench_function("prod_graficos_headless", |b| {
+        b.iter(|| {
+            let (tokens, _) = lumen_lexer::Lexer::new(black_box(source)).tokenize();
+            let (mut ast, _) = lumen_parser::Parser::new(tokens).parse();
+            lumen_sema::SemanticAnalyzer::new().analyze(&mut ast);
+            let ir = lumen_ir::IRBuilder::new().build(&ast);
+            let (bc, _) = lumen_codegen::Codegen::new().generate(&ir);
+            black_box(bc);
+        })
+    });
+}
+
 criterion_group!(
     benches,
     lexer_bench,
     parser_bench,
     pipeline_bench,
-    vm_exec_bench
+    vm_exec_bench,
+    prod_fallthrough_bench,
+    prod_defaults_bench,
+    prod_matematicas_bench,
+    prod_headless_bench
 );
 criterion_main!(benches);

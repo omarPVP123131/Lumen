@@ -547,6 +547,48 @@ imprimir(dataframe_df_a_csv(df));
 
 *LÚMEN v3.0.0 — © 2026 LÚMEN Core Team & Comunidad.*
 
+> **Producción Real (21 Ago 2026):** ver [docs/produccion.md](produccion.md) — 917 tests, bench 8, `es_headless()`, `CHUNK_VERSION 7`.
+
+---
+
+# CAPÍTULO 17.5: Producción Real v3.0.0 — De Código a Deploy (21 Ago 2026)
+
+En este capítulo llevamos **LÚMEN a producción real** con fixes escalables (no parches por demo), suite formal y CI headless.
+
+### 17.5.1 Fixes Escalables Llevados a Producción
+- **Builder `last_significant()` + `label_counter` global:** evita fallthrough `Variable 'a'` (función con `si __ren==0 { retornar; }` sin `Return` final caía en `limpiar_pantalla_alfa`) y `Variable 'n'` en `matematicas.nv` (colisión `Label(0)` en `label_map` global).
+- **VM `FuncMeta.defaults` persistidos `CHUNK_VERSION 7`:** `ir::Func.defaults` → `codegen::FuncMeta.defaults` (`Int/Float/Str/Bool`) serializados en `Bytecode` v7 (`decode` acepta 6 y 7). `bind_args` unificado para `Call`/`CallValue`/`run_function` (hilos) — `CallValue` (`var f=suma; f(5)`) ya no pierde defaults.
+- **Headless centralizado `stdlib/graficos.nv:es_headless()`:** `getenv("CI"/"LUMEN_HEADLESS")` vía `__ffi` (`msvcrt`/`libc`/`libSystem`), `peek!=0` → `iniciar()`/`ventana()` retornan `false/0` sin `SDL_Init`. Demos con `si !iniciar() { retornar; }` salen con `init_fail_ok`/`Headless/CI detectado — demo omitida`.
+
+### 17.5.2 Suite y Bench Formal (8 benches)
+```bash
+cargo test --workspace                          # 917 (616 e2e + 9 production, 673 vm tests)
+cargo test -p lumen-vm --test e2e               # 616 e2e (4 regresión: fallthrough, matematicas, defaults, lambda)
+cargo test --test production                    # 9 production (aceptación 3 + performance 2 + integración)
+cargo bench -p lumen-bench                      # 8: lexer_tokenize, parser_parse, pipeline_full, vm_fib_20 + prod_fallthrough, prod_defaults, prod_matematicas, prod_graficos_headless
+cargo bench -p lumen-bench -- --quick           # smoke CI — reporte target/criterion/report/index.html
+```
+
+### 17.5.3 CI `headless-check` y Verificación Local
+```yaml
+# .github/workflows/ci.yml — job headless-check (Linux)
+headless-check:
+  runs-on: ubuntu-latest
+  env: { LUMEN_HEADLESS: 1, CI: 1 }
+  steps:
+    - run: cargo test --workspace
+    - run: cargo run --bin lumen -- check examples
+    - run: cargo test --test production -- --nocapture
+    - run: cargo bench -p lumen-bench -- --quick
+```
+```powershell
+# Repro local (PowerShell)
+$env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lumen-bench -- --quick; .\target\debug\lumen.exe run examples\graficos_canvas_demo.nv
+# Esperado: Headless/CI detectado — demo omitida sin Variable 'a'
+```
+
+### 17.5.4 Checklist Deploy
+Ver [docs/produccion.md](produccion.md) §5 — `cargo fmt`, `clippy`, `cargo test`, `cargo bench`, `lumen check`, `LUMEN_HEADLESS=1` headless, `CHUNK_VERSION 7`, `VERSION` 3.0.0. Con todo en verde: `cargo build --release --target <target>` deployable en Windows/Linux/macOS/Android/WASM.
 
 ---
 

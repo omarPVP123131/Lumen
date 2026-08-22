@@ -1,23 +1,29 @@
-# Siguientes Pasos — Roadmap LÚMEN v2.4 → v3.0
+# Siguientes Pasos — Roadmap LÚMEN v3.0.0 Producción Real → v3.1
 
-**Estado actual:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6: fixpoint confirmado) + **Sprint 7: VM en LÚMEN (`vm.nv`) COMPLETADO** (fixpoint 861s → 20.1s, 43x COW Arc) + **Sprint 8: dogfooding — fuego 389/389 compilan · 112 CORRECTOS** (8 Ago 2026) + **paridad VM LÚMEN-Rust: sistema/JSON/archivos/concurrencia/stream/async byte-idénticos** (8 Ago 2026, batería 39/40). **Bootstrapping doble (compilador + VM) CONFIRMADO con fixpoint SHA-256 `3DA624D6...` (150,684 B)**. **Release v2.4.6 ✅ (14 Ago):** tag CI-autogenerado tras AOT optimizado (Cranelift 20x/C 18x), Fases 61-63 self-hosted (OR/if-let/rangos), Playground Ronda L1 + F1.2/F2.3/F4.2 completadas. **Release v3.0.0 PUBLICADA (20 Ago 2026):** 167 bugs corregidos, 720 pruebas en verde (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos sin fallos, clippy sin avisos, 4 fuzzers diferenciales sin divergencias. Los **Pendientes** siguen siendo **AI/ML (Fases 186-200)** y **Playground L2/L3**.
+**Estado actual (21 Ago 2026) — v3.0.0 Producción Real ✅:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6 fixpoint) + **Sprint 7: VM en LÚMEN COMPLETADO** + **Sprint 8: dogfooding 112 CORRECTOS** + **Bootstrapping doble SHA-256 `3DA624D6...`** + **v2.4.6 (14 Ago)** + **v3.0.0 (20 Ago)** 167 bugs + **v3.0.0 Producción Real (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` centralizado, **bench 8** (`cargo bench -p lumen-bench` — 4 prod: fallthrough, defaults, matematicas, headless), **616 e2e + 9 production = 673 vm tests (917 workspace)**, CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`, `lumen check` 389/389. Ver [docs/produccion.md](produccion.md). Pendientes: **AI/ML (Fases 186-200)** + **Playground L2/L3** + **v3.1** (ver `docs/plan-v3.1.md` y `docs/produccion.md` §6).
 
 ---
 
-## 🟢 Prioridad Alta — Fácil + Alto Impacto
+## ✅ Completado — Producción Real v3.0.0 (21 Ago 2026)
+
+| Área | Estado | Detalle |
+|------|--------|---------|
+| **Fixes escalables builder/VM** | ✅ | `last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`), `CHUNK_VERSION 7` + `FuncMeta.defaults` + `bind_args` unificado |
+| **Headless centralizado** | ✅ | `stdlib/graficos.nv:es_headless()` (`LUMEN_HEADLESS`/`CI` vía `__ffi`) + CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`) |
+| **Suite + bench formal** | ✅ | 616 e2e (4 regresión) + 9 production = 673 vm tests, 917 workspace; bench 8 (`cargo bench -p lumen-bench`) |
+| **Docs producción** | ✅ | `docs/produccion.md` checklist único, `VERSION` 3.0.0, `CHANGELOG` v3.0.0 producción |
+
+Ver [docs/produccion.md](produccion.md) para reproducir local y CI.
+
+## 🟢 Prioridad Alta — Fácil + Alto Impacto (v3.1)
+
+## 🟡 Prioridad Media — Moderado + Alto Impacto (v3.1)
 
 | Área | Complejidad | Impacto | Razón |
 |------|-------------|---------|-------|
-| **AI/ML (Fases 186-200)** | 🔴 Alta | 🔥 Alto | Tensores, redes neuronales, DataFrames. Feature diferenciadora. |
-| **Docs & Comunidad** | 🟢 Baja | 🔥 Muy Alto | Documentación, tutoriales, web, ejemplos. Lo que más necesita un lenguaje nuevo. |
-| **Playground Web completo** | 🟢 Baja | 🔥 Muy Alto | ✅ COMPLETADO: Ronda L1 + F1.2 (ETag/LUMEN_PORT) + F2.3 (autocompletado/minimap/error gutter) + F4.2 (categorías/búsqueda/favoritos/importar marker) + 2 ejemplos interactivos. Solo faltan L2/L3 (F3.3, F5.1, F5.2, F6.1, F6.2, F8.1, F8.2, F9.2). |
-
-## 🟡 Prioridad Media — Moderado + Alto Impacto
-
-| Área | Complejidad | Impacto | Razón |
-|------|-------------|---------|-------|
-| **Bootstrapping doble + release v2.4.6** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv compilada por el compilador LÚMEN + fixpoint certificado + tag/release v2.4.6 (CI autotag). |
-| **Fixes y pulido** | 🟢 Baja | 🔥 Alto | Estabilidad general, edge cases |
+| **v3.1 defaults no literales + label_map per-function** | 🟢 Baja | 🔥 Alto | `FuncMeta` defaults `None` → thunk/Expr serializado, `label_map` per-function (ver `docs/produccion.md` §6) |
+| **Fixes y pulido** | 🟢 Baja | 🔥 Alto | Estabilidad general, edge cases + `lumen fmt`/`check` en pre-commit |
+| **Bootstrapping doble + release v2.4.6/v3.0.0** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv + fixpoint + tags v2.4.6/v3.0.0 producción |
 
 ## 🔵 Prioridad Baja — Muy Complejo + Nicho
 

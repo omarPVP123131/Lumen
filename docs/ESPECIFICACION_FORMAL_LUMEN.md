@@ -56,4 +56,17 @@ Cualquier valor en tiempo de ejecución en la Máquina Virtual se representa med
 
 ---
 
-*LÚMEN Standard Specification — Certificación Oficial 2026.*
+---
+
+## 5. Bytecode y Versionado (v3.0.0 Producción)
+
+- **CHUNK_VERSION 7** (`LUMN` + version 7): `FuncMeta.defaults: Vec<Option<DefaultValue>>` (`Int/Float/Str/Bool`) persistidos en el chunk; `decode` acepta 6 y 7 para compat con `.nvc` antiguos. `VM bind_args` usa `DefaultValue` cuando `i>=args.len()` (unificado para `Call`/`CallValue`/`run_function`/hilos).
+- **Builder:** `last_significant()` ignora `Label/Nop/Phi` para `needs_return()`/`emit_return_if_needed()` + `label_counter` global (fix fallthrough `Variable 'a'/'n'` en `matematicas.nv`).
+- **Bench:** 8 benches criterion (`cargo bench -p lumen-bench` — §2.2 `docs/produccion.md`).
+
+## 6. Modo Headless y Producción
+
+- **Headless centralizado:** `stdlib/graficos.nv:es_headless()` usa `getenv("CI"/"LUMEN_HEADLESS")` vía `__ffi` (`msvcrt`/`libc`/`libSystem`) y `peek!=0`; `iniciar()`/`ventana()` retornan `false/0` sin `SDL_Init`. CI `headless-check` con `env: LUMEN_HEADLESS=1 CI=1` ejecuta `cargo test --workspace`, `lumen check examples`, `cargo test --test production`, `cargo bench -- --quick`. Ver `docs/produccion.md` §1.4 y §3.
+- **Verificación:** `cargo test --workspace` **917** (616 e2e + 9 production, 673 vm tests), `lumen check examples` 389/389, `cargo bench -p lumen-bench` 8 OK. `VERSION` 3.0.0.
+
+*LÚMEN Standard Specification — Certificación Oficial 2026 — v3.0.0 Producción Real (docs/produccion.md).*

@@ -1,12 +1,33 @@
-# Plan v3.1 — Mejoras Propuestas (21 Ago 2026)
+# Plan v3.1 — Mejoras Propuestas (21 Ago 2026) — Post-Producción v3.0.0
 
-**Estado base:** v3.0.0 publicado (167 bugs, 720/393/372, aarch64 fix, docs sincronizadas, 389 check, 414 tests).
+**Estado base:** v3.0.0 Producción Real publicado (21 Ago 2026) — **917 tests** (616 e2e + 9 production, 673 vm tests), **bench 8** (`cargo bench -p lumen-bench`), **headless `es_headless()`** centralizado (`stdlib/graficos.nv`, `LUMEN_HEADLESS`/`CI`), **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, **fixes escalables** `last_significant()` + `label_counter` global, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Ver [docs/produccion.md](produccion.md). Antes: 167 bugs v3.0.0 (720/393/372), aarch64 fix.
 
-Este plan prioriza **evidencia sobre promesas**. Cada ítem tiene criterio de aceptación medible.
+Este plan prioriza **evidencia sobre promesas**. Cada ítem tiene criterio de aceptación medible. Parte del checklist `docs/produccion.md`.
 
 ---
 
-## P1 — Estabilidad de Demos (hecho, pendiente de fix profundo)
+## P0 — Producción Real v3.0.0 ✅ COMPLETADO (21 Ago 2026)
+
+**Entregado:**
+- `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'` — `matematicas.nv` `Variable 'n'`)
+- `vm FuncMeta.defaults` persistidos `CHUNK_VERSION 7` (`Int/Float/Str/Bool`) + `bind_args` unificado (`Call`/`CallValue`/`run_function` con defaults reales)
+- `stdlib/graficos.nv:es_headless()` centralizado (`getenv CI/LUMEN_HEADLESS` vía `__ffi`, `peek!=0`)
+- Bench 8 (`cargo bench -p lumen-bench` — 4 prod: fallthrough, defaults, matematicas, headless) + reporte `target/criterion/report/index.html`
+- Tests 616 e2e (4 regresión) + 9 production = 673 vm tests, 917 workspace (`cargo test --workspace`)
+- CI `headless-check` job Linux `env: LUMEN_HEADLESS=1 CI=1` con `cargo test`, `lumen check examples`, `cargo test --test production`, `cargo bench -- --quick`
+- Docs `docs/produccion.md` con checklist único; `VERSION` 3.0.0, decode v6+7
+
+**Comandos verificación:**
+```bash
+cargo test --workspace
+cargo bench -p lumen-bench
+LUMEN_HEADLESS=1 CI=1 cargo test --workspace
+LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
+```
+
+---
+
+## P1 — Estabilidad de Demos (hecho v3.0.0, pendiente de fix profundo)
 
 **Hecho 21 Ago:**
 - `charts_demo`, `graficos_avanzado_demo`, `tui_temas_demo` ahora detectan `CI=1` / `LUMEN_HEADLESS=1` y salen con `Headless/CI detectado — demo omitida` (0) en lugar de `Variable 'a/radius' no definida` o `AV 0xC0000005`.
@@ -19,16 +40,17 @@ Este plan prioriza **evidencia sobre promesas**. Cada ítem tiene criterio de ac
 
 ---
 
-## P2 — CI/CD y Benchmarks (hecho parcial)
+## P2 — CI/CD y Benchmarks (completado v3.0.0 + próximo)
 
-**Hecho:**
+**Hecho v3.0.0:**
 - `reports/BENCHMARK.md` creado (VM 856ms / C 22ms / Cranelift 5.6ms; aot 38/38; self-hosting fixpoint 5s).
 - `gui_ffi.rs` fix verificado en `cargo build --release` (dev 7s, release 62s) y `cargo clippy -D warnings` 0.
+- **Nuevo:** `crates/lumen-bench` 8 benches (4 prod nuevos) — `cargo bench -p lumen-bench` + CI `headless-check` con `LUMEN_HEADLESS=1 CI=1` + `--quick` (ver `docs/produccion.md` §2.2 y §3).
 
-**Propuesto (1 día):**
+**Propuesto v3.1 (1 día):**
 - [ ] CI: job `fuzz-smoke` nightly (5min, `cargo fuzz run` con 4 corpora) `continue-on-error: true`, artefacto corpus. No bloquea release.
-- [ ] CI: publicar `BENCHMARK.md` como artefacto en cada tag (upload-artifact).
-- [ ] CI: `lumen check examples` + `CI=1 lumen run` de demos como gate (ahora pasa).
+- [ ] CI: publicar `BENCHMARK.md` + `target/criterion/report/index.html` como artefacto en cada tag (upload-artifact) y validar regresión >10%.
+- [x] CI: `lumen check examples` + `CI=1 lumen run` de demos como gate — **HECHO** en `headless-check` con `LUMEN_HEADLESS=1`.
 
 ---
 
@@ -61,13 +83,22 @@ Cada fase **requiere** 2 ejemplos + `cargo test -p lumen-vm` + `lumen check` + `
 
 ---
 
-## Cómo medir v3.1 DONE
+## Cómo medir v3.0.0 DONE ✅
 
-- `cargo test --workspace` 414 → **≥420** (nuevos tests de loader alpha + tui headless)
+- `cargo test --workspace` **917** (616 e2e + 9 production) 0 FAILED — **HECHO** (era 414→917)
+- `cargo bench -p lumen-bench` **8 benches** (4 prod) — **HECHO**
+- `cargo test --test production` **9 production** — **HECHO**
+- `CHUNK_VERSION` **7** (decode v6+7) con `FuncMeta.defaults` — **HECHO**
+- `stdlib/graficos.nv:es_headless()` + `LUMEN_HEADLESS=1` — **HECHO**
+
+## Cómo medir v3.1 DONE (siguiente)
+
+- `cargo test --workspace` 917 → **≥925** (nuevos tests de loader alpha + tui headless profundos)
 - `lumen check examples` 389 → **389** (sin regresión)
-- `CI=1 lumen run examples/charts_demo.nv` → **0** con mensaje headless (ya hecho)
+- `LUMEN_HEADLESS=1 CI=1 lumen run examples/charts_demo.nv` → **0** con mensaje headless (ya hecho, ahora centralizado)
+- `cargo bench -p lumen-bench` 8 → **8** con regresión <10% gate en CI
 - `cargo build --release -p lumen-cli` **<65s** (sin regresión)
-- `reports/BENCHMARK.md` actualizado en cada tag
+- `reports/BENCHMARK.md` actualizado en cada tag con `target/criterion` artifact
 
 ---
 

@@ -128,4 +128,31 @@ Inicia un servidor local en `http://localhost:8080` con:
 
 ---
 
-*LÚMEN v3.0.0 — Documentación de Herramientas Sincronizada.*
+---
+
+## 11. Producción Real v3.0.0 — Bench, Headless y Checklist
+
+> Checklist único: [docs/produccion.md](produccion.md) — `VERSION` 3.0.0 · `CHUNK_VERSION 7` · 917 tests.
+
+**Fixes escalables llevados a producción (21 Ago 2026):**
+- `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`)
+- `vm FuncMeta.defaults` persistidos `CHUNK_VERSION 7` + `bind_args` unificado (`Call`/`CallValue`/`run_function`)
+- `stdlib/graficos.nv:es_headless()` centralizado (`getenv CI/LUMEN_HEADLESS` vía `__ffi`)
+
+**Comandos producción:**
+```bash
+cargo test --workspace                          # 917 (616 e2e + 9 production, 673 vm tests)
+cargo test -p lumen-vm --test e2e               # 616 e2e (4 regresión: fallthrough, matematicas, defaults, lambda)
+cargo test --test production                    # 9 production (aceptación 3 + performance 2 + integración)
+cargo bench -p lumen-bench                      # 8 benches (lexer, parser, pipeline, vm_fib_20 + 4 prod)
+cargo bench -p lumen-bench -- --quick           # smoke CI
+LUMEN_HEADLESS=1 CI=1 cargo test --workspace
+LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
+LUMEN_HEADLESS=1 cargo test --test production -- --nocapture
+```
+
+**CI `headless-check`:** job Linux `env: LUMEN_HEADLESS=1 CI=1` corre `cargo test --workspace`, `lumen check examples`, `cargo test --test production`, `cargo bench -- --quick` (ver `.github/workflows/ci.yml`).
+
+**Bench formal 8** (`crates/lumen-bench/benches/benchmarks.rs`): `lexer_tokenize`, `parser_parse`, `pipeline_full`, `vm_fib_20`, `prod_fallthrough_early_return`, `prod_defaults_callvalue`, `prod_matematicas_potencia`, `prod_graficos_headless` — reporte `target/criterion/report/index.html`.
+
+*LÚMEN v3.0.0 Producción Real — Documentación de Herramientas Sincronizada (917 tests, bench 8, headless `es_headless()`).*
