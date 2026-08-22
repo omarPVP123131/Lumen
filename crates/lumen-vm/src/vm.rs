@@ -3397,9 +3397,8 @@ impl VM {
             let mut scope =
                 HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
             for (i, param_name) in func_params.iter().enumerate() {
-                if let Some(arg) = args.get(i) {
-                    scope.insert(param_name.clone(), arg.clone());
-                }
+                let arg = args.get(i).cloned().unwrap_or(Value::Void);
+                scope.insert(param_name.clone(), arg);
             }
             if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
                 return Err(VmError::Runtime(format!(
@@ -4276,13 +4275,9 @@ impl VM {
                     });
                     let mut scope =
                         HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
-                    for i in (0..param_count).rev() {
+                    for i in 0..param_count {
                         let param_name = self.bytecode.funcs[func_idx].params[i].clone();
-                        let arg = if i < args.len() {
-                            args[i].clone()
-                        } else {
-                            self.pop().unwrap_or(Value::Void)
-                        };
+                        let arg = args.get(i).cloned().unwrap_or(Value::Void);
                         scope.insert(param_name, arg);
                     }
                     self.locals.push(scope);

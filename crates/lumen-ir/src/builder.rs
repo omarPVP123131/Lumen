@@ -145,13 +145,7 @@ impl IRBuilder {
             self.gen_decl_or_stmt(node);
         }
 
-        if self
-            .current_instrs
-            .last()
-            .is_none_or(|i| !matches!(i, Instr::Halt))
-        {
-            self.emit(Instr::Halt);
-        }
+        self.emit_halt_if_needed();
 
         if self.program.entry.is_empty() {
             self.program.entry = "__main__".to_string();
@@ -161,8 +155,17 @@ impl IRBuilder {
 
         if has_toplevel_code && self.program.funcs.contains_key("main") {
             if let Some(main_func) = self.program.funcs.get_mut("__main__") {
-                if matches!(main_func.instrs.last(), Some(Instr::Halt)) {
-                    main_func.instrs.pop();
+                if matches!(Self::last_significant(&main_func.instrs), Some(Instr::Halt)) {
+                    // Remove the last significant Halt (handle trailing Label/Nop)
+                    if let Some(pos) = main_func
+                        .instrs
+                        .iter()
+                        .rposition(|i| !matches!(i, Instr::Label(_) | Instr::Nop | Instr::Phi(_, _)))
+                    {
+                        if matches!(main_func.instrs[pos], Instr::Halt) {
+                            main_func.instrs.remove(pos);
+                        }
+                    }
                 }
                 main_func.instrs.push(Instr::Call("main".to_string(), 0));
                 main_func.instrs.push(Instr::Halt);
@@ -204,6 +207,9 @@ impl IRBuilder {
             Decl::Function { name, body, .. } => {
                 self.finalize_func(); // Guarda las instrucciones de la función actual (que podría ser __main__) antes de cambiar de contexto!
                 let prev_func_name = self.current_func.take();
+                let saved_temp = self.temp_counter;
+                let saved_loop = std::mem::take(&mut self.loop_labels);
+                let saved_is_lambda = self.is_in_lambda;
 
                 self.current_func = Some(name.clone());
                 // Cargar instrucciones si esta función ya existía (por ejemplo, en un paso previo)
@@ -214,15 +220,18 @@ impl IRBuilder {
                     .map(|f| f.instrs.clone())
                     .unwrap_or_default();
                 self.temp_counter = 0;
+                self.loop_labels = Vec::new();
+                self.is_in_lambda = false;
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
-                if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
-                    self.emit(Instr::Return);
-                }
+                self.emit_return_if_needed();
                 self.finalize_func(); // Guardar las instrucciones de esta función
 
                 // Restaurar el contexto anterior
+                self.temp_counter = saved_temp;
+                self.loop_labels = saved_loop;
+                self.is_in_lambda = saved_is_lambda;
                 if let Some(prev_name) = prev_func_name {
                     self.current_func = Some(prev_name.clone());
                     // Cargar las instrucciones actualizadas de la función anterior
@@ -261,6 +270,9 @@ impl IRBuilder {
 
                 self.finalize_func(); // Guarda las instrucciones de la función actual (que podría ser __main__) antes de cambiar de contexto!
                 let prev_func_name = self.current_func.take();
+                let saved_temp = self.temp_counter;
+                let saved_loop = std::mem::take(&mut self.loop_labels);
+                let saved_is_lambda = self.is_in_lambda;
 
                 for method_decl in methods {
                     if let Decl::Function { name, ref body, .. } = method_decl {
@@ -278,17 +290,20 @@ impl IRBuilder {
                             .map(|f| f.instrs.clone())
                             .unwrap_or_default();
                         self.temp_counter = 0;
+                        self.loop_labels = Vec::new();
+                        self.is_in_lambda = false;
                         for node in body {
                             self.gen_decl_or_stmt(node);
                         }
-                        if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
-                            self.emit(Instr::Return);
-                        }
+                        self.emit_return_if_needed();
                         self.finalize_func(); // Guardar las instrucciones de este método
                     }
                 }
 
                 // Restaurar el contexto anterior
+                self.temp_counter = saved_temp;
+                self.loop_labels = saved_loop;
+                self.is_in_lambda = saved_is_lambda;
                 if let Some(prev_name) = prev_func_name {
                     self.current_func = Some(prev_name.clone());
                     // Cargar las instrucciones actualizadas de la función anterior
@@ -1543,13 +1558,7 @@ impl IRBuilder {
         for node in body {
             self.gen_decl_or_stmt(node);
         }
-        if !self
-            .current_instrs
-            .iter()
-            .any(|i| matches!(i, Instr::Return))
-        {
-            self.emit(Instr::Return);
-        }
+        self.emit_return_if_needed();
         self.finalize_func();
         self.current_func = saved_func;
         self.current_instrs = saved_instrs;
@@ -1562,6 +1571,33 @@ impl IRBuilder {
 
     fn emit(&mut self, instr: Instr) {
         self.current_instrs.push(instr);
+    }
+
+    fn last_significant(instrs: &[Instr]) -> Option<&Instr> {
+        instrs
+            .iter()
+            .rev()
+            .find(|i| !matches!(i, Instr::Label(_) | Instr::Nop | Instr::Phi(_, _)))
+    }
+
+    fn needs_return(&self) -> bool {
+        !matches!(Self::last_significant(&self.current_instrs), Some(Instr::Return))
+    }
+
+    fn needs_halt(&self) -> bool {
+        !matches!(Self::last_significant(&self.current_instrs), Some(Instr::Halt))
+    }
+
+    fn emit_return_if_needed(&mut self) {
+        if self.needs_return() {
+            self.emit(Instr::Return);
+        }
+    }
+
+    fn emit_halt_if_needed(&mut self) {
+        if self.needs_halt() {
+            self.emit(Instr::Halt);
+        }
     }
 
     fn new_label(&mut self) -> usize {

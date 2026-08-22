@@ -1221,13 +1221,13 @@ mod tests {
             "funcion entero duplicar(entero x) {\n    retornar x * 2;\n}\n".to_string(),
         );
         let mut loader = ModuleLoader::with_memory_files(mem);
-        let source = "importar \"util_mem.nv\";\nfuncion entero main() {\n    retornar util_mem__duplicar(21);\n}\n";
+        let source = "importar \"util_mem.nv\";\nfuncion entero main() {\n    retornar util_mem_duplicar(21);\n}\n";
         let program = loader
             .resolve_imports(source, Path::new("__lumen_mem__/main.nv"))
             .expect("debe resolver imports desde memoria");
         let text = format!("{:?}", program);
         assert!(
-            text.contains("util_mem__duplicar"),
+            text.contains("util_mem_duplicar"),
             "la función importada debe estar prefijada: {}",
             text
         );
