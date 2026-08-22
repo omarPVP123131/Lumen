@@ -217,11 +217,7 @@ impl IRBuilder {
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
-                if !self
-                    .current_instrs
-                    .iter()
-                    .any(|i| matches!(i, Instr::Return))
-                {
+                if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
                     self.emit(Instr::Return);
                 }
                 self.finalize_func(); // Guardar las instrucciones de esta función
@@ -285,11 +281,7 @@ impl IRBuilder {
                         for node in body {
                             self.gen_decl_or_stmt(node);
                         }
-                        if !self
-                            .current_instrs
-                            .iter()
-                            .any(|i| matches!(i, Instr::Return))
-                        {
+                        if !matches!(self.current_instrs.last(), Some(Instr::Return)) {
                             self.emit(Instr::Return);
                         }
                         self.finalize_func(); // Guardar las instrucciones de este método
