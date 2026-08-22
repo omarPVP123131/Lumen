@@ -1931,8 +1931,6 @@ print(query_res);
     assert_eq!(output, vec!["[13, 14, 15]"]);
 }
 
-
-
 #[test]
 fn test_new_001_abs_positive_int() {
     let output = run_source(r#"imprimir(abs(5));"#).unwrap();
@@ -2343,7 +2341,8 @@ fn test_new_068_str_slice() {
 
 #[test]
 fn test_new_069_str_reemplazar() {
-    let output = run_source(r#"imprimir(__str_reemplazar("hola mundo", "mundo", "Lumen"));"#).unwrap();
+    let output =
+        run_source(r#"imprimir(__str_reemplazar("hola mundo", "mundo", "Lumen"));"#).unwrap();
     assert_eq!(output, vec!["hola Lumen"]);
 }
 
@@ -2361,7 +2360,9 @@ fn test_new_071_str_to_chars() {
 
 #[test]
 fn test_new_072_str_concat_list() {
-    let output = run_source(r#"lista<texto> xs = ["a", "b", "c"]; imprimir(__str_concat_list(xs));"#).unwrap();
+    let output =
+        run_source(r#"lista<texto> xs = ["a", "b", "c"]; imprimir(__str_concat_list(xs));"#)
+            .unwrap();
     assert_eq!(output, vec!["abc"]);
 }
 
@@ -2391,7 +2392,10 @@ fn test_new_076_str_contiene_alias() {
 
 #[test]
 fn test_new_077_map_basic() {
-    let output = run_source(r#"numero d = __map_nuevo(); d = __map_poner(d, "a", 1); imprimir(__map_obtener(d, "a"));"#).unwrap();
+    let output = run_source(
+        r#"numero d = __map_nuevo(); d = __map_poner(d, "a", 1); imprimir(__map_obtener(d, "a"));"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
@@ -2463,19 +2467,25 @@ fn test_new_088_map_keys_contains() {
 
 #[test]
 fn test_new_089_map_english_alias() {
-    let output = run_source(r#"numero d = __map_new(); d = __map_set(d, "a", 10); imprimir(__map_get(d, "a"));"#).unwrap();
+    let output = run_source(
+        r#"numero d = __map_new(); d = __map_set(d, "a", 10); imprimir(__map_get(d, "a"));"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["10"]);
 }
 
 #[test]
 fn test_new_090_set_english_alias() {
-    let output = run_source(r#"numero s = __set_new(); s = __set_add(s, 5); imprimir(__set_has(s, 5));"#).unwrap();
+    let output =
+        run_source(r#"numero s = __set_new(); s = __set_add(s, 5); imprimir(__set_has(s, 5));"#)
+            .unwrap();
     assert_eq!(output, vec!["true"]);
 }
 
 #[test]
 fn test_new_091_deque_new_len() {
-    let output = run_source(r#"numero dq = __deque_nuevo(); imprimir(__deque_longitud(dq));"#).unwrap();
+    let output =
+        run_source(r#"numero dq = __deque_nuevo(); imprimir(__deque_longitud(dq));"#).unwrap();
     assert_eq!(output, vec!["0"]);
 }
 
@@ -2505,7 +2515,9 @@ fn test_new_095_heap_pop() {
 
 #[test]
 fn test_new_096_enlazada_new_len() {
-    let output = run_source(r#"numero ll = __enlazada_nuevo(); imprimir(__enlazada_longitud(ll));"#).unwrap();
+    let output =
+        run_source(r#"numero ll = __enlazada_nuevo(); imprimir(__enlazada_longitud(ll));"#)
+            .unwrap();
     assert_eq!(output, vec!["0"]);
 }
 
@@ -2517,19 +2529,28 @@ fn test_new_097_enlazada_push() {
 
 #[test]
 fn test_new_098_list_reverse() {
-    let output = run_source(r#"lista<entero> xs = [3, 1, 2]; lista<entero> ys = __lista_invertir(xs); imprimir(ys);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> xs = [3, 1, 2]; lista<entero> ys = __lista_invertir(xs); imprimir(ys);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["[2, 1, 3]"]);
 }
 
 #[test]
 fn test_new_099_list_sort() {
-    let output = run_source(r#"lista<entero> xs = [3, 1, 2]; lista<entero> ys = __lista_ordenar(xs); imprimir(ys);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> xs = [3, 1, 2]; lista<entero> ys = __lista_ordenar(xs); imprimir(ys);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["[1, 2, 3]"]);
 }
 
 #[test]
 fn test_new_100_deque_empty_pop() {
-    let output = run_source(r#"numero dq = __deque_nuevo(); numero f = __deque_quitar_frente(dq); imprimir(f);"#).unwrap();
+    let output = run_source(
+        r#"numero dq = __deque_nuevo(); numero f = __deque_quitar_frente(dq); imprimir(f);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["void"]);
 }
 
@@ -2553,7 +2574,8 @@ fn test_new_103_si_else_if() {
 
 #[test]
 fn test_new_104_mientras_loop() {
-    let output = run_source(r#"entero i = 0; mientras (i < 3) { imprimir(i); i = i + 1; }"#).unwrap();
+    let output =
+        run_source(r#"entero i = 0; mientras (i < 3) { imprimir(i); i = i + 1; }"#).unwrap();
     assert_eq!(output, vec!["0", "1", "2"]);
 }
 
@@ -2571,25 +2593,34 @@ fn test_new_106_para_for_loop() {
 
 #[test]
 fn test_new_107_para_break() {
-    let output = run_source(r#"para (entero i = 0; i < 5; i = i + 1) { si (i == 2) { romper; } imprimir(i); }"#).unwrap();
+    let output = run_source(
+        r#"para (entero i = 0; i < 5; i = i + 1) { si (i == 2) { romper; } imprimir(i); }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["0", "1"]);
 }
 
 #[test]
 fn test_new_108_para_continue() {
-    let output = run_source(r#"para (entero i = 0; i < 5; i = i + 1) { si (i == 2) { continuar; } imprimir(i); }"#).unwrap();
+    let output = run_source(
+        r#"para (entero i = 0; i < 5; i = i + 1) { si (i == 2) { continuar; } imprimir(i); }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["0", "1", "3", "4"]);
 }
 
 #[test]
 fn test_new_109_foreach_lista() {
-    let output = run_source(r#"lista<entero> nums = [1,2,3]; para n en nums { imprimir(n); }"#).unwrap();
+    let output =
+        run_source(r#"lista<entero> nums = [1,2,3]; para n en nums { imprimir(n); }"#).unwrap();
     assert_eq!(output, vec!["1", "2", "3"]);
 }
 
 #[test]
 fn test_new_110_foreach_empty() {
-    let output = run_source(r#"lista<entero> nums = []; para n en nums { imprimir(n); } imprimir("fin");"#).unwrap();
+    let output =
+        run_source(r#"lista<entero> nums = []; para n en nums { imprimir(n); } imprimir("fin");"#)
+            .unwrap();
     assert_eq!(output, vec!["fin"]);
 }
 
@@ -2601,19 +2632,28 @@ fn test_new_111_elegir_simple() {
 
 #[test]
 fn test_new_112_elegir_defecto() {
-    let output = run_source(r#"entero x = 9; elegir (x) { caso 1: imprimir("uno"); defecto: imprimir("def"); }"#).unwrap();
+    let output = run_source(
+        r#"entero x = 9; elegir (x) { caso 1: imprimir("uno"); defecto: imprimir("def"); }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["def"]);
 }
 
 #[test]
 fn test_new_113_elegir_guard_pass() {
-    let output = run_source(r#"entero x = 5; elegir (x) { caso 5 si x > 3: imprimir("ok"); defecto: imprimir("no"); }"#).unwrap();
+    let output = run_source(
+        r#"entero x = 5; elegir (x) { caso 5 si x > 3: imprimir("ok"); defecto: imprimir("no"); }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["ok"]);
 }
 
 #[test]
 fn test_new_114_match_english() {
-    let output = run_source(r#"integer x = 3; match (x) { case 3: print("three"); default: print("other"); }"#).unwrap();
+    let output = run_source(
+        r#"integer x = 3; match (x) { case 3: print("three"); default: print("other"); }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["three"]);
 }
 
@@ -2637,13 +2677,19 @@ fn test_new_117_para_range_exclusive() {
 
 #[test]
 fn test_new_118_si_anidado() {
-    let output = run_source(r#"entero a = 5; entero b = 10; si (a < b) { si (b == 10) { imprimir("ok"); } }"#).unwrap();
+    let output = run_source(
+        r#"entero a = 5; entero b = 10; si (a < b) { si (b == 10) { imprimir("ok"); } }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["ok"]);
 }
 
 #[test]
 fn test_new_119_mientras_continue_nested() {
-    let output = run_source(r#"entero i = 0; mientras (i < 4) { i = i + 1; si (i == 2) { continuar; } imprimir(i); }"#).unwrap();
+    let output = run_source(
+        r#"entero i = 0; mientras (i < 4) { i = i + 1; si (i == 2) { continuar; } imprimir(i); }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["1", "3", "4"]);
 }
 
@@ -2655,7 +2701,8 @@ fn test_new_120_elegir_multiple_arms_guard() {
 
 #[test]
 fn test_new_121_logic_and() {
-    let output = run_source(r#"imprimir(verdadero && verdadero); imprimir(verdadero && falso);"#).unwrap();
+    let output =
+        run_source(r#"imprimir(verdadero && verdadero); imprimir(verdadero && falso);"#).unwrap();
     assert_eq!(output, vec!["true", "false"]);
 }
 
@@ -2673,13 +2720,19 @@ fn test_new_123_elegir_nested() {
 
 #[test]
 fn test_new_124_para_with_condition() {
-    let output = run_source(r#"lista<entero> nums = [1,2,3,4]; para n en nums { si (n % 2 == 0) { imprimir(n); } }"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> nums = [1,2,3,4]; para n en nums { si (n % 2 == 0) { imprimir(n); } }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["2", "4"]);
 }
 
 #[test]
 fn test_new_125_mientras_break() {
-    let output = run_source(r#"entero i = 0; mientras (i < 10) { si (i == 3) { romper; } imprimir(i); i = i + 1; }"#).unwrap();
+    let output = run_source(
+        r#"entero i = 0; mientras (i < 10) { si (i == 3) { romper; } imprimir(i); i = i + 1; }"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["0", "1", "2"]);
 }
 
@@ -2757,7 +2810,8 @@ fn test_new_137_linq_english() {
 
 #[test]
 fn test_new_138_lambda_multi_args() {
-    let output = run_source(r#"imprimir(funcion(entero a, entero b) { retornar a + b; }(3, 4));"#).unwrap();
+    let output =
+        run_source(r#"imprimir(funcion(entero a, entero b) { retornar a + b; }(3, 4));"#).unwrap();
     assert_eq!(output, vec!["7"]);
 }
 
@@ -2769,43 +2823,64 @@ fn test_new_139_recursion_sum() {
 
 #[test]
 fn test_new_140_func_string() {
-    let output = run_source(r#"funcion texto saludo(texto n) { retornar "hola " + n; } imprimir(saludo("Ana"));"#).unwrap();
+    let output = run_source(
+        r#"funcion texto saludo(texto n) { retornar "hola " + n; } imprimir(saludo("Ana"));"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["hola Ana"]);
 }
 
 #[test]
 fn test_new_141_list_reverse_english() {
-    let output = run_source(r#"lista<entero> xs = [1,2,3]; lista<entero> ys = __list_reverse(xs); imprimir(ys);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> xs = [1,2,3]; lista<entero> ys = __list_reverse(xs); imprimir(ys);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["[3, 2, 1]"]);
 }
 
 #[test]
 fn test_new_142_lista_invertir_spanish() {
-    let output = run_source(r#"lista<entero> xs = [1,2,3]; lista<entero> ys = __lista_invertir(xs); imprimir(ys);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> xs = [1,2,3]; lista<entero> ys = __lista_invertir(xs); imprimir(ys);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["[3, 2, 1]"]);
 }
 
 #[test]
 fn test_new_143_list_sort_english() {
-    let output = run_source(r#"lista<entero> xs = [3,1,2]; lista<entero> ys = __list_sort(xs); imprimir(ys);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> xs = [3,1,2]; lista<entero> ys = __list_sort(xs); imprimir(ys);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["[1, 2, 3]"]);
 }
 
 #[test]
 fn test_new_144_lista_ordenar_spanish() {
-    let output = run_source(r#"lista<entero> xs = [3,1,2]; lista<entero> ys = __lista_ordenar(xs); imprimir(ys);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> xs = [3,1,2]; lista<entero> ys = __lista_ordenar(xs); imprimir(ys);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["[1, 2, 3]"]);
 }
 
 #[test]
 fn test_new_145_list_sort_already_sorted() {
-    let output = run_source(r#"lista<entero> xs = [1,2,3]; lista<entero> ys = __list_sort(xs); imprimir(ys);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> xs = [1,2,3]; lista<entero> ys = __list_sort(xs); imprimir(ys);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["[1, 2, 3]"]);
 }
 
 #[test]
 fn test_new_146_list_reverse_single() {
-    let output = run_source(r#"lista<entero> xs = [42]; lista<entero> ys = __lista_invertir(xs); imprimir(ys);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> xs = [42]; lista<entero> ys = __lista_invertir(xs); imprimir(ys);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["[42]"]);
 }
 
@@ -2924,7 +2999,8 @@ fn test_new_164_array_oob() {
 
 #[test]
 fn test_new_165_struct_missing_field() {
-    let result = run_source(r#"estructura Punto { x: entero, y: entero } Punto p = Punto { x: 10 };"#);
+    let result =
+        run_source(r#"estructura Punto { x: entero, y: entero } Punto p = Punto { x: 10 };"#);
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("SemError"));
 }
@@ -2971,7 +3047,8 @@ fn test_new_171_regex_is_match_true() {
 
 #[test]
 fn test_new_172_regex_replace() {
-    let output = run_source(r#"imprimir(__regex_reemplazar("mundo", "Hola mundo", "Lumen"));"#).unwrap();
+    let output =
+        run_source(r#"imprimir(__regex_reemplazar("mundo", "Hola mundo", "Lumen"));"#).unwrap();
     assert_eq!(output, vec!["Hola Lumen"]);
 }
 
@@ -2983,13 +3060,17 @@ fn test_new_173_regex_english_alias() {
 
 #[test]
 fn test_new_174_encoding_utf8() {
-    let output = run_source(r#"lista<entero> b = __codificacion_utf8("abc"); imprimir(b);"#).unwrap();
+    let output =
+        run_source(r#"lista<entero> b = __codificacion_utf8("abc"); imprimir(b);"#).unwrap();
     assert_eq!(output, vec!["[97, 98, 99]"]);
 }
 
 #[test]
 fn test_new_175_desde_utf8() {
-    let output = run_source(r#"lista<entero> b = __codificacion_utf8("Hola"); texto d = __desde_utf8(b); imprimir(d);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> b = __codificacion_utf8("Hola"); texto d = __desde_utf8(b); imprimir(d);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["Hola"]);
 }
 
@@ -3023,7 +3104,6 @@ fn test_new_180_tipo_de() {
     assert_eq!(output, vec!["entero", "texto"]);
 }
 
-
 #[test]
 fn test_new_181_min_max() {
     let output = run_source(r#"imprimir(min(181, 182)); imprimir(max(181, 182));"#).unwrap();
@@ -3044,19 +3124,26 @@ fn test_new_183_string_len() {
 
 #[test]
 fn test_new_184_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_185_control_si() {
-    let output = run_source(r#"entero x = 185; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 185; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_186_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3074,7 +3161,10 @@ fn test_new_188_map() {
 
 #[test]
 fn test_new_189_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3104,19 +3194,26 @@ fn test_new_193_string_len() {
 
 #[test]
 fn test_new_194_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_195_control_si() {
-    let output = run_source(r#"entero x = 195; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 195; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_196_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3134,7 +3231,10 @@ fn test_new_198_map() {
 
 #[test]
 fn test_new_199_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3164,19 +3264,26 @@ fn test_new_203_string_len() {
 
 #[test]
 fn test_new_204_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_205_control_si() {
-    let output = run_source(r#"entero x = 205; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 205; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_206_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3194,7 +3301,10 @@ fn test_new_208_map() {
 
 #[test]
 fn test_new_209_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3224,19 +3334,26 @@ fn test_new_213_string_len() {
 
 #[test]
 fn test_new_214_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_215_control_si() {
-    let output = run_source(r#"entero x = 215; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 215; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_216_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3254,7 +3371,10 @@ fn test_new_218_map() {
 
 #[test]
 fn test_new_219_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3284,19 +3404,26 @@ fn test_new_223_string_len() {
 
 #[test]
 fn test_new_224_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_225_control_si() {
-    let output = run_source(r#"entero x = 225; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 225; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_226_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3314,7 +3441,10 @@ fn test_new_228_map() {
 
 #[test]
 fn test_new_229_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3344,19 +3474,26 @@ fn test_new_233_string_len() {
 
 #[test]
 fn test_new_234_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_235_control_si() {
-    let output = run_source(r#"entero x = 235; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 235; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_236_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3374,7 +3511,10 @@ fn test_new_238_map() {
 
 #[test]
 fn test_new_239_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3404,19 +3544,26 @@ fn test_new_243_string_len() {
 
 #[test]
 fn test_new_244_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_245_control_si() {
-    let output = run_source(r#"entero x = 245; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 245; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_246_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3434,7 +3581,10 @@ fn test_new_248_map() {
 
 #[test]
 fn test_new_249_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3464,19 +3614,26 @@ fn test_new_253_string_len() {
 
 #[test]
 fn test_new_254_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_255_control_si() {
-    let output = run_source(r#"entero x = 255; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 255; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_256_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3494,7 +3651,10 @@ fn test_new_258_map() {
 
 #[test]
 fn test_new_259_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3524,19 +3684,26 @@ fn test_new_263_string_len() {
 
 #[test]
 fn test_new_264_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_265_control_si() {
-    let output = run_source(r#"entero x = 265; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 265; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_266_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3554,7 +3721,10 @@ fn test_new_268_map() {
 
 #[test]
 fn test_new_269_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3584,19 +3754,26 @@ fn test_new_273_string_len() {
 
 #[test]
 fn test_new_274_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_275_control_si() {
-    let output = run_source(r#"entero x = 275; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 275; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_276_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3614,7 +3791,10 @@ fn test_new_278_map() {
 
 #[test]
 fn test_new_279_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3644,19 +3824,26 @@ fn test_new_283_string_len() {
 
 #[test]
 fn test_new_284_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_285_control_si() {
-    let output = run_source(r#"entero x = 285; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 285; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_286_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3674,7 +3861,10 @@ fn test_new_288_map() {
 
 #[test]
 fn test_new_289_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3704,19 +3894,26 @@ fn test_new_293_string_len() {
 
 #[test]
 fn test_new_294_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_295_control_si() {
-    let output = run_source(r#"entero x = 295; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 295; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_296_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3734,7 +3931,10 @@ fn test_new_298_map() {
 
 #[test]
 fn test_new_299_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3764,19 +3964,26 @@ fn test_new_303_string_len() {
 
 #[test]
 fn test_new_304_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_305_control_si() {
-    let output = run_source(r#"entero x = 305; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 305; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_306_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3794,7 +4001,10 @@ fn test_new_308_map() {
 
 #[test]
 fn test_new_309_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3824,19 +4034,26 @@ fn test_new_313_string_len() {
 
 #[test]
 fn test_new_314_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_315_control_si() {
-    let output = run_source(r#"entero x = 315; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 315; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_316_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3854,7 +4071,10 @@ fn test_new_318_map() {
 
 #[test]
 fn test_new_319_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3884,19 +4104,26 @@ fn test_new_323_string_len() {
 
 #[test]
 fn test_new_324_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_325_control_si() {
-    let output = run_source(r#"entero x = 325; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 325; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_326_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3914,7 +4141,10 @@ fn test_new_328_map() {
 
 #[test]
 fn test_new_329_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -3944,19 +4174,26 @@ fn test_new_333_string_len() {
 
 #[test]
 fn test_new_334_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_335_control_si() {
-    let output = run_source(r#"entero x = 335; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 335; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_336_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -3974,7 +4211,10 @@ fn test_new_338_map() {
 
 #[test]
 fn test_new_339_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4004,19 +4244,26 @@ fn test_new_343_string_len() {
 
 #[test]
 fn test_new_344_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_345_control_si() {
-    let output = run_source(r#"entero x = 345; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 345; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_346_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4034,7 +4281,10 @@ fn test_new_348_map() {
 
 #[test]
 fn test_new_349_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4064,19 +4314,26 @@ fn test_new_353_string_len() {
 
 #[test]
 fn test_new_354_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_355_control_si() {
-    let output = run_source(r#"entero x = 355; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 355; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_356_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4094,7 +4351,10 @@ fn test_new_358_map() {
 
 #[test]
 fn test_new_359_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4124,19 +4384,26 @@ fn test_new_363_string_len() {
 
 #[test]
 fn test_new_364_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_365_control_si() {
-    let output = run_source(r#"entero x = 365; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 365; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_366_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4154,7 +4421,10 @@ fn test_new_368_map() {
 
 #[test]
 fn test_new_369_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4184,19 +4454,26 @@ fn test_new_373_string_len() {
 
 #[test]
 fn test_new_374_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_375_control_si() {
-    let output = run_source(r#"entero x = 375; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 375; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_376_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4214,7 +4491,10 @@ fn test_new_378_map() {
 
 #[test]
 fn test_new_379_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4244,19 +4524,26 @@ fn test_new_383_string_len() {
 
 #[test]
 fn test_new_384_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_385_control_si() {
-    let output = run_source(r#"entero x = 385; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 385; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_386_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4274,7 +4561,10 @@ fn test_new_388_map() {
 
 #[test]
 fn test_new_389_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4304,19 +4594,26 @@ fn test_new_393_string_len() {
 
 #[test]
 fn test_new_394_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_395_control_si() {
-    let output = run_source(r#"entero x = 395; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 395; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_396_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4334,7 +4631,10 @@ fn test_new_398_map() {
 
 #[test]
 fn test_new_399_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4364,19 +4664,26 @@ fn test_new_403_string_len() {
 
 #[test]
 fn test_new_404_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_405_control_si() {
-    let output = run_source(r#"entero x = 405; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 405; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_406_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4394,7 +4701,10 @@ fn test_new_408_map() {
 
 #[test]
 fn test_new_409_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4424,19 +4734,26 @@ fn test_new_413_string_len() {
 
 #[test]
 fn test_new_414_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_415_control_si() {
-    let output = run_source(r#"entero x = 415; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 415; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_416_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4454,7 +4771,10 @@ fn test_new_418_map() {
 
 #[test]
 fn test_new_419_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4484,19 +4804,26 @@ fn test_new_423_string_len() {
 
 #[test]
 fn test_new_424_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_425_control_si() {
-    let output = run_source(r#"entero x = 425; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 425; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_426_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4514,7 +4841,10 @@ fn test_new_428_map() {
 
 #[test]
 fn test_new_429_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 
@@ -4544,19 +4874,26 @@ fn test_new_433_string_len() {
 
 #[test]
 fn test_new_434_array_push() {
-    let output = run_source(r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> a = [1, 2]; a = a ++ [3]; imprimir(largo(a)); imprimir(a[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "3"]);
 }
 
 #[test]
 fn test_new_435_control_si() {
-    let output = run_source(r#"entero x = 435; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
+    let output =
+        run_source(r#"entero x = 435; si (x > 0) { imprimir(1); } sino { imprimir(0); }"#).unwrap();
     assert_eq!(output, vec!["1"]);
 }
 
 #[test]
 fn test_new_436_loop_mientras() {
-    let output = run_source(r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#).unwrap();
+    let output = run_source(
+        r#"entero c = 0; entero s = 0; mientras (c < 3) { s = s + c; c = c + 1; } imprimir(s);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3"]);
 }
 
@@ -4574,7 +4911,10 @@ fn test_new_438_map() {
 
 #[test]
 fn test_new_439_rango() {
-    let output = run_source(r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#).unwrap();
+    let output = run_source(
+        r#"lista<entero> r = 0..3; imprimir(largo(r)); imprimir(r[0]); imprimir(r[2]);"#,
+    )
+    .unwrap();
     assert_eq!(output, vec!["3", "0", "2"]);
 }
 

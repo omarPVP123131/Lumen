@@ -4593,7 +4593,13 @@ para a en nums {
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
-            assert!(matches!(&arms[0].value, Expr::Range { inclusive: false, .. }));
+            assert!(matches!(
+                &arms[0].value,
+                Expr::Range {
+                    inclusive: false,
+                    ..
+                }
+            ));
         } else {
             panic!("Expected Match");
         }
@@ -4605,7 +4611,13 @@ para a en nums {
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         if let DeclOrStmt::Stmt(Stmt::Match { arms, .. }) = &program[0] {
-            assert!(matches!(&arms[0].value, Expr::Range { inclusive: true, .. }));
+            assert!(matches!(
+                &arms[0].value,
+                Expr::Range {
+                    inclusive: true,
+                    ..
+                }
+            ));
         } else {
             panic!("Expected Match");
         }
@@ -4634,7 +4646,10 @@ para a en nums {
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         assert_eq!(program.len(), 1);
-        assert!(matches!(&program[0], DeclOrStmt::Decl(Decl::Function { .. })));
+        assert!(matches!(
+            &program[0],
+            DeclOrStmt::Decl(Decl::Function { .. })
+        ));
     }
 
     #[test]
@@ -4642,7 +4657,10 @@ para a en nums {
         let source = "funcion entero principal() { retornar 0; }";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Function { name, return_type, .. }) = &program[0] {
+        if let DeclOrStmt::Decl(Decl::Function {
+            name, return_type, ..
+        }) = &program[0]
+        {
             assert_eq!(name, "principal");
             assert_eq!(*return_type, Type::Entero);
         } else {
@@ -4656,7 +4674,10 @@ para a en nums {
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         assert_eq!(program.len(), 2);
-        assert!(matches!(&program[1], DeclOrStmt::Stmt(Stmt::ArraySet { .. })));
+        assert!(matches!(
+            &program[1],
+            DeclOrStmt::Stmt(Stmt::ArraySet { .. })
+        ));
     }
 
     #[test]
@@ -4677,7 +4698,10 @@ para a en nums {
         let source = "numero x = 5; entero y = x como entero;";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[1] {
+        if let DeclOrStmt::Decl(Decl::Variable {
+            init: Some(init), ..
+        }) = &program[1]
+        {
             assert!(matches!(init.as_ref(), Expr::Cast { .. }));
             if let Expr::Cast { cast_type, .. } = init.as_ref() {
                 assert_eq!(*cast_type, Type::Entero);
@@ -4692,7 +4716,10 @@ para a en nums {
         let source = "numero x = 5; texto t = x como texto;";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[1] {
+        if let DeclOrStmt::Decl(Decl::Variable {
+            init: Some(init), ..
+        }) = &program[1]
+        {
             assert!(matches!(init.as_ref(), Expr::Cast { .. }));
         } else {
             panic!("Expected Cast");
@@ -4712,7 +4739,10 @@ para a en nums {
         let source = "entero r = 10 |> duplicar() |> sumar(5);";
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
-        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[0] {
+        if let DeclOrStmt::Decl(Decl::Variable {
+            init: Some(init), ..
+        }) = &program[0]
+        {
             assert!(matches!(init.as_ref(), Expr::Call { .. }));
         } else {
             panic!("Expected Call chain");
@@ -4733,8 +4763,14 @@ para a en nums {
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         assert_eq!(program.len(), 2);
-        if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = &program[1] {
-            assert!(matches!(init.as_ref(), Expr::Binary { .. } | Expr::Call { .. } | Expr::Str { .. }));
+        if let DeclOrStmt::Decl(Decl::Variable {
+            init: Some(init), ..
+        }) = &program[1]
+        {
+            assert!(matches!(
+                init.as_ref(),
+                Expr::Binary { .. } | Expr::Call { .. } | Expr::Str { .. }
+            ));
         } else {
             panic!("Expected Variable with fstring");
         }
@@ -4746,7 +4782,10 @@ para a en nums {
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         if let DeclOrStmt::Decl(Decl::Variable { var_type, .. }) = &program[0] {
-            assert_eq!(*var_type, Type::Lista(Box::new(Type::Lista(Box::new(Type::Entero)))));
+            assert_eq!(
+                *var_type,
+                Type::Lista(Box::new(Type::Lista(Box::new(Type::Entero))))
+            );
         } else {
             panic!("Expected nested lista");
         }
@@ -4794,7 +4833,10 @@ para a en nums {
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         assert_eq!(program.len(), 2);
         for prog in &program {
-            if let DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) = prog {
+            if let DeclOrStmt::Decl(Decl::Variable {
+                init: Some(init), ..
+            }) = prog
+            {
                 assert!(matches!(init.as_ref(), Expr::Range { .. }));
             } else {
                 panic!("Expected Range");

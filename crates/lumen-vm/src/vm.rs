@@ -4291,8 +4291,7 @@ impl VM {
                         let param_name = self.bytecode.funcs[func_idx].params[i].clone();
                         let arg = if i < args.len() {
                             args[i].clone()
-                        } else if let Some(Some(dv)) =
-                            self.bytecode.funcs[func_idx].defaults.get(i)
+                        } else if let Some(Some(dv)) = self.bytecode.funcs[func_idx].defaults.get(i)
                         {
                             match dv {
                                 DefaultValue::Int(v) => Value::Int(*v),
@@ -4982,8 +4981,7 @@ impl VM {
                         let param_name = self.bytecode.funcs[func_idx].params[i].clone();
                         let arg = if i < args.len() {
                             args[i].clone()
-                        } else if let Some(Some(dv)) =
-                            self.bytecode.funcs[func_idx].defaults.get(i)
+                        } else if let Some(Some(dv)) = self.bytecode.funcs[func_idx].defaults.get(i)
                         {
                             match dv {
                                 DefaultValue::Int(v) => Value::Int(*v),
@@ -5863,7 +5861,7 @@ fn __str_ord(s: &str) -> Vec<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-use lumen_codegen::bytecode::{Bytecode, DefaultValue, FuncMeta, Instruction, Opcode};
+    use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
 
     fn make_bc(instrs: Vec<Instruction>) -> Bytecode {
         Bytecode {
@@ -6168,13 +6166,13 @@ use lumen_codegen::bytecode::{Bytecode, DefaultValue, FuncMeta, Instruction, Opc
                 FuncMeta {
                     name: "__main__".to_string(),
                     params: vec![],
-                defaults: vec![],
+                    defaults: vec![],
                     start: 0,
                 },
                 FuncMeta {
                     name: "sum".to_string(),
                     params: vec!["a".to_string(), "b".to_string()],
-                defaults: vec![None, None],
+                    defaults: vec![None, None],
                     start: 6,
                 },
             ],

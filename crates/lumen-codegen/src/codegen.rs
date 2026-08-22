@@ -119,18 +119,12 @@ impl Codegen {
                             .map(|d| match d {
                                 None => None,
                                 Some(v) => match v {
-                                    lumen_ir::ir::Value::Int(i) => {
-                                        Some(DefaultValue::Int(*i))
-                                    }
-                                    lumen_ir::ir::Value::Float(v) => {
-                                        Some(DefaultValue::Float(*v))
-                                    }
+                                    lumen_ir::ir::Value::Int(i) => Some(DefaultValue::Int(*i)),
+                                    lumen_ir::ir::Value::Float(v) => Some(DefaultValue::Float(*v)),
                                     lumen_ir::ir::Value::Str(s) => {
                                         Some(DefaultValue::Str(s.clone()))
                                     }
-                                    lumen_ir::ir::Value::Bool(b) => {
-                                        Some(DefaultValue::Bool(*b))
-                                    }
+                                    lumen_ir::ir::Value::Bool(b) => Some(DefaultValue::Bool(*b)),
                                     _ => None,
                                 },
                             })

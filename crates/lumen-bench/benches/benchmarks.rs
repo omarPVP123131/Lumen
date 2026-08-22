@@ -112,7 +112,8 @@ fn prod_fallthrough_bench(c: &mut Criterion) {
 }
 
 fn prod_defaults_bench(c: &mut Criterion) {
-    let source = r#"cualquiera f = funcion(entero a, entero b=10){ retornar a+b; }; f(5); f(5,20);"#;
+    let source =
+        r#"cualquiera f = funcion(entero a, entero b=10){ retornar a+b; }; f(5); f(5,20);"#;
     c.bench_function("prod_defaults_callvalue", |b| {
         b.iter(|| {
             let (tokens, _) = lumen_lexer::Lexer::new(black_box(source)).tokenize();

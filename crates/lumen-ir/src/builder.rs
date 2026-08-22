@@ -168,11 +168,9 @@ impl IRBuilder {
             if let Some(main_func) = self.program.funcs.get_mut("__main__") {
                 if matches!(Self::last_significant(&main_func.instrs), Some(Instr::Halt)) {
                     // Remove the last significant Halt (handle trailing Label/Nop)
-                    if let Some(pos) = main_func
-                        .instrs
-                        .iter()
-                        .rposition(|i| !matches!(i, Instr::Label(_) | Instr::Nop | Instr::Phi(_, _)))
-                    {
+                    if let Some(pos) = main_func.instrs.iter().rposition(|i| {
+                        !matches!(i, Instr::Label(_) | Instr::Nop | Instr::Phi(_, _))
+                    }) {
                         if matches!(main_func.instrs[pos], Instr::Halt) {
                             main_func.instrs.remove(pos);
                         }
@@ -1594,11 +1592,17 @@ impl IRBuilder {
     }
 
     fn needs_return(&self) -> bool {
-        !matches!(Self::last_significant(&self.current_instrs), Some(Instr::Return))
+        !matches!(
+            Self::last_significant(&self.current_instrs),
+            Some(Instr::Return)
+        )
     }
 
     fn needs_halt(&self) -> bool {
-        !matches!(Self::last_significant(&self.current_instrs), Some(Instr::Halt))
+        !matches!(
+            Self::last_significant(&self.current_instrs),
+            Some(Instr::Halt)
+        )
     }
 
     fn emit_return_if_needed(&mut self) {
