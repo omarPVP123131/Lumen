@@ -107,10 +107,10 @@ scripts/           *.ps1 (CI/CD, hooks, installers)
 fuzz/              fuzz targets
 ```
 
-## Bytecode (.nvc) — v3.0.0 Producción
+## Bytecode (.nvc) — v3.1.4 Producción
 
 - **Versión**: 7 (`CHUNK_VERSION 7`, decode acepta 6 y 7 para compat con `.nvc` antiguos)
-- **Novedad v3.0.0:** `FuncMeta.defaults: Vec<Option<DefaultValue>>` (`Int/Float/Str/Bool`) persistidos en el chunk para `bind_args` unificado (`Call`/`CallValue`/`run_function`/hilos usan defaults reales cuando `i>=args.len()` en vez de `Void`/`pop()` corrupto). Ver `docs/produccion.md` §1.3.
+- **Novedad v3.1.4:** `FuncMeta.defaults: Vec<Option<DefaultValue>>` (`Int/Float/Str/Bool`) persistidos en el chunk para `bind_args` unificado (`Call`/`CallValue`/`run_function`/hilos usan defaults reales cuando `i>=args.len()` en vez de `Void`/`pop()` corrupto). Ver `docs/produccion.md` §1.3.
 - **Magic**: `LUMN` (4 bytes)
 - **Opcodes**: 0-46 + 52-53 (MatchType/MatchPayload) y rangos
   - 0-27: Core (Push, Pop, Add, Sub, Jmp, Call, Ret, Print, etc.)
@@ -124,7 +124,7 @@ fuzz/              fuzz targets
   - 46: Mod
   - 52-53: MatchType/MatchPayload (if-let / elegir con payloads)
 
-## Modo Headless y Bench (v3.0.0)
+## Modo Headless y Bench (v3.1.4)
 
 - **Headless centralizado:** `stdlib/graficos.nv:es_headless()` usa `getenv("CI"/"LUMEN_HEADLESS")` vía `__ffi` (`msvcrt`/`libc`/`libSystem`) → `iniciar()`/`ventana()` retornan `false/0` sin `SDL_Init`. Demos con `si !iniciar() { retornar; }` salen con `init_fail_ok`. CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`. Ver `docs/produccion.md` §1.4 y §3.
 - **Bench formal 8 benches** (`crates/lumen-bench/benches/benchmarks.rs`): `lexer_tokenize`, `parser_parse`, `pipeline_full`, `vm_fib_20` + 4 prod `prod_fallthrough_early_return`, `prod_defaults_callvalue`, `prod_matematicas_potencia`, `prod_graficos_headless`. `cargo bench -p lumen-bench` (reporte `target/criterion/report/index.html`).
@@ -146,3 +146,4 @@ La VM maneja valores a través del enum `Value`:
 - `Value::Func(String)` — Referencia a función
 - `Value::Struct { name, fields }` — Estructura
 - `Value::Void` — Vacío
+

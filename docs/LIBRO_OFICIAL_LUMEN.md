@@ -1,7 +1,7 @@
 # 📖 Aprende a Programar con LÚMEN: De Principiante a Ingeniero de Software
 ### *Learn to Code with LÚMEN: From Zero to Software Engineer*
 
-**Versión Oficial v3.0.0 — Guía Completa de Computación, IA y Sistemas**
+**Versión Oficial v3.1.4 — Guía Completa de Computación, IA y Sistemas**
 
 ---
 
@@ -545,13 +545,13 @@ imprimir(dataframe_df_a_csv(df));
 
 ---
 
-*LÚMEN v3.0.0 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.1.4 — © 2026 LÚMEN Core Team & Comunidad.*
 
 > **Producción Real (21 Ago 2026):** ver [docs/produccion.md](produccion.md) — 917 tests, bench 8, `es_headless()`, `CHUNK_VERSION 7`.
 
 ---
 
-# CAPÍTULO 17.5: Producción Real v3.0.0 — De Código a Deploy (21 Ago 2026)
+# CAPÍTULO 17.5: Producción Real v3.1.4 — De Código a Deploy (21 Ago 2026)
 
 En este capítulo llevamos **LÚMEN a producción real** con fixes escalables (no parches por demo), suite formal y CI headless.
 
@@ -588,7 +588,7 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 ```
 
 ### 17.5.4 Checklist Deploy
-Ver [docs/produccion.md](produccion.md) §5 — `cargo fmt`, `clippy`, `cargo test`, `cargo bench`, `lumen check`, `LUMEN_HEADLESS=1` headless, `CHUNK_VERSION 7`, `VERSION` 3.0.0. Con todo en verde: `cargo build --release --target <target>` deployable en Windows/Linux/macOS/Android/WASM.
+Ver [docs/produccion.md](produccion.md) §5 — `cargo fmt`, `clippy`, `cargo test`, `cargo bench`, `lumen check`, `LUMEN_HEADLESS=1` headless, `CHUNK_VERSION 7`, `VERSION` 3.1.4. Con todo en verde: `cargo build --release --target <target>` deployable en Windows/Linux/macOS/Android/WASM.
 
 ---
 
@@ -728,4 +728,5 @@ imprimir("Paneo estéreo (L/R) : ", 3d.balance_paneo);
 
 ---
 
-*LÚMEN v3.0.0 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.1.4 — © 2026 LÚMEN Core Team & Comunidad.*
+

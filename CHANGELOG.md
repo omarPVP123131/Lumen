@@ -1,6 +1,6 @@
-## [3.0.0] - 2026-08-21 — Producción Real (fixes escalables + bench + headless)
+## [3.1.4] - 2026-08-21 — Producción Real (fixes escalables + bench + headless)
 
-### ⚡ v3.0.0 Producción: listo para deploy real (escalable, sin parches temporales)
+### ⚡ v3.1.4 Producción: listo para deploy real (escalable, sin parches temporales)
 
 **Fixes escalables (no parches por demo):**
 - **Builder fallthrough `Variable 'a'/'n'`:** `last_significant()` ignora `Label/Nop/Phi` para decidir terminador; `needs_return()`/`emit_return_if_needed()` en `Function`, `ImplRasgo`, `compile_lambda`, `build()` (`Halt`). `label_counter` global (no reseteo por función) evita colisión `Label(0)` en `codegen` global `label_map` que rompía `matematicas.nv` (`Variable 'n'`). Commits `64db441`, `730e74d`, `f83964f`.
@@ -16,13 +16,13 @@
 **CI `headless-check` nuevo:**
 - Job Linux `env: LUMEN_HEADLESS=1 CI=1` corre `cargo test --workspace`, `cargo run --bin lumen -- check examples`, `cargo test --test production`, `cargo bench -p lumen-bench -- --quick`. Ver `.github/workflows/ci.yml` y `docs/produccion.md`.
 
-**Versionado:** `Cargo.toml`/`VERSION` `3.0.0` · `CHUNK_VERSION 7` (decode v6+7) · `is_known_prefixed` con `_` single · docs actualizadas (`README`, `AGENTS`, `roadmap`, `produccion.md`, etc.).
+**Versionado:** `Cargo.toml`/`VERSION` `3.1.4` · `CHUNK_VERSION 7` (decode v6+7) · `is_known_prefixed` con `_` single · docs actualizadas (`README`, `AGENTS`, `roadmap`, `produccion.md`, etc.).
 
 ---
 
-## [3.0.0] - 2026-08-20
+## [3.1.4] - 2026-08-20
 
-### ⚡ v3.0.0: 167 bugs corregidos, unificación y verificación en tres plataformas
+### ⚡ v3.1.4: 167 bugs corregidos, unificación y verificación en tres plataformas
 
 **Unifica en una sola entrega el trabajo iniciado sobre la v2.4.6: los 8 bugs del reporte original y 159 más encontrados de forma activa.**
 
@@ -71,7 +71,7 @@ Todo los archivos "changes manual" se documentan aquí.
 
 ---
 
-## v3.0.0 - 20 Agosto 2026
+## v3.1.4 - 20 Agosto 2026
 
 ### Corregido (Verificación en Tres Plataformas)
 - Motor regex nativo propio por backtracking sin dependencias (BUG-166/167) — arregla stubs no-POSIX y desbordes con patrones de cadena vacía.
@@ -468,3 +468,4 @@ Todo los archivos "changes manual" se documentan aquí.
 
 Release inicial de LÚMEN. Lenguaje de programación educativo en español con pipeline completo
 Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
+

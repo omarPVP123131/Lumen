@@ -1,6 +1,6 @@
 # LÚMEN — Guía Completa de Herramientas y Ecosistema (DX)
 
-**v3.0.0 — Herramientas Oficiales de Desarrollo, Depuración y Despliegue**
+**v3.1.4 — Herramientas Oficiales de Desarrollo, Depuración y Despliegue**
 
 ---
 
@@ -130,9 +130,9 @@ Inicia un servidor local en `http://localhost:8080` con:
 
 ---
 
-## 11. Producción Real v3.0.0 — Bench, Headless y Checklist
+## 11. Producción Real v3.1.4 — Bench, Headless y Checklist
 
-> Checklist único: [docs/produccion.md](produccion.md) — `VERSION` 3.0.0 · `CHUNK_VERSION 7` · 917 tests.
+> Checklist único: [docs/produccion.md](produccion.md) — `VERSION` 3.1.4 · `CHUNK_VERSION 7` · 917 tests.
 
 **Fixes escalables llevados a producción (21 Ago 2026):**
 - `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`)
@@ -155,4 +155,5 @@ LUMEN_HEADLESS=1 cargo test --test production -- --nocapture
 
 **Bench formal 8** (`crates/lumen-bench/benches/benchmarks.rs`): `lexer_tokenize`, `parser_parse`, `pipeline_full`, `vm_fib_20`, `prod_fallthrough_early_return`, `prod_defaults_callvalue`, `prod_matematicas_potencia`, `prod_graficos_headless` — reporte `target/criterion/report/index.html`.
 
-*LÚMEN v3.0.0 Producción Real — Documentación de Herramientas Sincronizada (917 tests, bench 8, headless `es_headless()`).*
+*LÚMEN v3.1.4 Producción Real — Documentación de Herramientas Sincronizada (917 tests, bench 8, headless `es_headless()`).*
+

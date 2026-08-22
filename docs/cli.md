@@ -1,4 +1,4 @@
-# Referencia CLI de LÚMEN — v3.0.0
+# Referencia CLI de LÚMEN — v3.1.4
 
 ## Uso General
 
@@ -123,7 +123,7 @@ lumen lsp                              # Inicia servidor LSP Pro para VS Code / 
 
 ---
 
-## Producción Real v3.0.0 — Bench, Headless y CI
+## Producción Real v3.1.4 — Bench, Headless y CI
 
 > Checklist completo en [docs/produccion.md](produccion.md) — `CHUNK_VERSION 7` + `es_headless()` + `label_counter` global.
 
@@ -144,9 +144,9 @@ LUMEN_HEADLESS=1 cargo test --test production -- --nocapture
 
 **CI `headless-check`:** job Linux `env: LUMEN_HEADLESS=1 CI=1` con los 4 comandos anteriores. `cargo bench` reporta `target/criterion/report/index.html`.
 
-**Fixes escalables v3.0.0:** `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`), `vm bind_args` unificado + `FuncMeta.defaults` persistidos `CHUNK_VERSION 7`, `stdlib/graficos.nv es_headless()` centralizado.
+**Fixes escalables v3.1.4:** `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`), `vm bind_args` unificado + `FuncMeta.defaults` persistidos `CHUNK_VERSION 7`, `stdlib/graficos.nv es_headless()` centralizado.
 
-*LÚMEN v3.0.0 — Documentación CLI Oficial Sincronizada (Producción Real).*
+*LÚMEN v3.1.4 — Documentación CLI Oficial Sincronizada (Producción Real).*
 
 
 ---
@@ -180,3 +180,4 @@ lumen install http_router
 
 ### 4. `lumen doctor`
 Diagnostica automáticamente tu usuario, tu sistema operativo, los núcleos de tu CPU disponibles para el scheduler M:N y tus toolchains de compiladores C/Rust.
+

@@ -1,17 +1,17 @@
-# Siguientes Pasos — Roadmap LÚMEN v3.0.0 Producción Real → v3.1
+# Siguientes Pasos — Roadmap LÚMEN v3.1.4 Producción Real → v3.1
 
-**Estado actual (21 Ago 2026) — v3.0.0 Producción Real ✅:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6 fixpoint) + **Sprint 7: VM en LÚMEN COMPLETADO** + **Sprint 8: dogfooding 112 CORRECTOS** + **Bootstrapping doble SHA-256 `3DA624D6...`** + **v2.4.6 (14 Ago)** + **v3.0.0 (20 Ago)** 167 bugs + **v3.0.0 Producción Real (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` centralizado, **bench 8** (`cargo bench -p lumen-bench` — 4 prod: fallthrough, defaults, matematicas, headless), **616 e2e + 9 production = 673 vm tests (917 workspace)**, CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`, `lumen check` 389/389. Ver [docs/produccion.md](produccion.md). Pendientes: **AI/ML (Fases 186-200)** + **Playground L2/L3** + **v3.1** (ver `docs/plan-v3.1.md` y `docs/produccion.md` §6).
+**Estado actual (21 Ago 2026) — v3.1.4 Producción Real ✅:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6 fixpoint) + **Sprint 7: VM en LÚMEN COMPLETADO** + **Sprint 8: dogfooding 112 CORRECTOS** + **Bootstrapping doble SHA-256 `3DA624D6...`** + **v2.4.6 (14 Ago)** + **v3.1.4 (20 Ago)** 167 bugs + **v3.1.4 Producción Real (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` centralizado, **bench 8** (`cargo bench -p lumen-bench` — 4 prod: fallthrough, defaults, matematicas, headless), **616 e2e + 9 production = 673 vm tests (917 workspace)**, CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`, `lumen check` 389/389. Ver [docs/produccion.md](produccion.md). Pendientes: **AI/ML (Fases 186-200)** + **Playground L2/L3** + **v3.1** (ver `docs/plan-v3.1.md` y `docs/produccion.md` §6).
 
 ---
 
-## ✅ Completado — Producción Real v3.0.0 (21 Ago 2026)
+## ✅ Completado — Producción Real v3.1.4 (21 Ago 2026)
 
 | Área | Estado | Detalle |
 |------|--------|---------|
 | **Fixes escalables builder/VM** | ✅ | `last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`), `CHUNK_VERSION 7` + `FuncMeta.defaults` + `bind_args` unificado |
 | **Headless centralizado** | ✅ | `stdlib/graficos.nv:es_headless()` (`LUMEN_HEADLESS`/`CI` vía `__ffi`) + CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`) |
 | **Suite + bench formal** | ✅ | 616 e2e (4 regresión) + 9 production = 673 vm tests, 917 workspace; bench 8 (`cargo bench -p lumen-bench`) |
-| **Docs producción** | ✅ | `docs/produccion.md` checklist único, `VERSION` 3.0.0, `CHANGELOG` v3.0.0 producción |
+| **Docs producción** | ✅ | `docs/produccion.md` checklist único, `VERSION` 3.1.4, `CHANGELOG` v3.1.4 producción |
 
 Ver [docs/produccion.md](produccion.md) para reproducir local y CI.
 
@@ -23,7 +23,7 @@ Ver [docs/produccion.md](produccion.md) para reproducir local y CI.
 |------|-------------|---------|-------|
 | **v3.1 defaults no literales + label_map per-function** | 🟢 Baja | 🔥 Alto | `FuncMeta` defaults `None` → thunk/Expr serializado, `label_map` per-function (ver `docs/produccion.md` §6) |
 | **Fixes y pulido** | 🟢 Baja | 🔥 Alto | Estabilidad general, edge cases + `lumen fmt`/`check` en pre-commit |
-| **Bootstrapping doble + release v2.4.6/v3.0.0** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv + fixpoint + tags v2.4.6/v3.0.0 producción |
+| **Bootstrapping doble + release v2.4.6/v3.1.4** | 🟢 Baja | 🟡 Alto | ✅ COMPLETADO: vm.nv + fixpoint + tags v2.4.6/v3.1.4 producción |
 
 ## 🔵 Prioridad Baja — Muy Complejo + Nicho
 
@@ -79,3 +79,4 @@ Ver [docs/produccion.md](produccion.md) para reproducir local y CI.
 
 ### Después: **Producción & Cloud (Fases 201-220)**
 - AWS Lambda runtime, WASM plugins, extensión VS Code, empaquetado nativo
+

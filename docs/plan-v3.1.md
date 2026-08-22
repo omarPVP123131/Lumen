@@ -1,12 +1,12 @@
-# Plan v3.1 — Mejoras Propuestas (21 Ago 2026) — Post-Producción v3.0.0
+# Plan v3.1 — Mejoras Propuestas (21 Ago 2026) — Post-Producción v3.1.4
 
-**Estado base:** v3.0.0 Producción Real publicado (21 Ago 2026) — **917 tests** (616 e2e + 9 production, 673 vm tests), **bench 8** (`cargo bench -p lumen-bench`), **headless `es_headless()`** centralizado (`stdlib/graficos.nv`, `LUMEN_HEADLESS`/`CI`), **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, **fixes escalables** `last_significant()` + `label_counter` global, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Ver [docs/produccion.md](produccion.md). Antes: 167 bugs v3.0.0 (720/393/372), aarch64 fix.
+**Estado base:** v3.1.4 Producción Real publicado (21 Ago 2026) — **917 tests** (616 e2e + 9 production, 673 vm tests), **bench 8** (`cargo bench -p lumen-bench`), **headless `es_headless()`** centralizado (`stdlib/graficos.nv`, `LUMEN_HEADLESS`/`CI`), **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, **fixes escalables** `last_significant()` + `label_counter` global, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Ver [docs/produccion.md](produccion.md). Antes: 167 bugs v3.1.4 (720/393/372), aarch64 fix.
 
 Este plan prioriza **evidencia sobre promesas**. Cada ítem tiene criterio de aceptación medible. Parte del checklist `docs/produccion.md`.
 
 ---
 
-## P0 — Producción Real v3.0.0 ✅ COMPLETADO (21 Ago 2026)
+## P0 — Producción Real v3.1.4 ✅ COMPLETADO (21 Ago 2026)
 
 **Entregado:**
 - `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'` — `matematicas.nv` `Variable 'n'`)
@@ -15,7 +15,7 @@ Este plan prioriza **evidencia sobre promesas**. Cada ítem tiene criterio de ac
 - Bench 8 (`cargo bench -p lumen-bench` — 4 prod: fallthrough, defaults, matematicas, headless) + reporte `target/criterion/report/index.html`
 - Tests 616 e2e (4 regresión) + 9 production = 673 vm tests, 917 workspace (`cargo test --workspace`)
 - CI `headless-check` job Linux `env: LUMEN_HEADLESS=1 CI=1` con `cargo test`, `lumen check examples`, `cargo test --test production`, `cargo bench -- --quick`
-- Docs `docs/produccion.md` con checklist único; `VERSION` 3.0.0, decode v6+7
+- Docs `docs/produccion.md` con checklist único; `VERSION` 3.1.4, decode v6+7
 
 **Comandos verificación:**
 ```bash
@@ -27,7 +27,7 @@ LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
 
 ---
 
-## P1 — Estabilidad de Demos (hecho v3.0.0, pendiente de fix profundo)
+## P1 — Estabilidad de Demos (hecho v3.1.4, pendiente de fix profundo)
 
 **Hecho 21 Ago:**
 - `charts_demo`, `graficos_avanzado_demo`, `tui_temas_demo` ahora detectan `CI=1` / `LUMEN_HEADLESS=1` y salen con `Headless/CI detectado — demo omitida` (0) en lugar de `Variable 'a/radius' no definida` o `AV 0xC0000005`.
@@ -40,9 +40,9 @@ LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
 
 ---
 
-## P2 — CI/CD y Benchmarks (completado v3.0.0 + próximo)
+## P2 — CI/CD y Benchmarks (completado v3.1.4 + próximo)
 
-**Hecho v3.0.0:**
+**Hecho v3.1.4:**
 - `reports/BENCHMARK.md` creado (VM 856ms / C 22ms / Cranelift 5.6ms; aot 38/38; self-hosting fixpoint 5s).
 - `gui_ffi.rs` fix verificado en `cargo build --release` (dev 7s, release 62s) y `cargo clippy -D warnings` 0.
 - **Nuevo:** `crates/lumen-bench` 8 benches (4 prod nuevos) — `cargo bench -p lumen-bench` + CI `headless-check` con `LUMEN_HEADLESS=1 CI=1` + `--quick` (ver `docs/produccion.md` §2.2 y §3).
@@ -58,7 +58,7 @@ LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
 
 ### DX de alto impacto / bajo coste
 
-1. **Version honesty:** `Cargo.toml` ya es 3.0.0, pero `lumen --version` se lee de `CARGO_PKG_VERSION`. Añadir `VERSION` como source of truth en `build.rs` (include_str! + `env::set_var`) para que `lumen --version` y `VERSION` nunca diverjan.
+1. **Version honesty:** `Cargo.toml` ya es 3.1.4, pero `lumen --version` se lee de `CARGO_PKG_VERSION`. Añadir `VERSION` como source of truth en `build.rs` (include_str! + `env::set_var`) para que `lumen --version` y `VERSION` nunca diverjan.
 2. **Sugerencias `did you mean`:** ya existe `suggest_examples` para `lumen run typo` — extender a `lumen check typo` y a `importar "typo.nv"` (levenshtein en loader).
 3. **Repro unificado:** `scripts/repro.ps1 <file.nv>` que haga `check + run + run CI=1` y volcado de `target/pre-vuelo-report.json` para triage rápido.
 
@@ -83,7 +83,7 @@ Cada fase **requiere** 2 ejemplos + `cargo test -p lumen-vm` + `lumen check` + `
 
 ---
 
-## Cómo medir v3.0.0 DONE ✅
+## Cómo medir v3.1.4 DONE ✅
 
 - `cargo test --workspace` **917** (616 e2e + 9 production) 0 FAILED — **HECHO** (era 414→917)
 - `cargo bench -p lumen-bench` **8 benches** (4 prod) — **HECHO**
@@ -103,3 +103,4 @@ Cada fase **requiere** 2 ejemplos + `cargo test -p lumen-vm` + `lumen check` + `
 ---
 
 *LÚMEN v3.1 — foco en estabilidad (VM loader) y DX medible, antes de escalar a AI.*
+

@@ -1,9 +1,9 @@
-# Plan del Playground Web — LÚMEN v3.0.0 Producción Real+
+# Plan del Playground Web — LÚMEN v3.1.4 Producción Real+
 
-> Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026 · **Actualizado 21 Ago 2026: v3.0.0 Producción Real (917 tests, bench 8, headless `es_headless()`, CHUNK_VERSION 7)**
+> Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026 · **Actualizado 21 Ago 2026: v3.1.4 Producción Real (917 tests, bench 8, headless `es_headless()`, CHUNK_VERSION 7)**
 > Estructura: **9 features × 3 niveles (L1 funcional → L2 pulido → L3 avanzado) = 27 fases**, cada una con criterios de aceptación verificables.
 > ✅ **Ronda L1 COMPLETADA (14 Ago):** F1.1, F2.1, F3.1, F3.2, F4.1, F9.1 — ver "Estado actual".
-> ✅ **v3.0.0 Producción (21 Ago):** bench 8 y headless `stdlib/graficos.nv:es_headless()` validados en CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Playground usa `es_headless()` para demos gráficas en `LUMEN_HEADLESS=1`. Ver [docs/produccion.md](produccion.md).
+> ✅ **v3.1.4 Producción (21 Ago):** bench 8 y headless `stdlib/graficos.nv:es_headless()` validados en CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Playground usa `es_headless()` para demos gráficas en `LUMEN_HEADLESS=1`. Ver [docs/produccion.md](produccion.md).
 
 ---
 
@@ -15,7 +15,7 @@
 | Runtime WASM | `crates/lumen-wasm/src/lib.rs`: `LumenRuntime` wasm-bindgen con `run`, `run_with_files`, `check`, `tokenize`, `compile_to_bytes`, `version`, `register_js_function`. Pipeline completo (lexer→parser→sema→IR→codegen→VM) en el browser. |
 | Stdlib embebida | `crates/lumen-wasm/build.rs` genera `embedded_stdlib.rs` (31 archivos incl) + `ModuleLoader::with_memory_files` resuelve imports desde memoria (F3.1). |
 | Editor CodeMirror 6 | `web/vendor/cm/` (11 módulos ESM planos, vendor local sin CDN) + modo LUMEN generado desde `token.rs` (74 keywords, `StreamLanguage` + Catppuccin). **Autosave localStorage, error-line marking, `Ctrl+Enter`, gutter, autocompletado (`Ctrl+Space` + keywords/snippets), minimapa** (F2.1 + F2.3). |
-| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), **selector con categorías, búsqueda, favoritos, marcador "importar"**, 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v3.0.0. |
+| UI | `crates/lumen-wasm/web/index.html`: toggle **WASM ↔ Servidor** (persistente vía `localStorage`), historial de ejecuciones (hasta 10 runs), **selector con categorías, búsqueda, favoritos, marcador "importar"**, 128 ejemplos (API `/api/examples` + fallback `embedded_examples.js`), 3 pestañas (Salida/Consola/JS Interop), statusbar con tiempo, toast, 17 bridges JS. Versión v3.1.4. |
 | Descargar .nvc | `compile_to_bytes(source)` → `Uint8Array` → Blob descargable (F9.1). |
 | Build WASM | `wasm-pack build crates/lumen-wasm --target web` + `pkg/` en .gitignore (regenerable). |
 | Batería F4.1 | 128 ejemplos embebidos en `embedded_examples.js` (autogenerado por `gen-embedded-examples.ps1`). |
@@ -176,3 +176,4 @@ Ronda L3: F1.3 → F2.3 → F4.3 → F5.3 → F6.3 → F7.1 → F7.2 → F7.3 �
 - Backend con cuentas/guardado en nube (Alt 3 — evaluable después de F9.3).
 - Compilación WASI `cargo` en el browser (el VM ya es la opción real).
 - Sync bidireccional código↔bloques (v1: solo bloques→código, documentado).
+

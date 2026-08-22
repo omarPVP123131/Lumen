@@ -1,9 +1,9 @@
-# Referencia del Lenguaje LÚMEN — v3.0.0 Producción Real
+# Referencia del Lenguaje LÚMEN — v3.1.4 Producción Real
 
 LÚMEN es un lenguaje de programación educativo con sintaxis en español y equivalentes
 opcionales en inglés. Pipeline completo: Lexer → Parser → Sema → IR → Bytecode → VM.
 
-> **v3.0.0 Producción:** 917 tests (616 e2e + 9 production), bench 8 (`cargo bench -p lumen-bench`), modo headless centralizado (`stdlib/graficos.nv:es_headless()` con `LUMEN_HEADLESS`/`CI`), `CHUNK_VERSION 7` con defaults persistidos (`FuncMeta.defaults`), y CI `headless-check`. Ver checklist en [docs/produccion.md](produccion.md).
+> **v3.1.4 Producción:** 917 tests (616 e2e + 9 production), bench 8 (`cargo bench -p lumen-bench`), modo headless centralizado (`stdlib/graficos.nv:es_headless()` con `LUMEN_HEADLESS`/`CI`), `CHUNK_VERSION 7` con defaults persistidos (`FuncMeta.defaults`), y CI `headless-check`. Ver checklist en [docs/produccion.md](produccion.md).
 
 ---
 
@@ -176,7 +176,7 @@ funcion entero suma(entero a, entero b) {
     retornar a + b;
 }
 
-// Parámetros default — v3.0.0 persistidos en bytecode CHUNK_VERSION 7
+// Parámetros default — v3.1.4 persistidos en bytecode CHUNK_VERSION 7
 // FuncMeta.defaults serializado; VM bind_args usa DefaultValue en Call/CallValue/run_function/hilos
 funcion entero suma(entero a, entero b = 10) {
     retornar a + b;
@@ -476,10 +476,11 @@ texto entrada = leer();       // stdin (una línea)
 
 ---
 
-## Producción Real v3.0.0 — Notas de Implementación
+## Producción Real v3.1.4 — Notas de Implementación
 
 - **Builder:** `last_significant()` ignora `Label/Nop/Phi` para `needs_return()`/`emit_return_if_needed()` + `label_counter` global (fix fallthrough `Variable 'a'/'n'`). Ver `docs/produccion.md` §1.1.
 - **VM:** `FuncMeta.defaults` persistidos `CHUNK_VERSION 7` (`Int/Float/Str/Bool`) + `bind_args` unificado (3 call-sites). Ver `docs/produccion.md` §1.2-1.3.
 - **Headless:** `stdlib/graficos.nv:es_headless()` centralizado con `getenv("CI"/"LUMEN_HEADLESS")` vía `__ffi`. Demos gráficas con `si !iniciar() { retornar; }`. CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`. Ver `docs/produccion.md` §1.4 y §3.
 - **Bench:** 8 benches `cargo bench -p lumen-bench` (4 prod nuevos). Reporte `target/criterion/report/index.html`.
 - **Tests:** 616 e2e + 9 production = 673 vm tests, 917 workspace. 4 regresión: fallthrough, matematicas, defaults, lambda.
+

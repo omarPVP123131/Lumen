@@ -1,4 +1,4 @@
-# Guía de Contribución — LÚMEN v3.0.0 Producción Real
+# Guía de Contribución — LÚMEN v3.1.4 Producción Real
 
 ## Requisitos
 
@@ -70,14 +70,15 @@ El compilador está organizado en 16 crates dentro de `crates/`:
 3. Documentación actualizada
 4. Sin regresiones (todos los tests existentes deben pasar)
 
-## Producción Real v3.0.0
+## Producción Real v3.1.4
 
-Ver `docs/produccion.md` para checklist: `CHUNK_VERSION 7` (defaults persistidos), `builder last_significant()` + `label_counter` global, `vm bind_args` unificado, `stdlib/graficos.nv es_headless()` centralizado, bench 8, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). `VERSION` 3.0.0 es source of truth.
+Ver `docs/produccion.md` para checklist: `CHUNK_VERSION 7` (defaults persistidos), `builder last_significant()` + `label_counter` global, `vm bind_args` unificado, `stdlib/graficos.nv es_headless()` centralizado, bench 8, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). `VERSION` 3.1.4 es source of truth.
 
 ## Reportar Issues
 
 Incluir:
 - Código mínimo que reproduce el problema
 - Comportamiento esperado vs actual
-- Versión de LÚMEN (`lumen --version` → debe coincidir con `VERSION` 3.0.0 y `CHUNK_VERSION 7`)
+- Versión de LÚMEN (`lumen --version` → debe coincidir con `VERSION` 3.1.4 y `CHUNK_VERSION 7`)
 - Si es gráfico/headless: `LUMEN_HEADLESS=1` repro y `docs/produccion.md` §1.4
+

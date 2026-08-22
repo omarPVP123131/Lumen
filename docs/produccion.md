@@ -1,4 +1,4 @@
-# ⚡ LÚMEN v3.0.0 — Listo para Producción Real
+# ⚡ LÚMEN v3.1.4 — Listo para Producción Real
 
 > Última validación: `2026-08-21` · `cargo test --workspace` **917** (616 e2e + 9 production + 48 vm + 52 lexer + 75 parser + resto) · `CHUNK_VERSION 7` · `LUMEN_HEADLESS` + `es_headless()` centralizado · bench 8
 
@@ -93,7 +93,7 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 
 ## 4. Versionado y Compatibilidad
 
-- `Cargo.toml` `version = "3.0.0"` · `VERSION` `3.0.0` · `Bytecode CHUNK_VERSION 7` (decode acepta 6 y 7 para compat con `.nvc` antiguos).
+- `Cargo.toml` `version = "3.1.4"` · `VERSION` `3.1.4` · `Bytecode CHUNK_VERSION 7` (decode acepta 6 y 7 para compat con `.nvc` antiguos).
 - `ir::Func.defaults` y `FuncMeta.defaults` son `Vec<Option<DefaultValue>>`; viejos `.nvc` leídos como `vec![None; params.len()]` → comportamiento: `Void` para arg faltante (igual que antes pero sin corrupción `pop`).
 - `is_known_prefixed` sigue con `_` single (no `__` doble) para no romper `graficos_canvas_*`. Test `loader::test_memory_loader_resolves` corregido a `util_mem_duplicar` (single).
 
@@ -110,7 +110,7 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 - [x] `CHUNK_VERSION 7` con fallback v6
 - [x] `stdlib/graficos.nv` central headless, no per-demo patch obligatorio
 - [x] Docs actualizados: `README`, `AGENTS`, `roadmap`, `plan-v3.1`, `HERRAMIENTAS`, `MARKETING`, `siguiente`, etc. (ver diffs en commit producción)
-- [x] `VERSION` y `CHANGELOG` v3.0.0
+- [x] `VERSION` y `CHANGELOG` v3.1.4
 
 Si todo en verde, el lenguaje es deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`.
 
@@ -121,4 +121,5 @@ Si todo en verde, el lenguaje es deployable en Windows/Linux/macOS/Android/WASM 
 - `FuncMeta` defaults no literales (`b = foo()`) aún se guardan como `None` → `Void`; evaluar thunk o `Expr` serializado.
 - `label_map` per-function en `codegen` para eliminar colisión teórica lambda vs función (hoy mitigado con `label_counter` global, pero `codegen` global sigue siendo frágil).
 - `lumen fmt` y `lumen check` integrados en `pre-commit` y `cargo bench` en `autotag`/`release` para detectar regresiones de perf >10%.
+
 
