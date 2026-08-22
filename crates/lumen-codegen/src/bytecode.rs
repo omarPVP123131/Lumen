@@ -1,5 +1,13 @@
 pub const CHUNK_MAGIC: &[u8; 4] = b"LUMN";
-pub const CHUNK_VERSION: u32 = 6;
+pub const CHUNK_VERSION: u32 = 7;
+
+#[derive(Debug, Clone)]
+pub enum DefaultValue {
+    Int(i64),
+    Float(f64),
+    Str(String),
+    Bool(bool),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Opcode {
@@ -142,6 +150,7 @@ pub enum Instruction {
 pub struct FuncMeta {
     pub name: String,
     pub params: Vec<String>,
+    pub defaults: Vec<Option<DefaultValue>>,
     pub start: usize,
 }
 
@@ -204,6 +213,29 @@ impl Bytecode {
                 buf.extend_from_slice(&(p.len() as u32).to_le_bytes());
                 buf.extend_from_slice(p.as_bytes());
             }
+            buf.extend_from_slice(&(func.defaults.len() as u32).to_le_bytes());
+            for d in &func.defaults {
+                match d {
+                    None => buf.push(0),
+                    Some(DefaultValue::Int(v)) => {
+                        buf.push(1);
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                    Some(DefaultValue::Float(v)) => {
+                        buf.push(2);
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                    Some(DefaultValue::Str(s)) => {
+                        buf.push(3);
+                        buf.extend_from_slice(&(s.len() as u32).to_le_bytes());
+                        buf.extend_from_slice(s.as_bytes());
+                    }
+                    Some(DefaultValue::Bool(b)) => {
+                        buf.push(4);
+                        buf.push(if *b { 1 } else { 0 });
+                    }
+                }
+            }
             buf.extend_from_slice(&(func.start as u64).to_le_bytes());
         }
         buf.extend_from_slice(&(self.instructions.len() as u32).to_le_bytes());
@@ -252,9 +284,9 @@ impl Bytecode {
             return Err("Magic number inválido".to_string());
         }
         let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-        if version != CHUNK_VERSION {
+        if version != 6 && version != CHUNK_VERSION {
             return Err(format!(
-                "Versión {} de bytecode no soportada (esperada {})",
+                "Versión {} de bytecode no soportada (esperada {} o 6)",
                 version, CHUNK_VERSION
             ));
         }
@@ -385,6 +417,90 @@ impl Bytecode {
                 params.push(p);
                 pos += plen;
             }
+            let defaults = if version == 7 {
+                if pos + 4 > data.len() {
+                    break;
+                }
+                let num_defaults =
+                    u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]])
+                        as usize;
+                pos += 4;
+                let mut defs = Vec::with_capacity(num_defaults);
+                for _ in 0..num_defaults {
+                    if pos >= data.len() {
+                        break;
+                    }
+                    let tag = data[pos];
+                    pos += 1;
+                    match tag {
+                        0 => defs.push(None),
+                        1 => {
+                            if pos + 8 > data.len() {
+                                break;
+                            }
+                            let v = i64::from_le_bytes([
+                                data[pos],
+                                data[pos + 1],
+                                data[pos + 2],
+                                data[pos + 3],
+                                data[pos + 4],
+                                data[pos + 5],
+                                data[pos + 6],
+                                data[pos + 7],
+                            ]);
+                            pos += 8;
+                            defs.push(Some(DefaultValue::Int(v)));
+                        }
+                        2 => {
+                            if pos + 8 > data.len() {
+                                break;
+                            }
+                            let v = f64::from_le_bytes([
+                                data[pos],
+                                data[pos + 1],
+                                data[pos + 2],
+                                data[pos + 3],
+                                data[pos + 4],
+                                data[pos + 5],
+                                data[pos + 6],
+                                data[pos + 7],
+                            ]);
+                            pos += 8;
+                            defs.push(Some(DefaultValue::Float(v)));
+                        }
+                        3 => {
+                            if pos + 4 > data.len() {
+                                break;
+                            }
+                            let slen = u32::from_le_bytes([
+                                data[pos],
+                                data[pos + 1],
+                                data[pos + 2],
+                                data[pos + 3],
+                            ]) as usize;
+                            pos += 4;
+                            if pos + slen > data.len() {
+                                break;
+                            }
+                            let s = String::from_utf8_lossy(&data[pos..pos + slen]).to_string();
+                            pos += slen;
+                            defs.push(Some(DefaultValue::Str(s)));
+                        }
+                        4 => {
+                            if pos >= data.len() {
+                                break;
+                            }
+                            let b = data[pos] != 0;
+                            pos += 1;
+                            defs.push(Some(DefaultValue::Bool(b)));
+                        }
+                        _ => defs.push(None),
+                    }
+                }
+                defs
+            } else {
+                vec![None; params.len()]
+            };
             if pos + 8 > data.len() {
                 break;
             }
@@ -402,6 +518,7 @@ impl Bytecode {
             funcs.push(FuncMeta {
                 name,
                 params,
+                defaults,
                 start,
             });
         }

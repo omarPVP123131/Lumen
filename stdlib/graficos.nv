@@ -4,6 +4,27 @@
 // Requiere: SDL2.dll/libSDL2.so/libSDL2.dylib
 
 cualquiera __sdl = ninguno;
+cualquiera __libc_hl = ninguno;
+
+funcion booleano es_headless() {
+    si __tipo_de(__libc_hl) != "texto" {
+        __libc_hl = __ffi_cargar("msvcrt.dll");
+        si __tipo_de(__libc_hl) != "texto" {
+            __libc_hl = __ffi_cargar("libc.so.6");
+        }
+        si __tipo_de(__libc_hl) != "texto" {
+            __libc_hl = __ffi_cargar("libSystem.dylib");
+        }
+    }
+    si __tipo_de(__libc_hl) == "texto" {
+        entero p = __ffi_llamar(__libc_hl, "getenv", "texto", ["CI"], "entero");
+        si p != 0 && __ffi_peek(p, 0) != 0 { retornar verdadero; }
+        p = __ffi_llamar(__libc_hl, "getenv", "texto", ["LUMEN_HEADLESS"], "entero");
+        si p != 0 && __ffi_peek(p, 0) != 0 { retornar verdadero; }
+    }
+    retornar falso;
+}
+funcion booleano is_headless() { retornar es_headless(); }
 
 funcion booleano __cargar() {
     si __tipo_de(__sdl) == "texto" { retornar verdadero; }
@@ -26,6 +47,7 @@ funcion texto __err() {
 // ============================================================
 
 funcion booleano iniciar(entero flags) {
+    si es_headless() { retornar falso; }
     si !__cargar() { retornar falso; }
     entero rc = __ffi_llamar(__sdl, "SDL_Init", "entero", [flags], "entero");
     retornar rc == 0;
@@ -49,6 +71,7 @@ funcion texto delay(entero ms) { retornar dormir(ms); }
 // ============================================================
 
 funcion entero ventana(texto titulo, entero x, entero y, entero w, entero h, entero flags) {
+    si es_headless() { retornar 0; }
     si !__cargar() { retornar 0; }
     entero buf = __ffi_asignar(titulo.largo() + 1);
     __ffi_escribir(buf, 0, titulo);

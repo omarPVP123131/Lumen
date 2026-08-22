@@ -86,6 +86,7 @@ pub enum Instr {
 pub struct Func {
     pub name: String,
     pub params: Vec<String>,
+    pub defaults: Vec<Option<Value>>,
     pub entry: usize,
     pub instrs: Vec<Instr>,
 }

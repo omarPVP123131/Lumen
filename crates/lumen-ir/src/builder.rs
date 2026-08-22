@@ -62,6 +62,10 @@ impl IRBuilder {
                 let func = Func {
                     name: name.clone(),
                     params: params.iter().map(|p| p.name.clone()).collect(),
+                    defaults: params
+                        .iter()
+                        .map(|p| p.default.as_ref().and_then(|e| expr_to_ir_value(e)))
+                        .collect(),
                     entry: 0,
                     instrs: Vec::new(),
                 };
@@ -95,16 +99,22 @@ impl IRBuilder {
                         };
                         let mut param_names: Vec<String> =
                             params.iter().map(|p| p.name.clone()).collect();
+                        let mut param_defaults: Vec<Option<Value>> = params
+                            .iter()
+                            .map(|p| p.default.as_ref().and_then(|e| expr_to_ir_value(e)))
+                            .collect();
                         // Trait methods always have an implicit receiver (self)
                         if !param_names
                             .iter()
                             .any(|n| n == "self" || n == "yo" || n == "este")
                         {
                             param_names.insert(0, "self".to_string());
+                            param_defaults.insert(0, None);
                         }
                         let func = Func {
                             name: mangled.clone(),
                             params: param_names,
+                            defaults: param_defaults,
                             entry: 0,
                             instrs: Vec::new(),
                         };
@@ -130,6 +140,7 @@ impl IRBuilder {
             let main_func = Func {
                 name: "__main__".to_string(),
                 params: Vec::new(),
+                defaults: Vec::new(),
                 entry: 0,
                 instrs: Vec::new(),
             };
@@ -1536,10 +1547,15 @@ impl IRBuilder {
         self.lambda_counter += 1;
 
         let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+        let param_defaults: Vec<Option<Value>> = params
+            .iter()
+            .map(|p| p.default.as_ref().and_then(|e| expr_to_ir_value(e)))
+            .collect();
 
         let func = Func {
             name: lambda_name.clone(),
             params: param_names,
+            defaults: param_defaults,
             entry: 0,
             instrs: Vec::new(),
         };
@@ -1547,13 +1563,11 @@ impl IRBuilder {
         let saved_instrs = std::mem::take(&mut self.current_instrs);
         let saved_func = self.current_func.clone();
         let saved_temp = self.temp_counter;
-        let saved_label = self.label_counter;
         let saved_loop = std::mem::take(&mut self.loop_labels);
         let saved_is_lambda = self.is_in_lambda;
         self.current_func = Some(lambda_name.clone());
         self.current_instrs = Vec::new();
         self.temp_counter = 0;
-        self.label_counter = 0;
         self.is_in_lambda = true;
         for node in body {
             self.gen_decl_or_stmt(node);
@@ -1563,7 +1577,6 @@ impl IRBuilder {
         self.current_func = saved_func;
         self.current_instrs = saved_instrs;
         self.temp_counter = saved_temp;
-        self.label_counter = saved_label;
         self.loop_labels = saved_loop;
         self.is_in_lambda = saved_is_lambda;
         lambda_name
@@ -2053,6 +2066,16 @@ impl IRBuilder {
     }
 }
 
+fn expr_to_ir_value(expr: &Expr) -> Option<Value> {
+    match expr {
+        Expr::Int { value, .. } => Some(Value::Int(*value)),
+        Expr::Float { value, .. } => Some(Value::Float(*value)),
+        Expr::Str { value, .. } => Some(Value::Str(value.clone())),
+        Expr::Bool { value, .. } => Some(Value::Bool(*value)),
+        _ => None,
+    }
+}
+
 fn type_to_impl_name(t: &Type) -> Option<String> {
     match t {
         Type::Numero => Some("numero".to_string()),
@@ -2292,6 +2315,7 @@ imprimir(x);";
         let mut func = Func {
             name: "test".to_string(),
             params: vec![],
+            defaults: vec![],
             entry: 0,
             instrs: vec![
                 Instr::Nop,

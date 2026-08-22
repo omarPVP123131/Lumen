@@ -108,14 +108,40 @@ impl Codegen {
             .collect();
         func_list.sort_by_key(|a| a.1);
         for (name, start) in &func_list {
-            let params = program
+            let (params, defaults) = program
                 .funcs
                 .get(name)
-                .map(|f| f.params.clone())
-                .unwrap_or_default();
+                .map(|f| {
+                    (
+                        f.params.clone(),
+                        f.defaults
+                            .iter()
+                            .map(|d| match d {
+                                None => None,
+                                Some(v) => match v {
+                                    lumen_ir::ir::Value::Int(i) => {
+                                        Some(DefaultValue::Int(*i))
+                                    }
+                                    lumen_ir::ir::Value::Float(v) => {
+                                        Some(DefaultValue::Float(*v))
+                                    }
+                                    lumen_ir::ir::Value::Str(s) => {
+                                        Some(DefaultValue::Str(s.clone()))
+                                    }
+                                    lumen_ir::ir::Value::Bool(b) => {
+                                        Some(DefaultValue::Bool(*b))
+                                    }
+                                    _ => None,
+                                },
+                            })
+                            .collect(),
+                    )
+                })
+                .unwrap_or((Vec::new(), Vec::new()));
             self.bytecode.funcs.push(FuncMeta {
                 name: name.clone(),
                 params,
+                defaults,
                 start: *start,
             });
         }

@@ -4583,3 +4583,49 @@ fn test_new_440_abs_int() {
     let output = run_source(r#"imprimir(abs(-440));"#).unwrap();
     assert_eq!(output, vec!["440"]);
 }
+
+// === REGRESIÓN: bugs escalables corregidos en 64db441 y 730e74d ===
+
+#[test]
+fn test_regression_fallthrough_early_return() {
+    // Funciones void con early return condicional no deben hacer fallthrough a la siguiente función (bug limpiar_pantalla → limpiar_pantalla_alfa)
+    let src = r#"
+        funcion void foo(entero r, entero g, entero b) { si r == 0 { retornar; } imprimir(r); }
+        funcion void bar(entero r, entero g, entero b, entero a) { imprimir(a); }
+        foo(0,0,0); foo(1,2,3); bar(1,2,3,99);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["1", "99"]);
+}
+
+#[test]
+fn test_regression_matematicas_potencia() {
+    // potencia usada por seno/coseno/__factorial; fallaba por colisión de labels globales resets
+    let src2 = r#"
+        funcion numero potencia(numero base, entero exp) {
+            si (exp == 0) { retornar 1; }
+            numero res = 1; entero i=0; entero e=exp; si(e<0){e=-e;}
+            mientras(i<e){ res=res*base; i=i+1; }
+            si(exp<0){retornar 1.0/res;} retornar res;
+        }
+        imprimir(potencia(2,10));
+    "#;
+    let output = run_source(src2).unwrap();
+    assert_eq!(output, vec!["1024"]);
+}
+
+#[test]
+fn test_regression_defaults_callvalue() {
+    // CallValue con defaults debe usar valor por defecto, no Void (bug VM pop)
+    let src = r#"cualquiera f = funcion(entero a, entero b = 10) { retornar a + b; }; imprimir(f(5)); imprimir(f(5,20));"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["15", "25"]);
+}
+
+#[test]
+fn test_regression_lambda_fallthrough() {
+    // Lambda con early return condicional debe tener Return final, no fallthrough
+    let src = r#"cualquiera f = funcion(entero x) { si x > 0 { retornar x * 2; } retornar 0; }; imprimir(f(5)); imprimir(f(0));"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["10", "0"]);
+}

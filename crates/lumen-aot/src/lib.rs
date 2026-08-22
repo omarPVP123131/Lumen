@@ -1570,6 +1570,7 @@ mod tests {
             Func {
                 name: "test_func".to_string(),
                 params: vec![],
+                defaults: vec![],
                 entry: 0,
                 instrs: vec![Instr::ConstInt(42), Instr::Return],
             },
@@ -1587,6 +1588,7 @@ mod tests {
             Func {
                 name: "live".into(),
                 params: vec![],
+                defaults: vec![],
                 entry: 0,
                 instrs: vec![Instr::ConstInt(1), Instr::Return],
             },
@@ -1596,6 +1598,7 @@ mod tests {
             Func {
                 name: "dead".into(),
                 params: vec![],
+                defaults: vec![],
                 entry: 0,
                 instrs: vec![Instr::ConstInt(0), Instr::Return],
             },
@@ -1614,6 +1617,7 @@ mod tests {
             Func {
                 name: name.to_string(),
                 params: vec![],
+                defaults: vec![],
                 entry: 0,
                 instrs: vec![
                     Instr::ConstInt(40),
@@ -1684,6 +1688,7 @@ mod tests {
         let func = Func {
             name: "jit_add".to_string(),
             params: vec!["a".to_string(), "b".to_string()],
+            defaults: vec![None, None],
             entry: 0,
             instrs: vec![
                 Instr::ConstInt(30),

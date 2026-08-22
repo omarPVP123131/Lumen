@@ -118,6 +118,7 @@ mod tests {
             Func {
                 name: "main".into(),
                 params: vec![],
+                defaults: vec![],
                 entry: 0,
                 instrs: vec![Instr::Nop, Instr::ConstInt(42), Instr::Nop, Instr::Return],
             },

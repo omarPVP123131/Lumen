@@ -1,7 +1,7 @@
 use crate::value::{FixHasher, Value};
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 use im::HashMap as ImMap;
-use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
+use lumen_codegen::bytecode::{Bytecode, DefaultValue, FuncMeta, Instruction, Opcode};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -3394,10 +3394,22 @@ impl VM {
         if let Some(func) = self.find_func(name) {
             let func_start = func.start;
             let func_params = func.params.clone();
+            let func_defaults = func.defaults.clone();
             let mut scope =
                 HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
             for (i, param_name) in func_params.iter().enumerate() {
-                let arg = args.get(i).cloned().unwrap_or(Value::Void);
+                let arg = if i < args.len() {
+                    args[i].clone()
+                } else if let Some(Some(dv)) = func_defaults.get(i) {
+                    match dv {
+                        DefaultValue::Int(v) => Value::Int(*v),
+                        DefaultValue::Float(v) => Value::Float(*v),
+                        DefaultValue::Str(s) => Value::str(s.clone()),
+                        DefaultValue::Bool(b) => Value::Bool(*b),
+                    }
+                } else {
+                    Value::Void
+                };
                 scope.insert(param_name.clone(), arg);
             }
             if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
@@ -4277,7 +4289,20 @@ impl VM {
                         HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
                     for i in 0..param_count {
                         let param_name = self.bytecode.funcs[func_idx].params[i].clone();
-                        let arg = args.get(i).cloned().unwrap_or(Value::Void);
+                        let arg = if i < args.len() {
+                            args[i].clone()
+                        } else if let Some(Some(dv)) =
+                            self.bytecode.funcs[func_idx].defaults.get(i)
+                        {
+                            match dv {
+                                DefaultValue::Int(v) => Value::Int(*v),
+                                DefaultValue::Float(v) => Value::Float(*v),
+                                DefaultValue::Str(s) => Value::str(s.clone()),
+                                DefaultValue::Bool(b) => Value::Bool(*b),
+                            }
+                        } else {
+                            Value::Void
+                        };
                         scope.insert(param_name, arg);
                     }
                     self.locals.push(scope);
@@ -4955,7 +4980,20 @@ impl VM {
                         HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
                     for i in 0..param_count {
                         let param_name = self.bytecode.funcs[func_idx].params[i].clone();
-                        let arg = args.get(i).cloned().unwrap_or(Value::Void);
+                        let arg = if i < args.len() {
+                            args[i].clone()
+                        } else if let Some(Some(dv)) =
+                            self.bytecode.funcs[func_idx].defaults.get(i)
+                        {
+                            match dv {
+                                DefaultValue::Int(v) => Value::Int(*v),
+                                DefaultValue::Float(v) => Value::Float(*v),
+                                DefaultValue::Str(s) => Value::str(s.clone()),
+                                DefaultValue::Bool(b) => Value::Bool(*b),
+                            }
+                        } else {
+                            Value::Void
+                        };
                         scope.insert(param_name, arg);
                     }
                     self.locals.push(scope);
@@ -5825,7 +5863,7 @@ fn __str_ord(s: &str) -> Vec<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lumen_codegen::bytecode::{Bytecode, FuncMeta, Instruction, Opcode};
+use lumen_codegen::bytecode::{Bytecode, DefaultValue, FuncMeta, Instruction, Opcode};
 
     fn make_bc(instrs: Vec<Instruction>) -> Bytecode {
         Bytecode {
@@ -6130,11 +6168,13 @@ mod tests {
                 FuncMeta {
                     name: "__main__".to_string(),
                     params: vec![],
+                defaults: vec![],
                     start: 0,
                 },
                 FuncMeta {
                     name: "sum".to_string(),
                     params: vec!["a".to_string(), "b".to_string()],
+                defaults: vec![None, None],
                     start: 6,
                 },
             ],
@@ -6159,6 +6199,7 @@ mod tests {
             funcs: vec![FuncMeta {
                 name: "__main__".to_string(),
                 params: vec![],
+                defaults: vec![],
                 start: 0,
             }],
         };
@@ -6187,6 +6228,7 @@ mod tests {
             funcs: vec![FuncMeta {
                 name: "__main__".to_string(),
                 params: vec![],
+                defaults: vec![],
                 start: 0,
             }],
         };
