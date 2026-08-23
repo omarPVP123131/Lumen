@@ -36,7 +36,7 @@ pub unsafe extern "system" fn wnd_proc(
     wparam: usize,
     lparam: isize,
 ) -> isize {
-    let state = GUI_STATE.lock().unwrap();
+    let state = GUI_STATE.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(ref gui_state) = *state {
         if let Some(tx) = gui_state.windows.get(&hwnd) {
             let event = match msg {
@@ -58,9 +58,16 @@ pub unsafe extern "system" fn wnd_proc(
     }
     drop(state);
     unsafe {
-        let user32 = libloading::Library::new("user32.dll").unwrap();
-        let def: libloading::Symbol<unsafe extern "system" fn(HWND, u32, usize, isize) -> isize> =
-            user32.get(b"DefWindowProcA\0").unwrap();
+        let Ok(user32) = libloading::Library::new("user32.dll") else {
+            return 0;
+        };
+        let Ok(def) = (unsafe {
+            user32.get::<unsafe extern "system" fn(HWND, u32, usize, isize) -> isize>(
+                b"DefWindowProcA\0",
+            )
+        }) else {
+            return 0;
+        };
         def(hwnd, msg, wparam, lparam)
     }
 }
@@ -146,7 +153,7 @@ impl GuiWindow {
 
             let (tx, rx) = std::sync::mpsc::channel();
             {
-                let mut state = GUI_STATE.lock().unwrap();
+                let mut state = GUI_STATE.lock().unwrap_or_else(|e| e.into_inner());
                 if state.is_none() {
                     *state = Some(GuiState {
                         windows: HashMap::new(),
@@ -213,7 +220,7 @@ impl Drop for GuiWindow {
                 }
             }
         }
-        let mut state = GUI_STATE.lock().unwrap();
+        let mut state = GUI_STATE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(ref mut s) = *state {
             s.windows.remove(&self.hwnd);
         }

@@ -545,6 +545,8 @@ pub struct VM {
     generators: HashMap<String, String>,
     #[cfg(feature = "full")]
     ffi_libraries: HashMap<String, usize>,
+    #[cfg(feature = "full")]
+    ffi_allocations: HashMap<usize, std::alloc::Layout>,
     #[cfg(any(feature = "extra", feature = "full"))]
     #[allow(dead_code)]
     task_results: HashMap<String, std::sync::mpsc::Receiver<Value>>,
@@ -630,6 +632,8 @@ impl VM {
             generators: HashMap::new(),
             #[cfg(feature = "full")]
             ffi_libraries: HashMap::new(),
+            #[cfg(feature = "full")]
+            ffi_allocations: HashMap::new(),
             #[cfg(any(feature = "extra", feature = "full"))]
             task_results: HashMap::new(),
             #[cfg(any(feature = "extra", feature = "full"))]
@@ -2082,6 +2086,10 @@ impl VM {
         if name == "__ffi_asignar" || name == "__ffi_alloc" {
             let size = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let align = args.get(1).and_then(|v| v.as_num()).unwrap_or(8.0) as usize;
+            if size == 0 {
+                self.push(Value::Int(0));
+                return Some(Ok(()));
+            }
             let layout = match std::alloc::Layout::from_size_align(size, align) {
                 Ok(l) => l,
                 Err(e) => {
@@ -2093,6 +2101,13 @@ impl VM {
                 }
             };
             let ptr = unsafe { std::alloc::alloc(layout) };
+            if ptr.is_null() {
+                self.push(Value::Error(Box::new(Value::str(
+                    "Fallo al reservar memoria FFI".to_string(),
+                ))));
+                return Some(Ok(()));
+            }
+            self.ffi_allocations.insert(ptr as usize, layout);
             self.push(Value::Int(ptr as i64));
             return Some(Ok(()));
         }
@@ -2100,23 +2115,21 @@ impl VM {
         #[cfg(feature = "full")]
         if name == "__ffi_liberar" || name == "__ffi_free" {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
-            let size = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
-            let align = args.get(2).and_then(|v| v.as_num()).unwrap_or(8.0) as usize;
-            if ptr_val != 0 {
-                let layout = match std::alloc::Layout::from_size_align(size, align) {
-                    Ok(l) => l,
-                    Err(_) => {
-                        self.push(Value::Error(Box::new(Value::str(
-                            "Layout inválido para liberar",
-                        ))));
-                        return Some(Ok(()));
-                    }
-                };
+            if ptr_val == 0 {
+                self.push(Value::Void);
+                return Some(Ok(()));
+            }
+            if let Some(layout) = self.ffi_allocations.remove(&ptr_val) {
+                // Usa el layout almacenado en alloc, no el proporcionado por el caller (evita mismatch size/align)
                 unsafe {
                     std::alloc::dealloc(ptr_val as *mut u8, layout);
                 }
+                self.push(Value::Void);
+            } else {
+                self.push(Value::Error(Box::new(Value::str(
+                    "Liberación FFI inválida: puntero no encontrado o doble free".to_string(),
+                ))));
             }
-            self.push(Value::Void);
             return Some(Ok(()));
         }
 
@@ -2127,6 +2140,20 @@ impl VM {
             let data = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
             let bytes = data.as_bytes();
             if ptr_val != 0 && !bytes.is_empty() {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset
+                        .checked_add(bytes.len())
+                        .map_or(true, |end| end > layout.size())
+                    {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Escritura FFI fuera de rango: offset {} + len {} > size {}",
+                            offset,
+                            bytes.len(),
+                            layout.size()
+                        )))));
+                        return Some(Ok(()));
+                    }
+                }
                 unsafe {
                     std::ptr::copy_nonoverlapping(
                         bytes.as_ptr(),
@@ -2145,6 +2172,20 @@ impl VM {
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let len = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 && len > 0 {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset
+                        .checked_add(len)
+                        .map_or(true, |end| end > layout.size())
+                    {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Lectura FFI fuera de rango: offset {} + len {} > size {}",
+                            offset,
+                            len,
+                            layout.size()
+                        )))));
+                        return Some(Ok(()));
+                    }
+                }
                 let mut buf = vec![0u8; len];
                 unsafe {
                     std::ptr::copy_nonoverlapping(
@@ -2165,6 +2206,19 @@ impl VM {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset
+                        .checked_add(4)
+                        .map_or(true, |end| end > layout.size())
+                    {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Lectura FFI fuera de rango: offset {} + len 4 > size {}",
+                            offset,
+                            layout.size()
+                        )))));
+                        return Some(Ok(()));
+                    }
+                }
                 unsafe {
                     let b0 = *((ptr_val + offset) as *const u8) as u32;
                     let b1 = *((ptr_val + offset + 1) as *const u8) as u32;
@@ -2184,6 +2238,19 @@ impl VM {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset
+                        .checked_add(8)
+                        .map_or(true, |end| end > layout.size())
+                    {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Lectura FFI64 fuera de rango: offset {} + len 8 > size {}",
+                            offset,
+                            layout.size()
+                        )))));
+                        return Some(Ok(()));
+                    }
+                }
                 unsafe {
                     let mut b = [0u8; 8];
                     std::ptr::copy_nonoverlapping(
@@ -2205,6 +2272,19 @@ impl VM {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset
+                        .checked_add(1)
+                        .map_or(true, |end| end > layout.size())
+                    {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Peek byte fuera de rango: offset {} + len 1 > size {}",
+                            offset,
+                            layout.size()
+                        )))));
+                        return Some(Ok(()));
+                    }
+                }
                 unsafe {
                     let b = *((ptr_val + offset) as *const u8);
                     self.push(Value::Int(b as i64));
@@ -2221,6 +2301,19 @@ impl VM {
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let val = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as u32;
             if ptr_val != 0 {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset
+                        .checked_add(4)
+                        .map_or(true, |end| end > layout.size())
+                    {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Poke fuera de rango: offset {} + len 4 > size {}",
+                            offset,
+                            layout.size()
+                        )))));
+                        return Some(Ok(()));
+                    }
+                }
                 unsafe {
                     *((ptr_val + offset) as *mut u8) = val as u8;
                     *((ptr_val + offset + 1) as *mut u8) = (val >> 8) as u8;
@@ -2238,6 +2331,19 @@ impl VM {
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let val = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as u8;
             if ptr_val != 0 {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset
+                        .checked_add(1)
+                        .map_or(true, |end| end > layout.size())
+                    {
+                        self.push(Value::Error(Box::new(Value::str(format!(
+                            "Poke byte fuera de rango: offset {} + len 1 > size {}",
+                            offset,
+                            layout.size()
+                        )))));
+                        return Some(Ok(()));
+                    }
+                }
                 unsafe {
                     *((ptr_val + offset) as *mut u8) = val;
                 }
@@ -2359,7 +2465,25 @@ impl VM {
                 .get(1)
                 .map(|v| format!("{}", v).into_bytes())
                 .unwrap_or_default();
-            match self.bcrypt.as_ref().unwrap().aes_encrypt(&key, &data) {
+            if self.bcrypt.is_none() {
+                match Bcrypt::load() {
+                    Ok(b) => self.bcrypt = Some(Arc::new(b)),
+                    Err(e) => {
+                        self.push(Value::Error(Box::new(Value::str(e))));
+                        return Some(Ok(()));
+                    }
+                }
+            }
+            let bcrypt = match self.bcrypt.as_ref() {
+                Some(b) => b,
+                None => {
+                    self.push(Value::Error(Box::new(Value::str(
+                        "Bcrypt no inicializado".to_string(),
+                    ))));
+                    return Some(Ok(()));
+                }
+            };
+            match bcrypt.aes_encrypt(&key, &data) {
                 Ok(ct) => self.push(Value::str(hex::encode(ct))),
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
             }
@@ -2383,7 +2507,16 @@ impl VM {
                 .unwrap_or_default();
             let hex_data = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let data = hex::decode(&hex_data).unwrap_or_default();
-            match self.bcrypt.as_ref().unwrap().aes_decrypt(&key, &data) {
+            let bcrypt = match self.bcrypt.as_ref() {
+                Some(b) => b,
+                None => {
+                    self.push(Value::Error(Box::new(Value::str(
+                        "Bcrypt no inicializado".to_string(),
+                    ))));
+                    return Some(Ok(()));
+                }
+            };
+            match bcrypt.aes_decrypt(&key, &data) {
                 Ok(pt) => self.push(Value::str(String::from_utf8_lossy(&pt).to_string())),
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e)))),
             }
@@ -2973,7 +3106,7 @@ impl VM {
             let fn_name = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let fn_arg = args.get(2).cloned().unwrap_or(Value::Void);
             let result = if let Some(mutex) = self.mutexes.get(&mid) {
-                let _guard = mutex.lock().unwrap();
+                let _guard = mutex.lock().unwrap_or_else(|e| e.into_inner());
                 drop(_guard);
                 // Execute function while holding lock
                 let bc = self.bytecode.clone();
@@ -5855,6 +5988,17 @@ fn days_since_epoch(year: i64, month: u32, day: u32) -> i64 {
 // ── String ordinal helper ───────────────────────────────────────────────
 fn __str_ord(s: &str) -> Vec<i64> {
     s.chars().map(|c| c as i64).collect()
+}
+
+#[cfg(feature = "full")]
+impl Drop for VM {
+    fn drop(&mut self) {
+        for (ptr, layout) in self.ffi_allocations.drain() {
+            unsafe {
+                std::alloc::dealloc(ptr as *mut u8, layout);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

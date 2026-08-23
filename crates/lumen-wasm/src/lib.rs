@@ -92,7 +92,9 @@ impl LumenRuntime {
         let _ = lumen_vm::vm::JS_EVAL.set(js_eval);
 
         // Initialize the registered functions map
-        let mut guard = REGISTERED_JS_FUNCTIONS.lock().unwrap();
+        let mut guard = REGISTERED_JS_FUNCTIONS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *guard = Some(HashMap::new());
 
         LumenRuntime {
@@ -134,7 +136,9 @@ impl LumenRuntime {
     /// // __js_call("greet", "World")  →  "Hello, World"
     /// ```
     pub fn register_js_function(&self, name: &str, js_func_string: &str) {
-        let mut guard = REGISTERED_JS_FUNCTIONS.lock().unwrap();
+        let mut guard = REGISTERED_JS_FUNCTIONS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(ref mut map) = *guard {
             map.insert(name.to_string(), js_func_string.to_string());
         }
@@ -150,7 +154,9 @@ impl LumenRuntime {
 
     /// Desregistra una función JS previamente registrada.
     pub fn unregister_js_function(&self, name: &str) {
-        let mut guard = REGISTERED_JS_FUNCTIONS.lock().unwrap();
+        let mut guard = REGISTERED_JS_FUNCTIONS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(ref mut map) = *guard {
             map.remove(name);
         }
@@ -161,7 +167,9 @@ impl LumenRuntime {
 
     /// Lista todas las funciones JS registradas.
     pub fn list_js_functions(&self) -> String {
-        let guard = REGISTERED_JS_FUNCTIONS.lock().unwrap();
+        let guard = REGISTERED_JS_FUNCTIONS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(ref map) = *guard {
             let names: Vec<&str> = map.keys().map(|s| s.as_str()).collect();
             names.join(", ")

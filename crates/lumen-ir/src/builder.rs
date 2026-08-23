@@ -148,7 +148,12 @@ impl IRBuilder {
             self.fn_names.insert("__main__".to_string());
             self.finalize_func(); // Guardar el estado inicial (vacío) de __main__
             self.current_func = Some("__main__".to_string()); // Volver a main
-            self.current_instrs = self.program.funcs.get("__main__").unwrap().instrs.clone();
+            self.current_instrs = self
+                .program
+                .funcs
+                .get("__main__")
+                .map(|f| f.instrs.clone())
+                .unwrap_or_default();
             // Cargar sus instrucciones
         }
 

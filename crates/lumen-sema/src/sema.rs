@@ -3802,7 +3802,12 @@ impl SemanticAnalyzer {
     }
 
     fn current_scope(&mut self) -> &mut Scope {
-        self.scopes.last_mut().unwrap()
+        if self.scopes.is_empty() {
+            self.scopes.push(Scope::new());
+        }
+        self.scopes
+            .last_mut()
+            .expect("current_scope: scopes empty after push")
     }
 
     // Vincula las variables capturadas por un patrón de if-let / arm de match
