@@ -1,3 +1,4 @@
+// @interactive: interactive - requires display loop
 // Headless/CI guard — demo requiere display/SDL2/consola interactiva
 importar "sistema.nv";
 texto _ci_guard = sistema_env_obtener("CI");

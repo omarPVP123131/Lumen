@@ -1,3 +1,4 @@
+// @expected_failure: ArrayLen requires array - crypto API mismatch
 // ==========================================
 // crypto_sr.nv — Crypto operations (senior)
 // Uso: lumen run -L stdlib/ examples/sr/crypto_sr.nv

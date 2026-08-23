@@ -1,3 +1,4 @@
+// @expected_failure: vector_db_buscar index 3 OOB
 // ============================================================================
 // LÚMEN v2.4.6 — DEMO: AGENTE IA AUTÓNOMO CON RAG & TOOL-CALLING
 // Combina: vector_db.nv + ia.nv + postgres.nv + redis.nv

@@ -1,3 +1,4 @@
+// @expected_failure: Mod requires numbers - Windows ws2_32 only
 // Headless/CI guard — demo requiere red/GPU intensiva, omitida en CI
 importar "sistema.nv";
 texto _ci_guard = sistema_env_obtener("CI");

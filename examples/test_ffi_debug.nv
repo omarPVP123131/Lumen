@@ -1,3 +1,4 @@
+// @expected_failure: Gt requires numbers - FFI type mismatch headless
 imprimir("=== FFI Debug ===");
 sea lib = __ffi_cargar("msvcrt.dll");
 imprimir("lib: ", lib);

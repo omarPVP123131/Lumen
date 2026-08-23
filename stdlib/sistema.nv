@@ -2,16 +2,28 @@
 // System module — pure LÚMEN via FFI, dual ES/EN API
 // Uso: importar "sistema.nv"
 
-texto __libc = __ffi_cargar("msvcrt.dll");
+cualquiera __libc = ninguno;
+
+funcion booleano __cargar_libc() {
+    si __tipo_de(__libc) == "texto" { retornar verdadero; }
+    __libc = __ffi_cargar("msvcrt.dll");
+    si __tipo_de(__libc) == "texto" { retornar verdadero; }
+    __libc = __ffi_cargar("libc.so.6");
+    si __tipo_de(__libc) == "texto" { retornar verdadero; }
+    __libc = __ffi_cargar("libSystem.dylib");
+    retornar __tipo_de(__libc) == "texto";
+}
 
 // ============================================================
 // PROCESOS / PROCESS
 // ============================================================
 
 funcion texto ejecutar(texto cmd) {
+    si !__cargar_libc() { retornar ""; }
     texto res = "";
     // system() ejecuta y retorna código de salida
     entero r = __ffi_llamar(__libc, "system", "texto", [cmd], "entero");
+    si __tipo_de(r) != "entero" { retornar ""; }
     retornar a_texto(r);
 }
 funcion texto run(texto cmd) { retornar ejecutar(cmd); }
@@ -21,7 +33,10 @@ funcion texto run(texto cmd) { retornar ejecutar(cmd); }
 // ============================================================
 
 funcion texto env_obtener(texto clave) {
-    entero ptr = __ffi_llamar(__libc, "getenv", "texto", [clave], "entero");
+    si !__cargar_libc() { retornar ""; }
+    cualquiera ptr_val = __ffi_llamar(__libc, "getenv", "texto", [clave], "entero");
+    si __tipo_de(ptr_val) != "entero" { retornar ""; }
+    entero ptr = ptr_val como entero;
     si ptr == 0 { retornar ""; }
     entero len = 0;
     mientras __ffi_peek(ptr, len) != 0 { len = len + 1; }
@@ -30,9 +45,15 @@ funcion texto env_obtener(texto clave) {
 funcion texto env_get(texto key) { retornar env_obtener(key); }
 
 funcion booleano env_asignar(texto clave, texto valor) {
+    si !__cargar_libc() { retornar falso; }
     texto entrada = clave + "=" + valor;
-    entero r = __ffi_llamar(__libc, "_putenv", "texto", [entrada], "entero");
-    retornar r == 0;
+    cualquiera r = __ffi_llamar(__libc, "_putenv", "texto", [entrada], "entero");
+    si __tipo_de(r) == "entero" && r como entero == 0 { retornar verdadero; }
+    r = __ffi_llamar(__libc, "putenv", "texto", [entrada], "entero");
+    si __tipo_de(r) == "entero" && r como entero == 0 { retornar verdadero; }
+    r = __ffi_llamar(__libc, "setenv", "texto,texto,entero", [clave, valor, 1], "entero");
+    si __tipo_de(r) == "entero" && r como entero == 0 { retornar verdadero; }
+    retornar falso;
 }
 funcion booleano env_set(texto key, texto value) { retornar env_asignar(key, value); }
 
@@ -51,10 +72,12 @@ funcion texto path_unir(texto a, texto b) {
 funcion texto path_join(texto a, texto b) { retornar path_unir(a, b); }
 
 funcion texto path_absoluto(texto ruta) {
+    si !__cargar_libc() { retornar ruta; }
     entero buf = __ffi_asignar(260);
-    entero r = __ffi_llamar(__libc, "_fullpath", "entero,texto,entero", [buf, ruta, 260], "entero");
-    texto res = "";
-    si r != 0 {
+    // Windows _fullpath
+    cualquiera r = __ffi_llamar(__libc, "_fullpath", "entero,texto,entero", [buf, ruta, 260], "entero");
+    si __tipo_de(r) == "entero" && r como entero != 0 {
+        texto res = "";
         entero i = 0;
         mientras verdadero {
             entero b = __ffi_peek(buf, i);
@@ -62,9 +85,25 @@ funcion texto path_absoluto(texto ruta) {
             res = res + __str_from(b);
             i = i + 1;
         }
+        __ffi_liberar(buf, 260);
+        retornar res;
+    }
+    // POSIX realpath
+    r = __ffi_llamar(__libc, "realpath", "texto,entero", [ruta, buf], "entero");
+    si __tipo_de(r) == "entero" && r como entero != 0 {
+        texto res = "";
+        entero i = 0;
+        mientras verdadero {
+            entero b = __ffi_peek(buf, i);
+            si b == 0 { romper; }
+            res = res + __str_from(b);
+            i = i + 1;
+        }
+        __ffi_liberar(buf, 260);
+        retornar res;
     }
     __ffi_liberar(buf, 260);
-    retornar res;
+    retornar ruta;
 }
 funcion texto path_absolute(texto path) { retornar path_absoluto(path); }
 
@@ -130,11 +169,13 @@ funcion texto path_parent(texto path) { retornar path_padre(path); }
 
 funcion texto temp_directorio() {
     texto res = env_obtener("TEMP");
+    si res == "" { res = env_obtener("TMP"); }
+    si res == "" { res = env_obtener("TMPDIR"); }
+    si res == "" { res = env_obtener("XDG_RUNTIME_DIR"); }
     si res == "" {
-        res = env_obtener("TMP");
-    }
-    si res == "" {
-        res = "C:\\Windows\\Temp";
+        // Fallback por SO
+        texto os = env_obtener("OS");
+        si os.largo() > 0 && os[0] == "W" { res = "C:\\Windows\\Temp"; } sino { res = "/tmp"; }
     }
     retornar res;
 }
@@ -142,8 +183,16 @@ funcion texto temp_dir() { retornar temp_directorio(); }
 
 funcion texto temp_archivo() {
     texto dir = temp_directorio();
-    entero pid = __ffi_llamar(__libc, "_getpid", "", [], "entero");
+    si !__cargar_libc() {
+        retornar path_unir(dir, "lumen_" + a_texto(__tiempo_ahora()) + "_0");
+    }
+    cualquiera pid_val = __ffi_llamar(__libc, "_getpid", "", [], "entero");
+    si __tipo_de(pid_val) != "entero" {
+        pid_val = __ffi_llamar(__libc, "getpid", "", [], "entero");
+    }
+    entero pid = 0;
+    si __tipo_de(pid_val) == "entero" { pid = pid_val como entero; }
     entero ts = __tiempo_ahora();
-    retornar dir + "\\lumen_" + ts + "_" + pid;
+    retornar path_unir(dir, "lumen_" + a_texto(ts) + "_" + a_texto(pid));
 }
 funcion texto temp_file() { retornar temp_archivo(); }

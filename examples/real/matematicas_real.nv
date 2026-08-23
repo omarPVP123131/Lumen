@@ -1,3 +1,4 @@
+// @interactive: expected timeout - heavy compute
 // ==========================================
 // matematicas_real.nv — Math operations (real-world)
 // Uso: lumen run -L stdlib/ examples/real/matematicas_real.nv

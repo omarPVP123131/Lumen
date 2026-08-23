@@ -93,10 +93,67 @@ jobs:
       - name: Bench smoke (headless)
         run: cargo bench -p lumen-bench -- --quick 2>&1 | head -n 30
 
+  gate:
+    name: 🚪 Gate 0 crashes / 0 fails no permitidos
+    runs-on: ubuntu-latest
+    needs: [linux-test, headless-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build release artifact
+        run: cargo build --release --bin lumen
+      - name: Assemble minimal package (como release)
+        run: |
+          mkdir -p /tmp/pkg
+          cp target/release/lumen /tmp/pkg/lumen
+          cp -r stdlib /tmp/pkg/stdlib
+          cp -r examples /tmp/pkg/examples
+          chmod +x /tmp/pkg/lumen
+      - name: Run gate sobre artefacto empaquetado (no solo árbol fuentes)
+        run: python scripts/ci_gate.py --lumen /tmp/pkg/lumen --stdlib /tmp/pkg/stdlib --examples /tmp/pkg/examples --timeout 8 --workers 8
+
+  sanitizer-check:
+    name: 🧪 ASan/UBSan (nightly)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - name: ASan + UBSan (runtime VM)
+        env:
+          RUSTFLAGS: "-Z sanitizer=address,undefined -C force-frame-pointers=yes"
+          RUSTDOCFLAGS: "-Z sanitizer=address,undefined"
+        run: cargo test -p lumen-vm --lib --target x86_64-unknown-linux-gnu -- --nocapture 2>&1 | tail -n 20
+      - name: LeakSan optional
+        env:
+          RUSTFLAGS: "-Z sanitizer=leak"
+        run: cargo test -p lumen-vm --lib --target x86_64-unknown-linux-gnu 2>&1 | tail -n 20 || true
+
+  fuzz-smoke:
+    name: 🔀 Fuzz arreglos/strings/TUI/FFI (cargo fuzz smoke)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked || true
+      - name: Fuzz VM (5s por target)
+        run: |
+          if [ -d crates/lumen-vm/fuzz ]; then
+            cargo fuzz run fuzz_vm -- -max_total_time=5 2>&1 | tail -n 20 || true
+            cargo fuzz run fuzz_ffi -- -max_total_time=5 2>&1 | tail -n 20 || true
+          else
+            echo "fuzz harnesses no presentes — ver crates/lumen-vm/fuzz/README.md"
+            ls -la crates/lumen-vm/tests/production.rs | head
+          fi
+
   # ── 3. AUTOTAG AUTOMATIZADO TRAS CI VERDE ───────────────────────────────
   autotag:
     name: 🏷️ Autotag v<version>
-    needs: [fmt, clippy, linux-test, windows-test, wasm-check, headless-check]
+    needs: [fmt, clippy, linux-test, windows-test, wasm-check, headless-check, gate]
     if: (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

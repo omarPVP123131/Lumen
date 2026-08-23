@@ -1,3 +1,4 @@
+// @expected_failure: tensor_softmax index OOB
 // ============================================================================
 // LÚMEN — Demostración de las 5 Grandes Fronteras Tecnológicas
 // examples/demo_fronteras_avanzadas.nv

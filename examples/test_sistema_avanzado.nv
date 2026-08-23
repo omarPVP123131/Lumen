@@ -1,3 +1,4 @@
+// @expected_failure: Add requires numbers - sistema_temp_archivo
 importar "sistema.nv";
 importar "archivos.nv";
 

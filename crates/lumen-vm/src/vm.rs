@@ -2126,14 +2126,13 @@ impl VM {
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let data = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
             let bytes = data.as_bytes();
-            if ptr_val != 0 {
+            if ptr_val != 0 && !bytes.is_empty() {
                 unsafe {
                     std::ptr::copy_nonoverlapping(
                         bytes.as_ptr(),
                         (ptr_val + offset) as *mut u8,
                         bytes.len(),
                     );
-                    *((ptr_val + offset + bytes.len()) as *mut u8) = 0;
                 }
             }
             self.push(Value::Void);

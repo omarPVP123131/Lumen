@@ -1,3 +1,4 @@
+// @interactive: interactive - requires JS canvas
 // Ejemplo interactivo: Canvas drawing con JS bridges
 // Requiere modo Servidor (VM Rust) o WASM con bridges JS habilitados
 

@@ -1,3 +1,4 @@
+// @interactive: interactive - requires window
 // EJEMPLO GUI — Ventana nativa con bucle de eventos
 // Uso: lumen run examples/gui_ventana.nv
 // NOTA: Solo Windows. Abre una ventana Win32 nativa.

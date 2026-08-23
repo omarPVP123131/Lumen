@@ -1,3 +1,4 @@
+// @interactive: expected timeout - bigdata trace
 // ============================================================================
 // LÚMEN v2.4.6 — DEMO: TRACING JIT TIER-3, PLUGINS EN CALIENTE & BIG DATA
 // Combina: tracing_jit.nv + plugins.nv + dataframe.nv

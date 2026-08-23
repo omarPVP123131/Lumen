@@ -1,3 +1,4 @@
+// @expected_failure: Gt requires numbers - FFI type mismatch
 imprimir("=== FFI Simple Test ===");
 
 // Cargar msvcrt.dll

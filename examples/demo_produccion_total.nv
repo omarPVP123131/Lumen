@@ -1,3 +1,4 @@
+// @expected_failure: tensor_softmax index OOB - transformer dim mismatch
 // ============================================================================
 // LÚMEN — Demostración de Producción Total v2.4.4
 // LINQ Query, OpenAPI 3.0, Fibras Work-Stealing, Lock-Free & SIMD

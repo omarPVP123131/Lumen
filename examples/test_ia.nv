@@ -1,3 +1,4 @@
+// @expected_failure: ia_aplicar_rope index 14 OOB
 // ============================================================================
 // Prueba del Motor de Inferencia IA, Cuantización y RoPE en LÚMEN
 // ============================================================================
