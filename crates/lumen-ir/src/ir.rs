@@ -57,6 +57,7 @@ pub enum Instr {
     ArraySet,
     ArrayLen,
     ArrayPush,
+    ArrayPushVar(String),
     StructNew(String, usize),
     StructGet,
     StructSet,
@@ -80,6 +81,8 @@ pub enum Instr {
     Phi(usize, usize),
     Nop,
     Halt,
+    PushHandler(usize),
+    PopHandler,
 }
 
 #[derive(Debug, Clone)]

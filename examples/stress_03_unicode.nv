@@ -1,0 +1,16 @@
+// STRESS-03: Unicode, emoji, strings límites — debe manejar UTF-8 sin panic
+texto emoji = "🚀🎉🔥💀👻";
+imprimir("emoji largo: ", emoji.largo());
+imprimir("emoji[0]: ", emoji[0]);
+lista<texto> chars = __str_a_caracteres(emoji);
+imprimir("chars: ", chars.largo());
+texto mixto = "aéíóúñ🇪🇸";
+imprimir("mixto upper: ", __str_mayusculas(mixto));
+texto vacio = "";
+imprimir("vacio largo: ", vacio.largo());
+imprimir("vacio slice: ", __str_subcadena(vacio, 0, 0));
+imprimir("slice oob: ", __str_subcadena("abc", 2, 100));
+imprimir("pad 0: ", __str_padding_inicio("ab", 0, "*"));
+decimal sci = 1.0e5;
+imprimir("sci 1e5: ", sci);
+imprimir("stress03_ok");

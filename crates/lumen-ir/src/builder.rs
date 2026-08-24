@@ -536,19 +536,26 @@ impl IRBuilder {
             }
             Stmt::TryCatch {
                 try_body,
-                err_var: _,
+                err_var,
                 catch_body,
                 ..
             } => {
                 let catch_label = self.new_label();
                 let end_label = self.new_label();
 
+                // Frame de manejador: si el cuerpo lanza, la VM salta a catch_label
+                self.emit(Instr::PushHandler(catch_label));
                 for node in try_body {
                     self.gen_decl_or_stmt(node);
                 }
+                self.emit(Instr::PopHandler);
                 self.emit(Instr::Jmp(end_label));
 
                 self.emit(Instr::Label(catch_label));
+                // La VM pushea el mensaje de error; bindearlo a la variable
+                if !err_var.is_empty() {
+                    self.emit(Instr::Store(err_var.clone()));
+                }
                 for node in catch_body {
                     self.gen_decl_or_stmt(node);
                 }
@@ -1293,9 +1300,11 @@ impl IRBuilder {
                             for arg in args {
                                 self.gen_expr(arg);
                             }
-                            self.emit(Instr::ArrayPush);
                             if let Some(name) = var_name {
-                                self.emit(Instr::Store(name));
+                                // Mutación in-place del slot: evita clonar el Vec entero por iteración (O(n²) → O(n))
+                                self.emit(Instr::ArrayPushVar(name));
+                            } else {
+                                self.emit(Instr::ArrayPush);
                             }
                         }
                         "largo" | "len" | "length" => {

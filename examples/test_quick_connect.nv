@@ -1,4 +1,5 @@
 // @expected_failure: Mod requires numbers - Windows ws2_32 only, no network
+// @interactive: requires network, connect may timeout 8s
 imprimir("=== Quick Connect Test ===");
 
 // Try to connect to a localhost HTTP server or any reachable host

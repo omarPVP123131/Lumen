@@ -296,6 +296,33 @@ impl Lexer {
                             }
                         }
                     }
+                    // Notación científica: 1e5, 1.5E-3, 2.0e+10
+                    // Solo si hay dígito tras 'e'/'E' (+/- opcional) para no romper `3emil`
+                    if matches!(self.peek(), Some('e') | Some('E')) {
+                        let mut exp_ok = false;
+                        if let Some(sign) = self.peek_n(1) {
+                            if sign == '+' || sign == '-' {
+                                if let Some(d) = self.peek_n(2) {
+                                    exp_ok = d.is_ascii_digit();
+                                }
+                            } else if sign.is_ascii_digit() {
+                                exp_ok = true;
+                            }
+                        }
+                        if exp_ok {
+                            num.push(self.advance().unwrap()); // e/E
+                            if matches!(self.peek(), Some('+') | Some('-')) {
+                                num.push(self.advance().unwrap());
+                            }
+                            while let Some(d) = self.peek() {
+                                if d.is_ascii_digit() {
+                                    num.push(self.advance().unwrap());
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     tokens.push(Token::new(
                         TokenKind::NumLiteral(num),
                         Span::new(start_pos, self.prev_pos()),

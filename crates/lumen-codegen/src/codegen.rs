@@ -265,6 +265,18 @@ impl Codegen {
                     .instructions
                     .push(Instruction::Simple(Opcode::Halt));
             }
+            Instr::PushHandler(label) => {
+                let offset = self.label_map.get(label).copied().unwrap_or(0);
+                let idx = self.intern_num(offset as f64);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::PushHandler, idx));
+            }
+            Instr::PopHandler => {
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::PopHandler));
+            }
             Instr::Label(_) => {}
             Instr::Phi(_, _) => {}
             Instr::Read => {}
@@ -298,6 +310,12 @@ impl Codegen {
                 self.bytecode
                     .instructions
                     .push(Instruction::Simple(Opcode::ArrayPush));
+            }
+            Instr::ArrayPushVar(name) => {
+                let idx = self.intern_name(name);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::ArrayPushVar, idx));
             }
             Instr::StructNew(name, count) => {
                 let idx = self.intern_string(name);

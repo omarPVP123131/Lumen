@@ -61,11 +61,9 @@ pub unsafe extern "system" fn wnd_proc(
         let Ok(user32) = libloading::Library::new("user32.dll") else {
             return 0;
         };
-        let Ok(def) = (unsafe {
-            user32.get::<unsafe extern "system" fn(HWND, u32, usize, isize) -> isize>(
-                b"DefWindowProcA\0",
-            )
-        }) else {
+        let Ok(def) = user32.get::<unsafe extern "system" fn(HWND, u32, usize, isize) -> isize>(
+            b"DefWindowProcA\0",
+        ) else {
             return 0;
         };
         def(hwnd, msg, wparam, lparam)

@@ -4969,3 +4969,69 @@ fn test_regression_lambda_fallthrough() {
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["10", "0"]);
 }
+
+// === REGRESIÓN: hardening runtime (stress) ===
+
+#[test]
+fn test_regression_try_catch_runtime_error() {
+    // intentar/atrapar debe capturar errores de runtime (antes: catch era código muerto)
+    let src = r#"
+        intentar { entero x = 1 / 0; } atrapar (e) { imprimir("capturado"); }
+        imprimir("continua");
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["capturado", "continua"]);
+}
+
+#[test]
+fn test_regression_try_catch_undefined_var() {
+    let src = r#"
+        intentar { lista<entero> arr = [1]; imprimir(arr[5]); } atrapar (ex) { imprimir("undef ok"); }
+        intentar { entero m = 5 % 0; } atrapar (e2) { imprimir("mod ok"); }
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["undef ok", "mod ok"]);
+}
+
+#[test]
+fn test_regression_int_overflow_wraps_no_panic() {
+    // Overflow aritmético hace wrap (comportamiento definido), nunca panic/crash
+    let src = r#"
+        entero max = 9223372036854775807;
+        imprimir(max + 1);
+        imprimir(max * 2);
+        entero mn = 0 - 9223372036854775807 - 1;
+        imprimir(-mn);
+        imprimir(mn / (0 - 1));
+        imprimir(mn % (0 - 1));
+        imprimir(1 << 63);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output.len(), 6); // sin panic; valores wrap deterministas
+}
+
+#[test]
+fn test_regression_agregar_value_semantics_o_n() {
+    // agregar in-place: O(n) amortizado Y semántica de valores preservada
+    let src = r#"
+        lista<entero> a = [1, 2, 3];
+        lista<entero> b = a;
+        a.agregar(99);
+        imprimir(a.largo());
+        imprimir(b.largo());
+        entero i = 0;
+        mientras i < 5000 { a.agregar(i); i = i + 1; }
+        imprimir(a.largo());
+        imprimir(b.largo());
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["4", "3", "5004", "3"]);
+}
+
+#[test]
+fn test_regression_scientific_notation() {
+    // Notación científica en literales numéricos
+    let src = r#"decimal d = 1.0e5; imprimir(d); decimal e = 2.5E-1; imprimir(e);"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["100000", "0.25"]);
+}

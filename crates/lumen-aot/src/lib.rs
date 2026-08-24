@@ -1471,6 +1471,16 @@ fn emit_func(
                 ));
             }
             Instr::ArrayPush => s.push_str("  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push(_a, _x)); }\n"),
+            Instr::PushHandler(_) | Instr::PopHandler => {
+                // Limitación documentada: AOT C no soporta intentar/atrapar de runtime
+                // (los errores abortan en C); se emite como no-op para mantener el flujo.
+            }
+            Instr::ArrayPushVar(vname) => {
+                // AOT: degradar a push + store al global/local equivalente
+                let vn = gv_of(vname);
+                s.push_str("  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push(_a, _x)); }\n");
+                s.push_str(&format!("  SET({vn}, POP());\n"));
+            }
             Instr::ArrayGet => s.push_str("  { Val _i = POP(); Val _a = POP(); PUSH(_arr_get(_a, _i.i)); }\n"),
             Instr::ArraySet => {
                 s.push_str("  { Val _x = POP(); Val _i = POP(); Val _a = POP(); PUSH(_arr_set(_a, _i.i, _x)); }\n");

@@ -67,6 +67,9 @@ pub enum Opcode {
     MatchPayload = 53,
     BitXor = 54,
     BitNot = 55,
+    ArrayPushVar = 56,
+    PushHandler = 57,
+    PopHandler = 58,
 }
 
 impl Opcode {
@@ -128,6 +131,9 @@ impl Opcode {
             53 => Some(Opcode::MatchPayload),
             54 => Some(Opcode::BitXor),
             55 => Some(Opcode::BitNot),
+            56 => Some(Opcode::ArrayPushVar),
+            57 => Some(Opcode::PushHandler),
+            58 => Some(Opcode::PopHandler),
             _ => None,
         }
     }

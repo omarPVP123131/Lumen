@@ -186,8 +186,6 @@ fn test_regression_tui_no_crash_headless() {
     // P0: tui_puro, tui_temas_demo, tui_jr abortaban con LUMEN_HEADLESS=1 CI=1
     // Verificamos que el guard headless + fix __ffi_escribir hacen que no haya crash
     // Usamos ModuleLoader con stdlib real para cargar tui.nv como en producción
-    use lumen_sema::ModuleLoader;
-    use std::collections::HashMap;
     use std::path::Path;
 
     let stdlib_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -202,7 +200,7 @@ fn test_regression_tui_no_crash_headless() {
         if !path.exists() {
             continue;
         }
-        let src = std::fs::read_to_string(&path).unwrap();
+        let _src = std::fs::read_to_string(&path).unwrap();
         // Solo verificamos que con LUMEN_HEADLESS=1 no haya crash por heap corruption
         // El contenido tiene guard: si sistema_env_obtener("CI") != "" { retornar; }
         // Pero run_source no hace ModuleLoader, así que probamos el core FFI directamente

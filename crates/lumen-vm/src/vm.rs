@@ -555,11 +555,25 @@ pub struct VM {
     task_results_sync: HashMap<String, Value, FixHasher>,
     #[cfg(any(feature = "extra", feature = "full"))]
     task_counter: usize,
+    /// Frames de manejador intentar/atrapar: (catch_ip, stack_len, locals_len, call_len)
+    handlers: Vec<(usize, usize, usize, usize)>,
 }
 
 /// Helper to convert VmError into the builtin return type.
 fn builtin_err(err: VmError) -> Option<Result<(), VmError>> {
     Some(Err(err))
+}
+
+/// Mensaje legible de un VmError para bind en intentar/atrapar
+fn vm_error_message(e: &VmError) -> String {
+    match e {
+        VmError::Runtime(s) => s.clone(),
+        VmError::TypeError(s) => format!("Tipo incorrecto: {}", s),
+        VmError::DivisionByZero => "División por cero".to_string(),
+        VmError::StackUnderflow => "Desbordamiento de pila interno".to_string(),
+        VmError::UndefinedVariable(s) => format!("Variable '{}' no definida", s),
+        VmError::UndefinedFunction(s) => format!("Función '{}' no definida", s),
+    }
 }
 
 impl VM {
@@ -640,6 +654,7 @@ impl VM {
             task_results_sync: HashMap::with_hasher(FixHasher::default()),
             #[cfg(any(feature = "extra", feature = "full"))]
             task_counter: 0,
+            handlers: Vec::new(),
         }
     }
 
@@ -2143,7 +2158,7 @@ impl VM {
                 if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
                     if offset
                         .checked_add(bytes.len())
-                        .map_or(true, |end| end > layout.size())
+                        .is_none_or(|end| end > layout.size())
                     {
                         self.push(Value::Error(Box::new(Value::str(format!(
                             "Escritura FFI fuera de rango: offset {} + len {} > size {}",
@@ -2175,7 +2190,7 @@ impl VM {
                 if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
                     if offset
                         .checked_add(len)
-                        .map_or(true, |end| end > layout.size())
+                        .is_none_or(|end| end > layout.size())
                     {
                         self.push(Value::Error(Box::new(Value::str(format!(
                             "Lectura FFI fuera de rango: offset {} + len {} > size {}",
@@ -2207,10 +2222,7 @@ impl VM {
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
                 if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
-                    if offset
-                        .checked_add(4)
-                        .map_or(true, |end| end > layout.size())
-                    {
+                    if offset.checked_add(4).is_none_or(|end| end > layout.size()) {
                         self.push(Value::Error(Box::new(Value::str(format!(
                             "Lectura FFI fuera de rango: offset {} + len 4 > size {}",
                             offset,
@@ -2239,10 +2251,7 @@ impl VM {
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
                 if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
-                    if offset
-                        .checked_add(8)
-                        .map_or(true, |end| end > layout.size())
-                    {
+                    if offset.checked_add(8).is_none_or(|end| end > layout.size()) {
                         self.push(Value::Error(Box::new(Value::str(format!(
                             "Lectura FFI64 fuera de rango: offset {} + len 8 > size {}",
                             offset,
@@ -2273,10 +2282,7 @@ impl VM {
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
                 if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
-                    if offset
-                        .checked_add(1)
-                        .map_or(true, |end| end > layout.size())
-                    {
+                    if offset.checked_add(1).is_none_or(|end| end > layout.size()) {
                         self.push(Value::Error(Box::new(Value::str(format!(
                             "Peek byte fuera de rango: offset {} + len 1 > size {}",
                             offset,
@@ -2302,10 +2308,7 @@ impl VM {
             let val = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as u32;
             if ptr_val != 0 {
                 if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
-                    if offset
-                        .checked_add(4)
-                        .map_or(true, |end| end > layout.size())
-                    {
+                    if offset.checked_add(4).is_none_or(|end| end > layout.size()) {
                         self.push(Value::Error(Box::new(Value::str(format!(
                             "Poke fuera de rango: offset {} + len 4 > size {}",
                             offset,
@@ -2332,10 +2335,7 @@ impl VM {
             let val = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as u8;
             if ptr_val != 0 {
                 if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
-                    if offset
-                        .checked_add(1)
-                        .map_or(true, |end| end > layout.size())
-                    {
+                    if offset.checked_add(1).is_none_or(|end| end > layout.size()) {
                         self.push(Value::Error(Box::new(Value::str(format!(
                             "Poke byte fuera de rango: offset {} + len 1 > size {}",
                             offset,
@@ -3428,14 +3428,27 @@ impl VM {
             let cur_ip = self.ip;
             self.ip += 1;
             self.instr_count += 1;
-            match self.bytecode.instructions[cur_ip] {
-                Instruction::Simple(op) => self.execute_simple(op)?,
-                Instruction::WithIdx(op, idx) => self.execute_with_idx(op, idx)?,
-                Instruction::WithNum(op, n) => self.execute_with_num(op, n)?,
-                Instruction::WithBool(op, b) => self.execute_with_bool(op, b)?,
+            let exec_result = match self.bytecode.instructions[cur_ip] {
+                Instruction::Simple(op) => self.execute_simple(op),
+                Instruction::WithIdx(op, idx) => self.execute_with_idx(op, idx),
+                Instruction::WithNum(op, n) => self.execute_with_num(op, n),
+                Instruction::WithBool(op, b) => self.execute_with_bool(op, b),
                 Instruction::WithStr(op, ref s) => {
                     let s_clone = s.clone();
-                    self.execute_with_str(op, &s_clone)?;
+                    self.execute_with_str(op, &s_clone)
+                }
+            };
+            if let Err(e) = exec_result {
+                // intentar/atrapar: desenrollar al manejador más cercano si existe
+                if let Some((catch_ip, sl, ll, cl)) = self.handlers.pop() {
+                    self.stack.truncate(sl);
+                    self.locals.truncate(ll);
+                    self.call_stack.truncate(cl);
+                    let msg = vm_error_message(&e);
+                    self.push(Value::str(msg));
+                    self.ip = catch_ip;
+                } else {
+                    return Err(e);
                 }
             }
         }
@@ -3579,7 +3592,7 @@ impl VM {
                 let b = self.pop()?;
                 let a = self.pop()?;
                 match (a, b) {
-                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a + b)),
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a.wrapping_add(b))),
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Float(a as f64 + b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Float(a + b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Float(a + b)),
@@ -3605,7 +3618,7 @@ impl VM {
                 let b = self.pop()?;
                 let a = self.pop()?;
                 match (a, b) {
-                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a - b)),
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a.wrapping_sub(b))),
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Float(a as f64 - b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Float(a - b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Float(a - b)),
@@ -3616,7 +3629,7 @@ impl VM {
                 let b = self.pop()?;
                 let a = self.pop()?;
                 match (a, b) {
-                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a * b)),
+                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a.wrapping_mul(b))),
                     (Value::Int(a), Value::Float(b)) => self.push(Value::Float(a as f64 * b)),
                     (Value::Float(a), Value::Int(b)) => self.push(Value::Float(a * b as f64)),
                     (Value::Float(a), Value::Float(b)) => self.push(Value::Float(a * b)),
@@ -3628,7 +3641,11 @@ impl VM {
                 let a = self.pop()?;
                 match (a, b) {
                     (Value::Int(_), Value::Int(0)) => return Err(VmError::DivisionByZero),
-                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a / b)),
+                    (Value::Int(a), Value::Int(b)) => {
+                        // i64::MIN / -1 panics — wrapping semantics devuelven i64::MIN
+                        let q = if b == -1 { a.wrapping_neg() } else { a / b };
+                        self.push(Value::Int(q));
+                    }
                     (Value::Int(a), Value::Float(b)) => {
                         if b == 0.0 {
                             return Err(VmError::DivisionByZero);
@@ -3655,7 +3672,11 @@ impl VM {
                 let a = self.pop()?;
                 match (a, b) {
                     (Value::Int(_), Value::Int(0)) => return Err(VmError::DivisionByZero),
-                    (Value::Int(a), Value::Int(b)) => self.push(Value::Int(a.rem_euclid(b))),
+                    (Value::Int(a), Value::Int(b)) => {
+                        // rem_euclid(i64::MIN, -1) panics — wrapping semantics devuelven 0
+                        let r = if b == -1 { 0 } else { a.rem_euclid(b) };
+                        self.push(Value::Int(r));
+                    }
                     (Value::Int(a), Value::Float(b)) => {
                         if b == 0.0 {
                             return Err(VmError::DivisionByZero);
@@ -3867,7 +3888,7 @@ impl VM {
                                 b
                             )));
                         }
-                        self.push(Value::Int(a << *b as u32));
+                        self.push(Value::Int(a.wrapping_shl(*b as u32)));
                     }
                     _ => {
                         return Err(VmError::TypeError(
@@ -3920,7 +3941,7 @@ impl VM {
             Opcode::Neg => {
                 let a = self.pop()?;
                 match a {
-                    Value::Int(n) => self.push(Value::Int(-n)),
+                    Value::Int(n) => self.push(Value::Int(n.wrapping_neg())),
                     Value::Float(n) => self.push(Value::Float(-n)),
                     _ => return Err(VmError::TypeError("Neg requires number".to_string())),
                 }
@@ -3928,6 +3949,9 @@ impl VM {
             Opcode::Not => {
                 let a = self.pop()?;
                 self.push(Value::Bool(!a.is_truthy()));
+            }
+            Opcode::PopHandler => {
+                self.handlers.pop();
             }
             Opcode::Ret => {
                 let ret_val = self.pop().unwrap_or(Value::Void);
@@ -4370,6 +4394,47 @@ impl VM {
                         self.locals[cur].insert(name.to_string(), val);
                     }
                 }
+            }
+            Opcode::ArrayPushVar => {
+                // a.agregar(x) con `a` variable: muta el slot del scope in-place.
+                // El builder emitió `Load a; args; ArrayPushVar a` — hacemos pop del
+                // receptor obsoleto ANTES de mutar para que refcount vuelva a 1 y
+                // Arc::make_mut NO clone el Vec entero (O(n²) → O(n)).
+                let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
+                let value = self.pop()?;
+                // Descartar el receptor cargado INMEDIATAMENTE (drop explícito libera
+                // la referencia Arc antes de make_mut → refcount 1 → sin clone).
+                drop(self.pop().ok());
+                let mut found = false;
+                for scope in self.locals.iter_mut().rev() {
+                    if let Some(slot) = scope.get_mut(&name) {
+                        found = true;
+                        match slot {
+                            Value::Array(arr) => {
+                                Arc::make_mut(arr).push(value);
+                            }
+                            _ => {
+                                return Err(VmError::TypeError(format!(
+                                    "agregar requiere lista, pero '{}' no es una lista",
+                                    name
+                                )));
+                            }
+                        }
+                        break;
+                    }
+                }
+                if !found {
+                    return Err(VmError::UndefinedVariable(name));
+                }
+            }
+            Opcode::PushHandler => {
+                let off = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
+                self.handlers.push((
+                    off,
+                    self.stack.len(),
+                    self.locals.len(),
+                    self.call_stack.len(),
+                ));
             }
             Opcode::Call => {
                 let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
