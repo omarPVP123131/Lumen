@@ -6,10 +6,11 @@ pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     errors: Vec<ParseError>,
+    suppressed_errors: usize,
     no_struct_init: bool,
     type_params_stack: Vec<Vec<String>>,
     pending_greater: bool,
-    // Dentro de un arm de `elegir`, `|` separa patrones (OR) — nunca BinOp::BitOr.
+    // Dentro de un arm de `elegir`, `|` separa patrones (OR) - nunca BinOp::BitOr.
     match_arm_pipe: bool,
 }
 
@@ -19,6 +20,7 @@ impl Parser {
             tokens,
             pos: 0,
             errors: Vec::new(),
+            suppressed_errors: 0,
             no_struct_init: false,
             type_params_stack: Vec::new(),
             pending_greater: false,
@@ -1153,8 +1155,24 @@ impl Parser {
 
     fn parse_param(&mut self) -> Option<Param> {
         let start = self.peek().span;
-        let param_type = self.parse_type()?;
-        let name = self.expect_ident()?;
+        // Unificación sintáctica (QA #2): se aceptan ambas convenciones:
+        //   1. `Tipo nombre`        (clásica, ej: `entero a`)
+        //   2. `nombre: Tipo`       (estilo struct/campo, ej: `a: entero`)
+        // Se desambigua con lookahead: si `ident :` → forma estilo struct.
+        let colon_style = self.check_ident()
+            && !self.is_type_keyword(&self.peek().kind)
+            && self.pos + 1 < self.tokens.len()
+            && matches!(self.tokens[self.pos + 1].kind, TokenKind::Colon);
+        let (param_type, name) = if colon_style {
+            let name = self.expect_ident()?;
+            self.advance(); // consume ':'
+            let param_type = self.parse_type()?;
+            (param_type, name)
+        } else {
+            let param_type = self.parse_type()?;
+            let name = self.expect_ident()?;
+            (param_type, name)
+        };
         let default = if self.check(&[TokenKind::Equal]) {
             self.advance();
             Some(Box::new(self.parse_expression()?))
@@ -3743,12 +3761,35 @@ impl Parser {
         span: Span,
         suggestion: impl Into<String>,
     ) {
+        // Mitigación de cascada (QA #4): los errores derivados del mismo punto
+        // ruidoso no aportan — se deduplican y se limita el total reportado.
+        const MAX_ERRORS: usize = 20;
+
+        // Dedup: mismo código + misma línea = síntoma de la misma causa raíz
+        if self
+            .errors
+            .iter()
+            .any(|e| e.code == code && e.span.start.line == span.start.line)
+        {
+            self.suppressed_errors += 1;
+            return;
+        }
+        // Cap: tras MAX_ERRORS distintos, solo contamos
+        if self.errors.len() >= MAX_ERRORS {
+            self.suppressed_errors += 1;
+            return;
+        }
         self.errors.push(ParseError {
             code: code.to_string(),
             message: message.into(),
             span,
             suggestion: suggestion.into(),
         });
+    }
+
+    /// Total de errores suprimidos por cascada (para el resumen final)
+    pub fn suppressed_error_count(&self) -> usize {
+        self.suppressed_errors
     }
 
     fn synchronize(&mut self) {
@@ -4469,6 +4510,69 @@ para a en nums {
         let (program, errors) = parse(source);
         assert!(errors.is_empty(), "Parse errors: {:?}", errors);
         assert_eq!(program.len(), 1);
+    }
+
+    // === REGRESIÓN QA v3.2.0: observaciones #2 y #4 ===
+
+    /// QA #2: params estilo struct `nombre: Tipo` ahora válidos junto a `Tipo nombre`
+    #[test]
+    fn test_param_struct_style_syntax() {
+        let source = "funcion entero f(a: entero, b: entero) { retornar a + b; }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "param nombre:Tipo falló: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_param_mixed_styles() {
+        // Ambas convenciones mezcladas en la misma firma
+        let source = "funcion entero g(entero x, y: texto) { retornar x; }";
+        let (program, errors) = parse(source);
+        assert!(errors.is_empty(), "params mixtos fallaron: {:?}", errors);
+        assert_eq!(program.len(), 1);
+    }
+
+    #[test]
+    fn test_param_struct_style_with_default() {
+        let source = "funcion entero h(x: entero = 5) { retornar x; }";
+        let (program, errors) = parse(source);
+        assert!(
+            errors.is_empty(),
+            "default con nombre:Tipo falló: {:?}",
+            errors
+        );
+        assert_eq!(program.len(), 1);
+    }
+
+    /// QA #4: cascada de errores — un solo error raíz no debe generar 9 síntomas.
+    /// Con dedup por (código, línea), errores derivados en la misma línea se suprimen.
+    #[test]
+    fn test_error_cascade_deduplicated() {
+        // Un impl malformado generaba ~9 errores; ahora los derivados
+        // de la misma línea se deduplican
+        let source = "impl X { funcion vacio f(este, p sin tipo) { } } funcion entero main() { retornar 0; }";
+        let (_program, errors) = parse(source);
+        assert!(
+            errors.len() <= 5,
+            "cascada no mitigada: {} errores para una sola causa: {:?}",
+            errors.len(),
+            errors.iter().map(|e| &e.code).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_error_cap_max_20() {
+        // Archivo con muchos errores distintos: el cap limita el reporte a 20
+        let mut src = String::new();
+        for i in 0..40 {
+            src.push_str(&format!("entero e{} = \"tipo incorrecto\";\n", i));
+        }
+        let (_program, errors) = parse(&src);
+        assert!(
+            errors.len() <= 20,
+            "cap no aplicado: {} errores",
+            errors.len()
+        );
     }
 
     #[test]

@@ -407,6 +407,24 @@ fn print_help() {
     println!("   fmt <archivo.nv>            Auto-formatear código fuente / Format source");
     println!("   new <nombre_proyecto>       Crear un nuevo proyecto estructurado / New project");
     println!();
+    println!("  📖 SINTAXIS BÁSICA / CORE SYNTAX:");
+    println!();
+    println!("   funcion entero suma(entero a, entero b) {{ ... }}   // params: Tipo nombre");
+    println!("   funcion entero resta(a: entero, b: entero) {{ ... }} // o: nombre: Tipo (estilo struct)");
+    println!(
+        "   estructura Punto {{ x: entero, y: entero }}          // campos SIEMPRE nombre: Tipo"
+    );
+    println!(
+        "   impl Punto {{ funcion vacio mover(este, dx: entero) }} // receptor 'este' sin tipo"
+    );
+    println!(
+        "   si cond {{ }} sino {{ }} · mientras cond {{ }} · para (i = 0; i < n; i = i + 1) {{ }}"
+    );
+    println!(
+        "   intentar {{ }} atrapar (e) {{ }}                       // captura errores de runtime"
+    );
+    println!("   Variables: entero x = 1; texto s = \"a\"; sea y = 3.14;  // 'sea' infiere tipo");
+    println!();
     println!("  ⚡ COMPILACIÓN AOT & DISTRIBUCIÓN / COMPILATION & AOT:");
     println!();
     println!("   build <archivo.nv>          Compilar a bytecode portátil (.nvc)");
@@ -479,6 +497,16 @@ fn print_help() {
     println!("   --port <puerto>             Puerto para el servidor web (por defecto: 8080)");
     println!("   -v, --version               Mostrar versión de LÚMEN");
     println!("   -h, --help                  Mostrar esta ayuda");
+    println!();
+    println!("  🔧 VARIABLES DE ENTORNO / ENV VARS:");
+    println!();
+    println!("   LUMEN_HEADLESS=1            Modo headless (demos gráficas se omiten)");
+    println!("   LUMEN_KEEP_C=1              build --native conserva el .c intermedio generado");
+    println!("   LUMEN_KEEP_OBJ=1            Conserva artefactos objeto (.obj) tras compilar");
+    println!(
+        "   LUMEN_PROFILE=1             Perfil por-opcode del VM (diagnóstico de rendimiento)"
+    );
+    println!("   LUMEN_JIT_LOG=1             Log de tiering JIT (funciones calientes)");
     println!();
     println!("  💡 EJEMPLOS RÁPIDOS / QUICK EXAMPLES:");
     println!("   lumen run examples/hello.nv");
