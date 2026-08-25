@@ -258,16 +258,30 @@ impl Formatter {
                 trait_name,
                 target_type,
                 methods,
+                associated_types,
                 ..
             } => {
                 self.push_indent();
                 self.push("impl ");
-                self.push(trait_name);
-                self.push(" para ");
+                // Impl inherente (sin rasgo): `impl Cuenta { ... }` — NO emitir " para "
+                // que produce sintaxis inválida `impl  para Cuenta` (bug fmt v3.2.0)
+                if !trait_name.is_empty() {
+                    self.push(trait_name);
+                    self.push(" para ");
+                }
                 self.push(&format_type(target_type));
                 self.push(" {");
                 self.newline();
                 self.indent_inc();
+                for at in associated_types {
+                    self.push_indent();
+                    self.push(&format!(
+                        "tipo {} = {};",
+                        at.name,
+                        format_type(&at.target_type)
+                    ));
+                    self.newline();
+                }
                 for m in methods {
                     if let Decl::Function {
                         return_type,
@@ -293,7 +307,24 @@ impl Formatter {
                 self.push("}");
                 self.newline();
             }
-            _ => {}
+            Decl::Destructure { targets, init, .. } => {
+                // Sin este brazo, `entero a, texto b = tupla;` se borraba con fmt
+                self.push_indent();
+                for (i, t) in targets.iter().enumerate() {
+                    if i > 0 {
+                        self.push(", ");
+                    }
+                    if let Some(ref ty) = t.var_type {
+                        self.push(&format_type(ty));
+                        self.push(" ");
+                    }
+                    self.push(&t.name);
+                }
+                self.push(" = ");
+                self.fmt_expr(init);
+                self.push(";");
+                self.newline();
+            }
         }
     }
 
@@ -500,7 +531,138 @@ impl Formatter {
                 self.push(&format!("bloque_rust {{ \"{}\" }}", escape_string(code)));
                 self.newline();
             }
-            _ => {}
+            Stmt::FieldAssign {
+                expr, field, value, ..
+            } => {
+                // CRÍTICO: sin este brazo, fmt BORRABA silenciosamente asignaciones
+                // `obj.campo = valor;` (bug de data loss reportado por QA v3.2.0)
+                if top_level {
+                    self.push_indent();
+                }
+                self.fmt_expr(expr);
+                self.push(&format!(".{} = ", field));
+                self.fmt_expr(value);
+                self.push(";");
+                self.newline();
+            }
+            Stmt::ArraySet {
+                arr, index, value, ..
+            } => {
+                // Idem: `arr[i] = v;` también se borraba con el catch-all vacío
+                if top_level {
+                    self.push_indent();
+                }
+                self.fmt_expr(arr);
+                self.push("[");
+                self.fmt_expr(index);
+                self.push("] = ");
+                self.fmt_expr(value);
+                self.push(";");
+                self.newline();
+            }
+            Stmt::IfLet {
+                pattern,
+                value,
+                then_body,
+                else_body,
+                ..
+            } => {
+                if top_level {
+                    self.push_indent();
+                }
+                self.push("si sea ");
+                self.fmt_expr(pattern);
+                self.push(" = ");
+                self.fmt_expr(value);
+                self.push(" ");
+                self.fmt_block(then_body);
+                if let Some(eb) = else_body {
+                    self.push(" sino ");
+                    self.fmt_block(eb);
+                }
+                self.newline();
+            }
+            Stmt::GuardLet {
+                pattern,
+                value,
+                else_body,
+                ..
+            } => {
+                if top_level {
+                    self.push_indent();
+                }
+                self.push("sea ");
+                self.fmt_expr(pattern);
+                self.push(" = ");
+                self.fmt_expr(value);
+                self.push(" sino ");
+                self.fmt_block(else_body);
+                self.newline();
+            }
+            Stmt::Destructure { targets, value, .. } => {
+                if top_level {
+                    self.push_indent();
+                }
+                for (i, t) in targets.iter().enumerate() {
+                    if i > 0 {
+                        self.push(", ");
+                    }
+                    if let Some(ref ty) = t.var_type {
+                        self.push(&format_type(ty));
+                        self.push(" ");
+                    }
+                    self.push(&t.name);
+                }
+                self.push(" = ");
+                self.fmt_expr(value);
+                self.push(";");
+                self.newline();
+            }
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
+                // Séptimo statement que el catch-all borraba: `para (i=0; i<n; i=i+1) {}`
+                if top_level {
+                    self.push_indent();
+                }
+                self.push("para (");
+                if let Decl::Variable {
+                    ref var_type,
+                    ref name,
+                    init: Some(ref init_expr),
+                    ..
+                } = *init.clone()
+                {
+                    // `para (i = 0; ...)` sin tipo usa Type::Struct("Infer") — no imprimirlo
+                    let is_inferred = matches!(var_type, Type::Struct(s) if s == "Infer");
+                    if !is_inferred {
+                        self.push(&format_type(var_type));
+                        self.push(" ");
+                    }
+                    self.push(name);
+                    self.push(" = ");
+                    self.fmt_expr(init_expr);
+                }
+                self.push("; ");
+                self.fmt_expr(condition);
+                self.push("; ");
+                if let Stmt::Assignment {
+                    ref name,
+                    ref value,
+                    ..
+                } = *update.clone()
+                {
+                    self.push(name);
+                    self.push(" = ");
+                    self.fmt_expr(value);
+                }
+                self.push(") ");
+                self.fmt_block(body);
+            }
         }
     }
 
@@ -528,7 +690,12 @@ impl Formatter {
             if i > 0 {
                 self.push(", ");
             }
-            if p.name == "self" || p.name == "yo" {
+            // Receptor: `este`/`self`/`yo` o tipo especial Self del parser — sin anotación
+            let is_receiver = p.name == "self"
+                || p.name == "yo"
+                || p.name == "este"
+                || matches!(&p.param_type, Type::Struct(s) if s == "Self");
+            if is_receiver {
                 self.push(&p.name);
             } else {
                 self.push(&format_type(&p.param_type));
@@ -741,6 +908,49 @@ impl Formatter {
                 self.fmt_expr(expr);
                 self.push(" }");
             }
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                // Sin este brazo, `0..5` se formateaba como cadena vacía → `lista<entero> r = ;`
+                self.fmt_expr(start);
+                self.push(if *inclusive { "..=" } else { ".." });
+                self.fmt_expr(end);
+            }
+            Expr::Algun { expr, .. } => {
+                self.push("algun(");
+                self.fmt_expr(expr);
+                self.push(")");
+            }
+            Expr::Ninguno { .. } => {
+                self.push("ninguno");
+            }
+            Expr::Exito { expr, .. } => {
+                self.push("exito(");
+                self.fmt_expr(expr);
+                self.push(")");
+            }
+            Expr::Error { expr, .. } => {
+                self.push("error(");
+                self.fmt_expr(expr);
+                self.push(")");
+            }
+            Expr::Intentar { expr, .. } => {
+                self.push("intentar ");
+                self.fmt_expr(expr);
+            }
+            Expr::TupleAccess { expr, index, .. } => {
+                self.fmt_expr(expr);
+                self.push(&format!(".{}", index));
+            }
+            Expr::Lambda { params, body, .. } => {
+                self.push("funcion(");
+                self.fmt_params(params);
+                self.push(") ");
+                self.fmt_block(body);
+            }
             _ => {}
         }
     }
@@ -841,5 +1051,77 @@ mod tests {
         let src = "funcion entero suma(entero a,entero b){retornar a+b;}";
         let result = format_source(src).unwrap();
         assert!(result.contains("funcion entero suma"));
+    }
+
+    // === REGRESIÓN QA v3.2.0: fmt borraba statements silenciosamente ===
+
+    /// QA #1 (crítico): `obj.campo = valor;` desaparecía tras fmt
+    #[test]
+    fn test_fmt_preserves_field_assign() {
+        let src = "estructura Cuenta { saldo: entero, }\nfuncion entero principal() { Cuenta cuenta = Cuenta { saldo: 1000 }; cuenta.saldo = 500; retornar 0; }";
+        let result = format_source(src).unwrap();
+        assert!(
+            result.contains("cuenta.saldo = 500"),
+            "fmt BORRÓ la asignación a campo: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_fmt_preserves_field_assign_selfref() {
+        let src = "funcion void f() { cuenta.saldo = cuenta.saldo + 250; }";
+        let result = format_source(src).unwrap();
+        assert!(
+            result.contains("cuenta.saldo"),
+            "borró self-ref field assign"
+        );
+    }
+
+    /// QA: `arr[i] = v;` también se borraba
+    #[test]
+    fn test_fmt_preserves_array_set() {
+        let src = "funcion void f() { lista<entero> arr=[1,2]; arr[0] = 99; }";
+        let result = format_source(src).unwrap();
+        assert!(
+            result.contains("arr[0] = 99")
+                || result.contains("arr[0]= 99")
+                || result.contains("arr[0]"),
+            "borró ArraySet: {}",
+            result
+        );
+    }
+
+    /// QA: `para (init; cond; paso) {}` clásico se borraba
+    #[test]
+    fn test_fmt_preserves_classic_for() {
+        let src = "funcion void f() { para (entero i = 0; i < 3; i = i + 1) { imprimir(i); } }";
+        let result = format_source(src).unwrap();
+        assert!(result.contains("para ("), "borró for clásico: {}", result);
+        assert!(result.contains("i < 3"), "perdió condición del for");
+    }
+
+    /// Expresiones que se formateaban como cadena vacía
+    #[test]
+    fn test_fmt_preserves_range_expr() {
+        let src = "funcion void f() { lista<entero> r = 0..5; }";
+        let result = format_source(src).unwrap();
+        assert!(result.contains(".."), "borró rango: {}", result);
+    }
+
+    #[test]
+    fn test_fmt_preserves_algun_ninguno() {
+        let src = "funcion void f(opcion<entero> o) { si sea algun(x) = o { imprimir(x); } }";
+        let result = format_source(src).unwrap();
+        assert!(result.contains("algun"), "borró patrón algun: {}", result);
+    }
+
+    /// Idempotencia semántica: fmt dos veces == fmt una vez
+    #[test]
+    fn test_fmt_idempotent_field_assign() {
+        let src = "estructura C { saldo: entero, }\nfuncion void f() { C c = C { saldo: 1 }; c.saldo = 2; }";
+        let once = format_source(src).unwrap();
+        let twice = format_source(&once).unwrap();
+        assert_eq!(once, twice, "fmt no es idempotente");
+        assert!(twice.contains("c.saldo = 2"));
     }
 }

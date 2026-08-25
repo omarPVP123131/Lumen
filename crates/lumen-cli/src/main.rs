@@ -2411,7 +2411,12 @@ fn build_native(
             match s {
                 Ok(st) if st.success() => {
                     prof_time("gcc", &t);
-                    if std::env::var_os("LUMEN_KEEP_OBJ").is_none() && target.is_empty() {
+                    // QA #5: LUMEN_KEEP_C=1 conserva el C intermedio para inspección;
+                    // LUMEN_KEEP_OBJ=1 conserva artefactos objeto (comportamiento pre-existente).
+                    if std::env::var_os("LUMEN_KEEP_C").is_none()
+                        && std::env::var_os("LUMEN_KEEP_OBJ").is_none()
+                        && target.is_empty()
+                    {
                         let _ = fs::remove_file(&c_path);
                     }
                     if !target.is_empty() {
