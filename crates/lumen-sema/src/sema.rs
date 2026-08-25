@@ -759,6 +759,19 @@ impl SemanticAnalyzer {
     }
 
     fn collect_structs(&mut self, program: &Program) {
+        // Pass 1: pre-registrar nombres para que referencias recursivas
+        // (opcion<Self>) encuentren el nombre ya registrado (fix bug #4)
+        for node in program {
+            if let DeclOrStmt::Decl(Decl::Struct {
+                name, type_params, ..
+            }) = node
+            {
+                self.structs
+                    .entry(name.clone())
+                    .or_insert_with(|| (Vec::new(), type_params.clone()));
+            }
+        }
+        // Pass 2: resolver campos con los nombres ya registrados
         for node in program {
             if let DeclOrStmt::Decl(Decl::Struct {
                 name,
@@ -1421,7 +1434,11 @@ impl SemanticAnalyzer {
                 value,
                 span,
             } => {
-                let expr_type = self.analyze_expr(expr);
+                let raw_type = self.analyze_expr(expr);
+                let expr_type = match &raw_type {
+                    TypeInfo::Prestado { inner, .. } => (**inner).clone(),
+                    _ => raw_type.clone(),
+                };
                 let value_type = self.analyze_expr(value);
                 match &expr_type {
                     TypeInfo::Struct { fields, .. } => {
@@ -3139,7 +3156,12 @@ impl SemanticAnalyzer {
                 resolved_func: _,
                 span,
             } => {
-                let expr_type = self.analyze_expr(expr);
+                let raw_type = self.analyze_expr(expr);
+                // Auto-deref Prestado<T> → T para llamadas a métodos (QA bug #6)
+                let expr_type = match &raw_type {
+                    TypeInfo::Prestado { inner, .. } => (**inner).clone(),
+                    _ => raw_type.clone(),
+                };
                 let mut arg_types = Vec::new();
                 for arg in args {
                     arg_types.push(self.analyze_expr(arg));
@@ -3359,7 +3381,12 @@ impl SemanticAnalyzer {
             }
             Expr::FieldAccess { expr, field, span } => {
                 let expr_type = self.analyze_expr(expr);
-                match &expr_type {
+                // Auto-deref Prestado<T> → T para acceso a campos (QA bug #6)
+                let resolved = match &expr_type {
+                    TypeInfo::Prestado { inner, .. } => (**inner).clone(),
+                    _ => expr_type.clone(),
+                };
+                match &resolved {
                     TypeInfo::Struct { fields, .. } => {
                         let field_type = fields.iter().find(|(name, _)| name == field);
                         match field_type {
@@ -3386,7 +3413,7 @@ impl SemanticAnalyzer {
                             code: "E060".to_string(),
                             message: format!(
                                 "No puedes acceder a un campo de un valor de tipo '{:?}'",
-                                expr_type
+                                resolved
                             ),
                             span: *span,
                             suggestion: "Solo los structs tienen campos".to_string(),
@@ -3831,7 +3858,14 @@ impl SemanticAnalyzer {
             Expr::Error { expr, .. } => {
                 self.bind_pattern_vars(expr, span);
             }
-            Expr::Ninguno { .. } | Expr::EnumCtor { .. } => {}
+            Expr::Ninguno { .. } => {}
+            // QA bug #3: destructurar enums de usuario con datos
+            // `Exitoso(valor)` / `Resultado::Exitoso(valor)` como patrón if-let
+            Expr::EnumCtor { args, .. } => {
+                for a in args.iter() {
+                    self.bind_pattern_vars(a, span);
+                }
+            }
             Expr::Tuple { items, .. } => {
                 for it in items.iter() {
                     self.bind_pattern_vars(it, span);
@@ -4101,6 +4135,15 @@ fn can_assign(target: &TypeInfo, value: &TypeInfo) -> bool {
             return true;
         }
         return can_assign(target_inner, value_inner);
+    }
+    // Tipado nominal para structs de usuario: dos Struct con el mismo nombre son
+    // el mismo tipo independientemente de los campos (fix bug #4 — structs
+    // recursivos donde el placeholder tiene fields vacíos)
+    if let (TypeInfo::Struct { name: tn, .. }, TypeInfo::Struct { name: vn, .. }) = (target, value)
+    {
+        if tn == vn {
+            return true;
+        }
     }
     if let (TypeInfo::Enum(a), TypeInfo::Enum(b)) = (target, value) {
         return a == b;

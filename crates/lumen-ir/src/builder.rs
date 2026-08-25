@@ -429,14 +429,24 @@ impl IRBuilder {
                     expr: base, index, ..
                 } = expr.as_ref()
                 {
+                    // Paso 1: obtener elemento y mutar campo
                     self.gen_expr(base);
                     self.gen_expr(index);
                     self.emit(Instr::ArrayGet);
                     self.emit(Instr::ConstStr(field.clone()));
                     self.gen_expr(value);
                     self.emit(Instr::StructSet);
+                    // Stack: [struct_modificado]
+                    // Guardar en temporal para reordenar el stack correctamente
+                    let temp = format!("__fa_{}", self.temp_counter);
+                    self.temp_counter += 1;
+                    self.emit(Instr::StoreLocal(temp.clone()));
+
+                    // Paso 2: escribir de vuelta al arreglo
+                    // Stack para ArraySet debe ser: [array, index, nuevo_valor]
                     self.gen_expr(base);
                     self.gen_expr(index);
+                    self.emit(Instr::Load(temp.clone()));
                     self.emit(Instr::ArraySet);
                     if let Expr::Ident { name, .. } = base.as_ref() {
                         self.emit(Instr::Store(name.clone()));
