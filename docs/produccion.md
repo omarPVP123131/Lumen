@@ -1,6 +1,22 @@
-# ⚡ LÚMEN v3.2.0 — Listo para Producción Real
+# ⚡ LÚMEN v3.2.0 — Listo para Producción Real — CERTIFICADO APTO
 
-> Última validación: `2026-08-21` · `cargo test --workspace` **917** (616 e2e + 9 production + 48 vm + 52 lexer + 75 parser + resto) · `CHUNK_VERSION 7` · `LUMEN_HEADLESS` + `es_headless()` centralizado · bench 8
+> Última validación: `2026-08-21` · **Artefacto empaquetado verificado** (`lumen-v3.2.0-windows-x64.zip` SHA-256 OK, gate sobre el paquete: 393 PASS / 0 FAIL / 1 TIMEOUT @interactive / 0 CRASH) · `cargo test --release` 680 verde (621 e2e + 11 production + 48 vm) · `CHUNK_VERSION 7` · `LUMEN_HEADLESS` + `es_headless()` centralizado · bench 8
+
+## ✅ Certificación v3.2.0 — Evidencia sobre artefacto de release
+
+| Prueba | Resultado |
+|---|---|
+| SHA-256 `lumen-v3.2.0-windows-x64.zip` | `d5cb2b99…` == `SHA256SUMS.txt` ✓ |
+| SHA-256 `lumen-v3.2.0-linux-x64.tar.gz` | `559e468b…` == `SHA256SUMS.txt` ✓ |
+| Contenido del paquete | `lumen.exe` + 69 stdlib + **394 ejemplos** (389 + 5 stress) + docs + web |
+| `ci_gate.py` sobre binario del paquete (LUMEN_HEADLESS=1, timeout 8s, 8 workers) | **393 PASS / 0 FAIL / 1 TIMEOUT permitido / 0 CRASH — Gate PASSED** |
+| Único omitido explícito | `test_quick_connect.nv` (`// @interactive` — red) |
+| Usuario común SIN headless: `demo_produccion_total.nv` | `✓ Inferencia Transformer completada (dim=8)` EXIT:0 (antes `Índice 1` en `tensor_softmax`) |
+| Usuario común: `stress_04_arrays.nv` (20k agregar) | **0.04s** EXIT:0 (antes >120s TIMEOUT) |
+| Usuario común: `stress_05_value_sem.nv` | `value_semantics_ok` EXIT:0 |
+| Usuario común: `stress_02_arith_err.nv` | try/catch captura div0, overflow wrap, inf — EXIT:0 |
+| `cargo test --release --workspace` | 48 unit + 621 e2e + 11 production — 0 FAILED |
+| Bench release (`cargo bench -p lumen-bench`) | lexer 1.6µs · parser 4.4µs · pipeline 15.3µs · vm_fib_20 11ms · prod_fallthrough 44.7µs · prod_defaults 25.8µs |
 
 Este documento es el **checklist único de producción**. Si todos los puntos están en verde, el lenguaje es deployable.
 
@@ -37,9 +53,9 @@ Este documento es el **checklist único de producción**. Si todos los puntos es
 | **Regresión** | `e2e.rs` `test_regression_*` (4) | fallthrough early return, matematicas, defaults CallValue, lambda | `cargo test -p lumen-vm --test e2e test_regression` |
 | **Aceptación** | `production.rs` `test_aceptacion_*` (3) | hello, fib10, struct | `cargo test --test production` |
 | **Performance** | `production.rs` `test_performance_*` (2) + `lumen-bench` criterion (8 benches) | potencia 10k <2s, fib 20 <2s, `cargo bench` | `cargo bench -p lumen-bench` |
-| **Producción total** | `production.rs` 9 tests |  | `cargo test --test production` |
+| **Producción total** | `production.rs` 11 tests (9 + 2 regresión P0: ffi_no_overflow, tui_no_crash_headless) |  | `cargo test --test production` |
 
-**Total workspace:** `cargo test --workspace` → **917** (616 e2e + 9 prod + 48 vm + 52 lexer + 75 parser + 20 ir + 13 codegen + resto) — 0 FAILED.
+**Total workspace:** `cargo test --release --workspace` → **680** (621 e2e + 11 production + 48 vm) — 0 FAILED. Debug: **922+** con resto de suites.
 
 ### 2.2 Bench Formal (`cargo bench -p lumen-bench`)
 ```
@@ -93,7 +109,7 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 
 ## 4. Versionado y Compatibilidad
 
-- `Cargo.toml` `version = "3.1.4"` · `VERSION` `3.1.4` · `Bytecode CHUNK_VERSION 7` (decode acepta 6 y 7 para compat con `.nvc` antiguos).
+- `Cargo.toml` `version = "3.2.0"` · `VERSION` `3.2.0` · `Bytecode CHUNK_VERSION 7` (decode acepta 6 y 7 para compat con `.nvc` antiguos).
 - `ir::Func.defaults` y `FuncMeta.defaults` son `Vec<Option<DefaultValue>>`; viejos `.nvc` leídos como `vec![None; params.len()]` → comportamiento: `Void` para arg faltante (igual que antes pero sin corrupción `pop`).
 - `is_known_prefixed` sigue con `_` single (no `__` doble) para no romper `graficos_canvas_*`. Test `loader::test_memory_loader_resolves` corregido a `util_mem_duplicar` (single).
 
@@ -102,7 +118,7 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 ## 5. Checklist Final Producción Real
 
 - [x] `cargo fmt -- --check` y `cargo clippy --all -- -D warnings` pasan
-- [x] `cargo test --workspace` 0 FAILED (616 e2e + 9 prod)
+- [x] `cargo test --release --workspace` 0 FAILED (621 e2e + 11 production)
 - [x] `cargo bench -p lumen-bench` compila y corre (8 benches)
 - [x] `lumen check examples` 0 errores semánticos
 - [x] `LUMEN_HEADLESS=1 lumen run examples/graficos_*` → `init_fail_ok` sin `Variable 'a'`
@@ -110,7 +126,7 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 - [x] `CHUNK_VERSION 7` con fallback v6
 - [x] `stdlib/graficos.nv` central headless, no per-demo patch obligatorio
 - [x] Docs actualizados: `README`, `AGENTS`, `roadmap`, `plan-v3.1`, `HERRAMIENTAS`, `MARKETING`, `siguiente`, etc. (ver diffs en commit producción)
-- [x] `VERSION` y `CHANGELOG` v3.1.4
+- [x] `VERSION` `3.2.0` y `CHANGELOG` v3.2.0 con certificación de artefacto
 
 Si todo en verde, el lenguaje es deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`.
 
@@ -121,5 +137,6 @@ Si todo en verde, el lenguaje es deployable en Windows/Linux/macOS/Android/WASM 
 - `FuncMeta` defaults no literales (`b = foo()`) aún se guardan como `None` → `Void`; evaluar thunk o `Expr` serializado.
 - `label_map` per-function en `codegen` para eliminar colisión teórica lambda vs función (hoy mitigado con `label_counter` global, pero `codegen` global sigue siendo frágil).
 - `lumen fmt` y `lumen check` integrados en `pre-commit` y `cargo bench` en `autotag`/`release` para detectar regresiones de perf >10%.
+
 
 

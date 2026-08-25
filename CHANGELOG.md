@@ -1,12 +1,19 @@
 ## [3.2.0] - 2026-08-21
 
-### Producción Real — Hardening y Escalabilidad
+### Producción Real — Hardening y Escalabilidad — CERTIFICADO APTO sobre artefacto
+- **Verificación de release (artefacto empaquetado, no árbol fuentes):**
+  - `lumen-v3.2.0-windows-x64.zip` SHA-256 `d5cb2b99…` == `SHA256SUMS.txt` ✓ · `linux-x64.tar.gz` `559e468b…` ✓
+  - Paquete: `lumen.exe` + 69 stdlib + **394 ejemplos** (389 + 5 stress) + docs + web playground
+  - `ci_gate.py` sobre el binario del paquete con su stdlib/examples: **393 PASS / 0 FAIL / 1 TIMEOUT permitido (`test_quick_connect.nv` @interactive) / 0 CRASH — Gate PASSED**
+  - Usuario común SIN `LUMEN_HEADLESS`: `demo_produccion_total.nv` → `✓ Inferencia Transformer completada (dim=8)` EXIT:0 (antes `Índice 1 fuera de rango` en `tensor_softmax`) · `stress_04_arrays.nv` 20k en **0.04s** (antes >120s) · `stress_05` value semantics OK · `stress_02` try/catch+wrap OK
+  - `cargo test --release --workspace`: 48 unit + 621 e2e + 11 production, 0 FAILED · bench release: lexer 1.6µs / parser 4.4µs / pipeline 15.3µs / vm_fib_20 11ms
 - **VM:** `Add/Sub/Mul/Shl/Neg/Div/Mod` con `wrapping_*` para evitar panic en `i64::MIN`/`MAX` (overflow definido, no crash)
 - **Lexer:** soporte notación científica `1e5`, `1.5E-3` (antes `E012`)
 - **IR/VM:** `ArrayPushVar` in-place O(n²)→O(n) (20k pushes 10s→1s, 100k timeout→0.48s) con `ScopePush/Pop` y `StoreLocal` para shadowing correcto
 - **VM:** `intentar/atrapar` ahora captura errores de runtime (handler stack + `PushHandler`/`PopHandler` opcodes 57/58)
 - **VM:** `__str_longitud` ahora `chars().count()` (emoji 6, no 9 bytes) y `__str_subcadena` clamp negativo con `end==-1` → len
 - **VM:** `__ffi_escribir` fix overflow 1 byte, `ffi_allocations` tracking + `Drop`, bounds checks para `escribir/leer/peek/poke`
+- **CI:** fix job release — eliminado `lumen-lang-2.4.6.vsix` duplicado/obsoleto que causaba `Not Found update-a-release-asset`
 - **Tests:** 5 regresiones `try_catch`, `overflow`, `agregar`, `scientific` → 621 e2e + 11 production (675 vm)
 
 ## [3.1.4] - 2026-08-21 — Producción Real (fixes escalables + bench + headless)
