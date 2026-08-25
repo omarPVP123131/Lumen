@@ -637,9 +637,10 @@ impl IRBuilder {
                     let body_label = self.new_label();
                     // Patterns: cada uno salta al body si matchea; si ninguno
                     // matchea, el fallthrough llega al Jmp(fail) del final.
-                    self.emit_match_pattern(expr, &arm.value, fail_label, body_label);
+                    let has_guard = arm.guard.is_some();
+                    self.emit_match_pattern(expr, &arm.value, fail_label, body_label, has_guard);
                     for alt in &arm.alt_values {
-                        self.emit_match_pattern(expr, alt, fail_label, body_label);
+                        self.emit_match_pattern(expr, alt, fail_label, body_label, has_guard);
                     }
                     self.emit(Instr::Jmp(fail_label));
                     self.emit(Instr::Label(body_label));
@@ -1817,6 +1818,7 @@ impl IRBuilder {
         pattern: &Expr,
         fail_label: usize,
         body_label: usize,
+        has_guard: bool,
     ) {
         match pattern {
             Expr::Range {
@@ -1856,18 +1858,21 @@ impl IRBuilder {
                 self.emit_enum_variant_pattern(&temp, variant, args, fail_label);
                 self.emit(Instr::Jmp(body_label));
             }
-            Expr::Call { ref callee, ref args, .. } => {
-                if let Expr::Ident { name: ref variant_name, .. } = **callee {
+            Expr::Call {
+                ref callee,
+                ref args,
+                ..
+            } => {
+                if let Expr::Ident {
+                    name: ref variant_name,
+                    ..
+                } = **callee
+                {
                     let temp = format!("__mt_ev_{}", self.temp_counter);
                     self.temp_counter += 1;
                     self.gen_expr(expr);
                     self.emit(Instr::Store(temp.clone()));
-                    self.emit_enum_variant_pattern(
-                        &temp,
-                        variant_name,
-                        args,
-                        fail_label,
-                    );
+                    self.emit_enum_variant_pattern(&temp, variant_name, args, fail_label);
                     self.emit(Instr::Jmp(body_label));
                 }
             }
@@ -1920,6 +1925,22 @@ impl IRBuilder {
                     }
                 }
                 self.emit(Instr::Jmp(body_label));
+            }
+            Expr::Ident { name, .. } => {
+                if has_guard {
+                    // Con guarda: `caso n si n < 0:` — n es variable de comparación,
+                    // NO variante de enum. Usar igualdad (siempre true para mismo nombre).
+                    self.gen_expr(expr);
+                    self.gen_expr(pattern);
+                    self.emit(Instr::Binary(Op::NotEqual));
+                    self.emit(Instr::JmpIf(body_label));
+                } else {
+                    // Sin guarda: `caso Inactivo:` = variante de enum sin datos
+                    self.gen_expr(expr);
+                    self.emit(Instr::MatchVariant(name.clone()));
+                    self.emit(Instr::JmpIf(fail_label));
+                    self.emit(Instr::Jmp(body_label));
+                }
             }
             _ => {
                 self.gen_expr(expr);
