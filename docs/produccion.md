@@ -1,8 +1,8 @@
-# ⚡ LÚMEN v3.2.0 — Listo para Producción Real — CERTIFICADO APTO
+# ⚡ LÚMEN v3.3.0 — Listo para Producción Real — CERTIFICADO APTO
 
 > Última validación: `2026-08-21` · **Artefacto empaquetado verificado** (`lumen-v3.2.0-windows-x64.zip` SHA-256 OK, gate sobre el paquete: 393 PASS / 0 FAIL / 1 TIMEOUT @interactive / 0 CRASH) · `cargo test --release` 680 verde (621 e2e + 11 production + 48 vm) · `CHUNK_VERSION 7` · `LUMEN_HEADLESS` + `es_headless()` centralizado · bench 8
 
-## ✅ Certificación v3.2.0 — Evidencia sobre artefacto de release
+## ✅ Certificación v3.3.0 — Evidencia sobre artefacto de release
 
 | Prueba | Resultado |
 |---|---|

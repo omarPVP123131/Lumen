@@ -1,4 +1,4 @@
-# Guía de Contribución — LÚMEN v3.2.0 Producción Real
+# Guía de Contribución — LÚMEN v3.3.0 Producción Real
 
 ## Requisitos
 

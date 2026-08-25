@@ -1,7 +1,7 @@
-# 🛣️ Roadmap Oficial de LÚMEN (v1.0.0 → v3.2.0 Producción Real)
+# 🛣️ Roadmap Oficial de LÚMEN (v1.0.0 → v3.3.0 Producción Real)
 
 > **Visión:** El mejor lenguaje de programación educativo bilingüe — rápido, seguro, expresivo, con la mejor DX del mercado.
-> **v3.2.0 Producción Real (21 Ago 2026):** 917 tests (616 e2e + 9 production), bench 8 (`cargo bench -p lumen-bench`), headless `stdlib/graficos.nv:es_headless()` con `LUMEN_HEADLESS=1 CI=1`, `CHUNK_VERSION 7` con defaults persistidos. Ver [docs/produccion.md](produccion.md).
+> **v3.3.0 Producción Real (21 Ago 2026):** 917 tests (616 e2e + 9 production), bench 8 (`cargo bench -p lumen-bench`), headless `stdlib/graficos.nv:es_headless()` con `LUMEN_HEADLESS=1 CI=1`, `CHUNK_VERSION 7` con defaults persistidos. Ver [docs/produccion.md](produccion.md).
 
 ---
 
@@ -125,7 +125,7 @@ Producción & Cloud  [███████████████████�
 | 81 | **Build Incremental** | Caché de compilación incremental para módulos sin cambios | ✅ |
 | 82 | **Hot Reload** | Recarga automática de módulos en desarrollo con `lumen serve` | ✅ |
 | 83 | **Playground Web** | Editor online con ejecución en navegador vía WASM | ✅ |
-| 84 | **Benchmarks** | Suite criterion 8 benches (bench, parse, pipeline, VM + 4 prod: fallthrough, defaults, matematicas, headless) `cargo bench -p lumen-bench` | ✅ Producción v3.2.0 — ver `docs/produccion.md` §2.2 |
+| 84 | **Benchmarks** | Suite criterion 8 benches (bench, parse, pipeline, VM + 4 prod: fallthrough, defaults, matematicas, headless) `cargo bench -p lumen-bench` | ✅ Producción v3.3.0 — ver `docs/produccion.md` §2.2 |
 | 85 | **Plugins API** | Sistema de plugins para fases del compilador (hooks pre/post) | ✅ |
 | 86 | **AOT: C transpiler** | Transpilación a C + compilación con gcc/clang -O3 | ✅ |
 | 87 | **AOT: Cranelift** | Backend nativo directo vía Cranelift JIT/AOT | ✅ |
@@ -354,7 +354,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 
 ---
 
-## 🔍 Estado Actual (Agosto 2026) — v3.2.0 Producción Real
+## 🔍 Estado Actual (Agosto 2026) — v3.3.0 Producción Real
 
 > **Producción Real (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` centralizado, bench 8 (`cargo bench -p lumen-bench`), 616 e2e + 9 production = 673 vm tests (917 workspace), CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`. Checklist en [docs/produccion.md](produccion.md). `VERSION` 3.1.4, decode v6+7.
 
@@ -392,7 +392,7 @@ Colecciones avanzadas, texto, I/O y redes. Todo implementado vía builtins de VM
 ### ✅ Producción Real v3.1.4 (21 Ago 2026) — NUEVO
 - **Fixes escalables:** `builder::last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`), `vm::FuncMeta.defaults` persistidos `CHUNK_VERSION 7` + `bind_args` unificado (`Call`/`CallValue`/`run_function`), `stdlib/graficos.nv:es_headless()` centralizado (`getenv CI/LUMEN_HEADLESS` vía `__ffi`). Ver `docs/produccion.md` §1.
 - **Suite producción:** 616 e2e + 9 production (aceptación/performance/integración) = 673 vm tests, 917 workspace, 4 regresión (fallthrough, matematicas `potencia`, defaults, lambda). Bench 8 criterion (4 prod nuevos). CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`.
-- **Self-hosting completo (Fase 174)**: Pipeline LÚMEN→LÚMEN→.nvc→ejecuta ✅ (Sprint 2). Bootstrap ✅ (Sprint 3: `__compile_nv`, 533ms). HashMap O(1) ✅ (Sprint 4). **Self-hosting puro ✅ (Sprint 5, 31 Jul: fixpoint 54,712 B).** **Sprint 6 ✅ gramática completa (enum/elegir/sea/traits/closures/params-default).** **Sprint 7 ✅ VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x, COW Arc).** **Sprint 8 ✅ dogfooding: fuego 389/389 compilan · 112 CORRECTOS (8 Ago).** **Bootstrapping doble CONFIRMADO ✅ (8 Ago: SHA-256 3DA624D6..., 150,684 B byte-idénticos).** **Release v2.4.6 ✅ (14 Ago).** **Release v3.2.0 Producción ✅ (21 Ago: 917, bench 8, headless, CHUNK_VERSION 7).**
+- **Self-hosting completo (Fase 174)**: Pipeline LÚMEN→LÚMEN→.nvc→ejecuta ✅ (Sprint 2). Bootstrap ✅ (Sprint 3: `__compile_nv`, 533ms). HashMap O(1) ✅ (Sprint 4). **Self-hosting puro ✅ (Sprint 5, 31 Jul: fixpoint 54,712 B).** **Sprint 6 ✅ gramática completa (enum/elegir/sea/traits/closures/params-default).** **Sprint 7 ✅ VM en LÚMEN (`vm.nv`) + fixpoint 861s→20.1s (43x, COW Arc).** **Sprint 8 ✅ dogfooding: fuego 389/389 compilan · 112 CORRECTOS (8 Ago).** **Bootstrapping doble CONFIRMADO ✅ (8 Ago: SHA-256 3DA624D6..., 150,684 B byte-idénticos).** **Release v2.4.6 ✅ (14 Ago).** **Release v3.3.0 Producción ✅ (21 Ago: 917, bench 8, headless, CHUNK_VERSION 7).**
 
 ### 📋 Lo que falta (previo a v3.1.4)
 - **Release v3.1.4 ✅ (20 Ago 2026):** unifica en una entrega el trabajo iniciado sobre la v2.4.6 — **167 bugs corregidos**, verificación en tres plataformas (720 pruebas en verde en Linux y Windows, 393/393 en `lumen check`, 372 ejemplos sin fallos, clippy sin avisos y 4 fuzzers diferenciales sin divergencias). Incluye: motor regex nativo por backtracking, guardas de plataforma en `lumen_rt.h`, stdlib empaquetada, bloques sin llave corregidos, semántica de closures/structs/`prestado mut` y fix de build `gui_ffi.rs` para aarch64 Linux/Android.

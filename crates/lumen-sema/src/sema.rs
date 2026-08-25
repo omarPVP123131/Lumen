@@ -1490,7 +1490,12 @@ impl SemanticAnalyzer {
                 value,
                 span,
             } => {
-                let arr_type = self.analyze_expr(arr);
+                let raw_arr = self.analyze_expr(arr);
+                // Auto-deref Prestado<T> → T para asignación por índice (QA bug #6)
+                let arr_type = match &raw_arr {
+                    TypeInfo::Prestado { inner, .. } => (**inner).clone(),
+                    _ => raw_arr.clone(),
+                };
                 let _ = self.analyze_expr(index);
                 let value_type = self.analyze_expr(value);
                 match &arr_type {
@@ -3111,7 +3116,12 @@ impl SemanticAnalyzer {
                 TypeInfo::Lista(Box::new(TypeInfo::Entero))
             }
             Expr::Index { expr, index, span } => {
-                let expr_type = self.analyze_expr(expr);
+                let raw_type = self.analyze_expr(expr);
+                // Auto-deref Prestado<T> → T para indexación (QA bug #6)
+                let expr_type = match &raw_type {
+                    TypeInfo::Prestado { inner, .. } => (**inner).clone(),
+                    _ => raw_type.clone(),
+                };
                 let index_type = self.analyze_expr(index);
                 let is_range_slice = matches!(index.as_ref(), Expr::Range { .. })
                     || matches!(index_type, TypeInfo::Lista(_));

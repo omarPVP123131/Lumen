@@ -1,4 +1,4 @@
-# PLAN: LÚMEN — Independencia Total (Self-Hosting como C/Rust) — v3.2.0 Producción Real
+# PLAN: LÚMEN — Independencia Total (Self-Hosting como C/Rust) — v3.3.0 Producción Real
 
 **Objetivo:** LÚMEN se autocompila sin depender de Rust. El compilador, la VM y el runtime están escritos en LÚMEN. Bootstrap ocurre UNA sola vez con Rust. A partir de ahí, LÚMEN vive por sí mismo.
 
@@ -6,9 +6,9 @@
 
 ---
 
-## Estado Actual — 21 Agosto 2026 (v3.2.0 Producción Real ✅)
+## Estado Actual — 21 Agosto 2026 (v3.3.0 Producción Real ✅)
 
-> **v3.2.0 Producción Real PUBLICADO (21 Ago 2026):** **917 tests** (616 e2e incluye 4 regresión + 9 production, 673 vm tests), **bench 8** criterion (4 prod nuevos: fallthrough, defaults, matematicas, headless), **headless `es_headless()`** centralizado, **CHUNK_VERSION 7** con defaults persistidos, fixes escalables (builder fallthrough + VM aridad + `matematicas.nv` `Variable 'n'`), CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Antes **v3.1.4 (20 Ago 2026)** 167 bugs, 720 pruebas, 393/393 `lumen check`, 372 ejemplos, clippy, 4 fuzzers — el hito de self-hosting/bootstrapping doble se mantiene intacto y ahora suma producción real.
+> **v3.3.0 Producción Real PUBLICADO (21 Ago 2026):** **917 tests** (616 e2e incluye 4 regresión + 9 production, 673 vm tests), **bench 8** criterion (4 prod nuevos: fallthrough, defaults, matematicas, headless), **headless `es_headless()`** centralizado, **CHUNK_VERSION 7** con defaults persistidos, fixes escalables (builder fallthrough + VM aridad + `matematicas.nv` `Variable 'n'`), CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Antes **v3.1.4 (20 Ago 2026)** 167 bugs, 720 pruebas, 393/393 `lumen check`, 372 ejemplos, clippy, 4 fuzzers — el hito de self-hosting/bootstrapping doble se mantiene intacto y ahora suma producción real.
 
 ## Estado Histórico — 4 Agosto 2026 (Sprint 7 🟢 — VM en LÚMEN funcional)
 
@@ -25,7 +25,7 @@
 | **Bootstrapping doble** (vm.nv compilada por LÚMEN y auto-ejecutándose) | ⏳ | Próximo hito — 0 dependencias de Rust |
 | **Optimización fixpoint** | ✅ | Fixpoint v4 re-verificado en **5s** (112,368 B byte-IDENTICAL, 4 Ago) |
 | **Sprint 8: Dogfooding + release v2.4.6** | ✅ | **fuego: 389/389 compilan · 75/116 CORRECTOS (+14)** con la cadena 100% LÚMEN (**opcion.nv + resultado.nv ahora OK+CORRECTO** vía Option/Result reales; 38 no-corregidos son gaps: traits, closures, FFI/GUI, tuplas, timing) — fixpoint v4 **113,857 B byte-IDENTICAL** |
-| **v3.2.0 Producción Real** | ✅ **21 Ago 2026** | **917 tests** (616 e2e + 9 production), **bench 8**, **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, `es_headless()` centralizado, `headless-check` CI (`LUMEN_HEADLESS=1 CI=1`), `lumen check` 389/389 — ver `docs/produccion.md` |
+| **v3.3.0 Producción Real** | ✅ **21 Ago 2026** | **917 tests** (616 e2e + 9 production), **bench 8**, **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, `es_headless()` centralizado, `headless-check` CI (`LUMEN_HEADLESS=1 CI=1`), `lumen check` 389/389 — ver `docs/produccion.md` |
 
 ### Arquitectura (actualizada)
 

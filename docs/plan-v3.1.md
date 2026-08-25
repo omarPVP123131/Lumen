@@ -1,6 +1,6 @@
 # Plan v3.1 — Mejoras Propuestas (21 Ago 2026) — Post-Producción v3.1.4
 
-**Estado base:** v3.2.0 Producción Real publicado (21 Ago 2026) — **917 tests** (616 e2e + 9 production, 673 vm tests), **bench 8** (`cargo bench -p lumen-bench`), **headless `es_headless()`** centralizado (`stdlib/graficos.nv`, `LUMEN_HEADLESS`/`CI`), **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, **fixes escalables** `last_significant()` + `label_counter` global, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Ver [docs/produccion.md](produccion.md). Antes: 167 bugs v3.1.4 (720/393/372), aarch64 fix.
+**Estado base:** v3.3.0 Producción Real publicado (21 Ago 2026) — **917 tests** (616 e2e + 9 production, 673 vm tests), **bench 8** (`cargo bench -p lumen-bench`), **headless `es_headless()`** centralizado (`stdlib/graficos.nv`, `LUMEN_HEADLESS`/`CI`), **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, **fixes escalables** `last_significant()` + `label_counter` global, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Ver [docs/produccion.md](produccion.md). Antes: 167 bugs v3.1.4 (720/393/372), aarch64 fix.
 
 Este plan prioriza **evidencia sobre promesas**. Cada ítem tiene criterio de aceptación medible. Parte del checklist `docs/produccion.md`.
 

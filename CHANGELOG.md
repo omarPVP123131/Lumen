@@ -1,3 +1,48 @@
+## [3.3.0] - 2026-08-24
+
+### Lenguaje — Bugs QA v3.2.0 corregidos + features nuevas
+
+#### Bug #1 — fmt borraba código (CRÍTICO)
+- Eliminados catch-alls `_ => {}` en fmt_stmt/fmt_decl/fmt_expr
+- 7 statements recuperados: FieldAssign, ArraySet, For clásico, IfLet, GuardLet, Destructure stmt+decl
+- 8 expresiones recuperadas: Range, Algun/Ninguno/Exito/Error/Intentar, TupleAccess, Lambda
+- Exhaustividad forzada por compilador (nuevos Stmt/Decl sin brazo = error de compilación)
+
+#### Bug #2 — `arr[i].campo = valor` en runtime (CRÍTICO)
+- Builder: stack realineado con temporal entre StructSet y ArraySet
+- Variante profunda `o.items[i].campo = v` también arreglada con write-back en dos fases
+
+#### Bug #3 — if-let destructura enums de usuario con datos (CRÍTICO)
+- Nuevo opcode MatchVariant=62: compara solo variant del Value::Enum
+- MatchPayload extendido para extraer fields de Value::Enum
+- Builder maneja ambas formas: `Exitoso(x)` (sin calificar, Expr::Call) y `Enum::Variante(x)` (calificada, Expr::EnumCtor)
+- Multi-arg con ArrayGet por índice
+
+#### Bug #4 — structs recursivos via opcion<Self> (CRÍTICO)
+- collect_structs pre-registra nombres antes de resolver campos
+- can_assign usa tipado nominal para Struct de usuario (mismo nombre = mismo tipo)
+
+#### Bug #5 — imports transitivos (confirmado NO-bug funcional)
+- Sistema funciona; confusión por convención de prefijos con nombres que empiezan por {stem}_
+
+#### Bug #6 parcial — auto-deref Prestado<T> en sema
+- FieldAccess, MethodCall, FieldAssign, Index, ArraySet resuelven a través de Prestado { inner }
+- Elimina falsos errores E060/E047/E044; runtime sigue value-semantics (documentado)
+
+#### Otros fixes
+- 79 builtins sin typing: fallback Decimal→Numero (elimina falsos E031)
+- __regex_reemplazar/__regex_replace typing explícito Texto
+- Overflow aritmético wrapping_* (sin panic en i64::MIN/MAX)
+- Notación científica 1e5, 1.5E-3
+- ArrayPushVar O(n²)→O(n) para .agregar() en variables
+- intentar/atrapar captura errores de runtime
+- ScopePush/ScopePop + StoreLocal para shadowing correcto
+- Sintaxis params unificada: ambas formas `Tipo nombre` y `nombre: Tipo`
+- --help documenta sintaxis real + env vars
+- Cascada de errores mitigada (dedup por código+línea, cap 20)
+- LUMEN_KEEP_C=1 conserva el C intermedio de build --native
+- Ejemplo nuevo: examples/fase_impl_inherente.nv
+
 ## [3.2.0] - 2026-08-21
 
 ### Producción Real — Hardening y Escalabilidad — CERTIFICADO APTO sobre artefacto
