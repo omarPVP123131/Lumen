@@ -1702,6 +1702,29 @@ impl IRBuilder {
                 self.emit(Instr::Unary(Op::Not));
                 self.emit(Instr::JmpIf(else_label));
             }
+            Expr::EnumCtor { variant, args, .. } => {
+                self.emit_enum_variant_pattern(temp, variant, args, else_label);
+            }
+            // Variante sin calificar: `Exitoso(valor)` — parser genera Expr::Call
+            Expr::Call {
+                ref callee,
+                ref args,
+                ..
+            } => {
+                if let Expr::Ident {
+                    name: ref variant_name,
+                    ..
+                } = **callee
+                {
+                    self.emit_enum_variant_pattern(temp, variant_name, args, else_label);
+                } else {
+                    // Fallback: comparación por igualdad
+                    self.emit(Instr::Load(temp.to_string()));
+                    self.gen_expr(pattern);
+                    self.emit(Instr::Binary(Op::Equal));
+                    self.emit(Instr::JmpIf(else_label));
+                }
+            }
             Expr::Ident { name, .. } => {
                 self.emit(Instr::Load(temp.to_string()));
                 self.emit(Instr::Store(name.clone()));
@@ -1712,6 +1735,55 @@ impl IRBuilder {
                 self.gen_expr(pattern);
                 self.emit(Instr::Binary(Op::Equal));
                 self.emit(Instr::JmpIf(else_label));
+            }
+        }
+    }
+
+    /// Destructuring de variantes de enums de usuario (QA bug #3)
+    /// Maneja `Exitoso(x)`, `Resultado::Exitoso(x)`, `Pendiente` (sin datos)
+    fn emit_enum_variant_pattern(
+        &mut self,
+        temp: &str,
+        variant: &str,
+        args: &[Expr],
+        else_label: usize,
+    ) {
+        // 1. Comprobar variante sin comparar payload
+        self.emit(Instr::Load(temp.to_string()));
+        self.emit(Instr::MatchVariant(variant.to_string()));
+        self.emit(Instr::JmpIf(else_label)); // salta si NO matchea
+
+        // 2. Extraer payload via MatchPayload
+        self.emit(Instr::Load(temp.to_string()));
+        self.emit(Instr::MatchPayload);
+
+        // 3. Bindear args: 1 arg = valor directo, N args = array a destructurar
+        let ident_args: Vec<&String> = args
+            .iter()
+            .filter_map(|a| {
+                if let Expr::Ident { name, .. } = a {
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if ident_args.len() == 1 {
+            if let Expr::Ident { name, .. } = &args[0] {
+                self.emit(Instr::Store(name.clone()));
+            }
+        } else if ident_args.len() > 1 {
+            let arr_temp = format!("__ev_{}", self.temp_counter);
+            self.temp_counter += 1;
+            self.emit(Instr::Store(arr_temp.clone()));
+            for (i, a) in args.iter().enumerate() {
+                if let Expr::Ident { name, .. } = a {
+                    self.emit(Instr::Load(arr_temp.clone()));
+                    self.emit(Instr::ConstInt(i as i64));
+                    self.emit(Instr::ArrayGet);
+                    self.emit(Instr::Store(name.clone()));
+                }
             }
         }
     }

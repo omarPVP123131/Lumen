@@ -4306,6 +4306,16 @@ impl VM {
                     Value::Opcion(Some(inner)) => self.push(*inner),
                     Value::Exito(inner) => self.push(*inner),
                     Value::Error(inner) => self.push(*inner),
+                    Value::Enum { fields, .. } => {
+                        // Destructuring de enums de usuario (QA bug #3)
+                        if fields.is_empty() {
+                            self.push(Value::Void);
+                        } else if fields.len() == 1 {
+                            self.push(fields[0].clone());
+                        } else {
+                            self.push(Value::arr(fields.to_vec()));
+                        }
+                    }
                     other => self.push(other),
                 }
             }
@@ -4337,6 +4347,16 @@ impl VM {
         match op {
             Opcode::PushStr => {
                 self.push(Value::str(s.to_string()));
+                Ok(())
+            }
+            Opcode::MatchVariant => {
+                // s = variant_name — compara solo el nombre de la variante
+                let val = self.pop()?;
+                let matches = match &val {
+                    Value::Enum { variant: v, .. } => &**v == s,
+                    _ => false,
+                };
+                self.push(Value::Bool(matches));
                 Ok(())
             }
             _ => Ok(()),

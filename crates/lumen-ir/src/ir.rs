@@ -86,6 +86,7 @@ pub enum Instr {
     PopHandler,
     ScopePush,
     ScopePop,
+    MatchVariant(String),
 }
 
 #[derive(Debug, Clone)]

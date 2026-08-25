@@ -1472,9 +1472,10 @@ fn emit_func(
                 ));
             }
             Instr::ArrayPush => s.push_str("  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push(_a, _x)); }\n"),
-            Instr::PushHandler(_) | Instr::PopHandler | Instr::ScopePush | Instr::ScopePop => {
+            Instr::PushHandler(_) | Instr::PopHandler | Instr::ScopePush | Instr::ScopePop
+            | Instr::MatchVariant(_) => {
                 // Limitación documentada: AOT C no soporta intentar/atrapar de runtime
-                // ni scopes de bloque (los errores abortan en C); se emite como no-op para mantener el flujo.
+                // ni destructuring de enums; se emite como no-op para mantener el flujo.
             }
             Instr::ArrayPushVar(vname) => {
                 // AOT: degradar a push + store al global/local equivalente

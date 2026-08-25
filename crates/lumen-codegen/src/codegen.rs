@@ -293,6 +293,12 @@ impl Codegen {
                     .instructions
                     .push(Instruction::Simple(Opcode::ScopePop));
             }
+            Instr::MatchVariant(variant_name) => {
+                self.bytecode.instructions.push(Instruction::WithStr(
+                    Opcode::MatchVariant,
+                    variant_name.clone(),
+                ));
+            }
             Instr::Label(_) => {}
             Instr::Phi(_, _) => {}
             Instr::Read => {}

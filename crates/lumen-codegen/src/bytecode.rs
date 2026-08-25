@@ -73,6 +73,7 @@ pub enum Opcode {
     StoreLocal = 59,
     ScopePush = 60,
     ScopePop = 61,
+    MatchVariant = 62,
 }
 
 impl Opcode {
@@ -140,6 +141,7 @@ impl Opcode {
             59 => Some(Opcode::StoreLocal),
             60 => Some(Opcode::ScopePush),
             61 => Some(Opcode::ScopePop),
+            62 => Some(Opcode::MatchVariant),
             _ => None,
         }
     }
