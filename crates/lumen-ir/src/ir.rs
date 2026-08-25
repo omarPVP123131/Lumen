@@ -44,6 +44,7 @@ pub enum Instr {
     ConstBool(bool),
     Load(String),
     Store(String),
+    StoreLocal(String),
     Binary(Op),
     Unary(Op),
     Call(String, usize),
@@ -83,6 +84,8 @@ pub enum Instr {
     Halt,
     PushHandler(usize),
     PopHandler,
+    ScopePush,
+    ScopePop,
 }
 
 #[derive(Debug, Clone)]

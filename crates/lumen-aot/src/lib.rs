@@ -231,7 +231,7 @@ impl AotCompiler {
         // Los params de la firma se sobre-escriben con su valor real.
         let mut used_names: Vec<String> = Vec::new();
         for ins in instrs {
-            if let Instr::Load(n) | Instr::Store(n) = ins {
+            if let Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n) = ins {
                 if !used_names.iter().any(|x| x == n) {
                     used_names.push(n.clone());
                 }
@@ -298,7 +298,7 @@ impl AotCompiler {
                     stack.push(builder.use_var(v));
                     kinds.push(*var_kinds.get(n).unwrap_or(&false));
                 }
-                Instr::Store(n) => {
+                Instr::Store(n) | Instr::StoreLocal(n) => {
                     if let Some(v) = stack.pop() {
                         let k = kinds.pop().unwrap_or(false);
                         var_kinds.insert(n.to_string(), k);
@@ -795,7 +795,7 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
             var_ptrs.insert(p.clone(), ptr);
         }
         for ins in &func.instrs {
-            if let Instr::Load(n) | Instr::Store(n) = ins {
+            if let Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n) = ins {
                 if !var_ptrs.contains_key(n) {
                     let ptr = next_reg();
                     out.push_str(&format!("  {} = alloca i64\n", ptr));
@@ -839,7 +839,7 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
                         stack.push("0".to_string());
                     }
                 }
-                Instr::Store(n) => {
+                Instr::Store(n) | Instr::StoreLocal(n) => {
                     let val = stack.pop().unwrap_or_else(|| "0".to_string());
                     if let Some(ptr) = var_ptrs.get(n) {
                         out.push_str(&format!("  store i64 {}, i64* {}\n", val, ptr));
@@ -988,7 +988,8 @@ pub fn compile_to_c(program: &Program) -> String {
             add_name(p);
         }
         for ins in &func.instrs {
-            if let Instr::Load(n) | Instr::Store(n) | Instr::FuncRef(n) = ins {
+            if let Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n) | Instr::FuncRef(n) = ins
+            {
                 add_name(n);
             }
             if let Instr::Call(n, _) = ins {
@@ -1005,7 +1006,7 @@ pub fn compile_to_c(program: &Program) -> String {
     for (name, func) in &program.funcs {
         let mut set: Vec<String> = func.params.clone();
         for ins in &func.instrs {
-            if let Instr::Load(n) | Instr::Store(n) = ins {
+            if let Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n) = ins {
                 if !set.iter().any(|x| x == n) {
                     set.push(n.clone());
                 }
@@ -1173,7 +1174,7 @@ fn emit_func(
             Instr::Load(n) => {
                 s.push_str(&format!("  PUSH({});\n", gv_of(n)));
             }
-            Instr::Store(n) => {
+            Instr::Store(n) | Instr::StoreLocal(n) => {
                 s.push_str(&format!("  {} = _dcp(POP());\n", gv_of(n)));
             }
             Instr::Binary(op) => {
@@ -1471,9 +1472,9 @@ fn emit_func(
                 ));
             }
             Instr::ArrayPush => s.push_str("  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push(_a, _x)); }\n"),
-            Instr::PushHandler(_) | Instr::PopHandler => {
+            Instr::PushHandler(_) | Instr::PopHandler | Instr::ScopePush | Instr::ScopePop => {
                 // Limitación documentada: AOT C no soporta intentar/atrapar de runtime
-                // (los errores abortan en C); se emite como no-op para mantener el flujo.
+                // ni scopes de bloque (los errores abortan en C); se emite como no-op para mantener el flujo.
             }
             Instr::ArrayPushVar(vname) => {
                 // AOT: degradar a push + store al global/local equivalente

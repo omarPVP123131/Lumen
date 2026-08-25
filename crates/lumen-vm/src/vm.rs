@@ -864,7 +864,8 @@ impl VM {
 
         if name == "__str_len" || name == "__str_longitud" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            self.push(Value::Int(s.len() as i64));
+            // Conteo de caracteres (chars), no bytes — consistente con s[i]/slice
+            self.push(Value::Int(s.chars().count() as i64));
             return Some(Ok(()));
         }
 
@@ -914,29 +915,29 @@ impl VM {
 
         if name == "__str_slice" || name == "__str_subcadena" {
             let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            let start = args
-                .get(1)
-                .and_then(|v| match v {
-                    Value::Int(i) => Some(*i as usize),
-                    _ => v.as_num().map(|f| f as usize),
-                })
-                .unwrap_or(0);
+            let nchars = s.chars().count() as i64;
+            // Leer como i64 para clamp correcto de negativos (soporta rangos estilo Python)
+            let start = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as i64;
             let end = args
                 .get(2)
-                .and_then(|v| match v {
-                    Value::Int(i) => {
-                        if *i == -1 {
-                            Some(s.len())
-                        } else {
-                            Some(*i as usize)
-                        }
-                    }
-                    _ => v.as_num().map(|f| f as usize),
-                })
-                .unwrap_or(s.len());
-            let start = start.min(s.len());
-            let end = end.min(s.len()).max(start);
-            let sub: String = s.chars().skip(start).take(end - start).collect();
+                .and_then(|v| v.as_num())
+                .unwrap_or(nchars as f64) as i64;
+            // Normalizar negativos - conservar compatibilidad: end==-1 significa "hasta el final" (len), no len-1
+            let s0 = if start < 0 { nchars + start } else { start };
+            let e0 = if end == -1 {
+                nchars
+            } else if end < 0 {
+                nchars + end
+            } else {
+                end
+            };
+            let s0 = s0.clamp(0, nchars);
+            let e0 = e0.clamp(0, nchars).max(s0.max(0));
+            let sub: String = s
+                .chars()
+                .skip(s0 as usize)
+                .take((e0 - s0) as usize)
+                .collect();
             self.push(Value::str(sub));
             return Some(Ok(()));
         }
@@ -3953,6 +3954,14 @@ impl VM {
             Opcode::PopHandler => {
                 self.handlers.pop();
             }
+            Opcode::ScopePush => {
+                self.locals.push(HashMap::with_hasher(FixHasher::default()));
+            }
+            Opcode::ScopePop => {
+                if self.locals.len() > 1 {
+                    self.locals.pop();
+                }
+            }
             Opcode::Ret => {
                 let ret_val = self.pop().unwrap_or(Value::Void);
                 #[cfg(any(feature = "extra", feature = "full"))]
@@ -4393,6 +4402,14 @@ impl VM {
                     if !found {
                         self.locals[cur].insert(name.to_string(), val);
                     }
+                }
+            }
+            Opcode::StoreLocal => {
+                let val = self.pop()?;
+                let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
+                let n = self.locals.len();
+                if n > 0 {
+                    self.locals[n - 1].insert(name, val);
                 }
             }
             Opcode::ArrayPushVar => {

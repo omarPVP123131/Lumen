@@ -180,6 +180,12 @@ impl Codegen {
                     .instructions
                     .push(Instruction::WithIdx(Opcode::Store, idx));
             }
+            Instr::StoreLocal(name) => {
+                let idx = self.intern_name(name);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::StoreLocal, idx));
+            }
             Instr::Binary(op) => {
                 let opcode = match op {
                     Op::Add => Opcode::Add,
@@ -276,6 +282,16 @@ impl Codegen {
                 self.bytecode
                     .instructions
                     .push(Instruction::Simple(Opcode::PopHandler));
+            }
+            Instr::ScopePush => {
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::ScopePush));
+            }
+            Instr::ScopePop => {
+                self.bytecode
+                    .instructions
+                    .push(Instruction::Simple(Opcode::ScopePop));
             }
             Instr::Label(_) => {}
             Instr::Phi(_, _) => {}

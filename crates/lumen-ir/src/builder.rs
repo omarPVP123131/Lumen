@@ -201,7 +201,7 @@ impl IRBuilder {
             Decl::Variable { name, init, .. } => {
                 if let Some(init_expr) = init {
                     self.gen_expr(init_expr);
-                    self.emit(Instr::Store(name.clone()));
+                    self.emit(Instr::StoreLocal(name.clone()));
                 }
             }
             Decl::Destructure { targets, init, .. } => {
@@ -215,7 +215,7 @@ impl IRBuilder {
                     }
                     self.emit(Instr::Load(temp.clone()));
                     self.emit(Instr::TupleAccess(i));
-                    self.emit(Instr::Store(target.name.clone()));
+                    self.emit(Instr::StoreLocal(target.name.clone()));
                 }
             }
             Decl::Function { name, body, .. } => {
@@ -334,7 +334,7 @@ impl IRBuilder {
             }
             Decl::Const { name, value, .. } => {
                 self.gen_expr(value);
-                self.emit(Instr::Store(name.clone()));
+                self.emit(Instr::StoreLocal(name.clone()));
             }
         }
     }
@@ -627,9 +627,11 @@ impl IRBuilder {
                 self.emit(Instr::Label(end_label));
             }
             Stmt::Block { stmts, .. } => {
+                self.emit(Instr::ScopePush);
                 for node in stmts {
                     self.gen_decl_or_stmt(node);
                 }
+                self.emit(Instr::ScopePop);
             }
             Stmt::ForEach {
                 var_name,
@@ -661,7 +663,7 @@ impl IRBuilder {
                 self.emit(Instr::Load(arr_temp.clone()));
                 self.emit(Instr::Load(idx_temp.clone()));
                 self.emit(Instr::ArrayGet);
-                self.emit(Instr::Store(var_name.clone()));
+                self.emit(Instr::StoreLocal(var_name.clone()));
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
@@ -730,7 +732,7 @@ impl IRBuilder {
                     }
                     self.emit(Instr::Load(temp.clone()));
                     self.emit(Instr::TupleAccess(i));
-                    self.emit(Instr::Store(target.name.clone()));
+                    self.emit(Instr::StoreLocal(target.name.clone()));
                 }
             }
             Stmt::InlineAsm { code, .. } => {

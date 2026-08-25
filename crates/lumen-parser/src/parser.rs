@@ -2200,7 +2200,7 @@ impl Parser {
         let span = token.span;
         match &token.kind {
             TokenKind::NumLiteral(s) => {
-                if s.contains('.') {
+                if s.contains('.') || s.contains('e') || s.contains('E') {
                     let value: f64 = s.parse().unwrap_or(0.0);
                     Some(Expr::Float { value, span })
                 } else {

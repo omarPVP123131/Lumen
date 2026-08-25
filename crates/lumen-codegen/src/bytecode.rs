@@ -70,6 +70,9 @@ pub enum Opcode {
     ArrayPushVar = 56,
     PushHandler = 57,
     PopHandler = 58,
+    StoreLocal = 59,
+    ScopePush = 60,
+    ScopePop = 61,
 }
 
 impl Opcode {
@@ -134,6 +137,9 @@ impl Opcode {
             56 => Some(Opcode::ArrayPushVar),
             57 => Some(Opcode::PushHandler),
             58 => Some(Opcode::PopHandler),
+            59 => Some(Opcode::StoreLocal),
+            60 => Some(Opcode::ScopePush),
+            61 => Some(Opcode::ScopePop),
             _ => None,
         }
     }
