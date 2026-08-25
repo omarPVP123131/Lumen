@@ -444,7 +444,6 @@ jobs:
           prerelease: false
           files: |
             release_assets/*
-            lumen-lang-2.4.6.vsix
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
