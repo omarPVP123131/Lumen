@@ -1374,12 +1374,24 @@ impl SemanticAnalyzer {
                 for arm in arms {
                     self.scopes.push(Scope::new());
                     self.bind_pattern_vars(&arm.value, arm.span);
-                    let arm_val_type = self.analyze_expr(&arm.value);
                     let is_range_arm = matches!(&arm.value, Expr::Range { .. });
                     let is_pattern_arm = matches!(
                         &arm.value,
                         Expr::Algun { .. } | Expr::Exito { .. } | Expr::Error { .. }
                     );
+                    // QA bug #3: reconocer variantes de enums de usuario como patrones
+                    let is_enum_variant_arm = matches!(&arm.value, Expr::EnumCtor { .. })
+                        || matches!(&arm.value, Expr::Call { callee, .. }
+                            if matches!(**callee, Expr::Ident { .. }));
+
+                    if is_enum_variant_arm {
+                        // No analizar como expresión — es un patrón de variante.
+                        // Solo verificar que la variante existe en el enum del switch.
+                        self.scopes.pop();
+                        continue;
+                    }
+
+                    let arm_val_type = self.analyze_expr(&arm.value);
                     if !is_range_arm
                         && !is_pattern_arm
                         && arm_val_type != expr_type

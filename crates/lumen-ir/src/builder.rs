@@ -1847,6 +1847,30 @@ impl IRBuilder {
                 self.emit_if_let_pattern(&temp, pattern, fail_label);
                 self.emit(Instr::Jmp(body_label));
             }
+            Expr::EnumCtor { variant, args, .. } => {
+                // Destructuring de enums en elegir (extensión de bug #3)
+                let temp = format!("__mt_ev_{}", self.temp_counter);
+                self.temp_counter += 1;
+                self.gen_expr(expr);
+                self.emit(Instr::Store(temp.clone()));
+                self.emit_enum_variant_pattern(&temp, variant, args, fail_label);
+                self.emit(Instr::Jmp(body_label));
+            }
+            Expr::Call { ref callee, ref args, .. } => {
+                if let Expr::Ident { name: ref variant_name, .. } = **callee {
+                    let temp = format!("__mt_ev_{}", self.temp_counter);
+                    self.temp_counter += 1;
+                    self.gen_expr(expr);
+                    self.emit(Instr::Store(temp.clone()));
+                    self.emit_enum_variant_pattern(
+                        &temp,
+                        variant_name,
+                        args,
+                        fail_label,
+                    );
+                    self.emit(Instr::Jmp(body_label));
+                }
+            }
             Expr::Tuple { items, .. } => {
                 let temp = format!("__mt_tup_{}", self.temp_counter);
                 self.temp_counter += 1;
