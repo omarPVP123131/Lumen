@@ -964,7 +964,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "lumen-aot"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "cranelift",
  "cranelift-jit",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-api"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-codegen",
  "lumen-ir",
@@ -989,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-bench"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "criterion",
  "lumen-codegen",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-cli"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "chrono",
  "lumen-aot",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-codegen"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-ir",
  "proptest",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-doc"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -1040,7 +1040,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-fmt"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -1050,7 +1050,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-ir"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -1061,7 +1061,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-lexer"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1070,7 +1070,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-lsp"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-lexer",
  "lumen-parser",
@@ -1080,7 +1080,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-parser"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-lexer",
  "serde",
@@ -1090,7 +1090,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-pkg"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1098,7 +1098,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-plugin"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-ir",
  "lumen-lexer",
@@ -1108,7 +1108,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-project"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-repl"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-codegen",
  "lumen-ir",
@@ -1129,7 +1129,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-sema"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "lumen-codegen",
  "lumen-ir",
@@ -1142,7 +1142,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-vm"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "base64",
  "chrono",
@@ -1167,7 +1167,7 @@ dependencies = [
 
 [[package]]
 name = "lumen-wasm"
-version = "3.3.0"
+version = "3.3.1"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",

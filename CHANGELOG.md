@@ -1,3 +1,11 @@
+## [3.3.1] - 2026-08-25
+
+### Correcciones
+
+#### elegir/caso con guardas (regresión de 3.3.0)
+- MatchVariant ahora solo se emite para Idents sin guarda: `caso n si n < 0:` volvía a tratar `n` como variable de comparación, no como variante de enum
+- La destructuración de enums en `elegir` sigue funcionando para patrones sin condición
+
 ## [3.3.0] - 2026-08-24
 
 ### Lenguaje — Bugs QA v3.2.0 corregidos + features nuevas
