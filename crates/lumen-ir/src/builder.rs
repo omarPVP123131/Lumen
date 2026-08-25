@@ -448,8 +448,32 @@ impl IRBuilder {
                     self.gen_expr(index);
                     self.emit(Instr::Load(temp.clone()));
                     self.emit(Instr::ArraySet);
-                    if let Expr::Ident { name, .. } = base.as_ref() {
-                        self.emit(Instr::Store(name.clone()));
+                    // Stack: [array_actualizado]
+                    // Paso 3: write-back al contenedor si no es una variable simple
+                    // (ej. `o.items[i].campo = v` — hay que hacer StructSet en o.items)
+                    match base.as_ref() {
+                        Expr::Ident { name, .. } => {
+                            self.emit(Instr::Store(name.clone()));
+                        }
+                        Expr::FieldAccess {
+                            expr: struct_base,
+                            field: list_field,
+                            ..
+                        } => {
+                            // o.items[i].campo = v → escribir lista actualizada de vuelta
+                            // Stack: [nueva_lista]
+                            let temp2 = format!("__fa2_{}", self.temp_counter);
+                            self.temp_counter += 1;
+                            self.emit(Instr::StoreLocal(temp2.clone()));
+                            self.gen_expr(struct_base);
+                            self.emit(Instr::ConstStr(list_field.clone()));
+                            self.emit(Instr::Load(temp2.clone()));
+                            self.emit(Instr::StructSet);
+                            if let Expr::Ident { name, .. } = struct_base.as_ref() {
+                                self.emit(Instr::Store(name.clone()));
+                            }
+                        }
+                        _ => {}
                     }
                 } else if let Expr::FieldAccess {
                     expr: base,
