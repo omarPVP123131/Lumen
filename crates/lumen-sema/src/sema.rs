@@ -2891,6 +2891,11 @@ impl SemanticAnalyzer {
                                     || callee == "__regex_coincide"
                                 {
                                     TypeInfo::Booleano
+                                } else if callee == "__regex_reemplazar"
+                                    || callee == "__regex_replace"
+                                {
+                                    // QA: faltaba typing — retornaba Decimal en vez de Texto
+                                    TypeInfo::Texto
                                 } else if callee == "__http_get"
                                     || callee == "__http_obtener"
                                     || callee == "__http_post"
@@ -2929,7 +2934,10 @@ impl SemanticAnalyzer {
                                 {
                                     TypeInfo::Entero
                                 } else if callee.starts_with("__") {
-                                    TypeInfo::Decimal
+                                    // Fallback dinámico: builtins sin typing específico
+                                    // retornan Numero (acepta asignación a cualquier tipo)
+                                    // antes era Decimal que es estricto y causaba falsos E031
+                                    TypeInfo::Numero
                                 } else {
                                     let var_type = self.lookup(&callee).map(|s| s.var_type.clone());
                                     match var_type {
