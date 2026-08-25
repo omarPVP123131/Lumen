@@ -1,9 +1,9 @@
-# Plan del Playground Web — LÚMEN v3.1.4 Producción Real+
+# Plan del Playground Web — LÚMEN v3.2.0 Producción Real+
 
-> Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026 · **Actualizado 21 Ago 2026: v3.1.4 Producción Real (917 tests, bench 8, headless `es_headless()`, CHUNK_VERSION 7)**
+> Estado: PLAN v2 (Alt C: niveles de madurez) · 14 Ago 2026 · **Actualizado 21 Ago 2026: v3.2.0 Producción Real (917 tests, bench 8, headless `es_headless()`, CHUNK_VERSION 7)**
 > Estructura: **9 features × 3 niveles (L1 funcional → L2 pulido → L3 avanzado) = 27 fases**, cada una con criterios de aceptación verificables.
 > ✅ **Ronda L1 COMPLETADA (14 Ago):** F1.1, F2.1, F3.1, F3.2, F4.1, F9.1 — ver "Estado actual".
-> ✅ **v3.1.4 Producción (21 Ago):** bench 8 y headless `stdlib/graficos.nv:es_headless()` validados en CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Playground usa `es_headless()` para demos gráficas en `LUMEN_HEADLESS=1`. Ver [docs/produccion.md](produccion.md).
+> ✅ **v3.2.0 Producción (21 Ago):** bench 8 y headless `stdlib/graficos.nv:es_headless()` validados en CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Playground usa `es_headless()` para demos gráficas en `LUMEN_HEADLESS=1`. Ver [docs/produccion.md](produccion.md).
 
 ---
 

@@ -1,6 +1,6 @@
 # LÚMEN — Manual Completo del Lenguaje
 
-**Versión Oficial v3.1.4 — Especificación Integral de la Gramática y Ecosistema**
+**Versión Oficial v3.2.0 — Especificación Integral de la Gramática y Ecosistema**
 
 > LÚMEN es un lenguaje de programación nativo bilingüe (Español / Inglés) de ultra-alto rendimiento, tipado estático estricto y modelos de memoria adaptativos (64-bit NaN-Boxing y Borrow Checker Zero-GC).
 
@@ -214,13 +214,13 @@ funcion vacio hardware_directo() {
 
 ---
 
-*LÚMEN v3.1.4 — Documentación Oficial Sincronizada.*
+*LÚMEN v3.2.0 — Documentación Oficial Sincronizada.*
 
 > **Producción Real v3.1.4 (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` (`LUMEN_HEADLESS`/`CI`), bench 8 (`cargo bench -p lumen-bench`), 616 e2e + 9 production = 673 vm tests (917 workspace), CI `headless-check`. Ver [docs/produccion.md](produccion.md).
 
 ---
 
-## 15. Producción Real v3.1.4 — Fixes Escalables, Bench y Headless
+## 15. Producción Real v3.2.0 — Fixes Escalables, Bench y Headless
 
 > Checklist único: [docs/produccion.md](produccion.md)
 

@@ -1,3 +1,14 @@
+## [3.2.0] - 2026-08-21
+
+### Producción Real — Hardening y Escalabilidad
+- **VM:** `Add/Sub/Mul/Shl/Neg/Div/Mod` con `wrapping_*` para evitar panic en `i64::MIN`/`MAX` (overflow definido, no crash)
+- **Lexer:** soporte notación científica `1e5`, `1.5E-3` (antes `E012`)
+- **IR/VM:** `ArrayPushVar` in-place O(n²)→O(n) (20k pushes 10s→1s, 100k timeout→0.48s) con `ScopePush/Pop` y `StoreLocal` para shadowing correcto
+- **VM:** `intentar/atrapar` ahora captura errores de runtime (handler stack + `PushHandler`/`PopHandler` opcodes 57/58)
+- **VM:** `__str_longitud` ahora `chars().count()` (emoji 6, no 9 bytes) y `__str_subcadena` clamp negativo con `end==-1` → len
+- **VM:** `__ffi_escribir` fix overflow 1 byte, `ffi_allocations` tracking + `Drop`, bounds checks para `escribir/leer/peek/poke`
+- **Tests:** 5 regresiones `try_catch`, `overflow`, `agregar`, `scientific` → 621 e2e + 11 production (675 vm)
+
 ## [3.1.4] - 2026-08-21 — Producción Real (fixes escalables + bench + headless)
 
 ### ⚡ v3.1.4 Producción: listo para deploy real (escalable, sin parches temporales)
@@ -19,6 +30,17 @@
 **Versionado:** `Cargo.toml`/`VERSION` `3.1.4` · `CHUNK_VERSION 7` (decode v6+7) · `is_known_prefixed` con `_` single · docs actualizadas (`README`, `AGENTS`, `roadmap`, `produccion.md`, etc.).
 
 ---
+
+## [3.2.0] - 2026-08-21
+
+### Producción Real — Hardening y Escalabilidad
+- **VM:** `Add/Sub/Mul/Shl/Neg/Div/Mod` con `wrapping_*` para evitar panic en `i64::MIN`/`MAX` (overflow definido, no crash)
+- **Lexer:** soporte notación científica `1e5`, `1.5E-3` (antes `E012`)
+- **IR/VM:** `ArrayPushVar` in-place O(n²)→O(n) (20k pushes 10s→1s, 100k timeout→0.48s) con `ScopePush/Pop` y `StoreLocal` para shadowing correcto
+- **VM:** `intentar/atrapar` ahora captura errores de runtime (handler stack + `PushHandler`/`PopHandler` opcodes 57/58)
+- **VM:** `__str_longitud` ahora `chars().count()` (emoji 6, no 9 bytes) y `__str_subcadena` clamp negativo con `end==-1` → len
+- **VM:** `__ffi_escribir` fix overflow 1 byte, `ffi_allocations` tracking + `Drop`, bounds checks para `escribir/leer/peek/poke`
+- **Tests:** 5 regresiones `try_catch`, `overflow`, `agregar`, `scientific` → 621 e2e + 11 production (675 vm)
 
 ## [3.1.4] - 2026-08-20
 

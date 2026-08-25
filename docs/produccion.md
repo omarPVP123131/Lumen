@@ -1,4 +1,4 @@
-# ⚡ LÚMEN v3.1.4 — Listo para Producción Real
+# ⚡ LÚMEN v3.2.0 — Listo para Producción Real
 
 > Última validación: `2026-08-21` · `cargo test --workspace` **917** (616 e2e + 9 production + 48 vm + 52 lexer + 75 parser + resto) · `CHUNK_VERSION 7` · `LUMEN_HEADLESS` + `es_headless()` centralizado · bench 8
 

@@ -1,7 +1,7 @@
 # 📖 Aprende a Programar con LÚMEN: De Principiante a Ingeniero de Software
 ### *Learn to Code with LÚMEN: From Zero to Software Engineer*
 
-**Versión Oficial v3.1.4 — Guía Completa de Computación, IA y Sistemas**
+**Versión Oficial v3.2.0 — Guía Completa de Computación, IA y Sistemas**
 
 ---
 
@@ -545,13 +545,13 @@ imprimir(dataframe_df_a_csv(df));
 
 ---
 
-*LÚMEN v3.1.4 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.2.0 — © 2026 LÚMEN Core Team & Comunidad.*
 
 > **Producción Real (21 Ago 2026):** ver [docs/produccion.md](produccion.md) — 917 tests, bench 8, `es_headless()`, `CHUNK_VERSION 7`.
 
 ---
 
-# CAPÍTULO 17.5: Producción Real v3.1.4 — De Código a Deploy (21 Ago 2026)
+# CAPÍTULO 17.5: Producción Real v3.2.0 — De Código a Deploy (21 Ago 2026)
 
 En este capítulo llevamos **LÚMEN a producción real** con fixes escalables (no parches por demo), suite formal y CI headless.
 
@@ -728,5 +728,5 @@ imprimir("Paneo estéreo (L/R) : ", 3d.balance_paneo);
 
 ---
 
-*LÚMEN v3.1.4 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.2.0 — © 2026 LÚMEN Core Team & Comunidad.*
 

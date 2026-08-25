@@ -1,12 +1,12 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v3.1.4 Producción Real — Released: 21 Agosto 2026 — 917 tests, CHUNK_VERSION 7, bench 8, headless `es_headless()`**
+**v3.2.0 Producción Real — Released: 21 Agosto 2026 — 917 tests, CHUNK_VERSION 7, bench 8, headless `es_headless()`**
 
 > Checklist único de producción: [docs/produccion.md](produccion.md) — `LUMEN_HEADLESS=1` + `cargo bench -p lumen-bench` + `CHUNK_VERSION 7`
 
 ---
 
-## Testing (Actual) — v3.1.4 Producción Real (21 Ago 2026)
+## Testing (Actual) — v3.2.0 Producción Real (21 Ago 2026)
 
 | Crate | Tests | Tipo | Nota v3.1.4 |
 |-------|-------|------|-------------|
@@ -26,7 +26,7 @@
 | lumen-bench | 8 | bench | `cargo bench -p lumen-bench`: lexer, parser, pipeline, vm_fib_20 + 4 prod (fallthrough, defaults, matematicas, headless) |
 | **Total workspace** | **917** |  | `cargo test --workspace` 0 FAILED (673 vm tests = 616 e2e + 9 prod + 48 unit) |
 
-**v3.1.4 Producción: 917 pruebas en verde (Linux y Windows), 389/389 en `lumen check`, 389 `run` OK con `CI=1`, 8 benches criterion, clippy sin avisos, 4 fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos, `LUMEN_HEADLESS=1` headless centralizado `stdlib/graficos.nv:es_headless()`. Ver `docs/produccion.md`.**
+**v3.2.0 Producción: 917 pruebas en verde (Linux y Windows), 389/389 en `lumen check`, 389 `run` OK con `CI=1`, 8 benches criterion, clippy sin avisos, 4 fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos, `LUMEN_HEADLESS=1` headless centralizado `stdlib/graficos.nv:es_headless()`. Ver `docs/produccion.md`.**
 
 **Comandos producción:**
 ```bash
@@ -444,7 +444,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 
 ---
 
-## Bytecode (.nvc) — v3.1.4 Producción
+## Bytecode (.nvc) — v3.2.0 Producción
 
 - **Version**: 7 (`CHUNK_VERSION 7`, decode acepta 6 y 7)
 - **Novedad v3.1.4:** `FuncMeta.defaults: Vec<Option<DefaultValue>>` persistidos (`Int/Float/Str/Bool`) para `bind_args` unificado (3 call-sites). Ver `docs/produccion.md` §1.3.
@@ -650,5 +650,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 - **Versionado:** `Cargo.toml`/`VERSION` `3.1.4` · `CHUNK_VERSION 7` (fallback v6) · docs sincronizadas (`README`, `roadmap`, `plan-v3.1`, `HERRAMIENTAS`, `produccion.md`) · `CHANGELOG` v3.1.4 producción.
 - **Verificado:** `cargo test --workspace` 917, `cargo bench -p lumen-bench` 8 OK, `LUMEN_HEADLESS=1` repro local (`Headless/CI detectado — demo omitida`).
 
-**Estado actual: LÚMEN v3.1.4 Producción Real — deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`. Próximos: `FuncMeta` defaults no literales (thunk), `label_map` per-function, `lumen fmt` en pre-commit (ver `docs/produccion.md` §6).**
+**Estado actual: LÚMEN v3.2.0 Producción Real — deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`. Próximos: `FuncMeta` defaults no literales (thunk), `label_map` per-function, `lumen fmt` en pre-commit (ver `docs/produccion.md` §6).**
 

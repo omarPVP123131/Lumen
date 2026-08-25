@@ -1,6 +1,6 @@
 # LÚMEN — El Lenguaje que Ilumina
 
-**v3.1.4 — Documento de Posicionamiento y Visión**
+**v3.2.0 — Documento de Posicionamiento y Visión**
 
 > *"Programar no debería ser un lujo en inglés. Debería ser un derecho en tu idioma."*
 
@@ -36,7 +36,7 @@ importar ingles;   // Ahora puedes usar if/else/while/for también
 
 **No existe otro lenguaje que haga esto.** Python, JavaScript, Rust — todos asumen inglés.
 
-### 2. Compilador de Calidad Industrial — v3.1.4 Producción Real
+### 2. Compilador de Calidad Industrial — v3.2.0 Producción Real
 
 LÚMEN no es un intérprete de juguete. Tiene un pipeline de compilación completo:
 
@@ -84,7 +84,7 @@ nombre = "Ana"; // El compilador deduce: texto
 - `Opcion<T>` para nulabilidad segura
 - Sum types con `enum`
 
-### 5. Baterías Incluidas (v3.1.4 Producción Real)
+### 5. Baterías Incluidas (v3.2.0 Producción Real)
 
 | Herramienta | Comando | Novedad v3.1.4 |
 |-------------|---------|----------------|
@@ -147,7 +147,7 @@ imprimir("Hola {nombre}, tienes {edad} años y mides {altura}m");
 
 ## ✅ Producción Real v3.1.4 (21 Ago 2026) — NUEVO
 
-**LÚMEN v3.1.4 ya es deployable** con checklist de producción en [docs/produccion.md](produccion.md):
+**LÚMEN v3.2.0 ya es deployable** con checklist de producción en [docs/produccion.md](produccion.md):
 
 - Fixes escalables: `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` + `bind_args` unificado, `es_headless()` centralizado
 - 917 tests (616 e2e + 9 production), 8 benches (`cargo bench -p lumen-bench`), 389/389 `lumen check`, CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`
@@ -205,7 +205,7 @@ LENGUAJE.md y HERRAMIENTAS.md son completos, pero faltan:
 | **Estudiante hispanohablante** aprendiendo a programar | ✅ Perfecto. Sin barrera de idioma. |
 | **Profesor de programación** en secundaria/universidad | ✅ Ideal. Diseñado para enseñar conceptos. |
 | **Autodidacta** que quiere crear scripts y herramientas | ✅ Bueno. Sintaxis clara, errores útiles, REPL. |
-| **Desarrollador profesional** buscando producción | ✅ Ya — v3.1.4 Producción Real (917 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`, ver `docs/produccion.md`) |
+| **Desarrollador profesional** buscando producción | ✅ Ya — v3.2.0 Producción Real (917 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`, ver `docs/produccion.md`) |
 | **Startup** que necesita backend en producción | ✅ Ya — `lumen bundle`/`lumen build --release` + `cargo test --workspace` + headless CI, ver `docs/produccion.md` |
 
 ### ¿Contra quién compite LÚMEN?
@@ -265,5 +265,5 @@ estáticos, genéricos, traits, pattern matching y mensajes de error pedagógico
 
 ---
 
-*LÚMEN v3.1.4 — Agosto 2026 · Hecho con convicción, no con hype.*
+*LÚMEN v3.2.0 — Agosto 2026 · Hecho con convicción, no con hype.*
 

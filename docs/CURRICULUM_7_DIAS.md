@@ -1,6 +1,6 @@
 # 🎓 Aprende LÚMEN en 7 Días: De Principiante a Ingeniero de Sistemas
 
-**Plan Oficial de Formación Acelerada — LÚMEN v3.1.4 Producción Real (21 Ago 2026) — 917 tests, bench 8, headless `es_headless()`, `CHUNK_VERSION 7`**
+**Plan Oficial de Formación Acelerada — LÚMEN v3.2.0 Producción Real (21 Ago 2026) — 917 tests, bench 8, headless `es_headless()`, `CHUNK_VERSION 7`**
 
 > **Producción Real:** checklist en [docs/produccion.md](produccion.md) — `cargo test --workspace` (917), `cargo bench -p lumen-bench` (8), `LUMEN_HEADLESS=1 CI=1` para CI/headless, `VERSION` 3.1.4.
 
@@ -110,5 +110,5 @@ lumen bundle src/main.nv -o produccion_final
 
 ---
 
-*LÚMEN Curriculum — De 0 a Ingeniero de Software Certificado — v3.1.4 Producción Real (917 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`).*
+*LÚMEN Curriculum — De 0 a Ingeniero de Software Certificado — v3.2.0 Producción Real (917 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`).*
 
