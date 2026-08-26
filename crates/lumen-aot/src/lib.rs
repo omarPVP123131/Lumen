@@ -1860,10 +1860,13 @@ fn emit_func(
                 ));
             }
             Instr::ArrayPushVar(vname) => {
-                // AOT: degradar a push + store al global/local equivalente
+                // AOT: push + store al slot (con guard de refs prestado mut)
                 let vn = gv_of(&var_at(i, vname));
                 s.push_str("  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push(_a, _x)); }\n");
-                s.push_str(&format!("  SET({vn}, POP());\n"));
+                s.push_str(&format!(
+                    "  {{ Val _sv_ = POP(); if ({vn}.t == T_PTR && {vn}.p) *{vn}.p = _dcp(_sv_); else {vn} = _dcp(_sv_); }}\n",
+                    vn = vn
+                ));
             }
             Instr::ArrayGet => s.push_str("  { Val _i = POP(); Val _a = POP(); PUSH(_arr_get(_a, _i.i)); }\n"),
             Instr::ArraySet => {

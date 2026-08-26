@@ -678,3 +678,27 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 
 #### Fuzzing con tolerancia (harness v2)
 - pid_caps.nv: PID + capturas regex — PAR total VM↔nativo
+
+## [3.3.9] - 2026-08-25
+
+### Fuzzing profunda: genéricos + refs en backend C
+
+#### Bug F6 — inferencia de TypeVars desde argumentos
+- `primero([7,8])` con `lista<T>` fallaba E041: la firma genérica registraba el
+  T interior como `Struct("T")` y sin `type_args` explícitos no había unificación.
+- sema ahora infiere ligando patrones→argumentos (TypeVar, Struct-T-param,
+  Lista, Opcion) cuando no hay type_args — `primero([7,8])` == 7 ✓
+
+#### Bug F7 — macro SET inexistente en ArrayPushVar del backend C
+- El lowering emitía `SET(gv[n], POP())` (macro que ya no existe) → cualquier
+  `.agregar()` sobre param/lista local rompía la compilación nativa. Ahora usa
+  el patrón Store con guard de referencias prestado mut.
+
+#### Paridad verificada
+- gen_ref.nv (genéricos + refs + concat): VM == nativo ✓
+
+### Estado honesto de pendientes
+- **Self-hosting sync (#6)**: lexer.nv/parser.nv aún NO conocen `prestado mut
+  este` ni MakeRef; el fixpoint compiler_v4 requiere espejar parse_param y el
+  codegen de receiver-referencia antes de la próxima regeneración.
+- **LLVM/Cranelift _lw_* (#7)**: sesión dedicada; arquitectura en 3.3.7.

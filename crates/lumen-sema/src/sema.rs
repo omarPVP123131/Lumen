@@ -2042,6 +2042,39 @@ impl SemanticAnalyzer {
                                         }
                                     }
                                     Some(map)
+                                } else if !fn_type_params.is_empty() {
+                                    // Fuzzing 3.3.9: inferencia de TypeVars desde los
+                                    // argumentos reales (`primero([7,8])` liga T=Entero)
+                                    let mut map = HashMap::new();
+                                    fn unify(pat: &TypeInfo, act: &TypeInfo, ftps: &[String], map: &mut HashMap<String, TypeInfo>) {
+                                        match pat {
+                                            TypeInfo::TypeVar(tv) => {
+                                                map.entry(tv.clone()).or_insert_with(|| act.clone());
+                                            }
+                                            // El T de lista<T> puede haberse resuelto a
+                                            // Struct("T") al registrar la firma genérica
+                                            TypeInfo::Struct { name, fields }
+                                                if fields.is_empty() && ftps.contains(name) =>
+                                            {
+                                                map.entry(name.clone()).or_insert_with(|| act.clone());
+                                            }
+                                            TypeInfo::Lista(pi) => {
+                                                if let TypeInfo::Lista(ai) = act {
+                                                    unify(pi, ai, ftps, map);
+                                                }
+                                            }
+                                            TypeInfo::Opcion(pi) => {
+                                                if let TypeInfo::Opcion(ai) = act {
+                                                    unify(pi, ai, ftps, map);
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    for (pt, got) in param_types.iter().zip(arg_types.iter()) {
+                                        unify(pt, got, &fn_type_params, &mut map);
+                                    }
+                                    if map.is_empty() { None } else { Some(map) }
                                 } else {
                                     None
                                 };

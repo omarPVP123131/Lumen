@@ -668,3 +668,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 - **Suite actual**: 633 e2e + 80 parser + 56 sema + 11 production + 6 AOT, 0 fallos. Docs sincronizadas: LENGUAJE.md §3 (semántica real prestado/prestado mut/W060/scoping), CHANGELOG 3.3.1→3.3.6.
 
 **v3.3.7 (25 Ago): motor regex propio en C (puerto min_regex.rs — fin de POSIX/stubs), harness scripts/fuzz_paridad.ps1 con normalización, corutinas PAR VM↔nativo, __str_upper/lower en backend C. Gap detectado: builtin PID inexistente en todas las capas. Pendiente sesión dedicada: LLVM/Cranelift vía shims _lw_*.**
+
+**v3.3.9 (25 Ago): F6 inferencia genérica desde args (Struct("T")-param unifica); F7 macro SET muerto en ArrayPushVar del C. Paridad gen_ref. Pendientes explícitos: self-hosting sync (prestado mut este en parser.nv) y LLVM/Cranelift _lw_*.**
