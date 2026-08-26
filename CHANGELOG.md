@@ -866,3 +866,18 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   compila con `compiler_v4.nvc` sin crash (131B → 39 tokens → Programa → 26 instrs),
   aunque la semántica write-back aún es degradada (41 vs 42) pendiente de
   `codegen.nv` MakeRef → próximo paso antes del fixpoint SHA
+
+## [3.5.1] - 2026-08-26
+
+### Self-hosting: bare-decl scoping + prestado mut compila (degradado)
+
+- Builder: `numero r;` sin inicializador ahora reserva slot (StoreLocal 0) —
+  cierra la fuga de scope que rompía el self-hosting con el nuevo scoping
+  por bloques (fixpoint bloqueado por `Variable r no definida` en _parse_prog)
+- Parser LUMEN: `prestado|borrowed [mut] T nombre` y `prestado mut este` en
+  params tolerante; `impl C {`/`impl Trait para T {` enrutado a _parse_decl
+  con mangling inherente corregido (`C_dup` no `{_C_dup`)
+- Evidencia: `fuzz/selfhost_probe.nv` (`inc(prestado mut entero x)`) ahora
+  compila con `compiler_v4.nvc` (131B → Programa → 26 instrs → OK), aunque
+  la semántica write-back sigue degradada (41 vs 42) pendiente de MakeRef en
+  codegen.nv
