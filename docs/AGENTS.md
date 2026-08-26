@@ -682,3 +682,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **v3.4.6 (25 Ago): _sv caller-wide eliminado → save solo del callee (recursión correcta, fib OK). Siguiente perf: params a locals C en prólogo. Pendientes: self-hosting sync, LLVM/Cranelift _lw_*.**
 **v3.4.7: espejo prestado[mut] en parser.nv (_parse_decl). REGRESIÓN pre-existente detectada: self-hosted crashea con bloques impl (repro fuzz/selfhost_base.nv sin prestado). Desbloqueo: fix impl → generar_v4.ps1 → fixpoint SHA.**
 **v3.4.8: _parse_prog ruta impl/rasgo a _parse_decl. Crash persiste via parsear_con_base (segundo driver con r posiblemente sin declarar) - siguiente sesion ese loop.**
+
+**v3.4.9: (?!...) negativos ambos motores (regex_nneg PAR), perf callee-save estable. Bloqueo self-hosting: segundo driver parsear_con_base con r sin declarar.**

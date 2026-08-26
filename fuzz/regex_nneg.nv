@@ -1,0 +1,6 @@
+funcion vacio main() {
+    imprimir(__regex_coincide("foo(?!bar)", "foobar"));
+    imprimir(__regex_coincide("foo(?!bar)", "foobaz"));
+    imprimir(__regex_reemplazar("\d+(?!px)", "12px 12 15px", "N"));
+}
+

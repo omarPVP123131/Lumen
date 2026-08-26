@@ -841,3 +841,12 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   SEGUNDO bucle driver en esa funcion con posible r sin declarar; siguiente
   sesion: buscar su loop y declarar/declaracion temprana
 - Espejo prestado[mut] ya en parser.nv (3.4.7); regenerado compiler_v4.nv
+
+## [3.4.9] - 2026-08-26
+
+### Regex: lookaheads negativos (?!...) + perf callee-save
+- Motor: `NegLook` (Rust) / `R_NLOOK` (C) cero-ancho invertido — paridad
+  verificada `(?!bar)`, con interacción cuantificador+lookahead documentada
+- Perf backend C: cambio 3.4.6 callee-save verificado estable (fuzz gen_ref)
+- Self-hosting: `numero r = 0;` en _parse_prog + ruta impl documentados;
+  fixpoint aún bloqueado por segundo driver (parsear_con_base)

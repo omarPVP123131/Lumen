@@ -1801,7 +1801,7 @@ funcion numero _parse_prog(numero st) {
         }
         numero tt = _st_tt(st);
         texto tvs = a_texto(_st_tv(st));
-        numero r;
+        numero r = 0;
         si ((tt == 6 || tt == 1) && (tvs == "funcion" || tvs == "function" ||
                          tvs == "estructura" || tvs == "importar" ||
                          tvs == "import" || tvs == "enum" ||
