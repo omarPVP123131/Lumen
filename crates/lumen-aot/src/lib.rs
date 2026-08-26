@@ -1086,7 +1086,7 @@ pub fn compile_to_c(program: &Program) -> String {
     let mut var_plans: HashMap<String, HashMap<usize, String>> = HashMap::new();
     for (fname, func) in &program.funcs {
         let pr = renames.get(fname).cloned().unwrap_or_default();
-        var_plans.insert(fname.clone(), plan_var_keys(func, &pr));
+        var_plans.insert(fname.clone(), plan_var_keys(fname, func, &pr));
     }
 
     for (name, func) in &program.funcs {
@@ -1245,6 +1245,7 @@ fn esc(s: &str) -> String {
 /// mismo nombre no se pisan y las iteraciones de un bucle reusan su slot.
 /// Fuente única de verdad para la colección de nombres, name_sets y el emisor.
 fn plan_var_keys(
+    fname: &str,
     func: &LumenFunc,
     param_renames: &HashMap<String, String>,
 ) -> HashMap<usize, String> {
@@ -1279,7 +1280,7 @@ fn plan_var_keys(
                     Some(k) => k.clone(),
                     None => {
                         counter += 1;
-                        let k = format!("{}#{}", n, counter);
+                        let k = format!("{}::{}#{}", fname, n, counter);
                         top.insert(n.clone(), k.clone());
                         k
                     }
@@ -1331,6 +1332,7 @@ fn op_code(op: &Op) -> i64 {
 /// globals del llamador (_sv) alrededor de cada llamada; los slots que son
 /// objetivo de un prestado mut deben EXCLUIRSE del restore o la mutación se
 /// desharía. Devuelve índice de instrucción Call -> nombres referenciados.
+#[allow(dead_code)] // v3.4.6: obsoleto desde save/restore callee-scoped; se elimina en limpieza
 fn collect_ref_args(
     func: &LumenFunc,
     plan: &HashMap<usize, String>,
@@ -1456,7 +1458,6 @@ fn emit_func(
         mangle(name)
     ));
 
-    let ref_args = collect_ref_args(func, plan);
     // Resolvedor de slot por instrucción (params renombrados + sombreado)
     let var_at = |i: usize, n: &str| -> String {
         plan.get(&i).cloned().unwrap_or_else(|| n.to_string())
@@ -1737,33 +1738,25 @@ fn emit_func(
                     s.push_str("  { Val _rt = POP(); Val _ar = POP(); Val _tp = POP(); Val _nm = POP(); Val _hc = POP(); (void)_tp; PUSH(_ffi_call(_hc, _nm.s, _ar, _rt.s)); }\n");
                 } else if let Some(callee) = program.funcs.get(n) {
                     let plen = callee.params.len().min(*argc);
-                    // Excluir del save/restore _sv los slots que esta llamada
-                    // recibe por referencia: la mutación del callee debe persistir.
-                    let excluded: Vec<String> = ref_args
-                        .get(&i)
-                        .cloned()
-                        .unwrap_or_default()
-                        .iter()
-                        .map(|rn| rn.clone())
-                        .collect();
-                    let caller_names: Vec<String> =
-                        name_sets.get(name).cloned().unwrap_or_default();
-                    let caller_names: Vec<String> = caller_names
-                        .into_iter()
-                        .filter(|cn| !excluded.contains(cn))
-                        .collect();
+                    // v3.4.6: save/restore SOLO de los slots del CALLEE (params y
+                    // locales renombrados `{callee}::...`). El llamador ya no se
+                    // guarda nunca (sus slots son únicos por función); el callee
+                    // sí se preserva para que la RECURSIÓN vea sus params
+                    // originales tras las llamadas anidadas.
+                    let callee_slots: Vec<String> =
+                        name_sets.get(n).cloned().unwrap_or_default();
                     let mut pre = String::new();
                     let mut post = String::new();
-                    if !caller_names.is_empty() {
-                        pre.push_str("  { Val _sv[");
-                        pre.push_str(&caller_names.len().to_string());
+                    if !callee_slots.is_empty() {
+                        pre.push_str("  { Val _cs[");
+                        pre.push_str(&callee_slots.len().to_string());
                         pre.push_str("];\n");
-                        for (i, cn) in caller_names.iter().enumerate() {
-                            pre.push_str(&format!("    _sv[{}] = {};\n", i, gv_of(cn)));
+                        for (k, ck) in callee_slots.iter().enumerate() {
+                            pre.push_str(&format!("    _cs[{}] = {};\n", k, gv_of(ck)));
                         }
                         post.push_str("    ");
-                        for (i, cn) in caller_names.iter().enumerate() {
-                            post.push_str(&format!("{} = _sv[{}]; ", gv_of(cn), i));
+                        for (k, ck) in callee_slots.iter().enumerate() {
+                            post.push_str(&format!("{} = _cs[{}]; ", gv_of(ck), k));
                         }
                         post.push_str("}\n");
                     }

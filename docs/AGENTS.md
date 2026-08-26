@@ -679,3 +679,4 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **v3.4.3: errores regex unificados VM-C (_regex_m_val). Pendientes: (?:...)/lookaheads, perf _sv, self-hosting sync, LLVM/Cranelift _lw_*.**
 **v3.4.4: (?:...) no-capturante en ambos motores, PAR total (regex_ncg.nv). Pendientes: lookaheads, perf _sv, self-hosting, LLVM/Cranelift.**
 **v3.4.5: lookaheads (?=) ambos motores + builtins __regex_* migrados a min_regex (adiós divergencia crate externa). Suite regex e2e verde. Pendientes: perf _sv, self-hosting sync, LLVM/Cranelift _lw_*.**
+**v3.4.6 (25 Ago): _sv caller-wide eliminado → save solo del callee (recursión correcta, fib OK). Siguiente perf: params a locals C en prólogo. Pendientes: self-hosting sync, LLVM/Cranelift _lw_*.**

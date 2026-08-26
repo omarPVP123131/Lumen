@@ -796,3 +796,21 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   `{m,n}` y `$n` funcionan IDÉNTICOS en VM y nativo, sin divergencias de
   sintaxis entre plataformas. La suite e2e de regex completa en verde sobre
   el motor propio.
+
+## [3.4.6] - 2026-08-25
+
+### Perf backend C: save/restore por llamada reducido al CALLEE
+- Antes cada llamada a función guardaba/restauraba TODOS los slots del
+  llamador (_sv). Ahora el llamador jamás se guarda (sus slots son únicos
+  gracias al renombrado `{fn}::{var}#N` de 3.3.x); solo se preservan los
+  slots del CALLEE, necesarios para que la RECURSIÓN vea sus params
+  originales tras las llamadas anidadas (fib verificado)
+- Eliminado el mecanismo de exclusión ref_args asociado; colect_ref_args
+  marcado obsoleto
+- Paridad re-verificada: gen_ref.nv, test gcc integral, workspace 0 fallos
+- Próximo paso perf: copiar params a locales C en el prólogo y eliminar
+  también el save del callee
+
+### Self-hosting sync (#1): sin cambios de código esta entrega
+- El protocolo completo sigue documentado en CHANGELOG 3.4.1; el espejo de
+  `prestado mut este` en parser.nv es el prerrequisito antes de regenerar
