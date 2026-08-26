@@ -168,6 +168,61 @@ fn prod_headless_bench(c: &mut Criterion) {
     });
 }
 
+
+fn prod_ref_mut_bench(c: &mut Criterion) {
+    // v3.3+: MakeRef/write-back en bucle cerrado
+    let source = r#"
+        funcion vacio sumar(prestado mut entero total, entero v) { total = total + v; }
+        estructura Cont { n: entero }
+        impl Cont {
+            funcion vacio inc(prestado mut este) { este.n = este.n + 1; }
+        }
+        funcion vacio main() {
+            entero t = 0;
+            sea c = Cont { n: 0 };
+            para i en [1, 2, 3, 4, 5] {
+                sumar(t, i);
+                c.inc();
+            }
+            imprimir(t);
+            imprimir(c.n);
+        }
+    "#;
+    c.bench_function("prod_ref_mut_writeback", |b| {
+        b.iter(|| {
+            let (tokens, _) = lumen_lexer::Lexer::new(black_box(source)).tokenize();
+            let (mut ast, _) = lumen_parser::Parser::new(tokens).parse();
+            lumen_sema::SemanticAnalyzer::new().analyze(&mut ast);
+            let ir = lumen_ir::IRBuilder::new().build(&ast);
+            let (bc, _) = lumen_codegen::Codegen::new().generate(&ir);
+            let mut vm = lumen_vm::VM::new(bc);
+            let _ = vm.run();
+            black_box(vm.output().to_vec());
+        })
+    });
+}
+
+fn prod_comptime_bench(c: &mut Criterion) {
+    // v3.3+: plegado comptime con llamadas a funciones puras
+    let source = r#"
+        funcion entero fib(n: entero) {
+            si (n < 2) { retornar n; }
+            retornar fib(n - 1) + fib(n - 2);
+        }
+        funcion vacio main() {
+            sea f = comptime { fib(15) };
+            imprimir(f);
+        }
+    "#;
+    c.bench_function("prod_comptime_fold", |b| {
+        b.iter(|| {
+            let (tokens, _) = lumen_lexer::Lexer::new(black_box(source)).tokenize();
+            let (mut ast, _) = lumen_parser::Parser::new(tokens).parse();
+            lumen_ir::comptime::ComptimeEvaluator::new(&ast).rewrite_program(&mut ast);
+            black_box(ast);
+        })
+    });
+}
 criterion_group!(
     benches,
     lexer_bench,
@@ -177,6 +232,8 @@ criterion_group!(
     prod_fallthrough_bench,
     prod_defaults_bench,
     prod_matematicas_bench,
-    prod_headless_bench
+    prod_headless_bench,
+    prod_ref_mut_bench,
+    prod_comptime_bench
 );
 criterion_main!(benches);

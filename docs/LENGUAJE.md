@@ -97,12 +97,25 @@ funcion vacio main() {
 
 ## 4. Metaprogramación en Tiempo de Compilación (`comptime`)
 
-Evalúa expresiones y genera constantes durante la fase de compilación con cero sobrecarga en runtime:
+Evalúa expresiones **y llama a funciones puras del propio programa** durante la
+compilación; el resultado literal reemplaza la expresión (cero sobrecarga en runtime):
 
 ```lumen
-entero tamano_tabla = en_tiempo_compilacion { (1024 * 1024) / 16 + 42 };
-imprimir("Constante precomputada: ", tamano_tabla); // 65578
+funcion entero fib(n: entero) {
+    si (n < 2) { retornar n; }
+    retornar fib(n - 1) + fib(n - 2);
+}
+entero tamano_tabla = comptime { (1024 * 1024) / 16 + 42 };  // 65578
+entero f10 = comptime { fib(20) };                            // 6765, evaluado en compile-time
+texto saludo = comptime { "hola" + " " + "mundo" };           // "hola mundo"
 ```
+
+- Soportado: literales, aritmética/comparaciones, builtins puros (`abs`, `min`,
+  `max`, `piso`/`floor`, `techo`/`ceil`, `redondear`, `raiz`, `potencia`) y
+  llamadas recursivas a funciones propias.
+- Límites: profundidad 128, 1M pasos. Lo no evaluable (variables externas,
+  efectos, límites excedidos) se ejecuta normal en runtime — degradación segura.
+- Alias: `comptime {}` / `en_tiempo_compilacion {}`.
 
 ---
 

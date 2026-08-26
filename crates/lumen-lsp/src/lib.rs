@@ -621,7 +621,7 @@ fn get_hover_info(doc: &str, line_idx: usize, col_idx: usize) -> String {
         "posponer" | "defer" => "```lumen\nposponer { ... }\n```\n**Gestor de Recursos RAII** — Garantiza la ejecución de limpieza al salir del ámbito actual.".to_string(),
         "imprimir" | "print" => "```lumen\nimprimir(valor1, valor2, ...)\n```\nFunción integrada para imprimir valores formateados a la salida estándar.".to_string(),
         "elegir" | "match" => "```lumen\nelegir (expresion) {\n    caso Patron: ...\n    defecto: ...\n}\n```\nPattern matching exhaustivo con soporte para rangos, enums y or-patterns.".to_string(),
-        "prestado" | "borrowed" => "```lumen\nprestado T / borrowed T\n```\n**Borrow Checker Zero-GC** — Referencia inmutable de cero-copia verificada estáticamente en compilación.".to_string(),
+        "prestado" | "borrowed" => "```lumen\nprestado T / borrowed T\nprestado mut T (write-back real, v3.3+)\nprestado mut este  (receiver mutable de método)\n```\n**Borrow Checker Zero-GC** — Referencia inmutable; con `mut` pasa por referencia real con write-back (aviso W060 si el argumento no es lvalue).".to_string(),
         "dueno" | "owner" => "```lumen\ndueno T / owner T\n```\n**Propiedad Lineal** — Valor con transferencia de titularidad única y control estricto de vida.".to_string(),
         "en_tiempo_compilacion" | "comptime" => "```lumen\nen_tiempo_compilacion { expr }\n```\n**Metaprogramación Comptime** — Evalúa cálculos y tipos durante la compilación sin costo en runtime.".to_string(),
         other => format!("### Símbolo LÚMEN `{}`\nElemento de código analizado por el servidor LSP.", other),

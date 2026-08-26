@@ -131,3 +131,18 @@ Each function call creates a frame with:
 - **Version**: 6 (uint8)
 - **Sections**: strings pool, ints pool, floats pool, names pool, function metadata, instruction chunks
 - See `docs/spec/bytecode-format.md` for full byte-level specification
+
+## Opcode 63 — MakeRef (v3.3+)
+
+`MakeRef` (WithIdx, idx → tabla `names`) crea una referencia mutable al slot de la
+variable nombrada para implementar `prestado mut` con write-back real.
+
+- Emisión: el builder la genera cuando un argumento **variable simple** (`Ident`)
+  llega a un parámetro declarado `prestado mut T`, y en el receptor de métodos
+  `prestado mut este`. Argumentos no-lvalue caen a paso por valor (+ aviso W060).
+- Runtime: apila `Value::Ref { cell: Arc<Mutex<Value>>, owner }`; la celda se
+  comparte entre alias (reenvío f(g(x))), `Load`/`Store` son transparentes y `Ret`
+  hace write-back del valor final al slot del llamador (`CallFrame.locals_base`).
+- AOT C: baja a un puntero real (`T_PTR` → `_v_ptr(&gv[slot])`) con escritura
+  inmediata; los params se renombran por función (`{fn}::{param}`) y las
+  declaraciones locales por sitio (`plan_var_keys`) para sombreado correcto.

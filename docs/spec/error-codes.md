@@ -39,3 +39,11 @@
 | E041 | Tipo de argumento incorrecto |
 | E042 | Función no definida |
 | E080 | Match no exhaustivo, falta una variante |
+
+## Warnings (W0xx)
+
+### W060 — prestado mut con argumento no-lvalue
+Un parámetro `prestado mut T` recibe como argumento algo que no es una variable
+simple (`o.campo`, `arr[i]`, literal, expresión). El argumento se pasa **por valor**
+y las mutaciones de la función no serán visibles fuera. Fix: asigna a una variable
+local y pásala.

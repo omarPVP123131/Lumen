@@ -5225,3 +5225,62 @@ fn test_comptime_nonfoldable_falls_back_to_runtime() {
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["101"]);
 }
+
+// === v3.3.6: structs locales (antes "El struct 'P' no está definido") ===
+
+#[test]
+fn test_local_struct_declaration() {
+    let src = r#"
+        funcion vacio main() {
+            estructura P { x: entero }
+            sea p = P { x: 7 };
+            imprimir(p.x);
+            sea ps = [P { x: 8 }];
+            ps[0].x = 9;
+            imprimir(ps[0].x);
+        }
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["7", "9"]);
+}
+
+#[test]
+fn test_method_prestado_mut_receiver() {
+    // prestado mut este (v3.3.5): el receptor pasa por referencia real
+    let src = r#"
+        estructura Cuenta { saldo: entero }
+        impl Cuenta {
+            funcion vacio duplicar(prestado mut este) {
+                este.saldo = este.saldo * 2;
+            }
+            funcion vacio depositar(prestado mut este, entero monto) {
+                este.saldo = este.saldo + monto;
+            }
+        }
+        funcion vacio main() {
+            sea c = Cuenta { saldo: 50 };
+            c.duplicar();
+            c.depositar(25);
+            imprimir(c.saldo);
+        }
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["125"]);
+}
+
+#[test]
+fn test_ref_mut_in_loop_accumulates() {
+    // refs dentro de bucles: cada iteración muta el original
+    let src = r#"
+        funcion vacio sumar(prestado mut entero total, entero v) {
+            total = total + v;
+        }
+        entero t = 0;
+        para i en [1, 2, 3, 4] {
+            sumar(t, i);
+        }
+        imprimir(t);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["10"]);
+}

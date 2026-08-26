@@ -2103,6 +2103,11 @@ mod tests {
                 sea a = 20;
                 sea b = 22;
                 imprimir(a + b);
+                // Fuzzing 3.3.6: indexado y largo de textos en el nativo
+                sea s = "abc";
+                imprimir(s[1]);
+                imprimir(s.largo());
+                imprimir("x:", s[2]);
             }
         "#;
         let tokens = lumen_lexer::Lexer::new(source).tokenize();
@@ -2155,7 +2160,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             test_out,
-            vec!["42", "atrapado", "55", "R", "42"],
+            vec!["42", "atrapado", "55", "R", "42", "b", "3", "x:c"],
             "salida completa: {:?}",
             test_out
         );

@@ -621,3 +621,13 @@ Todo los archivos "changes manual" se documentan aquí.
 Release inicial de LÚMEN. Lenguaje de programación educativo en español con pipeline completo
 Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 
+
+### Notas de plataforma y cobertura añadida (post-3.3.6)
+- Regex nativas en el **backend C** usan POSIX regex: en Linux/macOS plenas; en
+  Windows los stubs divergen del VM (que tiene motor propio por backtracking).
+  Pendiente v3.3.7: portar el motor own-engine a lumen_rt.h.
+- Tests formales nuevos: structs locales, métodos `prestado mut este`, refs en
+  bucles, indexado/largo de textos en el nativo (test gcc integral extendido).
+- Benchmarks criterion: `prod_ref_mut_writeback`, `prod_comptime_fold`.
+- Docs spec: vm-spec opcode 63 MakeRef; error-codes W060; LENGUAJE §4 comptime
+  con llamadas puras. LSP: hover/completado actualizado para prestado mut.
