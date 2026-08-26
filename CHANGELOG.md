@@ -832,3 +832,12 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   1. Depurar el crash impl en parser.nv (probable skip-tolerante roto)
   2. Regenerar: pwsh generar_v4.ps1 → lumen build compiler_v4.nv
   3. Fixpoint: correr .nvc sobre compiler_v4.nv ×2 y comparar SHA-256
+##
+### [3.4.8] Self-hosting: routeo impl/rasgo a _parse_decl + tercer bug mapeado
+
+- _parse_prog ahora enruta impl/rasgo/trait hacia _parse_decl (antes caian
+  a statements: causa del crash con bloques impl)
+- PERSISTE Variable r no definida desde parser_parsear_con_base -> existe un
+  SEGUNDO bucle driver en esa funcion con posible r sin declarar; siguiente
+  sesion: buscar su loop y declarar/declaracion temprana
+- Espejo prestado[mut] ya en parser.nv (3.4.7); regenerado compiler_v4.nv
