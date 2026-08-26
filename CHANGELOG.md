@@ -850,3 +850,19 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 - Perf backend C: cambio 3.4.6 callee-save verificado estable (fuzz gen_ref)
 - Self-hosting: `numero r = 0;` en _parse_prog + ruta impl documentados;
   fixpoint aún bloqueado por segundo driver (parsear_con_base)
+
+## [3.5.0] - 2026-08-26
+
+### Self-hosting: prestado mut compila (semántica degradada) + fixpoint desbloqueado
+
+- Parser LUMEN (`parser.nv`): `_parse_decl` ahora reconoce `prestado|borrowed
+  [mut] T nombre` y `prestado mut este/self/yo` sin crashear; forma general
+  salta el prefijo y lee tipo+nombre normales, receiver crea param tipo Self
+- Builder Rust: declaraciones `numero r;` sin inicializador ahora reservan slot
+  (emiten StoreLocal 0) — cierra el scope-fuga que rompía el self-hosting con
+  el nuevo scoping por bloques
+- `impl` routing en `_parse_prog` del parser LUMEN corregido (inherente vs trait)
+- **Evidencia**: `fuzz/selfhost_probe.nv` (`inc(prestado mut entero x)`) ahora
+  compila con `compiler_v4.nvc` sin crash (131B → 39 tokens → Programa → 26 instrs),
+  aunque la semántica write-back aún es degradada (41 vs 42) pendiente de
+  `codegen.nv` MakeRef → próximo paso antes del fixpoint SHA

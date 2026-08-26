@@ -684,3 +684,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **v3.4.8: _parse_prog ruta impl/rasgo a _parse_decl. Crash persiste via parsear_con_base (segundo driver con r posiblemente sin declarar) - siguiente sesion ese loop.**
 
 **v3.4.9: (?!...) negativos ambos motores (regex_nneg PAR), perf callee-save estable. Bloqueo self-hosting: segundo driver parsear_con_base con r sin declarar.**
+
+**v3.5.0: self-hosting compila prestado mut (fuzz/selfhost_probe.nv OK, degradado 41 vs 42). Fix `numero r;` bare-decl en builder + `impl` routing. Siguiente: codegen.nv MakeRef para write-back real y fixpoint.**

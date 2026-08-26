@@ -229,6 +229,13 @@ impl IRBuilder {
                 if let Some(init_expr) = init {
                     self.gen_expr(init_expr);
                     self.emit(Instr::StoreLocal(name.clone()));
+                } else {
+                    // v3.4.8: declaraciones sin inicializador (`numero r;`) deben
+                    // reservar slot en el scope donde aparecen (antes no emitían
+                    // nada y `r = ...` dentro de un bloque con ScopePush fugaba
+                    // al scope interior, rompiendo el self-hosting)
+                    self.emit(Instr::ConstInt(0));
+                    self.emit(Instr::StoreLocal(name.clone()));
                 }
             }
             Decl::Destructure { targets, init, .. } => {

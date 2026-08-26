@@ -1246,9 +1246,19 @@ funcion numero _parse_stmt(numero st) {
         st = _st_adv(st);
         texto trait_nm = a_texto(_st_tv(st));
         st = _st_adv(st);
-        si (_st_kw(st, "para") || _st_kw(st, "for")) { st = _st_adv(st); }
-        texto type_nm = a_texto(_st_tv(st));
-        si (_st_tp(st)) { st = _st_tp_skip(st); } sino { st = _st_adv(st); }
+        texto type_nm = "";
+        si (_st_kw(st, "para") || _st_kw(st, "for")) {
+            st = _st_adv(st);
+            type_nm = a_texto(_st_tv(st));
+            si (_st_tp(st)) { st = _st_tp_skip(st); } sino { st = _st_adv(st); }
+        } sino {
+            si (_st_ch(st, 5, "{")) {
+                type_nm = trait_nm; trait_nm = "";
+            } sino {
+                type_nm = a_texto(_st_tv(st));
+                si (_st_tp(st)) { st = _st_tp_skip(st); } sino { st = _st_adv(st); }
+            }
+        }
         si (_st_ch(st, 5, "{")) { st = _st_adv(st); }
         mientras (!_st_eof(st)) {
             si (_st_ch(st, 5, "}")) { romper; }
@@ -1289,7 +1299,8 @@ funcion numero _parse_stmt(numero st) {
                 numero rmb = _parse_blk(st);
                 numero mbod = __map_obtener(rmb, "node");
                 st = __map_obtener(rmb, "st");
-                texto mangled = type_nm + "_" + trait_nm + "_" + mnm;
+                texto mangled = "";
+                si (trait_nm == "") { mangled = type_nm + "_" + mnm; } sino { mangled = type_nm + "_" + trait_nm + "_" + mnm; }
                 numero mf = __map_nuevo();
                 mf = __map_poner(mf, "tipo", "Func");
                 mf = __map_poner(mf, "nombre", mangled);
@@ -1953,7 +1964,7 @@ funcion numero _parse_decl(numero st) {
                         si (_st_ch(nxr, 5, ",") || _st_ch(nxr, 5, ")") || _st_eof(nxr)) {
                             numero pmr = __map_nuevo();
                             pmr = __map_poner(pmr, "nombre", p1);
-                            pmr = __map_poner(pmr, "tipo", "Self");
+                            pmr = __map_poner(pmr, "tipo", type_nm);
                             pmr = __map_poner(pmr, "defecto", 0);
                             prms = __map_poner(prms, a_texto(pc), pmr);
                             pc = pc + 1;
