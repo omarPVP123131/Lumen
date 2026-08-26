@@ -299,6 +299,12 @@ impl Codegen {
                     variant_name.clone(),
                 ));
             }
+            Instr::MakeRef(name) => {
+                let idx = self.intern_name(name);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::MakeRef, idx));
+            }
             Instr::Label(_) => {}
             Instr::Phi(_, _) => {}
             Instr::Read => {}

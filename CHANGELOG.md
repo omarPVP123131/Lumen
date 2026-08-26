@@ -1,10 +1,33 @@
 ## [3.3.1] - 2026-08-25
 
-### Correcciones
+### Lenguaje — Bugs QA completados
 
-#### elegir/caso con guardas (regresión de 3.3.0)
-- MatchVariant ahora solo se emite para Idents sin guarda: `caso n si n < 0:` volvía a tratar `n` como variable de comparación, no como variante de enum
-- La destructuración de enums en `elegir` sigue funcionando para patrones sin condición
+#### Bug #6 COMPLETO — referencias reales `prestado mut` con write-back
+- Nuevo `Value::Ref` con celda compartida (`Arc<Mutex<Value>>`): los alias nunca divergen
+- Nueva instrucción IR `MakeRef` (opcode 63): el builder la emite cuando un argumento
+  variable simple llega a un parámetro `prestado mut`; expresiones no-lvalue caen a valor
+- `Load`/`Store` transparentes a través de la referencia; write-back al slot del llamador en `Ret`
+- Reenvío de referencias f(g(x)) comparte la misma celda; frontera de hilos/tasks degrada a valor
+- Sema: auto-deref en binarios y asignación (`n = n + 1` sobre `prestado mut entero`)
+- Backend AOT C: punteros reales (`T_PTR`), escritura inmediata, exclusión de ref-targets del save/restore
+- Renombrado de params por función (`{fn}::{param}`) en el backend C: elimina colisiones
+  entre params del callee y variables del llamador (bug latente pre-existente)
+
+#### Bug #7 COMPLETO — comptime con llamadas a funciones
+- Nuevo intérprete const-eval (`lumen-ir/src/comptime.rs`): aritmética, comparaciones,
+  strings, builtins puros (abs/min/max/piso/techo/redondear/raiz/potencia) y llamadas
+  recursivas a funciones propias del programa (límites: profundidad 128, 1M pasos)
+- Pre-paso en CLI y pipeline de tests: `comptime { fib(20) }` se pliega a literal `6765`
+- Degradación segura: lo no evaluable se ejecuta normal en runtime
+
+### Backends AOT — todos funcionan sin fallos
+- Backend C: intentar/atrapar real vía bandera de error + chequeos estáticos (sin
+  setjmp/longjmp, inmune a -O3); MatchVariant para elegir destructurante;
+  guard POP contra underflow (funciones void ya no leen ST[-1])
+- Test gcc integral: refs + try/catch + elegir + structs + comptime verificados end-to-end
+- LLVM/Cranelift: rechazo ruidoso (`llvm_supported`/`cranelift_supported`) — los backends
+  limitados ahora FALLAN con mensaje claro en compile-time en lugar de emitir
+  silenciosamente artefactos rotos; sugerencia apunta al backend C completo
 
 ## [3.3.0] - 2026-08-24
 

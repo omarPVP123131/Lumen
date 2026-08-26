@@ -431,6 +431,10 @@ pub const MAX_CALL_STACK_DEPTH: usize = 10_000;
 pub struct CallFrame {
     pub func_name: String,
     pub return_ip: usize,
+    /// Nivel de `locals` al entrar a la función (antes del scope de params).
+    /// Se usa en Ret para desapilar todos los scopes del frame y hacer
+    /// write-back de referencias prestado mut (bug #6).
+    pub locals_base: usize,
 }
 
 #[derive(Debug)]
@@ -793,6 +797,8 @@ impl VM {
         // ██ Utility builtins (core — disponibles también en wasm sin feature "full") ██
         if name == "__tipo_de" || name == "__typeof" {
             let val = args.first().cloned().unwrap_or(Value::Void);
+            // Transparencia de referencias: el tipo reportado es el del contenido
+            let val = val.deep_deref();
             let type_name = match &val {
                 Value::Int(_) => "entero",
                 Value::Float(_) => "decimal",
@@ -808,6 +814,7 @@ impl VM {
                 Value::Exito(_) => "exito",
                 Value::Error(_) => "error",
                 Value::Opcion(_) => "opcion",
+                Value::Ref { .. } => unreachable!("deep_deref elimina Ref"),
             };
             self.push(Value::str(type_name.to_string()));
             return Some(Ok(()));
@@ -3556,6 +3563,12 @@ impl VM {
                 } else {
                     Value::Void
                 };
+                // Frontera de hilo/task: una referencia apunta a scopes del VM
+                // originario; aquí se degrada a valor (semántica documentada).
+                let arg = match arg {
+                    Value::Ref { .. } => arg.deep_deref(),
+                    other => other,
+                };
                 scope.insert(param_name.clone(), arg);
             }
             if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
@@ -3568,6 +3581,7 @@ impl VM {
             self.call_stack.push(CallFrame {
                 func_name: name.to_string(),
                 return_ip: self.bytecode.instructions.len(), // Past end → run() loop breaks
+                locals_base: self.locals.len() - 1,
             });
             self.ip = func_start;
             self.run()?;
@@ -3984,7 +3998,29 @@ impl VM {
                     }
                 }
                 if let Some(frame) = self.call_stack.pop() {
-                    self.locals.pop();
+                    // Write-back de referencias prestado mut (bug #6): cada Ref
+                    // creada en este frame apunta a un slot del llamador; copiar
+                    // el valor final de vuelta antes de descartar los scopes.
+                    let base = frame.locals_base.max(1).min(self.locals.len());
+                    let mut writebacks: Vec<(usize, String, Value)> = Vec::new();
+                    for scope in self.locals.iter().skip(base) {
+                        for v in scope.values() {
+                            if let Value::Ref { cell, owner } = v {
+                                if let Some((target_si, target_name)) = owner {
+                                    let final_val = cell.lock().unwrap().clone();
+                                    writebacks.push((*target_si, target_name.clone(), final_val));
+                                }
+                            }
+                        }
+                    }
+                    self.locals.truncate(base);
+                    for (si, nm, val) in writebacks {
+                        if si < self.locals.len() {
+                            if let Some(slot) = self.locals[si].get_mut(&nm) {
+                                *slot = val;
+                            }
+                        }
+                    }
                     self.ip = frame.return_ip;
                     self.push(ret_val);
                 } else {
@@ -4398,6 +4434,11 @@ impl VM {
                     .map(|s| s.as_str())
                     .unwrap_or("");
                 let val = self.lookup(name)?;
+                // Transparencia de referencias: leer a través del Ref (bug #6)
+                let val = match val {
+                    Value::Ref { .. } => val.deep_deref(),
+                    other => other,
+                };
                 self.push(val);
             }
             Opcode::Store => {
@@ -4414,7 +4455,13 @@ impl VM {
                     let mut found = false;
                     for scope in self.locals.iter_mut().rev() {
                         if let Some(entry) = scope.get_mut(name) {
-                            *entry = val.clone();
+                            // Si el slot contiene una referencia, escribir A
+                            // TRAVÉS de la celda compartida conservando el owner
+                            if entry.is_ref() {
+                                entry.ref_set(val.clone());
+                            } else {
+                                *entry = val.clone();
+                            }
                             found = true;
                             break;
                         }
@@ -4450,6 +4497,22 @@ impl VM {
                             Value::Array(arr) => {
                                 Arc::make_mut(arr).push(value);
                             }
+                            // Slot con referencia prestado mut: mutar el array
+                            // dentro de la celda preservando el owner del Ref
+                            Value::Ref { cell, .. } => {
+                                let mut g = cell.lock().unwrap();
+                                match &mut *g {
+                                    Value::Array(arr) => {
+                                        Arc::make_mut(arr).push(value);
+                                    }
+                                    _ => {
+                                        return Err(VmError::TypeError(format!(
+                                            "agregar requiere lista, pero '{}' no es una lista",
+                                            name
+                                        )))
+                                    }
+                                }
+                            }
                             _ => {
                                 return Err(VmError::TypeError(format!(
                                     "agregar requiere lista, pero '{}' no es una lista",
@@ -4472,6 +4535,36 @@ impl VM {
                     self.locals.len(),
                     self.call_stack.len(),
                 ));
+            }
+            Opcode::MakeRef => {
+                // prestado mut (bug #6): crear referencia al slot de la variable.
+                // Se busca el slot (scope, nombre) y se apila Value::Ref con el
+                // owner para que Ret haga write-back al llamador.
+                let name = self
+                    .bytecode
+                    .names
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut target: Option<(usize, Value)> = None;
+                for (si, scope) in self.locals.iter().enumerate().rev() {
+                    if let Some(v) = scope.get(&name) {
+                        target = Some((si, v.clone()));
+                        break;
+                    }
+                }
+                match target {
+                    Some((si, existing)) => {
+                        let ref_val = match existing {
+                            // Reenvío: g(p) donde p ya es Ref — compartir la
+                            // MISMA celda para que los alias no diverjan
+                            Value::Ref { cell, owner } => Value::Ref { cell, owner },
+                            other => Value::new_ref(other, Some((si, name))),
+                        };
+                        self.push(ref_val);
+                    }
+                    None => return Err(VmError::UndefinedVariable(name)),
+                }
             }
             Opcode::Call => {
                 let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
@@ -4518,6 +4611,7 @@ impl VM {
                     self.call_stack.push(CallFrame {
                         func_name: name,
                         return_ip: self.ip,
+                        locals_base: self.locals.len(),
                     });
                     let mut scope =
                         HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
@@ -5208,6 +5302,7 @@ impl VM {
                     self.call_stack.push(CallFrame {
                         func_name: name,
                         return_ip: self.ip,
+                        locals_base: self.locals.len(),
                     });
                     let mut scope =
                         HashMap::with_capacity_and_hasher(param_count, FixHasher::default());

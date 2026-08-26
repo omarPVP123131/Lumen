@@ -1,4 +1,5 @@
 pub mod builder;
+pub mod comptime;
 pub mod ir;
 
 pub use builder::IRBuilder;

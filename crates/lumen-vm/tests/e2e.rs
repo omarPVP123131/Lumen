@@ -24,6 +24,9 @@ fn run_source(source: &str) -> Result<Vec<String>, String> {
         return Err(format!("SemError: {}", sem_errors[0].message));
     }
 
+    // comptime (bug #7): mismo orden que el CLI — plegar antes del builder
+    lumen_ir::comptime::ComptimeEvaluator::new(&program).rewrite_program(&mut program);
+
     let builder = IRBuilder::new();
     let ir_program = builder.build(&program);
 
@@ -5034,4 +5037,191 @@ fn test_regression_scientific_notation() {
     let src = r#"decimal d = 1.0e5; imprimir(d); decimal e = 2.5E-1; imprimir(e);"#;
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["100000", "0.25"]);
+}
+
+// === BUG #6 COMPLETO: referencias reales prestado mut con write-back ===
+
+#[test]
+fn test_ref_mut_scalar_writeback() {
+    // Caso QA bug #6: mutación de un escalar dentro de la función visible fuera
+    let src = r#"
+        funcion vacio incrementar(prestado mut entero n) {
+            n = n + 1;
+        }
+        entero x = 5;
+        incrementar(x);
+        imprimir(x);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["6"]);
+}
+
+#[test]
+fn test_ref_mut_swap_two_vars() {
+    let src = r#"
+        funcion vacio intercambiar(prestado mut entero a, prestado mut entero b) {
+            sea t = a;
+            a = b;
+            b = t;
+        }
+        entero a = 1;
+        entero b = 2;
+        intercambiar(a, b);
+        imprimir(a);
+        imprimir(b);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["2", "1"]);
+}
+
+#[test]
+fn test_ref_mut_struct_field_writeback() {
+    let src = r#"
+        estructura Punto { x: entero, y: entero }
+        funcion vacio reset(prestado mut Punto p) {
+            p.x = 0;
+            p.y = 0;
+        }
+        sea p = Punto { x: 3, y: 4 };
+        reset(p);
+        imprimir(p.x);
+        imprimir(p.y);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["0", "0"]);
+}
+
+#[test]
+fn test_ref_mut_array_push_and_set() {
+    let src = r#"
+        funcion vacio agregar_dato(prestado mut lista<entero> xs, entero v) {
+            xs.agregar(v);
+        }
+        funcion vacio poner_primero(prestado mut lista<entero> xs, entero v) {
+            xs[0] = v;
+        }
+        sea xs = [1, 2];
+        agregar_dato(xs, 99);
+        imprimir(largo(xs));
+        imprimir(xs[2]);
+        poner_primero(xs, -7);
+        imprimir(xs[0]);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["3", "99", "-7"]);
+}
+
+#[test]
+fn test_ref_mut_forwarding_chain() {
+    // g recibe ref y la reenvía a f: ambas mutaciones persisten
+    let src = r#"
+        funcion vacio f(prestado mut entero n) {
+            n = n + 10;
+        }
+        funcion vacio g(prestado mut entero m) {
+            f(m);
+            m = m + 1;
+        }
+        entero v = 100;
+        g(v);
+        imprimir(v);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["111"]);
+}
+
+#[test]
+fn test_ref_mut_literal_arg_no_crash() {
+    // Argumento no-lvalue a param prestado mut: fallback por valor, sin crash
+    let src = r#"
+        funcion vacio duplicar(prestado mut entero n) {
+            n = n * 2;
+        }
+        duplicar(5);
+        imprimir("ok");
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["ok"]);
+}
+
+#[test]
+fn test_ref_mut_by_value_still_works() {
+    // Sin prestado mut sigue siendo paso por valor (no se muta el original)
+    let src = r#"
+        funcion vacio inutil(entero n) {
+            n = n + 1;
+        }
+        entero x = 5;
+        inutil(x);
+        imprimir(x);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["5"]);
+}
+
+// === BUG #7 COMPLETO: comptime con llamadas a funciones ===
+
+#[test]
+fn test_comptime_arithmetic_folds() {
+    let src = r#"
+        sea tabla = comptime { (1024*1024)/16 + 42 };
+        imprimir(tabla);
+        sea cubo = comptime { 7 * 7 * 7 };
+        imprimir(cubo);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["65578", "343"]);
+}
+
+#[test]
+fn test_comptime_function_call_fib() {
+    // fib(20) se evalúa en COMPILE TIME (intérprete const-eval)
+    let src = r#"
+        funcion entero fib(n: entero) {
+            si (n < 2) { retornar n; }
+            retornar fib(n - 1) + fib(n - 2);
+        }
+        funcion vacio main() {
+            sea f = comptime { fib(20) };
+            imprimir(f);
+        }
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["6765"]);
+}
+
+#[test]
+fn test_comptime_string_concat() {
+    let src = r#"
+        sea msg = comptime { "hola" + " " + "mundo" };
+        imprimir(msg);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["hola mundo"]);
+}
+
+#[test]
+fn test_comptime_pure_builtins() {
+    let src = r#"
+        sea a = comptime { raiz(144) };
+        imprimir(a);
+        sea b = comptime { abs(0 - 42) };
+        imprimir(b);
+        sea c = comptime { potencia(2, 10) };
+        imprimir(c);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["12", "42", "1024"]);
+}
+
+#[test]
+fn test_comptime_nonfoldable_falls_back_to_runtime() {
+    // Variable externa → NO plegable → se ejecuta normal en runtime
+    let src = r#"
+        entero base = 100;
+        base = base + 1;
+        imprimir(base);
+    "#;
+    let output = run_source(src).unwrap();
+    assert_eq!(output, vec!["101"]);
 }

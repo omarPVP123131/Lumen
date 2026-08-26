@@ -972,6 +972,9 @@ dependencies = [
  "cranelift-native",
  "cranelift-object",
  "lumen-ir",
+ "lumen-lexer",
+ "lumen-parser",
+ "lumen-sema",
  "target-lexicon 0.12.16",
 ]
 

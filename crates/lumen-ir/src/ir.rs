@@ -87,6 +87,10 @@ pub enum Instr {
     ScopePush,
     ScopePop,
     MatchVariant(String),
+    /// Crea una referencia mutable al slot de la variable nombrada (bug #6).
+    /// El argumento debe ser un lvalue simple (Ident). El VM apila Value::Ref
+    /// con owner (scope_idx, nombre) para hacer write-back en Ret.
+    MakeRef(String),
 }
 
 #[derive(Debug, Clone)]

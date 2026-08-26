@@ -35,6 +35,7 @@ typedef struct Val {
   struct Val (*fp)(void);
   const char* en;
   const char* vr;
+  struct Val* p;
 } Val;
 
 #define T_INT 0
@@ -52,16 +53,66 @@ typedef struct Val {
 #define T_FRE 12
 #define T_STT 13
 #define T_MAP 14
+#define T_PTR 15
 
 static Val ST[16384];
 static int SP = 0;
 #define PUSH(v) (ST[(SP)++] = (v))
-#define POP() (ST[--(SP)])
+/* Guard contra underflow: las funciones void retornan sin valor apilado;
+   el VM hace pop().unwrap_or(Void), aquí devolvemos Void igualmente. */
+#define POP() ((SP) > 0 ? ST[--(SP)] : _v_void())
 #define TOP() (ST[SP - 1])
 
 static Val gv[16384];
 static const char* gn[16384];
 static int gc = 0;
+
+/* ── intentar/atrapar (sin unwinding: bandera de error + chequeos estáticos) ──
+   Cada operación riesgosa pone _err=1; el código generado chequea después de
+   cada una y salta al manejador abierto más cercano (etiqueta estática).
+   Es determinista, seguro con -O3 y no depende de setjmp/longjmp. */
+static char* _last_err_msg = 0;
+static int _err = 0;
+static int _h_sp[64];
+static int _hn = 0;
+static char* _fmt(Val v);
+static void _rt_throw_val(Val v) {
+  if (_hn > 0 || _err) {
+    _last_err_msg = _fmt(v);
+    _err = 1;
+    return;
+  }
+  /* Sin manejador en ninguna función del camino: fallar como siempre */
+  fprintf(stderr, "%s\n", _fmt(v));
+  exit(3);
+}
+static void _rt_throw(const char* msg) {
+  char* m = (char*)malloc(strlen(msg) + 1);
+  strcpy(m, msg);
+  _rt_throw_val((Val){.t = T_STR, .s = m});
+}
+/* Chequeo con manejador abierto: restaurar stack, apilar mensaje, saltar */
+#define _ERRCHK(lbl)                                                          \
+  do {                                                                        \
+    if (__builtin_expect(_err, 0)) {                                          \
+      _hn--;                                                                  \
+      SP = _h_sp[_hn];                                                        \
+      PUSH(_v_str(_last_err_msg));                                            \
+      _err = 0;                                                               \
+      goto lbl;                                                               \
+    }                                                                         \
+  } while (0)
+/* Chequeo sin manejador en esta función: propagar al llamador */
+#define _ERRPROP()                                       \
+  do {                                                   \
+    if (__builtin_expect(_err, 0)) return _v_void();     \
+  } while (0)
+static int _try_begin(void) {
+  if (_hn >= 64) _rt_throw("Demasiados manejadores intentar anidados");
+  _h_sp[_hn] = SP;
+  return _hn++;
+}
+static void _try_end(void) { if (_hn > 0) _hn--; }
 
 static void _reg(const char* n) {
   for (int i = 0; i < gc; i++)
@@ -105,6 +156,13 @@ static inline Val _v_int(int64_t x) { return (Val){.i = x, .t = T_INT}; }
 static inline Val _v_flt(double x) { return (Val){.f = x, .t = T_FLT}; }
 static inline Val _v_bool(int x) { return (Val){.i = x ? 1 : 0, .t = T_BOL}; }
 static inline Val _v_void(void) { return (Val){.t = T_VOD}; }
+/* Referencia mutable (prestado mut): apunta a un slot gv[] estable. */
+static inline Val _v_ptr(Val* p) { return (Val){.p = p, .t = T_PTR}; }
+static inline Val _deref(Val v) {
+  int guard = 0;
+  while (v.t == T_PTR && v.p && guard++ < 1024) v = *v.p;
+  return v;
+}
 static Val _v_str(const char* s) {
   size_t n = strlen(s);
   char* m = (char*)malloc(n + 1);
@@ -130,6 +188,8 @@ static int _isnum(Val v) { return v.t == T_INT || v.t == T_FLT || v.t == T_BOL; 
 static double _asf(Val v) { return v.t == T_FLT ? v.f : (double)v.i; }
 
 static inline int _eq(Val a, Val b) {
+  a = _deref(a);
+  b = _deref(b);
   if (__builtin_expect(a.t == T_INT && b.t == T_INT, 1)) return a.i == b.i;
   if (_isnum(a) && _isnum(b)) return _asf(a) == _asf(b);
   if (a.t == T_STR && b.t == T_STR) return strcmp(a.s, b.s) == 0;
@@ -162,6 +222,7 @@ static inline int _lts(Val a, Val b) {
 }
 
 static int _truthy(Val v) {
+  v = _deref(v);
   switch (v.t) {
     case T_BOL:
     case T_INT:
@@ -191,8 +252,8 @@ static Val _arith(int op, Val a, Val b) {
       case 1: return _v_int(x + y);
       case 3: return _v_int(x - y);
       case 4: return _v_int(x * y);
-      case 5: if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return _v_int(x / y);
-      case 6: if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return _v_int(x % y);
+      case 5: if (!y) { _rt_throw("Error: Division por cero"); } return _v_int(x / y);
+      case 6: if (!y) { _rt_throw("Error: Division por cero"); } return _v_int(x % y);
     }
     return _v_int(0);
   }
@@ -216,8 +277,8 @@ static inline Val _bin(int op, Val a, Val b) {
       case 1:  return (Val){.i = x + y, .t = T_INT};
       case 3:  return (Val){.i = x - y, .t = T_INT};
       case 4:  return (Val){.i = x * y, .t = T_INT};
-      case 5:  if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return (Val){.i = x / y, .t = T_INT};
-      case 6:  if (!y) { fprintf(stderr, "Error: Division por cero\n"); exit(3); } return (Val){.i = x % y, .t = T_INT};
+      case 5:  if (!y) { _rt_throw("Error: Division por cero"); } return (Val){.i = x / y, .t = T_INT};
+      case 6:  if (!y) { _rt_throw("Error: Division por cero"); } return (Val){.i = x % y, .t = T_INT};
       case 7:  return (Val){.i = (x == y), .t = T_BOL};
       case 8:  return (Val){.i = (x != y), .t = T_BOL};
       case 9:  return (Val){.i = (x < y), .t = T_BOL};
@@ -271,6 +332,8 @@ static Val _bnot(Val a) { return _v_int(~(int64_t)_asf(a)); }
 
 static inline Val _dcp(Val v) {
   if (__builtin_expect(v.t <= T_BOL || v.t == T_STR || v.t == T_NON || v.t == T_VOD, 1)) return v;
+  /* Una referencia se copia tal cual (el punto de escritura no cambia). */
+  if (v.t == T_PTR || v.t == T_FRE) return v;
   if (v.t == T_ARR || v.t == T_TUP || v.t == T_ENM) {
     Val nv = v;
     nv.items = (Val*)malloc(sizeof(Val) * (v.argc > 0 ? v.argc : 1));
@@ -315,15 +378,17 @@ static Val _arr_push(Val a, Val x) {
 }
 static Val _arr_get(Val a, int64_t ix) {
   if (ix < 0 || ix >= a.argc) {
-    fprintf(stderr, "Indice %lld fuera de rango (largo: %d)\n", (long long)ix, a.argc);
-    exit(3);
+    char _eb[96];
+    snprintf(_eb, sizeof _eb, "Indice %lld fuera de rango (largo: %d)", (long long)ix, a.argc);
+    _rt_throw(_eb);
   }
   return a.items[ix];
 }
 static Val _arr_set(Val a, int64_t ix, Val x) {
   if (ix < 0 || ix >= a.argc) {
-    fprintf(stderr, "Indice %lld fuera de rango (largo: %d)\n", (long long)ix, a.argc);
-    exit(3);
+    char _eb[96];
+    snprintf(_eb, sizeof _eb, "Indice %lld fuera de rango (largo: %d)", (long long)ix, a.argc);
+    _rt_throw(_eb);
   }
   a.items[ix] = x;
   return a;
@@ -410,6 +475,7 @@ static Val _st_set(Val s, const char* f, Val x) {
 static char* _fmt(Val v) {
   char* b = (char*)malloc(8192);
   if (!b) return (char*)"";
+  v = _deref(v);
   switch (v.t) {
     case T_INT:
       snprintf(b, 8192, "%lld", (long long)v.i);

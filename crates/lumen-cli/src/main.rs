@@ -1746,6 +1746,8 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
     let base_path = Path::new(path);
     let loader = ModuleLoader::new(lib_dirs.to_vec());
     let mut program = resolve_or_exit(loader, &source, base_path);
+    // comptime (bug #7): plegar expresiones comptime evaluables antes de sema
+    lumen_ir::comptime::ComptimeEvaluator::new(&program).rewrite_program(&mut program);
     prof_time("imports+parse", &t);
     let t = prof_start();
     let sema = SemanticAnalyzer::new();
@@ -2018,6 +2020,8 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
             process::exit(1);
         }
     };
+    // comptime (bug #7): plegar expresiones comptime evaluables antes de sema
+    lumen_ir::comptime::ComptimeEvaluator::new(&flat).rewrite_program(&mut flat);
     let sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut flat);
     if !sem_errors.is_empty() {
@@ -2297,6 +2301,8 @@ fn build_native(
         }
     };
     let mut prog = program;
+    // comptime (bug #7): plegar expresiones comptime evaluables antes de sema
+    lumen_ir::comptime::ComptimeEvaluator::new(&prog).rewrite_program(&mut prog);
     let errors = SemanticAnalyzer::new().analyze(&mut prog);
     if !errors.is_empty() {
         show_sema_errors(&errors, &source, path);
@@ -2366,6 +2372,13 @@ fn build_native(
     match backend {
         "llvm" => {
             let t = prof_start();
+            // Rechazo ruidoso: no generar artefactos rotos silenciosamente
+            let unsupported = lumen_aot::llvm_supported(&ir);
+            if !unsupported.is_empty() {
+                eprintln!("✗ El backend LLVM aún no soporta: {}", unsupported.join(", "));
+                eprintln!("  Sugerencia: usa `lumen build --native` (backend C, soporte completo).");
+                process::exit(1);
+            }
             let llvm_ir = lumen_aot::compile_to_llvm_ir(&ir);
             let ll_path = out_name.with_extension("ll");
             fs::write(&ll_path, &llvm_ir).unwrap_or_else(|e| {
@@ -2479,6 +2492,13 @@ fn build_native(
         }
         "rust" => {
             let t = prof_start();
+            // Rechazo ruidoso: no generar artefactos rotos silenciosamente
+            let unsupported = lumen_aot::cranelift_supported(&ir);
+            if !unsupported.is_empty() {
+                eprintln!("✗ El backend Cranelift aún no soporta: {}", unsupported.join(", "));
+                eprintln!("  Sugerencia: usa `lumen build --native` (backend C, soporte completo).");
+                process::exit(1);
+            }
             let obj_path = out_name.with_extension("obj");
             if let Err(e) = lumen_aot::compile_to_object(&ir, obj_path.to_str().unwrap()) {
                 eprintln!("Error backend Rust (Cranelift): {}", e);

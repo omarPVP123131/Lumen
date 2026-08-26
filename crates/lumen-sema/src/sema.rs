@@ -1152,12 +1152,18 @@ impl SemanticAnalyzer {
             Stmt::Assignment { name, value, span } => {
                 let value_type = self.analyze_expr(value);
                 if let Some(sym) = self.lookup(name) {
-                    if !can_assign(&sym.var_type, &value_type) {
+                    // prestado mut (bug #6): asignar a través de la referencia
+                    // se valida contra el tipo interior, no contra Prestado.
+                    let target = match &sym.var_type {
+                        TypeInfo::Prestado { inner, .. } => (**inner).clone(),
+                        other => other.clone(),
+                    };
+                    if !can_assign(&target, &value_type) {
                         self.errors.push(SemError {
                             code: "E031".to_string(),
-                            message: format!("No puedes asignar un valor de tipo '{:?}' a la variable '{}' de tipo '{:?}'", value_type, name, sym.var_type),
+                            message: format!("No puedes asignar un valor de tipo '{:?}' a la variable '{}' de tipo '{:?}'", value_type, name, target),
                             span: *span,
-                            suggestion: format!("Usa un valor de tipo '{:?}' para asignar a '{}'", sym.var_type, name),
+                            suggestion: format!("Usa un valor de tipo '{:?}' para asignar a '{}'", target, name),
                         });
                     }
                 } else if matches!(value_type, TypeInfo::Func { .. }) {
@@ -1699,8 +1705,15 @@ impl SemanticAnalyzer {
                 resolved_method: _,
                 span,
             } => {
-                let lt = self.analyze_expr(left);
-                let rt = self.analyze_expr(right);
+                // prestado mut (bug #6): los operadores ven el tipo interior
+                let lt = match self.analyze_expr(left) {
+                    TypeInfo::Prestado { inner, .. } => *inner,
+                    other => other,
+                };
+                let rt = match self.analyze_expr(right) {
+                    TypeInfo::Prestado { inner, .. } => *inner,
+                    other => other,
+                };
                 let op_method_name = |op: &BinOp| -> &str {
                     match op {
                         BinOp::Add => "sumar",

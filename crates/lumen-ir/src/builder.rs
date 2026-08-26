@@ -17,6 +17,10 @@ pub struct IRBuilder {
     lambda_counter: usize,
     loop_labels: Vec<LoopLabels>,
     default_params: HashMap<String, Vec<Option<Expr>>>,
+    /// Función (o método mangled) -> índices de params declarados `prestado mut`.
+    /// En esos positions, si el argumento es un Ident simple se emite MakeRef
+    /// para pasar por referencia con write-back (bug #6).
+    ref_mut_params: HashMap<String, Vec<usize>>,
     fn_names: HashSet<String>,
     impl_method_map: HashMap<String, String>,
     is_in_lambda: bool,
@@ -39,6 +43,7 @@ impl IRBuilder {
             lambda_counter: 0,
             loop_labels: Vec::new(),
             default_params: HashMap::new(),
+            ref_mut_params: HashMap::new(),
             fn_names: HashSet::new(),
             impl_method_map: HashMap::new(),
             is_in_lambda: false,
@@ -118,6 +123,18 @@ impl IRBuilder {
                             entry: 0,
                             instrs: Vec::new(),
                         };
+                        let has_self = params
+                            .iter()
+                            .any(|p| p.name == "self" || p.name == "yo" || p.name == "este");
+                        let refs: Vec<usize> = params
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, p)| is_prestado_mut(&p.param_type))
+                            .map(|(i, _)| if has_self { i } else { i + 1 })
+                            .collect();
+                        if !refs.is_empty() {
+                            self.ref_mut_params.insert(mangled.clone(), refs);
+                        }
                         self.program.funcs.insert(mangled.clone(), func);
                         self.fn_names.insert(mangled.clone());
                         self.impl_method_map.insert(name.clone(), mangled);
@@ -133,6 +150,16 @@ impl IRBuilder {
                     .map(|p| p.default.clone().map(|boxed| *boxed))
                     .collect();
                 self.default_params.insert(name.clone(), defaults);
+                // Registrar params `prestado mut` para pasarlos por referencia
+                let refs: Vec<usize> = params
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, p)| is_prestado_mut(&p.param_type))
+                    .map(|(i, _)| i)
+                    .collect();
+                if !refs.is_empty() {
+                    self.ref_mut_params.insert(name.clone(), refs);
+                }
             }
         }
 
@@ -1223,7 +1250,20 @@ impl IRBuilder {
                                     | "__tcp_conectar_async"
                             )
                         {
-                            for arg in args {
+                            let ref_positions = self.ref_mut_params.get(name).cloned();
+                            for (i, arg) in args.iter().enumerate() {
+                                // prestado mut + argumento es variable simple →
+                                // pasar por referencia con write-back (bug #6)
+                                if ref_positions
+                                    .as_ref()
+                                    .map_or(false, |v| v.contains(&i))
+                                {
+                                    if let Expr::Ident { name: vn, .. } = arg {
+                                        self.emit(Instr::MakeRef(vn.clone()));
+                                        continue;
+                                    }
+                                    // lvalue compuesto o expresión: fallback por valor
+                                }
                                 self.gen_expr(arg);
                             }
                             let defaults = self.default_params.get(name).cloned();
@@ -2245,6 +2285,12 @@ fn expr_to_ir_value(expr: &Expr) -> Option<Value> {
         Expr::Bool { value, .. } => Some(Value::Bool(*value)),
         _ => None,
     }
+}
+
+/// ¿Es `prestado mut T` (o `borrowed mut T`)? Solo la forma mutable pasa por
+/// referencia; `prestado T` inmutable sigue siendo solo lectura por valor.
+fn is_prestado_mut(t: &Type) -> bool {
+    matches!(t, Type::Prestado { mutable: true, .. })
 }
 
 fn type_to_impl_name(t: &Type) -> Option<String> {

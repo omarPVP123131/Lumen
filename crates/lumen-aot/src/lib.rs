@@ -752,6 +752,88 @@ impl JitEngine {
     }
 }
 
+/// Capacidad del backend LLVM textual: subconjunto verificado correcto.
+/// Todo lo demás debe rechazarse ANTES de generar artefactos rotos.
+pub fn llvm_supported(program: &Program) -> Vec<String> {
+    let mut bad: Vec<String> = Vec::new();
+    let mut note = |f: &str| {
+        if !bad.iter().any(|x| x == f) {
+            bad.push(f.to_string());
+        }
+    };
+    for func in program.funcs.values() {
+        for ins in &func.instrs {
+            match ins {
+                Instr::ConstInt(_) | Instr::ConstBool(_) | Instr::Load(_)
+                | Instr::Store(_) | Instr::StoreLocal(_) | Instr::Return | Instr::Jmp(_)
+                | Instr::JmpIf(_) | Instr::Label(_) | Instr::Phi(..) | Instr::Nop
+                | Instr::Halt => {}
+                Instr::ConstStr(_) => note("textos"),
+                Instr::ConstFloat(_) => note("decimales"),
+                Instr::Unary(_) => note("operadores unarios"),
+                Instr::Print | Instr::Read => note("imprimir/leer"),
+                Instr::Binary(op) => match op {
+                    Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Equal
+                    | Op::NotEqual | Op::Less | Op::LessEqual | Op::Greater
+                    | Op::GreaterEqual | Op::BitOr | Op::BitAnd | Op::BitXor
+                    | Op::ShiftLeft | Op::ShiftRight => {}
+                    _ => note("operadores lógicos/concatenación"),
+                },
+                Instr::Call(n, _) => {
+                    // Solo llamadas a funciones propias del programa
+                    if !program.funcs.contains_key(n) {
+                        note(format!("builtins ({})", n).as_str());
+                    }
+                }
+                Instr::ArrayNew(_) | Instr::ArrayGet | Instr::ArraySet | Instr::ArrayLen
+                | Instr::ArrayPush | Instr::ArrayPushVar(_) => note("listas"),
+                Instr::StructNew(..) | Instr::StructGet | Instr::StructSet => note("estructuras"),
+                Instr::EnumCtor { .. } | Instr::MatchVariant(_) => note("enumeraciones"),
+                Instr::ResultOk | Instr::ResultErr | Instr::TryUnwrap | Instr::OptionSome
+                | Instr::OptionNone => note("resultado/opción"),
+                Instr::MatchType(_) | Instr::MatchPayload => note("elegir con tipos"),
+                Instr::TupleNew(_) | Instr::TupleAccess(_) => note("tuplas"),
+                Instr::FuncRef(_) | Instr::CallValue(_) => note("funciones como valores"),
+                Instr::MakeRef(_) => note("prestado mut"),
+                Instr::PushHandler(_) | Instr::PopHandler => note("intentar/atrapar"),
+                Instr::ScopePush | Instr::ScopePop => {}
+            }
+        }
+    }
+    bad.sort();
+    bad.dedup();
+    bad
+}
+
+/// Capacidad del backend Cranelift (objeto nativo): subconjunto verificado.
+pub fn cranelift_supported(program: &Program) -> Vec<String> {
+    let mut bad: Vec<String> = Vec::new();
+    let mut note = |f: &str| {
+        if !bad.iter().any(|x| x == f) {
+            bad.push(f.to_string());
+        }
+    };
+    for func in program.funcs.values() {
+        for ins in &func.instrs {
+            match ins {
+                Instr::ConstInt(_) | Instr::ConstBool(_) | Instr::ConstStr(_)
+                | Instr::Load(_) | Instr::Store(_) | Instr::StoreLocal(_) | Instr::Unary(_)
+                | Instr::Return | Instr::Jmp(_) | Instr::JmpIf(_) | Instr::Label(_)
+                | Instr::Print | Instr::Nop | Instr::Halt | Instr::Call(_, _) => {}
+                Instr::ConstFloat(_) => note("decimales"),
+                Instr::Binary(op) => match op {
+                    Op::Add | Op::Sub | Op::Mul | Op::BitAnd | Op::BitOr | Op::BitXor => {}
+                    _ => note("división/módulo/comparaciones/cambios de bit"),
+                },
+                _ => note("agregados/cierres/excepciones/referencias"),
+            }
+        }
+    }
+    bad.sort();
+    bad.dedup();
+    bad
+}
+
 pub fn compile_to_llvm_ir(program: &Program) -> String {
     let mut out = String::new();
     out.push_str("; ModuleID = 'lumen'\n");
@@ -983,20 +1065,43 @@ pub fn compile_to_c(program: &Program) -> String {
         }
     };
     let mut unknown: Vec<String> = Vec::new();
+
+    // Renombrado de params por función: `{fn}::{param}`. El namespace gv[] es
+    // plano y compartido entre funciones; sin renombrado, un param del callee
+    // con el mismo nombre que una variable del llamador se pisan mutuamente
+    // (y con referencias prestado mut el slot se autorreferencia).
+    let mut renames: HashMap<String, HashMap<String, String>> = HashMap::new();
+    for (fname, func) in &program.funcs {
+        let mut m: HashMap<String, String> = HashMap::new();
+        for p in &func.params {
+            m.insert(p.clone(), format!("{}::{}", fname, p));
+        }
+        renames.insert(fname.clone(), m);
+    }
+    // Traduce un nombre de variable al slot real dentro de la función `fname`
+    let resolve_var =
+        |fname: &str, n: &str| -> String { renames.get(fname).and_then(|m| m.get(n)).cloned().unwrap_or_else(|| n.to_string()) };
+
     for (name, func) in &program.funcs {
         for p in &func.params {
-            add_name(p);
+            add_name(&resolve_var(name, p));
         }
         for ins in &func.instrs {
-            if let Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n) | Instr::FuncRef(n) = ins
-            {
-                add_name(n);
-            }
-            if let Instr::Call(n, _) = ins {
-                if !program.funcs.contains_key(n) && !unknown.iter().any(|u| u == n) {
-                    unknown.push(n.clone());
-                    record_unsupported_builtin(n);
+            match ins {
+                Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n)
+                | Instr::ArrayPushVar(n) | Instr::MakeRef(n) => {
+                    add_name(&resolve_var(name, n));
                 }
+                Instr::FuncRef(n) => {
+                    add_name(n);
+                }
+                Instr::Call(cn, _) => {
+                    if !program.funcs.contains_key(cn) && !unknown.iter().any(|u| u == cn) {
+                        unknown.push(cn.clone());
+                        record_unsupported_builtin(cn);
+                    }
+                }
+                _ => {}
             }
         }
         let _ = name;
@@ -1004,11 +1109,19 @@ pub fn compile_to_c(program: &Program) -> String {
 
     let mut name_sets: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (name, func) in &program.funcs {
-        let mut set: Vec<String> = func.params.clone();
+        // Slots reales de la función: params renombrados + variables del cuerpo
+        let mut set: Vec<String> = func
+            .params
+            .iter()
+            .map(|p| resolve_var(name, p))
+            .collect();
         for ins in &func.instrs {
-            if let Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n) = ins {
-                if !set.iter().any(|x| x == n) {
-                    set.push(n.clone());
+            if let Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n)
+            | Instr::ArrayPushVar(n) | Instr::MakeRef(n) = ins
+            {
+                let key = resolve_var(name, n);
+                if !set.iter().any(|x| x == &key) {
+                    set.push(key);
                 }
             }
         }
@@ -1021,10 +1134,11 @@ pub fn compile_to_c(program: &Program) -> String {
     }
     for (name, func) in &program.funcs {
         if !func.params.is_empty() {
+            // Registry para CallValue dinámico: claves RENOMBRADAS de params
             let plist: Vec<String> = func
                 .params
                 .iter()
-                .map(|p| format!("\"{}\"", esc(p)))
+                .map(|p| format!("\"{}\"", esc(&resolve_var(name, p))))
                 .collect();
             out.push_str(&format!(
                 "  _regpars(\"{}\", (const char*[]){{ {} }}, {});\n",
@@ -1036,11 +1150,19 @@ pub fn compile_to_c(program: &Program) -> String {
     }
     out.push_str("}\n\n");
 
+    out.push_str("/* noinline: evita que el optimizador mueva locales del llamador\n   a través de los puntos setjmp/longjmp de intentar/atrapar */\n");
+    out.push_str("#if defined(__GNUC__) || defined(__clang__)\n#define LUMEN_NOINLINE __attribute__((noinline,noclone))\n#else\n#define LUMEN_NOINLINE\n#endif\n\n");
     for name in program.funcs.keys() {
-        out.push_str(&format!("static Val _f_{}(void);\n", mangle(name)));
+        out.push_str(&format!(
+            "static LUMEN_NOINLINE Val _f_{}(void);\n",
+            mangle(name)
+        ));
     }
     for n in &unknown {
-        out.push_str(&format!("static Val _f_{}(void);\n", mangle(n)));
+        out.push_str(&format!(
+            "static LUMEN_NOINLINE Val _f_{}(void);\n",
+            mangle(n)
+        ));
     }
     out.push_str("static Val _call_by_name(const char* nm);\n");
     out.push('\n');
@@ -1059,11 +1181,11 @@ pub fn compile_to_c(program: &Program) -> String {
     };
 
     for (name, func) in &program.funcs {
-        out.push_str(&emit_func(name, func, program, &name_sets, &gv_of));
+        out.push_str(&emit_func(name, func, program, &name_sets, &gv_of, &renames));
     }
     for n in &unknown {
         out.push_str(&format!(
-            "static Val _f_{}(void) {{ return _v_void(); }}\n\n",
+            "static LUMEN_NOINLINE Val _f_{}(void) {{ return _v_void(); }}\n\n",
             mangle(n)
         ));
     }
@@ -1098,6 +1220,7 @@ pub fn compile_to_c(program: &Program) -> String {
     out.push_str("int main(void) {\n  _init();\n");
     if !entry.is_empty() {
         out.push_str(&format!("  (void)_f_{}();\n", mangle(&entry)));
+        out.push_str("  if (_err) {\n    fprintf(stderr, \"%s\\n\", _last_err_msg ? _last_err_msg : \"Error\");\n    return 3;\n  }\n");
     }
     out.push_str("  return 0;\n}\n");
     out
@@ -1134,18 +1257,154 @@ fn op_code(op: &Op) -> i64 {
     }
 }
 
+/// Simula el stack del código lineal para saber qué variables fueron pasadas
+/// por referencia (MakeRef) a cada llamada. El backend C guarda/restaura los
+/// globals del llamador (_sv) alrededor de cada llamada; los slots que son
+/// objetivo de un prestado mut deben EXCLUIRSE del restore o la mutación se
+/// desharía. Devuelve índice de instrucción Call -> nombres referenciados.
+fn collect_ref_args(func: &LumenFunc) -> HashMap<usize, Vec<String>> {
+    let mut out: HashMap<usize, Vec<String>> = HashMap::new();
+    let mut st: Vec<Option<String>> = Vec::new();
+    let popn = |st: &mut Vec<Option<String>>, k: usize| {
+        if st.len() < k {
+            return false;
+        }
+        st.truncate(st.len() - k);
+        true
+    };
+    for (idx, instr) in func.instrs.iter().enumerate() {
+        match instr {
+            Instr::ConstInt(_) | Instr::ConstFloat(_) | Instr::ConstStr(_) | Instr::ConstBool(_)
+            | Instr::Load(_) | Instr::Read | Instr::FuncRef(_) => st.push(None),
+            Instr::MakeRef(n) => st.push(Some(n.clone())),
+            Instr::Binary(_) => {
+                if !popn(&mut st, 2) {
+                    break;
+                }
+                st.push(None);
+            }
+            Instr::Unary(_) | Instr::ArrayLen | Instr::TryUnwrap | Instr::MatchType(_)
+            | Instr::MatchPayload | Instr::TupleAccess(_) | Instr::MatchVariant(_)
+            | Instr::ResultOk | Instr::ResultErr | Instr::OptionSome | Instr::OptionNone => {
+                if !popn(&mut st, 1) {
+                    break;
+                }
+                st.push(None);
+            }
+            Instr::StructGet | Instr::ArrayGet => {
+                if !popn(&mut st, 2) {
+                    break;
+                }
+                st.push(None);
+            }
+            Instr::StructSet | Instr::ArraySet | Instr::ArrayPush => {
+                if !popn(&mut st, 3) {
+                    break;
+                }
+                st.push(None);
+            }
+            Instr::ArrayNew(n) | Instr::StructNew(_, n) | Instr::TupleNew(n) => {
+                if !popn(&mut st, *n) {
+                    break;
+                }
+                st.push(None);
+            }
+            Instr::EnumCtor { argc, .. } => {
+                if !popn(&mut st, *argc) {
+                    break;
+                }
+                st.push(None);
+            }
+            Instr::ArrayPushVar(_) => {
+                if !popn(&mut st, 2) {
+                    break;
+                }
+            }
+            Instr::Store(_) | Instr::StoreLocal(_) | Instr::Print => {
+                if !popn(&mut st, 1) {
+                    break;
+                }
+            }
+            Instr::Call(_, argc) => {
+                if st.len() < *argc {
+                    break;
+                }
+                let refs: Vec<String> = st[st.len() - argc..]
+                    .iter()
+                    .filter_map(|o| o.clone())
+                    .collect();
+                out.insert(idx, refs);
+                st.truncate(st.len() - argc);
+                st.push(None);
+            }
+            Instr::CallValue(argc) => {
+                if !popn(&mut st, argc + 1) {
+                    break;
+                }
+                st.push(None);
+            }
+            Instr::JmpIf(_) => {
+                if !popn(&mut st, 1) {
+                    break;
+                }
+            }
+            Instr::Return | Instr::Halt | Instr::Jmp(_) | Instr::Label(_)
+            | Instr::ScopePush | Instr::ScopePop | Instr::PushHandler(_)
+            | Instr::PopHandler | Instr::Nop | Instr::Phi(_, _) => {}
+        }
+    }
+    out
+}
+
 fn emit_func(
     name: &str,
     func: &LumenFunc,
     program: &Program,
     name_sets: &BTreeMap<String, Vec<String>>,
     gv_of: &dyn Fn(&str) -> String,
+    renames: &HashMap<String, HashMap<String, String>>,
 ) -> String {
+    // Resuelve el slot real de una variable dentro de ESTA función
+    let var_of = |n: &str| -> String {
+        renames
+            .get(name)
+            .and_then(|m| m.get(n))
+            .cloned()
+            .unwrap_or_else(|| n.to_string())
+    };
+    // Resuelve el slot de un param de una función llamada (callee)
+    let callee_slot_of = |callee: &str, pn: &str| -> String {
+        renames
+            .get(callee)
+            .and_then(|m| m.get(pn))
+            .cloned()
+            .unwrap_or_else(|| pn.to_string())
+    };
     let mut s = String::new();
-    s.push_str(&format!("static Val _f_{}(void) {{\n", mangle(name)));
+    s.push_str(&format!(
+        "static LUMEN_NOINLINE Val _f_{}(void) {{\n",
+        mangle(name)
+    ));
 
-    for instr in &func.instrs {
-        match instr {
+    let ref_args = collect_ref_args(func);
+    let mut handler_labels: Vec<usize> = Vec::new();
+    for (i, instr) in func.instrs.iter().enumerate() {
+        // ¿Instrucción cuyas llamadas al runtime pueden lanzar error?
+        let risky = matches!(
+            instr,
+            Instr::Binary(_)
+                | Instr::Unary(_)
+                | Instr::ArrayGet
+                | Instr::ArraySet
+                | Instr::ArrayPush
+                | Instr::StructGet
+                | Instr::StructSet
+                | Instr::TryUnwrap
+                | Instr::MatchPayload
+            | Instr::Call(_, _)
+            | Instr::CallValue(_)
+    );
+    match instr {
             Instr::ConstInt(n) => s.push_str(&format!("  PUSH(_v_int({}));\n", n)),
             Instr::ConstFloat(f) => {
                 if f.is_finite() {
@@ -1172,10 +1431,16 @@ fn emit_func(
                 ));
             }
             Instr::Load(n) => {
-                s.push_str(&format!("  PUSH({});\n", gv_of(n)));
+                s.push_str(&format!("  PUSH(_deref({}));\n", gv_of(&var_of(n))));
             }
             Instr::Store(n) | Instr::StoreLocal(n) => {
-                s.push_str(&format!("  {} = _dcp(POP());\n", gv_of(n)));
+                // Si el slot contiene una referencia (prestado mut), escribir
+                // a través del puntero; si no, asignación normal.
+                let g = gv_of(&var_of(n));
+                s.push_str(&format!(
+                    "  {{ Val _sv_ = POP(); if ({g}.t == T_PTR && {g}.p) *{g}.p = _dcp(_sv_); else {g} = _dcp(_sv_); }}\n",
+                    g = g
+                ));
             }
             Instr::Binary(op) => {
                 let code = op_code(op);
@@ -1389,8 +1654,21 @@ fn emit_func(
                     s.push_str("  { Val _rt = POP(); Val _ar = POP(); Val _tp = POP(); Val _nm = POP(); Val _hc = POP(); (void)_tp; PUSH(_ffi_call(_hc, _nm.s, _ar, _rt.s)); }\n");
                 } else if let Some(callee) = program.funcs.get(n) {
                     let plen = callee.params.len().min(*argc);
+                    // Excluir del save/restore _sv los slots que esta llamada
+                    // recibe por referencia: la mutación del callee debe persistir.
+                    let excluded: Vec<String> = ref_args
+                        .get(&i)
+                        .cloned()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|rn| var_of(rn))
+                        .collect();
                     let caller_names: Vec<String> =
                         name_sets.get(name).cloned().unwrap_or_default();
+                    let caller_names: Vec<String> = caller_names
+                        .into_iter()
+                        .filter(|cn| !excluded.contains(cn))
+                        .collect();
                     let mut pre = String::new();
                     let mut post = String::new();
                     if !caller_names.is_empty() {
@@ -1410,7 +1688,7 @@ fn emit_func(
                     for i in (0..plen).rev() {
                         s.push_str(&format!(
                             "  {} = _dcp(POP());\n",
-                            gv_of(&callee.params[i])
+                            gv_of(&callee_slot_of(n, &callee.params[i]))
                         ));
                     }
                     for _ in plen..*argc {
@@ -1472,14 +1750,35 @@ fn emit_func(
                 ));
             }
             Instr::ArrayPush => s.push_str("  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push(_a, _x)); }\n"),
-            Instr::PushHandler(_) | Instr::PopHandler | Instr::ScopePush | Instr::ScopePop
-            | Instr::MatchVariant(_) => {
-                // Limitación documentada: AOT C no soporta intentar/atrapar de runtime
-                // ni destructuring de enums; se emite como no-op para mantener el flujo.
+            Instr::MakeRef(vname) => {
+                // prestado mut (bug #6): apilar puntero al slot gv[] de la variable.
+                // El slot gv es estático → la dirección es estable durante todo el run.
+                s.push_str(&format!("  PUSH(_v_ptr(&{}));\n", gv_of(&var_of(vname))));
+            }
+            Instr::PushHandler(catch_label) => {
+                // intentar/atrapar sin unwinding: guardar SP; los chequeos
+                // _ERRCHK posteriores usan la etiqueta estática del catch.
+                handler_labels.push(*catch_label);
+                s.push_str("  { _h_sp[_hn] = SP; _hn++; }\n");
+            }
+            Instr::PopHandler => {
+                s.push_str("  _try_end();\n");
+            }
+            Instr::ScopePush | Instr::ScopePop => {
+                // Limitación documentada: el backend C usa un namespace plano de
+                // variables; el sombreado por bloques sigue la semántica del VM
+                // solo si los nombres no colisionan entre bloques hermanos.
+            }
+            Instr::MatchVariant(vname) => {
+                // Destructuring de enums en elegir: comparar solo el variant.
+                s.push_str(&format!(
+                    "  {{ Val _mv = _deref(POP()); PUSH(_v_bool(_mv.t == T_ENM && _mv.vr && !strcmp(_mv.vr, \"{}\"))); }}\n",
+                    esc(vname)
+                ));
             }
             Instr::ArrayPushVar(vname) => {
                 // AOT: degradar a push + store al global/local equivalente
-                let vn = gv_of(vname);
+                let vn = gv_of(&var_of(vname));
                 s.push_str("  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push(_a, _x)); }\n");
                 s.push_str(&format!("  SET({vn}, POP());\n"));
             }
@@ -1557,6 +1856,17 @@ fn emit_func(
                 if let Instr::Halt = instr {
                     s.push_str("  return _v_void();\n");
                 }
+            }
+        }
+        // Chequeo de error tras operaciones riesgosas (intentar/atrapar sin
+        // unwinding): salta al catch abierto más cercano o propaga al llamador.
+        if risky {
+            match handler_labels.last() {
+                Some(l) => s.push_str(&format!(
+                    "  if (__builtin_expect(_err,0)) {{ _hn--; SP = _h_sp[_hn]; PUSH(_v_str(_last_err_msg)); _err = 0; goto L_{}; }}\n",
+                    l
+                )),
+                None => s.push_str("  if (__builtin_expect(_err,0)) return _v_void();\n"),
             }
         }
     }
@@ -1647,7 +1957,7 @@ mod tests {
     fn test_c_backend_structural() {
         let program = sample_program("main");
         let c = compile_to_c(&program);
-        assert!(c.contains("static Val _f_main(void)"));
+        assert!(c.contains("static LUMEN_NOINLINE Val _f_main(void)"));
         assert!(c.contains("int main(void)"));
         assert!(c.contains("PUSH(_v_int(40))"));
         assert!(c.contains("_bin(1, _a, _b)"));
@@ -1656,10 +1966,7 @@ mod tests {
 
     #[test]
     fn test_c_backend_gcc_runtime() {
-        // Skip on Windows: el runtime C usa POSIX (opendir, regex) no disponible nativamente
-        if cfg!(windows) {
-            return;
-        }
+        // Requiere gcc disponible (Linux CI o MSYS2 en Windows)
         if std::process::Command::new("gcc")
             .arg("--version")
             .output()
@@ -1667,15 +1974,80 @@ mod tests {
         {
             return;
         }
-        if std::env::var_os("MSYSTEM").is_some() {
-            return;
+        // Requiere un gcc FUNCIONAL: bajo los hooks de git el PATH puede
+        // resolver a un gcc roto; se prueba con un programa trivial.
+        let probe_dir = std::env::temp_dir().join("lumen_gcc_probe");
+        std::fs::create_dir_all(&probe_dir).unwrap();
+        let probe_c = probe_dir.join("p.c");
+        let probe_exe = probe_dir.join("p.exe");
+        std::fs::write(&probe_c, "int main(void){return 0;}\n").unwrap();
+        let _ = std::fs::remove_file(&probe_exe);
+        match std::process::Command::new("gcc")
+            .args([
+                probe_c.to_str().unwrap(),
+                "-o",
+                probe_exe.to_str().unwrap(),
+            ])
+            .output()
+        {
+            Ok(o) if o.status.success() && probe_exe.exists() => {}
+            _ => return, // gcc ausente o roto en este entorno: omitir test
         }
-        let program = sample_program("main");
-        let c = compile_to_c(&program);
-        let dir = std::env::temp_dir().join(format!("lumen_aot_test_{}", std::process::id()));
+        let source = r#"
+            estructura Punto { x: entero, y: entero }
+            funcion vacio subir(prestado mut Punto p, entero d) {
+                p.y = p.y + d;
+            }
+            funcion entero fib(n: entero) {
+                si (n < 2) { retornar n; }
+                retornar fib(n - 1) + fib(n - 2);
+            }
+            funcion texto color(texto c) {
+                elegir (c) {
+                    caso "rojo": { retornar "R"; }
+                    defecto: { retornar "?"; }
+                }
+            }
+            funcion vacio main() {
+                sea p = Punto { x: 1, y: 2 };
+                subir(p, 40);
+                imprimir(p.y);
+                intentar {
+                    sea xs = [1];
+                    imprimir(xs[5]);
+                } atrapar (e) {
+                    imprimir("atrapado");
+                }
+                sea f = comptime { fib(10) };
+                imprimir(f);
+                imprimir(color("rojo"));
+                sea a = 20;
+                sea b = 22;
+                imprimir(a + b);
+            }
+        "#;
+        let tokens = lumen_lexer::Lexer::new(source).tokenize();
+        let (mut program, _) = lumen_parser::Parser::new(tokens.0).parse();
+        let sem_errors = lumen_sema::SemanticAnalyzer::new().analyze(&mut program);
+        assert!(sem_errors.is_empty(), "sema fallo: {:?}", sem_errors);
+        lumen_ir::comptime::ComptimeEvaluator::new(&program)
+            .rewrite_program(&mut program);
+        let ir = lumen_ir::IRBuilder::new().build(&program);
+        let c = compile_to_c(&ir);
+        // Dir único por corrida: el pid se reusa entre ejecuciones del binario
+        // de tests y el antivirus puede bloquear un .exe recién escrito.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "lumen_aot_test_{}_{}",
+            std::process::id(),
+            nanos
+        ));
         std::fs::create_dir_all(&dir).unwrap();
-        let c_path = dir.join("test.c");
-        let exe_path = dir.join("test.exe");
+        let c_path = dir.join("test_full.c");
+        let exe_path = dir.join("test_full.exe");
         std::fs::write(&c_path, c).unwrap();
         let status = std::process::Command::new("gcc")
             .arg(c_path.to_str().unwrap())
@@ -1688,9 +2060,26 @@ mod tests {
                 String::from_utf8_lossy(&status.stderr)
             );
         }
-        let out = std::process::Command::new(&exe_path).output().unwrap();
-        let test_out = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n");
-        assert_eq!(test_out, "42\n");
+        let out = loop {
+            match std::process::Command::new(&exe_path).output() {
+                Ok(o) => break o,
+                Err(_) => {
+                    // Retry: el AV de Windows puede bloquear el .exe recién creado
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+            }
+        };
+        let test_out = String::from_utf8_lossy(&out.stdout)
+            .replace("\r\n", "\n")
+            .lines()
+            .map(|l| l.trim_end().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            test_out,
+            vec!["42", "atrapado", "55", "R", "42"],
+            "salida completa: {:?}",
+            test_out
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

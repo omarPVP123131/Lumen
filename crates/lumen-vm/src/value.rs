@@ -142,11 +142,37 @@ pub enum Value {
     Tuple(Vec<Value>),
     Map(HashMap<Value, Value, FixHasher>),
     Void,
+    /// Referencia mutable (prestado mut, bug #6). La celda es compartida entre
+    /// todos los alias (bindings de params reenviados), de modo que las
+    /// mutaciones son visibles de inmediato en toda la cadena. `owner` es el
+    /// slot (scope_idx, nombre) del llamador para write-back en Ret.
+    /// Semánticamente transparente: eq/hash/display/truthy resuelven el contenido.
+    Ref {
+        cell: std::sync::Arc<std::sync::Mutex<Value>>,
+        owner: Option<(usize, String)>,
+    },
 }
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
+        // Transparencia de referencias: comparar el contenido resuelto
+        let a_owned;
+        let b_owned;
+        let a = match self {
+            Value::Ref { cell, .. } => {
+                a_owned = cell.lock().unwrap().clone();
+                &a_owned
+            }
+            v => v,
+        };
+        let b = match other {
+            Value::Ref { cell, .. } => {
+                b_owned = cell.lock().unwrap().clone();
+                &b_owned
+            }
+            v => v,
+        };
+        match (a, b) {
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a.to_bits() == b.to_bits(),
             (Value::Str(a), Value::Str(b)) => a.as_ref() == b.as_ref(),
@@ -192,6 +218,12 @@ impl Eq for Value {}
 
 impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        // Transparencia de referencias: hashear el contenido resuelto
+        if let Value::Ref { cell, .. } = self {
+            let owned = cell.lock().unwrap().clone();
+            owned.hash(state);
+            return;
+        }
         match self {
             Value::Void => 0u8.hash(state),
             Value::Int(n) => {
@@ -274,6 +306,7 @@ impl Hash for Value {
                     h.hash(state);
                 }
             }
+            Value::Ref { .. } => unreachable!("resuelto al inicio de hash"),
         }
     }
 }
@@ -281,6 +314,48 @@ impl Hash for Value {
 impl Value {
     pub fn str(s: impl Into<String>) -> Value {
         Value::Str(Arc::from(s.into()))
+    }
+
+    /// Resuelve referencias recursivamente y devuelve el valor subyacente.
+    pub fn deep_deref(&self) -> Value {
+        match self {
+            Value::Ref { cell, .. } => {
+                let inner = cell.lock().unwrap().clone();
+                inner.deep_deref()
+            }
+            other => other.clone(),
+        }
+    }
+
+    /// Lee el contenido de la celda (una sola capa).
+    pub fn ref_get(&self) -> Option<Value> {
+        match self {
+            Value::Ref { cell, .. } => Some(cell.lock().unwrap().clone()),
+            _ => None,
+        }
+    }
+
+    /// Escribe a través de la celda (una sola capa).
+    pub fn ref_set(&self, v: Value) -> bool {
+        match self {
+            Value::Ref { cell, .. } => {
+                *cell.lock().unwrap() = v;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Crea una nueva referencia compartida al mismo contenido.
+    pub fn new_ref(inner: Value, owner: Option<(usize, String)>) -> Value {
+        Value::Ref {
+            cell: std::sync::Arc::new(std::sync::Mutex::new(inner)),
+            owner,
+        }
+    }
+
+    pub fn is_ref(&self) -> bool {
+        matches!(self, Value::Ref { .. })
     }
 
     pub fn arr(v: Vec<Value>) -> Value {
@@ -307,6 +382,7 @@ impl Value {
 
     pub fn as_num(&self) -> Option<f64> {
         match self {
+            Value::Ref { cell, .. } => cell.lock().unwrap().as_num(),
             Value::Int(n) => Some(*n as f64),
             Value::Float(n) => Some(*n),
             _ => None,
@@ -315,6 +391,7 @@ impl Value {
 
     pub fn as_i64(&self) -> Option<i64> {
         match self {
+            Value::Ref { cell, .. } => cell.lock().unwrap().as_i64(),
             Value::Int(n) => Some(*n),
             Value::Float(n) => Some(*n as i64),
             _ => None,
@@ -323,6 +400,7 @@ impl Value {
 
     pub fn as_bool(&self) -> Option<bool> {
         match self {
+            Value::Ref { cell, .. } => cell.lock().unwrap().as_bool(),
             Value::Bool(b) => Some(*b),
             _ => None,
         }
@@ -330,6 +408,7 @@ impl Value {
 
     pub fn is_truthy(&self) -> bool {
         match self {
+            Value::Ref { cell, .. } => cell.lock().unwrap().is_truthy(),
             Value::Bool(b) => *b,
             Value::Int(n) => *n != 0,
             Value::Float(n) => *n != 0.0,
@@ -399,6 +478,10 @@ impl fmt::Display for Value {
                 write!(f, "{{{} }}", items.join(", "))
             }
             Value::Void => write!(f, "void"),
+            Value::Ref { cell, .. } => {
+                let inner = cell.lock().unwrap().clone();
+                write!(f, "{}", inner)
+            }
         }
     }
 }

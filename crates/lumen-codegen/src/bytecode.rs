@@ -74,6 +74,7 @@ pub enum Opcode {
     ScopePush = 60,
     ScopePop = 61,
     MatchVariant = 62,
+    MakeRef = 63,
 }
 
 impl Opcode {
@@ -142,6 +143,7 @@ impl Opcode {
             60 => Some(Opcode::ScopePush),
             61 => Some(Opcode::ScopePop),
             62 => Some(Opcode::MatchVariant),
+            63 => Some(Opcode::MakeRef),
             _ => None,
         }
     }
