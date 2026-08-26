@@ -1,3 +1,25 @@
+## [3.3.6] - 2026-08-25
+
+### Fuzzing manual VM↔nativo — 3 bugs encontrados y arreglados
+
+#### Bug F1 — indexado/largo de textos en backend C (paridad)
+- `"abc"[1]` crasheaba el binario nativo; `s.largo()` daba 0. `_arr_get`/`_arr_len`
+  ahora manejan T_STR (get valida rango y devuelve el carácter; set lanza error claro)
+
+#### Bug F2 — structs declarados dentro de funciones
+- `estructura P { ... }` dentro de un cuerpo de función no se registraba en sema
+  ("El struct 'P' no está definido"). collect_structs ahora registra también los locales
+
+#### Bug F3 — imprimir multi-argumento en backend C
+- El nativo imprimía cada argumento en su propia línea; la VM los concatena.
+  Ahora ambos producen UNA línea (`imprimir("a:", x)`); `imprimir()` sin args = línea vacía
+
+### Verificación de paridad
+- Lotes de fuzzing comparando salida VM vs binario nativo: aritmética/overflow/mod
+  negativo, floats, strings, sombreado anidado, arrays 2D, struct-en-array field assign,
+  elegir con or/guard, destructuring, foreach, try/catch anidado, refs en bucles,
+  métodos mutables, mapas, resultado/opción — **0 diferencias** tras los fixes
+
 ## [3.3.5] - 2026-08-25
 
 ### Lenguaje — hacia producción sin limitantes

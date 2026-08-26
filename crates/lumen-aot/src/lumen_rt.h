@@ -377,6 +377,17 @@ static Val _arr_push(Val a, Val x) {
   return a;
 }
 static Val _arr_get(Val a, int64_t ix) {
+  /* Fuzzing 3.3.6: indexado de textos "abc"[1] (paridad con VM) */
+  if (a.t == T_STR) {
+    int64_t n = (int64_t)strlen(a.s ? a.s : "");
+    if (ix < 0 || ix >= n) {
+      char _eb[96];
+      snprintf(_eb, sizeof _eb, "Índice %lld fuera de rango (largo: %lld)", (long long)ix, (long long)n);
+      _rt_throw(_eb);
+    }
+    char c2[2] = {a.s[ix], 0};
+    return _v_str(c2);
+  }
   if (ix < 0 || ix >= a.argc) {
     char _eb[96];
     snprintf(_eb, sizeof _eb, "Indice %lld fuera de rango (largo: %d)", (long long)ix, a.argc);
@@ -385,6 +396,12 @@ static Val _arr_get(Val a, int64_t ix) {
   return a.items[ix];
 }
 static Val _arr_set(Val a, int64_t ix, Val x) {
+  (void)x;
+  if (a.t == T_STR) {
+    char _eb[96];
+    snprintf(_eb, sizeof _eb, "No se puede asignar a un índice de texto");
+    _rt_throw(_eb);
+  }
   if (ix < 0 || ix >= a.argc) {
     char _eb[96];
     snprintf(_eb, sizeof _eb, "Indice %lld fuera de rango (largo: %d)", (long long)ix, a.argc);
@@ -393,7 +410,11 @@ static Val _arr_set(Val a, int64_t ix, Val x) {
   a.items[ix] = x;
   return a;
 }
-static Val _arr_len(Val a) { return _v_int(a.argc); }
+static Val _arr_len(Val a) {
+  /* Fuzzing 3.3.6: largo() sobre texto también (paridad con VM) */
+  if (a.t == T_STR) return _v_int((int64_t)strlen(a.s ? a.s : ""));
+  return _v_int(a.argc);
+}
 static Val _arr_rev(Val a) {
   Val* ns = (Val*)malloc(sizeof(Val) * (a.argc + 1));
   for (int i = 0; i < a.argc; i++) ns[i] = a.items[a.argc - 1 - i];

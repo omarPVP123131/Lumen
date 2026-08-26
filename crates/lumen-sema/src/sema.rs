@@ -778,9 +778,29 @@ impl SemanticAnalyzer {
                     .entry(name.clone())
                     .or_insert_with(|| (Vec::new(), type_params.clone()));
             }
+            // Fuzzing 3.3.6: structs declarados DENTRO de funciones también se
+            // registran (antes: "El struct 'P' no está definido")
+            if let DeclOrStmt::Decl(Decl::Function { body, .. }) = node {
+                for inner in body {
+                    if let DeclOrStmt::Decl(Decl::Struct {
+                        name, type_params, ..
+                    }) = inner
+                    {
+                        self.structs
+                            .entry(name.clone())
+                            .or_insert_with(|| (Vec::new(), type_params.clone()));
+                    }
+                }
+            }
         }
-        // Pass 2: resolver campos con los nombres ya registrados
+        // Pass 2: resolver campos con los nombres ya registrados (incluye structs locales a funciones)
+        let mut local_bodies: Vec<Vec<DeclOrStmt>> = Vec::new();
         for node in program {
+            if let DeclOrStmt::Decl(Decl::Function { body, .. }) = node {
+                local_bodies.push(body.clone());
+            }
+        }
+        for node in program.iter().chain(local_bodies.iter().flatten().map(|x| x)) {
             if let DeclOrStmt::Decl(Decl::Struct {
                 name,
                 fields,

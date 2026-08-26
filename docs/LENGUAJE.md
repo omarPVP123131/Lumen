@@ -64,15 +64,34 @@ entero? telefono = ninguno;
 
 Para sistemas de misión crítica donde se requiere latencia predecible sin pausas de Garbage Collector:
 * **`prestado T`**: Referencia inmutable sin copia.
-* **`prestado mut T`**: Referencia mutable exclusiva (regla XOR de aliasing).
+* **`prestado mut T`**: Referencia mutable con write-back real (v3.3+): pasar una
+  variable simple a un parámetro `prestado mut` crea una referencia compartida; las
+  mutaciones dentro de la función SÍ afectan a la variable del llamador (VM y AOT C).
+  Si el argumento no es un lvalue simple (`o.campo`, `arr[i]`, expresiones), se pasa
+  por valor y el compilador emite el aviso **W060**.
+* **`prestado mut este`** (v3.3.5+): receiver mutable de método — `c.depositar(100)`
+  muta la instancia real.
 * **`dueno T`**: Propiedad lineal con transferencia única de titularidad (*move semantics*).
 
 ```lumen
-funcion entero procesar_buffer(prestado texto mensaje, dueno lista<entero> datos) {
-    imprimir("Lectura sin copia: ", mensaje);
-    retornar largo(datos);
+funcion vacio incrementar(prestado mut entero n) { n = n + 1; }
+estructura Cuenta { saldo: entero }
+impl Cuenta {
+    funcion vacio depositar(prestado mut este, entero monto) {
+        este.saldo = este.saldo + monto;
+    }
+}
+funcion vacio main() {
+    sea x = 5;
+    incrementar(x);            // x == 6 (write-back real)
+    sea c = Cuenta { saldo: 1 };
+    c.depositar(99);           // c.saldo == 100
 }
 ```
+
+> **Alcance de bloques (v3.3.5+)**: cada cuerpo de `si/sino/mientras/para/para-cada/
+> si-let/elegir/match` es un scope propio; un `sea` interior sombreada y NO se ve
+> fuera del bloque (VM y binario nativo coinciden).
 
 ---
 

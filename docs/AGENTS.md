@@ -652,3 +652,17 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 
 **Estado actual: LÚMEN v3.3.0 Producción Real — deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`. Próximos: `FuncMeta` defaults no literales (thunk), `label_map` per-function, `lumen fmt` en pre-commit (ver `docs/produccion.md` §6).**
 
+
+---
+
+## Progreso (25 Ago 2026 — sesión AI · v3.3.x: QA bugs + fuzzing paridad VM↔nativo)
+
+- **v3.3.0/3.3.1**: bugs QA #1-#7 completados (fmt sin pérdida, `arr[i].campo=`, if-let/elegir destructura enums con datos, structs recursivos, MatchVariant con guardas). Suite 633 e2e.
+- **v3.3.5 — Bug #6 COMPLETO (refs reales)**: `Value::Ref` celda compartida + opcode 63 MakeRef + write-back en Ret; sema auto-deref en binarios/asignación; backend C con punteros reales y **renombrado de params por función** (`{fn}::{param}`) que elimina colisiones latentes.
+- **v3.3.5 — Bug #7 COMPLETO (comptime)**: intérprete const-eval (`lumen-ir/src/comptime.rs`) pliega `comptime { fib(20) }` a literal; límites profundidad 128 / 1M pasos; fallback runtime seguro.
+- **v3.3.5 — Sombreado real de bloques**: ScopePush/ScopePop en si/mientras/para/foreach/si-let/elegir/match; AOT C planificador estático `plan_var_keys`. VM y nativo coinciden.
+- **v3.3.5 — Métodos mutables**: sintaxis `prestado mut este` (parser+sema+builder); el receptor pasa por referencia.
+- **v3.3.5 — Aviso W060**: argumento no-lvalue a `prestado mut` se pasa por valor y se advierte en compile-time (`SemanticAnalyzer::warnings`, `analyze(&mut self)`).
+- **AOT sin fallos**: LLVM/Cranelift rechazan RUIDOSAMENTE constructos no soportados (`llvm_supported`/`cranelift_supported`) — nunca más artefactos rotos silenciosos. Test gcc integral end-to-end (refs+try/catch+elegir+structs+comptime).
+- **v3.3.6 — Fuzzing manual VM↔nativo (3 bugs)**: (F1) indexado/largo de textos en C (`"abc"[1]`, `s.largo()`); (F2) structs declarados dentro de funciones en sema; (F3) imprimir multi-arg concatena en una línea como el VM. Lotes de paridad: aritmética/overflow/mod negativo, floats, sombreado anidado, arrays 2D, struct-en-array, or/guard patterns, destructuring, foreach, try/catch anidado, refs en bucles, métodos mutables, mapas, resultado/opción — **0 diferencias** tras fixes.
+- **Suite actual**: 633 e2e + 80 parser + 56 sema + 11 production + 6 AOT, 0 fallos. Docs sincronizadas: LENGUAJE.md §3 (semántica real prestado/prestado mut/W060/scoping), CHANGELOG 3.3.1→3.3.6.

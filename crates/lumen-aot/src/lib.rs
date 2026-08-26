@@ -1534,10 +1534,15 @@ fn emit_func(
             Instr::Call(n, argc) => {
                 if n == "imprimir" || n == "print" {
                     if *argc > 0 {
+                        // Fuzzing 3.3.6: concatenar argumentos en UNA línea
+                        // (paridad con VM: imprimir("a:", x) => "a:<x>")
                         s.push_str(&format!(
-                            "  {{ Val _t[{}]; for (int _k = {} - 1; _k >= 0; _k--) _t[_k] = POP(); for (int _k2 = 0; _k2 < {}; _k2++) printf(\"%s\\n\", _fmt(_t[_k2])); }}\n",
+                            "  {{ Val _t[{}]; for (int _k = {} - 1; _k >= 0; _k--) _t[_k] = POP(); char* _cmb = (char*)malloc(65536); _cmb[0] = 0; for (int _k2 = 0; _k2 < {}; _k2++) {{ char* _p = _fmt(_t[_k2]); strcat(_cmb, _p); free(_p); }} printf(\"%s\\n\", _cmb); free(_cmb); }}\n",
                             argc, argc, argc
                         ));
+                    } else {
+                        // Sin argumentos: línea vacía (paridad con VM)
+                        s.push_str("  printf(\"\\n\");\n");
                     }
                     s.push_str("  PUSH(_v_void());\n");
                 } else if n == "leer" || n == "read" {
