@@ -1137,8 +1137,6 @@ mod tests {
 #[cfg(test)]
 mod tests_v338 {
     use super::*;
-    use lumen_lexer::Lexer;
-    use lumen_parser::Parser;
 
     fn fmt_of(src: &str) -> String {
         let once = format_source(src).expect("fmt fallo");

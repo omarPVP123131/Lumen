@@ -800,10 +800,7 @@ impl SemanticAnalyzer {
                 local_bodies.push(body.clone());
             }
         }
-        for node in program
-            .iter()
-            .chain(local_bodies.iter().flatten().map(|x| x))
-        {
+        for node in program.iter().chain(local_bodies.iter().flatten()) {
             if let DeclOrStmt::Decl(Decl::Struct {
                 name,
                 fields,
