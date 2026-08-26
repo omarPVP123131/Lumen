@@ -447,3 +447,15 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  fuzz-paridad:
+    name: 🔁 Paridad VM↔nativo
+    needs: [fmt, clippy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y gcc
+      - name: Fuzzing de paridad VM vs binario nativo
+        run: |
+          chmod +x scripts/fuzz_paridad.ps1
+          pwsh -NoProfile -File scripts/fuzz_paridad.ps1

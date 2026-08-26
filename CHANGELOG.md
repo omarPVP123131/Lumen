@@ -702,3 +702,27 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   este` ni MakeRef; el fixpoint compiler_v4 requiere espejar parse_param y el
   codegen de receiver-referencia antes de la próxima regeneración.
 - **LLVM/Cranelift _lw_* (#7)**: sesión dedicada; arquitectura en 3.3.7.
+
+## [3.4.0] - 2026-08-25
+
+### Feature: expansión de capturas en __regex_reemplazar ($1, ${n}, $0)
+- Antes el reemplazo era literal en ambas capas. Ahora `$1..$9`, `${n}` y
+  `$0` (match completo) se expanden con las capturas del último match,
+  implementado EN PARALELO en min_regex.rs y lumen_rt.h — paridad exacta
+  VM↔nativo verificada (fuzz/regex_dollar.nv)
+- Fix C: la raíz CAP no pasa por R_CAP al descender → $0 se registra
+  manualmente tras cada match
+
+### CI: job fuzz-paridad
+- Nuevo job `fuzz-paridad` en Linux: ejecuta scripts/fuzz_paridad.ps1 en
+  cada push para detectar divergencias VM↔nativo automáticamente
+
+### Docs
+- LENGUAJE.md apéndice: sintaxis regex soportada por el motor propio
+  (y qué falta: {m,n}, (?:...), lookaheads)
+
+### Pendientes explícitos (sin cambios esta entrega)
+- #2 restante: f-strings/interpolación y async/tareas vs nativo
+- #5 perf: eliminar _sv por llamada (slots renombrados lo permiten)
+- #6 self-hosting sync: espejar prestado mut este en parser.nv + fixpoint
+- LLVM/Cranelift _lw_*: sesión dedicada

@@ -343,3 +343,14 @@ w = autograd_backward(loss, w);
 w = autograd_paso_adamw(opt, w);
 ```
 
+
+## Apéndice — Sintaxis regex soportada (motor propio, v3.3.7+)
+
+LÚMEN usa un motor propio por backtracking idéntico en VM y backend nativo
+(NO es POSIX completo). Soportado: literales, `.`, `^`, `$`, clases `[a-z]` con
+negación `[^...]`, escapes `\d \D \w \W \s \S`, cuantificadores greedy `* + ?`,
+grupos de captura `()` y alternancia `|`. NO soportado aún: cuantificadores
+acotados `{m,n}`, grupos no-capturantes `(?:...)`, lookaheads.
+
+En `__regex_reemplazar` el reemplazo expande `$1..$9`, `${n}` y `$0`
+(match completo), con paridad exacta VM↔nativo (v3.4.0).

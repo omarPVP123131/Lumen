@@ -77,9 +77,38 @@ impl Regex {
         let mut res = String::new();
         let mut pos = 0;
         while pos < cs.len() {
-            if let Some(end) = try_match(&self.pieces, &cs, pos, 0) {
-                res.push_str(replacement);
-                pos = end;
+            let mut caps = vec![(0usize, 0usize); 16];
+            let mut gi = 0;
+            if let Some((end, _)) = try_match_cap(&self.pieces, &cs, pos, 0, &mut caps, &mut gi) {
+                // v3.4.0: expansión de $1..$9 y ${n} sobre las capturas
+                let rc: Vec<char> = replacement.chars().collect();
+                let mut i = 0;
+                while i < rc.len() {
+                    if rc[i] == '$' && i + 1 < rc.len() {
+                        if rc[i + 1] == '{' {
+                            if let Some(close) = rc[i + 2..].iter().position(|&c| c == '}') {
+                                let num: String = rc[i + 2..i + 2 + close].iter().collect();
+                                if let Ok(n) = num.trim().parse::<usize>() {
+                                    if n < caps.len() && caps[n].1 > caps[n].0 {
+                                        res.extend(&cs[caps[n].0..caps[n].1]);
+                                    }
+                                }
+                                i += 3 + close;
+                                continue;
+                            }
+                        } else if rc[i + 1].is_ascii_digit() {
+                            let n = rc[i + 1].to_digit(10).unwrap() as usize;
+                            if n < caps.len() && caps[n].1 > caps[n].0 {
+                                res.extend(&cs[caps[n].0..caps[n].1]);
+                            }
+                            i += 2;
+                            continue;
+                        }
+                    }
+                    res.push(rc[i]);
+                    i += 1;
+                }
+                pos = if end > pos { end } else { pos + 1 };
             } else {
                 res.push(cs[pos]);
                 pos += 1;

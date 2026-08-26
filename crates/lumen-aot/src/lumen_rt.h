@@ -1001,13 +1001,47 @@ static char* _regex_rep(const char* pat, const char* s, const char* rep) {
   int cl = (int)strlen(s);
   int pos = 0;
   while (pos < cl) {
+    _rcaps_on = 1;
+    memset(_rcaps, 0, sizeof(_rcaps));
     int end = _rtry_root(&r, s, cl, pos);
     if (end >= 0) {
-      size_t rl = strlen(rep);
-      while (oi + rl + 1 > cap) { cap *= 2; out = (char*)realloc(out, cap); }
-      memcpy(out + oi, rep, rl); oi += rl;
+      /* $0 = match completo: la raíz CAP no pasa por R_CAP en _rtry */
+      _rcaps[0].st = pos; _rcaps[0].en = end;
+      /* v3.4.0: expansión de $N y ${N} sobre las capturas */
+      const char* rp = rep;
+      while (*rp) {
+        if (rp[0] == '$' && rp[1] == '{') {
+          const char* close = strchr(rp + 2, '}');
+          if (close) {
+            char num[8]; size_t nl = (size_t)(close - (rp + 2));
+            if (nl < sizeof num) { memcpy(num, rp + 2, nl); num[nl] = 0; }
+            else num[0] = 0;
+            int n = atoi(num);
+            if (n >= 0 && n < 16 && r.ngroups >= n && _rcaps[n].en > _rcaps[n].st) {
+              int a = _rcaps[n].st, b = _rcaps[n].en;
+              while (oi + (size_t)(b - a) + 1 > cap) { cap *= 2; out = (char*)realloc(out, cap); }
+              memcpy(out + oi, s + a, (size_t)(b - a)); oi += (size_t)(b - a);
+            }
+            rp = close + 1;
+            continue;
+          }
+        } else if (rp[0] == '$' && rp[1] >= '0' && rp[1] <= '9') {
+          int n = rp[1] - '0';
+          if (n < 16 && r.ngroups >= n && _rcaps[n].en > _rcaps[n].st) {
+            int a = _rcaps[n].st, b = _rcaps[n].en;
+            while (oi + (size_t)(b - a) + 1 > cap) { cap *= 2; out = (char*)realloc(out, cap); }
+            memcpy(out + oi, s + a, (size_t)(b - a)); oi += (size_t)(b - a);
+          }
+          rp += 2;
+          continue;
+        }
+        if (oi + 2 > cap) { cap *= 2; out = (char*)realloc(out, cap); }
+        out[oi++] = *rp++;
+      }
       pos = end > pos ? end : pos + 1; /* evita bucle en match vacío */
+      _rcaps_on = 0;
     } else {
+      _rcaps_on = 0;
       if (oi + 2 > cap) { cap *= 2; out = (char*)realloc(out, cap); }
       out[oi++] = s[pos];
       pos++;
