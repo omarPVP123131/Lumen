@@ -4003,11 +4003,13 @@ impl VM {
                     let mut writebacks: Vec<(usize, String, Value)> = Vec::new();
                     for scope in self.locals.iter().skip(base) {
                         for v in scope.values() {
-                            if let Value::Ref { cell, owner } = v {
-                                if let Some((target_si, target_name)) = owner {
-                                    let final_val = cell.lock().unwrap().clone();
-                                    writebacks.push((*target_si, target_name.clone(), final_val));
-                                }
+                            if let Value::Ref {
+                                cell,
+                                owner: Some((target_si, target_name)),
+                            } = v
+                            {
+                                let final_val = cell.lock().unwrap().clone();
+                                writebacks.push((*target_si, target_name.clone(), final_val));
                             }
                         }
                     }

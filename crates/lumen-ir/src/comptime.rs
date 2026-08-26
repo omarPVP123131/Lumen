@@ -66,7 +66,7 @@ impl ComptimeEvaluator {
 
     /// Pre-paso sobre todo el programa: reemplaza cada `comptime {...}`
     /// evaluable por su literal. Devuelve cuántos nodos se plegaron.
-    pub fn rewrite_program(&mut self, program: &mut Vec<DeclOrStmt>) -> usize {
+    pub fn rewrite_program(&mut self, program: &mut [DeclOrStmt]) -> usize {
         let mut folded = 0;
         for node in program.iter_mut() {
             match node {
@@ -172,7 +172,7 @@ impl ComptimeEvaluator {
                     return Err(());
                 }
                 let mut call_env: HashMap<String, CVal> = HashMap::new();
-                for (p, v) in f.params.iter().zip(vals.into_iter()) {
+                for (p, v) in f.params.iter().zip(vals) {
                     call_env.insert(p.clone(), v);
                 }
                 self.exec_fn_body(&f.body, &mut call_env, depth + 1)

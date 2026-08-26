@@ -1279,7 +1279,7 @@ impl IRBuilder {
                             for (i, arg) in args.iter().enumerate() {
                                 // prestado mut + argumento es variable simple →
                                 // pasar por referencia con write-back (bug #6)
-                                if ref_positions.as_ref().map_or(false, |v| v.contains(&i)) {
+                                if ref_positions.as_ref().is_some_and(|v| v.contains(&i)) {
                                     if let Expr::Ident { name: vn, .. } = arg {
                                         self.emit(Instr::MakeRef(vn.clone()));
                                         continue;
@@ -1392,7 +1392,7 @@ impl IRBuilder {
                     let ref_recv = self
                         .ref_mut_params
                         .get(&fname)
-                        .map_or(false, |v| v.contains(&0));
+                        .is_some_and(|v| v.contains(&0));
                     if ref_recv {
                         if let Expr::Ident { name: rn, .. } = expr.as_ref() {
                             self.emit(Instr::MakeRef(rn.clone()));

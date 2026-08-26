@@ -1151,11 +1151,11 @@ pub fn compile_to_c(program: &Program) -> String {
                 Instr::FuncRef(n) => {
                     add_name(n);
                 }
-                Instr::Call(cn, _) => {
-                    if !program.funcs.contains_key(cn) && !unknown.iter().any(|u| u == cn) {
-                        unknown.push(cn.clone());
-                        record_unsupported_builtin(cn);
-                    }
+                Instr::Call(cn, _)
+                    if !program.funcs.contains_key(cn) && !unknown.iter().any(|u| u == cn) =>
+                {
+                    unknown.push(cn.clone());
+                    record_unsupported_builtin(cn);
                 }
                 _ => {}
             }

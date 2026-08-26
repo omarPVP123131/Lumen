@@ -52,13 +52,13 @@ impl Regex {
 
     pub fn is_match(&self, text: &str) -> bool {
         let cs: Vec<char> = text.chars().collect();
-        if self.pieces.len() > 0 {
+        if !self.pieces.is_empty() {
             if let Piece::Start = self.pieces[0] {
                 return try_match(&self.pieces, &cs, 0, 0).is_some();
             }
         }
         for i in 0..=cs.len() {
-            if let Some(_) = try_match(&self.pieces, &cs, i, 0) {
+            if try_match(&self.pieces, &cs, i, 0).is_some() {
                 return true;
             }
         }
@@ -70,7 +70,7 @@ impl Regex {
         let mut caps = vec![String::new(); self.groups + 1];
         let mut groups = vec![(0usize, 0usize); self.groups];
         let mut group_idx = 0;
-        if self.pieces.len() > 0 {
+        if !self.pieces.is_empty() {
             if let Piece::Start = self.pieces[0] {
                 if let Some((end, _)) =
                     try_match_cap(&self.pieces, &cs, 0, 0, &mut groups, &mut group_idx)
@@ -159,7 +159,7 @@ fn try_match_cap(
     mut ci: usize,
     mut pi: usize,
     caps: &mut Vec<(usize, usize)>,
-    gi: &mut usize,
+    _gi: &mut usize,
 ) -> Option<(usize, usize)> {
     while pi < pieces.len() {
         match &pieces[pi] {
@@ -259,7 +259,7 @@ fn try_match_cap(
                 // Greedy: try max first, then reduce
                 let mut count = 0;
                 while count < *max {
-                    match try_match_cap(&[*(*inner).clone()], cs, ci, 0, caps, gi) {
+                    match try_match_cap(&[*(*inner).clone()], cs, ci, 0, caps, _gi) {
                         Some((end, _)) => {
                             ci = end;
                             count += 1;
@@ -272,7 +272,7 @@ fn try_match_cap(
                 if count >= *min {
                     let saved_ci = ci;
                     // Restore ci for the backtrack position
-                    match try_match_cap(&pieces[pi + 1..], cs, ci, 0, caps, gi) {
+                    match try_match_cap(&pieces[pi + 1..], cs, ci, 0, caps, _gi) {
                         Some((end, _)) => {
                             return Some((end, ci));
                         }
@@ -302,20 +302,18 @@ fn try_match_cap(
                 }
             }
             Piece::Look(inner) => {
-                if try_match_cap(inner, cs, ci, 0, caps, gi).is_none() {
-                    return None;
-                }
+                try_match_cap(inner, cs, ci, 0, caps, _gi)?;
                 pi += 1; // cero ancho: no consume
             }
             Piece::NegLook(inner) => {
-                if try_match_cap(inner, cs, ci, 0, caps, gi).is_some() {
+                if try_match_cap(inner, cs, ci, 0, caps, _gi).is_some() {
                     return None;
                 }
                 pi += 1; // cero ancho: no consume
             }
             Piece::Alt(alternatives) => {
                 for alt in alternatives {
-                    if let Some((end, _)) = try_match_cap(alt, cs, ci, 0, caps, gi) {
+                    if let Some((end, _)) = try_match_cap(alt, cs, ci, 0, caps, _gi) {
                         return Some((end, ci));
                     }
                 }
