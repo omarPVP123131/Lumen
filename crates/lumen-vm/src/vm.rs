@@ -1724,7 +1724,7 @@ impl VM {
 
         if name == "__regex_new" || name == "__regex_nuevo" {
             let pat = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            match regex::Regex::new(&pat) {
+            match crate::lumen_min_regex_new(&pat) {
                 Ok(_) => self.push(Value::Bool(true)),
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
@@ -1734,7 +1734,7 @@ impl VM {
         if name == "__regex_is_match" || name == "__regex_coincide" {
             let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-            match regex::Regex::new(&re_s) {
+            match crate::lumen_min_regex_new(&re_s) {
                 Ok(r) => self.push(Value::Bool(r.is_match(&text))),
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
@@ -1744,19 +1744,11 @@ impl VM {
         if name == "__regex_captures" || name == "__regex_capturar" {
             let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-            match regex::Regex::new(&re_s) {
+            match crate::lumen_min_regex_new(&re_s) {
                 Ok(r) => {
-                    if let Some(caps) = r.captures(&text) {
-                        let vs: Vec<Value> = caps
-                            .iter()
-                            .map(|m| {
-                                Value::str(m.map(|x| x.as_str().to_string()).unwrap_or_default())
-                            })
-                            .collect();
-                        self.push(Value::arr(vs));
-                    } else {
-                        self.push(Value::arr(vec![]));
-                    }
+                    let caps = r.captures(&text);
+                    let vs: Vec<Value> = caps.into_iter().map(Value::str).collect();
+                    self.push(Value::arr(vs));
                 }
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
@@ -1767,8 +1759,8 @@ impl VM {
             let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
             let rep = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
-            match regex::Regex::new(&re_s) {
-                Ok(r) => self.push(Value::str(r.replace_all(&text, rep.as_str()).to_string())),
+            match crate::lumen_min_regex_new(&re_s) {
+                Ok(r) => self.push(Value::str(r.replace(&text, rep.as_str()))),
                 Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
             }
             return Some(Ok(()));
@@ -5111,35 +5103,26 @@ impl VM {
                     }
                 } else if name == "__regex_new" || name == "__regex_nuevo" {
                     let pat = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                    match regex::Regex::new(&pat) {
+                    match crate::lumen_min_regex_new(&pat) {
                         Ok(_) => self.push(Value::Bool(true)),
                         Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__regex_is_match" || name == "__regex_coincide" {
                     let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    match regex::Regex::new(&re_s) {
+                    match crate::lumen_min_regex_new(&re_s) {
                         Ok(r) => self.push(Value::Bool(r.is_match(&text))),
                         Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__regex_captures" || name == "__regex_capturar" {
                     let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
-                    match regex::Regex::new(&re_s) {
+                    match crate::lumen_min_regex_new(&re_s) {
                         Ok(r) => {
-                            if let Some(caps) = r.captures(&text) {
-                                let vs: Vec<Value> = caps
-                                    .iter()
-                                    .map(|m| {
-                                        Value::str(
-                                            m.map(|x| x.as_str().to_string()).unwrap_or_default(),
-                                        )
-                                    })
-                                    .collect();
-                                self.push(Value::arr(vs));
-                            } else {
-                                self.push(Value::arr(vec![]));
-                            }
+                            let caps = r.captures(&text);
+                            let vs: Vec<Value> =
+                                caps.into_iter().map(Value::str).collect();
+                            self.push(Value::arr(vs));
                         }
                         Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
@@ -5147,9 +5130,9 @@ impl VM {
                     let re_s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                     let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
                     let rep = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
-                    match regex::Regex::new(&re_s) {
+                    match crate::lumen_min_regex_new(&re_s) {
                         Ok(r) => {
-                            self.push(Value::str(r.replace_all(&text, rep.as_str()).to_string()))
+                            self.push(Value::str(r.replace(&text, rep.as_str())))
                         }
                         Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }

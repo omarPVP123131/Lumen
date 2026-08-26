@@ -781,3 +781,18 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 
 ### Pendientes vivos
 - Lookaheads `(?=...)` · perf `_sv` · self-hosting sync · LLVM/Cranelift _lw_*
+
+## [3.4.5] - 2026-08-25
+
+### Lookaheads (?=...) + builtins migrados al motor propio
+
+#### Lookahead positivo en ambos motores
+- `Piece::Look` (Rust) / `R_LOOK` (C): aserción cero-ancho; paridad verificada
+  (`foo(?=bar)`, reemplazo `\d+(?=px)` → solo el número seguido de px)
+
+#### Los builtins __regex_* usan ahora el motor PROPIO (hito)
+- `__regex_coincide/capturar/reemplazar` migrados de la crate externa a
+  min_regex.rs (`crate::lumen_min_regex_new`): lookaheads, `(?:...)`,
+  `{m,n}` y `$n` funcionan IDÉNTICOS en VM y nativo, sin divergencias de
+  sintaxis entre plataformas. La suite e2e de regex completa en verde sobre
+  el motor propio.

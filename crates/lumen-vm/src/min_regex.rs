@@ -11,6 +11,8 @@ enum Piece {
     Start, End,
     Capture { inner: Vec<Piece>, idx: usize },
     Alt(Vec<Vec<Piece>>),
+    /// Lookahead positivo (?=...) - cero ancho
+    Look(Vec<Piece>),
 }
 
 pub struct Regex {
@@ -207,6 +209,10 @@ fn try_match_cap(pieces: &[Piece], cs: &[char], mut ci: usize, mut pi: usize, ca
                     None => return None,
                 }
             }
+            Piece::Look(inner) => {
+                if try_match_cap(inner, cs, ci, 0, caps, gi).is_none() { return None; }
+                pi += 1; // cero ancho: no consume
+            }
             Piece::Alt(alternatives) => {
                 for alt in alternatives {
                     if let Some((end, _)) = try_match_cap(alt, cs, ci, 0, caps, gi) {
@@ -326,6 +332,14 @@ fn parse_piece(chars: &[char], pi: &mut usize, groups: &mut usize) -> Result<Pie
             Ok(Piece::Class { chars: cls_chars, ranges, negated })
         }
         '(' => {
+            // v3.4.5: lookahead positivo (?=...)
+            if *pi + 1 < chars.len() && chars[*pi] == '?' && chars[*pi + 1] == '=' {
+                *pi += 2;
+                let (inner, _) = parse_alt(chars, pi)?;
+                if *pi >= chars.len() || chars[*pi] != ')' { return Err("Unmatched '('".into()); }
+                *pi += 1;
+                return Ok(Piece::Look(inner));
+            }
             // v3.4.4: grupo NO capturante `(?:...)` — desciende sin grabar
             // captura (idx::MAX supera el guard `idx < caps.len()` del matcher)
             if *pi + 1 < chars.len() && chars[*pi] == '?' && chars[*pi + 1] == ':' {

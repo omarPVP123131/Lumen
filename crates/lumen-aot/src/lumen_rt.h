@@ -754,7 +754,7 @@ static Val _heap_agregar(Val h, Val x) {
    alternancia |), misma semántica greedy/backtracking — paridad exacta
    VM↔nativo en TODAS las plataformas (elimina POSIX regex y stubs). */
 enum { R_LIT, R_ANY, R_DIG, R_NDIG, R_WRD, R_NWRD, R_SPC, R_NSPC,
-       R_CLASS, R_QUANT, R_START, R_END, R_CAP, R_ALT };
+       R_CLASS, R_QUANT, R_START, R_END, R_CAP, R_ALT, R_LOOK };
 typedef struct RPc RPc;
 struct RPc {
   int t; char lit; int neg;
@@ -808,6 +808,15 @@ static RPc *_rp_piece(const char *s, int *i) {
     return p;
   }
   if (c == '(') {
+    /* v3.4.5: lookahead positivo (?=...) - cero ancho */
+    if (s[*i] == '?' && s[*i + 1] == '=') {
+      (*i) += 2;
+      RPc *lk = _rp(R_LOOK);
+      lk->seq = (RPc**)_rp_seq(s, i, &lk->nseq);
+      if (s[*i] != ')') return NULL;
+      (*i)++;
+      return lk;
+    }
     RPc *cap = _rp(R_CAP);
     /* v3.4.4: `(?:...)` no capturante — idx=0 no graba en el matcher */
     if (s[*i] == '?' && s[*i + 1] == ':') { (*i) += 2; cap->idx = 0; }
@@ -945,6 +954,11 @@ static int _rtry(RPc **seq, int n, const char *cs, int cl, int ci, int pi) {
         if (e < 0) return -1;
         if (_rcaps_on && p->idx > 0 && p->idx < 16) { _rcaps[p->idx].st = ci; _rcaps[p->idx].en = e; }
         ci = e; pi++; break;
+      }
+      case R_LOOK: {
+        int e = _rtry(p->seq, p->nseq, cs, cl, ci, 0);
+        if (e < 0) return -1;
+        pi++; break; /* cero ancho: no consume */
       }
       case R_ALT: {
         for (int k = 0; k < p->nalts; k++) {
