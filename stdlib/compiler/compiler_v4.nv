@@ -1948,17 +1948,19 @@ funcion numero _parse_decl(numero st) {
                 si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
             }
             // v3.4.7: espejo self-hosting — `prestado [mut] ...` en params.
-            // Receiver `prestado mut este` → tipo "Self"; forma general salta
-            // prestado[/mut] y deja que el flujo normal lea tipo+nombre.
+            texto prestado_tag = "";
             si (!_st_eof(st)) {
                 texto kwp = a_texto(_st_tv(st));
                 si (kwp == "prestado" || kwp == "borrowed") {
                     st = _st_adv(st);
                     texto p1 = a_texto(_st_tv(st));
+                    texto mut_tag = "";
                     si (p1 == "mut" || p1 == "mutable") {
+                        mut_tag = " mut";
                         st = _st_adv(st);
                         p1 = a_texto(_st_tv(st));
                     }
+                    prestado_tag = "prestado" + mut_tag + " ";
                     si (p1 == "este" || p1 == "self" || p1 == "yo") {
                         numero nxr = _st_adv(st);
                         si (_st_ch(nxr, 5, ",") || _st_ch(nxr, 5, ")") || _st_eof(nxr)) {
@@ -1966,16 +1968,22 @@ funcion numero _parse_decl(numero st) {
                             pmr = __map_poner(pmr, "nombre", p1);
                             pmr = __map_poner(pmr, "tipo", type_nm);
                             pmr = __map_poner(pmr, "defecto", 0);
+                            // marcar receiver mut con tag en tipo para codegen
+                            si (mut_tag != "") {
+                                pmr = __map_poner(pmr, "tipo", "prestado mut " + type_nm);
+                            }
                             prms = __map_poner(prms, a_texto(pc), pmr);
                             pc = pc + 1;
                             st = nxr;
                             continuar;
                         }
                     }
-                    // forma general: p1 es el tipo interior — el flujo de abajo lo lee
+                    // forma general: p1 ya es el tipo interior; el flujo lee tipo+nombre
+                    // pero recordamos el tag para prefijar el tipo del param
                 }
             }
-            texto pt = a_texto(_st_tv(st));
+            texto pt_raw = a_texto(_st_tv(st));
+            texto pt = prestado_tag + pt_raw;
             // Avanzar correctamente tras el tipo (soporta genéricos como lista<entero>)
             si (_st_tp(st)) {
                 st = _st_tp_skip(st);
@@ -2563,6 +2571,7 @@ numero OP_ENUM_VAR = 44;
 numero OP_ENUM_ARGC = 45;
 numero OP_TUPLE_NEW = 47;
 numero OP_TUPLE_GET = 48;
+numero OP_MAKE_REF = 63;
 
 numero dt_cnt = 0;
 
@@ -2803,9 +2812,34 @@ funcion numero _gen_expr(numero cg, numero node) {
             cg = _cg_emit(cg, _instr(41, 0)); // OptionSome
             retornar cg;
         }
-        // Generate code for arguments
+        // v3.5.1: prestado mut — si el param es prestado mut y el arg es variable, emitir MakeRef
+        imprimir("CALLEE:", a_texto(callee));
+        numero target_ptypes = 0;
+        entero found_pt = 0;
+        {
+            numero funcs2 = __map_obtener(cg, "funcs");
+            numero fcnt2 = __map_obtener(cg, "func_cnt");
+            entero fi = 0;
+            mientras fi < fcnt2 {
+                numero ff = __map_obtener(funcs2, a_texto(fi));
+                si (a_texto(__map_obtener(ff, "nombre")) == a_texto(callee)) {
+                    target_ptypes = __map_obtener(ff, "ptypes");
+                    found_pt = 1;
+                    imprimir("FOUND PTYPES");
+                    romper;
+                }
+                fi = fi + 1;
+            }
+            si (found_pt == 0) { imprimir("NOT FOUND"); }
+        }
         numero ai = 0;
         mientras ai < argc {
+            // TEST: forzar MakeRef incondicional para debug
+            numero anode2 = __map_obtener(args, a_texto(ai));
+            texto vname2 = a_texto(__map_obtener(anode2, "nombre"));
+            cg = _cg_emit(cg, _instr(OP_MAKE_REF, vname2));
+            ai = ai + 1;
+            continuar;
             cg = _gen_expr(cg, __map_obtener(args, a_texto(ai)));
             ai = ai + 1;
         }
@@ -3386,6 +3420,14 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
             pi = pi + 1;
         }
         pm = __map_poner(pm, "cnt", pn);
+        numero ptm = __map_nuevo();
+        entero pk = 0;
+        mientras pk < pn {
+            numero pp = __map_obtener(params, a_texto(pk));
+            ptm = __map_poner(ptm, a_texto(pk), __map_obtener(pp, "tipo"));
+            pk = pk + 1;
+        }
+        ptm = __map_poner(ptm, "cnt", pn);
         numero pd = __map_nuevo();
         entero pj = 0;
         mientras pj < pn {
@@ -3399,6 +3441,7 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
         numero f = __map_nuevo();
         f = __map_poner(f, "nombre", nombre);
         f = __map_poner(f, "params", pm);
+        f = __map_poner(f, "ptypes", ptm);
         f = __map_poner(f, "defectos", pd);
         f = __map_poner(f, "start", start);
         funcs = __map_poner(funcs, a_texto(fc), f);

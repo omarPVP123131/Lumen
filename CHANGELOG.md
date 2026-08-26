@@ -881,3 +881,15 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   compila con `compiler_v4.nvc` (131B → Programa → 26 instrs → OK), aunque
   la semántica write-back sigue degradada (41 vs 42) pendiente de MakeRef en
   codegen.nv
+
+## [3.5.2] - 2026-08-26
+
+### Self-hosting: correcciones adicionales parser
+
+- _parse_prog enruta impl/rasgo/trait a _parse_decl (ya en 3.5.1) — se documenta
+  el caso inherente `impl C {` donde type_nm se confundía con "{"
+- Parser prestado: prefijo "prestado mut " preservado en tipo del param para
+  que codegen pueda decidir MakeRef (pendiente codegen MakeRef real)
+- Evidencia: selfhost_probe compila OK (131B) vía nvc, aún degradado 41 vs 42
+
+### Regex: negativos (?!...) ya en 3.4.9, unificados en 3.5.x

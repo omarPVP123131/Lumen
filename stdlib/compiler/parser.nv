@@ -1692,17 +1692,19 @@ funcion numero _parse_decl(numero st) {
                 si (_st_ch(st, 5, ",")) { st = _st_adv(st); }
             }
             // v3.4.7: espejo self-hosting — `prestado [mut] ...` en params.
-            // Receiver `prestado mut este` → tipo "Self"; forma general salta
-            // prestado[/mut] y deja que el flujo normal lea tipo+nombre.
+            texto prestado_tag = "";
             si (!_st_eof(st)) {
                 texto kwp = a_texto(_st_tv(st));
                 si (kwp == "prestado" || kwp == "borrowed") {
                     st = _st_adv(st);
                     texto p1 = a_texto(_st_tv(st));
+                    texto mut_tag = "";
                     si (p1 == "mut" || p1 == "mutable") {
+                        mut_tag = " mut";
                         st = _st_adv(st);
                         p1 = a_texto(_st_tv(st));
                     }
+                    prestado_tag = "prestado" + mut_tag + " ";
                     si (p1 == "este" || p1 == "self" || p1 == "yo") {
                         numero nxr = _st_adv(st);
                         si (_st_ch(nxr, 5, ",") || _st_ch(nxr, 5, ")") || _st_eof(nxr)) {
@@ -1710,16 +1712,22 @@ funcion numero _parse_decl(numero st) {
                             pmr = __map_poner(pmr, "nombre", p1);
                             pmr = __map_poner(pmr, "tipo", type_nm);
                             pmr = __map_poner(pmr, "defecto", 0);
+                            // marcar receiver mut con tag en tipo para codegen
+                            si (mut_tag != "") {
+                                pmr = __map_poner(pmr, "tipo", "prestado mut " + type_nm);
+                            }
                             prms = __map_poner(prms, a_texto(pc), pmr);
                             pc = pc + 1;
                             st = nxr;
                             continuar;
                         }
                     }
-                    // forma general: p1 es el tipo interior — el flujo de abajo lo lee
+                    // forma general: p1 ya es el tipo interior; el flujo lee tipo+nombre
+                    // pero recordamos el tag para prefijar el tipo del param
                 }
             }
-            texto pt = a_texto(_st_tv(st));
+            texto pt_raw = a_texto(_st_tv(st));
+            texto pt = prestado_tag + pt_raw;
             // Avanzar correctamente tras el tipo (soporta genéricos como lista<entero>)
             si (_st_tp(st)) {
                 st = _st_tp_skip(st);

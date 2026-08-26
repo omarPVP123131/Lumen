@@ -688,3 +688,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **v3.5.0: self-hosting compila prestado mut (fuzz/selfhost_probe.nv OK, degradado 41 vs 42). Fix `numero r;` bare-decl en builder + `impl` routing. Siguiente: codegen.nv MakeRef para write-back real y fixpoint.**
 
 **v3.5.1: builder bare-decl fix + parser prestado tolerante; self-hosting compila prestado mut libre (degradado). Impl mangling inherente corregido pero codegen MakeRef pendiente para write-back real.**
+
+**v3.5.2: parser prestado mut prefix preservado; selfhost_probe sigue degradado (MakeRef codegen pendiente).**
