@@ -814,3 +814,21 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 ### Self-hosting sync (#1): sin cambios de código esta entrega
 - El protocolo completo sigue documentado en CHANGELOG 3.4.1; el espejo de
   `prestado mut este` en parser.nv es el prerrequisito antes de regenerar
+
+## [3.4.7] - 2026-08-25
+
+### Self-hosting: espejo `prestado [mut]` en parser.nv + regresión detectada
+
+#### Espejo añadido
+- `_parse_decl` del compilador autohospedado ahora reconoce en params:
+  `prestado|borrowed [mut] T nombre` (salta los modificadores y lee tipo+nombre)
+  y la forma receiver `prestado mut este|self|yo` → tipo "Self"
+
+#### Regresión PRE-EXISTENTE detectada (bloquea el fixpoint)
+- El self-hosted crashea ("Variable r no definida" en _parse_prog) con
+  programas que usan bloques `impl C { ... }` — reproducido TAMBIÉN sin
+  prestado (fuzz/selfhost_base.nv), así que NO fue introducido por este cambio
+- Protocolo de desbloqueo para la próxima sesión:
+  1. Depurar el crash impl en parser.nv (probable skip-tolerante roto)
+  2. Regenerar: pwsh generar_v4.ps1 → lumen build compiler_v4.nv
+  3. Fixpoint: correr .nvc sobre compiler_v4.nv ×2 y comparar SHA-256
