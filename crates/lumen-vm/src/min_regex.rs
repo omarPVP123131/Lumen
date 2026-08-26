@@ -5,11 +5,28 @@
 enum Piece {
     Lit(char),
     Any,
-    Digit, NonDigit, Word, NonWord, Space, NonSpace,
-    Class { chars: Vec<char>, ranges: Vec<(char, char)>, negated: bool },
-    Quant { inner: Box<Piece>, min: usize, max: usize },
-    Start, End,
-    Capture { inner: Vec<Piece>, idx: usize },
+    Digit,
+    NonDigit,
+    Word,
+    NonWord,
+    Space,
+    NonSpace,
+    Class {
+        chars: Vec<char>,
+        ranges: Vec<(char, char)>,
+        negated: bool,
+    },
+    Quant {
+        inner: Box<Piece>,
+        min: usize,
+        max: usize,
+    },
+    Start,
+    End,
+    Capture {
+        inner: Vec<Piece>,
+        idx: usize,
+    },
     Alt(Vec<Vec<Piece>>),
     /// Lookahead positivo (?=...) - cero ancho
     Look(Vec<Piece>),
@@ -27,7 +44,9 @@ impl Regex {
         let chars: Vec<char> = pattern.chars().collect();
         let mut pi = 0;
         let (pieces, groups) = parse_alt(&chars, &mut pi)?;
-        if pi != chars.len() { return Err("Trailing characters".into()); }
+        if pi != chars.len() {
+            return Err("Trailing characters".into());
+        }
         Ok(Regex { pieces, groups })
     }
 
@@ -39,7 +58,9 @@ impl Regex {
             }
         }
         for i in 0..=cs.len() {
-            if let Some(_) = try_match(&self.pieces, &cs, i, 0) { return true; }
+            if let Some(_) = try_match(&self.pieces, &cs, i, 0) {
+                return true;
+            }
         }
         false
     }
@@ -51,7 +72,9 @@ impl Regex {
         let mut group_idx = 0;
         if self.pieces.len() > 0 {
             if let Piece::Start = self.pieces[0] {
-                if let Some((end, _)) = try_match_cap(&self.pieces, &cs, 0, 0, &mut groups, &mut group_idx) {
+                if let Some((end, _)) =
+                    try_match_cap(&self.pieces, &cs, 0, 0, &mut groups, &mut group_idx)
+                {
                     caps[0] = cs[..end].iter().collect();
                     for (i, (s, e)) in groups.iter().enumerate() {
                         if i < self.groups && *s < *e {
@@ -63,7 +86,9 @@ impl Regex {
             }
         }
         for i in 0..=cs.len() {
-            if let Some((end, _)) = try_match_cap(&self.pieces, &cs, i, 0, &mut groups, &mut group_idx) {
+            if let Some((end, _)) =
+                try_match_cap(&self.pieces, &cs, i, 0, &mut groups, &mut group_idx)
+            {
                 caps[0] = cs[i..end].iter().collect();
                 for (i, (s, e)) in groups.iter().enumerate() {
                     if i < self.groups && *s < *e {
@@ -128,72 +153,134 @@ fn try_match(pieces: &[Piece], cs: &[char], ci: usize, pi: usize) -> Option<usiz
     try_match_cap(pieces, cs, ci, pi, &mut caps, &mut gi).map(|(e, _)| e)
 }
 
-fn try_match_cap(pieces: &[Piece], cs: &[char], mut ci: usize, mut pi: usize, caps: &mut Vec<(usize, usize)>, gi: &mut usize) -> Option<(usize, usize)> {
+fn try_match_cap(
+    pieces: &[Piece],
+    cs: &[char],
+    mut ci: usize,
+    mut pi: usize,
+    caps: &mut Vec<(usize, usize)>,
+    gi: &mut usize,
+) -> Option<(usize, usize)> {
     while pi < pieces.len() {
         match &pieces[pi] {
-            Piece::Start => { if ci != 0 { return None; } pi += 1; }
-            Piece::End => { if ci != cs.len() { return None; } pi += 1; }
+            Piece::Start => {
+                if ci != 0 {
+                    return None;
+                }
+                pi += 1;
+            }
+            Piece::End => {
+                if ci != cs.len() {
+                    return None;
+                }
+                pi += 1;
+            }
             Piece::Any => {
-                if ci >= cs.len() || cs[ci] == '\n' { return None; }
-                ci += 1; pi += 1;
+                if ci >= cs.len() || cs[ci] == '\n' {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
             Piece::Lit(c) => {
-                if ci >= cs.len() || cs[ci] != *c { return None; }
-                ci += 1; pi += 1;
+                if ci >= cs.len() || cs[ci] != *c {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
             Piece::Digit => {
-                if ci >= cs.len() || !cs[ci].is_ascii_digit() { return None; }
-                ci += 1; pi += 1;
+                if ci >= cs.len() || !cs[ci].is_ascii_digit() {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
             Piece::NonDigit => {
-                if ci >= cs.len() || cs[ci].is_ascii_digit() { return None; }
-                ci += 1; pi += 1;
+                if ci >= cs.len() || cs[ci].is_ascii_digit() {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
             Piece::Word => {
-                if ci >= cs.len() || !(cs[ci].is_ascii_alphanumeric() || cs[ci] == '_') { return None; }
-                ci += 1; pi += 1;
+                if ci >= cs.len() || !(cs[ci].is_ascii_alphanumeric() || cs[ci] == '_') {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
             Piece::NonWord => {
-                if ci >= cs.len() || cs[ci].is_ascii_alphanumeric() || cs[ci] == '_' { return None; }
-                ci += 1; pi += 1;
+                if ci >= cs.len() || cs[ci].is_ascii_alphanumeric() || cs[ci] == '_' {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
             Piece::Space => {
-                if ci >= cs.len() || !cs[ci].is_ascii_whitespace() { return None; }
-                ci += 1; pi += 1;
+                if ci >= cs.len() || !cs[ci].is_ascii_whitespace() {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
             Piece::NonSpace => {
-                if ci >= cs.len() || cs[ci].is_ascii_whitespace() { return None; }
-                ci += 1; pi += 1;
+                if ci >= cs.len() || cs[ci].is_ascii_whitespace() {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
-            Piece::Class { chars, ranges, negated } => {
-                if ci >= cs.len() { return None; }
+            Piece::Class {
+                chars,
+                ranges,
+                negated,
+            } => {
+                if ci >= cs.len() {
+                    return None;
+                }
                 let ch = cs[ci];
                 let mut matched = chars.contains(&ch);
-                for (lo, hi) in ranges { if ch >= *lo && ch <= *hi { matched = true; } }
-                if *negated { matched = !matched; }
-                if !matched { return None; }
-                ci += 1; pi += 1;
+                for (lo, hi) in ranges {
+                    if ch >= *lo && ch <= *hi {
+                        matched = true;
+                    }
+                }
+                if *negated {
+                    matched = !matched;
+                }
+                if !matched {
+                    return None;
+                }
+                ci += 1;
+                pi += 1;
             }
             Piece::Quant { inner, min, max } => {
                 // Greedy: try max first, then reduce
                 let mut count = 0;
                 while count < *max {
                     match try_match_cap(&[*(*inner).clone()], cs, ci, 0, caps, gi) {
-                        Some((end, _)) => { ci = end; count += 1; }
+                        Some((end, _)) => {
+                            ci = end;
+                            count += 1;
+                        }
                         None => break,
                     }
                 }
-                while count >= *min {
+                // Semántica del motor: el bloque se evalúa SOLO una vez (el
+                // cuerpo siempre retorna o hace break), por eso es un `if`.
+                if count >= *min {
                     let saved_ci = ci;
                     // Restore ci for the backtrack position
                     match try_match_cap(&pieces[pi + 1..], cs, ci, 0, caps, gi) {
-                        Some((end, _)) => { return Some((end, ci)); }
+                        Some((end, _)) => {
+                            return Some((end, ci));
+                        }
                         None => {
                             // Backtrack: undo one match
                             count -= 1;
                             // Need to re-match one fewer time
                             ci = saved_ci;
-                            break;
                         }
                     }
                 }
@@ -205,18 +292,25 @@ fn try_match_cap(pieces: &[Piece], cs: &[char], mut ci: usize, mut pi: usize, ca
                 let mut inner_gi = 0;
                 match try_match_cap(inner, cs, ci, 0, caps, &mut inner_gi) {
                     Some((end, _)) => {
-                        if *idx < caps.len() { caps[*idx] = (start, end); }
-                        ci = end; pi += 1;
+                        if *idx < caps.len() {
+                            caps[*idx] = (start, end);
+                        }
+                        ci = end;
+                        pi += 1;
                     }
                     None => return None,
                 }
             }
             Piece::Look(inner) => {
-                if try_match_cap(inner, cs, ci, 0, caps, gi).is_none() { return None; }
+                if try_match_cap(inner, cs, ci, 0, caps, gi).is_none() {
+                    return None;
+                }
                 pi += 1; // cero ancho: no consume
             }
             Piece::NegLook(inner) => {
-                if try_match_cap(inner, cs, ci, 0, caps, gi).is_some() { return None; }
+                if try_match_cap(inner, cs, ci, 0, caps, gi).is_some() {
+                    return None;
+                }
                 pi += 1; // cero ancho: no consume
             }
             Piece::Alt(alternatives) => {
@@ -239,13 +333,21 @@ fn parse_alt(chars: &[char], pi: &mut usize) -> Result<(Vec<Piece>, usize), Stri
         alts.push((pieces, groups));
         if *pi < chars.len() && chars[*pi] == '|' {
             *pi += 1;
-        } else { break; }
+        } else {
+            break;
+        }
     }
     if alts.len() == 1 {
         Ok(alts.remove(0))
     } else {
         let mut groups = 0;
-        let alt_pieces: Vec<Vec<Piece>> = alts.into_iter().map(|(p, g)| { groups += g; p }).collect();
+        let alt_pieces: Vec<Vec<Piece>> = alts
+            .into_iter()
+            .map(|(p, g)| {
+                groups += g;
+                p
+            })
+            .collect();
         Ok((vec![Piece::Alt(alt_pieces)], groups))
     }
 }
@@ -255,26 +357,58 @@ fn parse_concat(chars: &[char], pi: &mut usize) -> Result<(Vec<Piece>, usize), S
     let mut groups = 0;
     while *pi < chars.len() {
         let c = chars[*pi];
-        if c == '|' || c == ')' { break; }
+        if c == '|' || c == ')' {
+            break;
+        }
         let piece = parse_piece(chars, pi, &mut groups)?;
         // Check for quantifier
         if *pi < chars.len() {
             match chars[*pi] {
-                '*' => { *pi += 1; pieces.push(Piece::Quant { inner: Box::new(piece), min: 0, max: usize::MAX }); continue; }
-                '+' => { *pi += 1; pieces.push(Piece::Quant { inner: Box::new(piece), min: 1, max: usize::MAX }); continue; }
-                '?' => { *pi += 1; pieces.push(Piece::Quant { inner: Box::new(piece), min: 0, max: 1 }); continue; }
+                '*' => {
+                    *pi += 1;
+                    pieces.push(Piece::Quant {
+                        inner: Box::new(piece),
+                        min: 0,
+                        max: usize::MAX,
+                    });
+                    continue;
+                }
+                '+' => {
+                    *pi += 1;
+                    pieces.push(Piece::Quant {
+                        inner: Box::new(piece),
+                        min: 1,
+                        max: usize::MAX,
+                    });
+                    continue;
+                }
+                '?' => {
+                    *pi += 1;
+                    pieces.push(Piece::Quant {
+                        inner: Box::new(piece),
+                        min: 0,
+                        max: 1,
+                    });
+                    continue;
+                }
                 '{' => {
                     // v3.4.2: cuantificador acotado {m}, {m,}, {m,n}; malformado → '{' literal
                     let save = *pi;
                     *pi += 1;
                     let mut min_s = String::new();
-                    while *pi < chars.len() && chars[*pi].is_ascii_digit() { min_s.push(chars[*pi]); *pi += 1; }
+                    while *pi < chars.len() && chars[*pi].is_ascii_digit() {
+                        min_s.push(chars[*pi]);
+                        *pi += 1;
+                    }
                     if !min_s.is_empty() {
                         let mut max_opt: Option<String> = None;
                         if *pi < chars.len() && chars[*pi] == ',' {
                             *pi += 1;
                             let mut ms = String::new();
-                            while *pi < chars.len() && chars[*pi].is_ascii_digit() { ms.push(chars[*pi]); *pi += 1; }
+                            while *pi < chars.len() && chars[*pi].is_ascii_digit() {
+                                ms.push(chars[*pi]);
+                                *pi += 1;
+                            }
                             max_opt = Some(ms);
                         }
                         if *pi < chars.len() && chars[*pi] == '}' {
@@ -285,7 +419,11 @@ fn parse_concat(chars: &[char], pi: &mut usize) -> Result<(Vec<Piece>, usize), S
                                 Some(ms) if ms.is_empty() => usize::MAX,
                                 Some(ms) => ms.parse().unwrap_or(min),
                             };
-                            pieces.push(Piece::Quant { inner: Box::new(piece), min, max });
+                            pieces.push(Piece::Quant {
+                                inner: Box::new(piece),
+                                min,
+                                max,
+                            });
                             continue;
                         }
                     }
@@ -300,7 +438,9 @@ fn parse_concat(chars: &[char], pi: &mut usize) -> Result<(Vec<Piece>, usize), S
 }
 
 fn parse_piece(chars: &[char], pi: &mut usize, groups: &mut usize) -> Result<Piece, String> {
-    if *pi >= chars.len() { return Err("Unexpected end".into()); }
+    if *pi >= chars.len() {
+        return Err("Unexpected end".into());
+    }
     let c = chars[*pi];
     *pi += 1;
     match c {
@@ -308,8 +448,11 @@ fn parse_piece(chars: &[char], pi: &mut usize, groups: &mut usize) -> Result<Pie
         '$' => Ok(Piece::End),
         '.' => Ok(Piece::Any),
         '\\' => {
-            if *pi >= chars.len() { return Err("Trailing backslash".into()); }
-            let esc = chars[*pi]; *pi += 1;
+            if *pi >= chars.len() {
+                return Err("Trailing backslash".into());
+            }
+            let esc = chars[*pi];
+            *pi += 1;
             match esc {
                 'd' => Ok(Piece::Digit),
                 'D' => Ok(Piece::NonDigit),
@@ -322,7 +465,9 @@ fn parse_piece(chars: &[char], pi: &mut usize, groups: &mut usize) -> Result<Pie
         }
         '[' => {
             let negated = *pi < chars.len() && chars[*pi] == '^';
-            if negated { *pi += 1; }
+            if negated {
+                *pi += 1;
+            }
             let mut cls_chars = Vec::new();
             let mut ranges = Vec::new();
             while *pi < chars.len() && chars[*pi] != ']' {
@@ -334,15 +479,23 @@ fn parse_piece(chars: &[char], pi: &mut usize, groups: &mut usize) -> Result<Pie
                     *pi += 1;
                 }
             }
-            if *pi < chars.len() { *pi += 1; }
-            Ok(Piece::Class { chars: cls_chars, ranges, negated })
+            if *pi < chars.len() {
+                *pi += 1;
+            }
+            Ok(Piece::Class {
+                chars: cls_chars,
+                ranges,
+                negated,
+            })
         }
         '(' => {
             // v3.4.6: lookahead negativo (?!...)
             if *pi + 1 < chars.len() && chars[*pi] == '?' && chars[*pi + 1] == '!' {
                 *pi += 2;
                 let (inner, _) = parse_alt(chars, pi)?;
-                if *pi >= chars.len() || chars[*pi] != ')' { return Err("Unmatched '('".into()); }
+                if *pi >= chars.len() || chars[*pi] != ')' {
+                    return Err("Unmatched '('".into());
+                }
                 *pi += 1;
                 return Ok(Piece::NegLook(inner));
             }
@@ -350,7 +503,9 @@ fn parse_piece(chars: &[char], pi: &mut usize, groups: &mut usize) -> Result<Pie
             if *pi + 1 < chars.len() && chars[*pi] == '?' && chars[*pi + 1] == '=' {
                 *pi += 2;
                 let (inner, _) = parse_alt(chars, pi)?;
-                if *pi >= chars.len() || chars[*pi] != ')' { return Err("Unmatched '('".into()); }
+                if *pi >= chars.len() || chars[*pi] != ')' {
+                    return Err("Unmatched '('".into());
+                }
                 *pi += 1;
                 return Ok(Piece::Look(inner));
             }
@@ -359,14 +514,21 @@ fn parse_piece(chars: &[char], pi: &mut usize, groups: &mut usize) -> Result<Pie
             if *pi + 1 < chars.len() && chars[*pi] == '?' && chars[*pi + 1] == ':' {
                 *pi += 2;
                 let (inner, _) = parse_alt(chars, pi)?;
-                if *pi >= chars.len() || chars[*pi] != ')' { return Err("Unmatched '('".into()); }
+                if *pi >= chars.len() || chars[*pi] != ')' {
+                    return Err("Unmatched '('".into());
+                }
                 *pi += 1;
-                return Ok(Piece::Capture { inner, idx: usize::MAX });
+                return Ok(Piece::Capture {
+                    inner,
+                    idx: usize::MAX,
+                });
             }
             *groups += 1;
             let idx = *groups;
             let (inner, _) = parse_alt(chars, pi)?;
-            if *pi >= chars.len() || chars[*pi] != ')' { return Err("Unmatched '('".into()); }
+            if *pi >= chars.len() || chars[*pi] != ')' {
+                return Err("Unmatched '('".into());
+            }
             *pi += 1;
             Ok(Piece::Capture { inner, idx })
         }

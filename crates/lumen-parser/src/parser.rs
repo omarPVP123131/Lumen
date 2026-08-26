@@ -1158,10 +1158,8 @@ impl Parser {
         // Receiver mutable de método: `prestado mut este` (o self/yo/borrowed mut self).
         // El receiver no lleva nombre aparte ni tipo explícito: se resuelve al
         // tipo del impl en sema.
-        if matches!(
-            self.peek().kind,
-            TokenKind::Prestado | TokenKind::Borrowed
-        ) && self.pos + 2 < self.tokens.len()
+        if matches!(self.peek().kind, TokenKind::Prestado | TokenKind::Borrowed)
+            && self.pos + 2 < self.tokens.len()
             && matches!(
                 self.tokens[self.pos + 1].kind,
                 TokenKind::Mut | TokenKind::Mutable

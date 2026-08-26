@@ -1279,10 +1279,7 @@ impl IRBuilder {
                             for (i, arg) in args.iter().enumerate() {
                                 // prestado mut + argumento es variable simple →
                                 // pasar por referencia con write-back (bug #6)
-                                if ref_positions
-                                    .as_ref()
-                                    .map_or(false, |v| v.contains(&i))
-                                {
+                                if ref_positions.as_ref().map_or(false, |v| v.contains(&i)) {
                                     if let Expr::Ident { name: vn, .. } = arg {
                                         self.emit(Instr::MakeRef(vn.clone()));
                                         continue;

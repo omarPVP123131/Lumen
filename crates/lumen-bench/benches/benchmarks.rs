@@ -168,7 +168,6 @@ fn prod_headless_bench(c: &mut Criterion) {
     });
 }
 
-
 fn prod_ref_mut_bench(c: &mut Criterion) {
     // v3.3+: MakeRef/write-back en bucle cerrado
     let source = r#"

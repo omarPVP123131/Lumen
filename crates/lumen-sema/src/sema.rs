@@ -800,7 +800,10 @@ impl SemanticAnalyzer {
                 local_bodies.push(body.clone());
             }
         }
-        for node in program.iter().chain(local_bodies.iter().flatten().map(|x| x)) {
+        for node in program
+            .iter()
+            .chain(local_bodies.iter().flatten().map(|x| x))
+        {
             if let DeclOrStmt::Decl(Decl::Struct {
                 name,
                 fields,
@@ -1096,10 +1099,7 @@ impl SemanticAnalyzer {
                                     // `prestado mut este`: receiver por referencia
                                     Type::Prestado { inner, mutable } => {
                                         if let Type::Struct(s) = &**inner {
-                                            if s == "Self"
-                                                || s == "self"
-                                                || s == "este"
-                                            {
+                                            if s == "Self" || s == "self" || s == "este" {
                                                 p.param_type = Type::Prestado {
                                                     inner: Box::new(target_type.clone()),
                                                     mutable: *mutable,
@@ -2046,17 +2046,24 @@ impl SemanticAnalyzer {
                                     // Fuzzing 3.3.9: inferencia de TypeVars desde los
                                     // argumentos reales (`primero([7,8])` liga T=Entero)
                                     let mut map = HashMap::new();
-                                    fn unify(pat: &TypeInfo, act: &TypeInfo, ftps: &[String], map: &mut HashMap<String, TypeInfo>) {
+                                    fn unify(
+                                        pat: &TypeInfo,
+                                        act: &TypeInfo,
+                                        ftps: &[String],
+                                        map: &mut HashMap<String, TypeInfo>,
+                                    ) {
                                         match pat {
                                             TypeInfo::TypeVar(tv) => {
-                                                map.entry(tv.clone()).or_insert_with(|| act.clone());
+                                                map.entry(tv.clone())
+                                                    .or_insert_with(|| act.clone());
                                             }
                                             // El T de lista<T> puede haberse resuelto a
                                             // Struct("T") al registrar la firma genérica
                                             TypeInfo::Struct { name, fields }
                                                 if fields.is_empty() && ftps.contains(name) =>
                                             {
-                                                map.entry(name.clone()).or_insert_with(|| act.clone());
+                                                map.entry(name.clone())
+                                                    .or_insert_with(|| act.clone());
                                             }
                                             TypeInfo::Lista(pi) => {
                                                 if let TypeInfo::Lista(ai) = act {
@@ -2074,7 +2081,11 @@ impl SemanticAnalyzer {
                                     for (pt, got) in param_types.iter().zip(arg_types.iter()) {
                                         unify(pt, got, &fn_type_params, &mut map);
                                     }
-                                    if map.is_empty() { None } else { Some(map) }
+                                    if map.is_empty() {
+                                        None
+                                    } else {
+                                        Some(map)
+                                    }
                                 } else {
                                     None
                                 };
@@ -2116,14 +2127,8 @@ impl SemanticAnalyzer {
                                 {
                                     // prestado mut con argumento no-lvalue: se pasa
                                     // por valor y las mutaciones se pierden (aviso)
-                                    if let TypeInfo::Prestado {
-                                        mutable: true, ..
-                                    } = expected
-                                    {
-                                        if !matches!(
-                                            args.get(i),
-                                            Some(Expr::Ident { .. })
-                                        ) {
+                                    if let TypeInfo::Prestado { mutable: true, .. } = expected {
+                                        if !matches!(args.get(i), Some(Expr::Ident { .. })) {
                                             self.warnings.push(format!(
                                                 "W060 [{}:{}]: '{}' espera 'prestado mut' en el argumento {}; se pasa por valor y las mutaciones no se verán fuera",
                                                 span.start.line, span.start.col, callee, i + 1
@@ -2533,8 +2538,7 @@ impl SemanticAnalyzer {
                                         });
                                     }
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
-                                } else if callee == "__sistema_pid" || callee == "__process_pid"
-                                {
+                                } else if callee == "__sistema_pid" || callee == "__process_pid" {
                                     TypeInfo::Entero
                                 } else if callee == "__file_exists" || callee == "__existe_archivo"
                                 {

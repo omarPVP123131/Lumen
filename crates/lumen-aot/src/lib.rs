@@ -764,19 +764,39 @@ pub fn llvm_supported(program: &Program) -> Vec<String> {
     for func in program.funcs.values() {
         for ins in &func.instrs {
             match ins {
-                Instr::ConstInt(_) | Instr::ConstBool(_) | Instr::Load(_)
-                | Instr::Store(_) | Instr::StoreLocal(_) | Instr::Return | Instr::Jmp(_)
-                | Instr::JmpIf(_) | Instr::Label(_) | Instr::Phi(..) | Instr::Nop
+                Instr::ConstInt(_)
+                | Instr::ConstBool(_)
+                | Instr::Load(_)
+                | Instr::Store(_)
+                | Instr::StoreLocal(_)
+                | Instr::Return
+                | Instr::Jmp(_)
+                | Instr::JmpIf(_)
+                | Instr::Label(_)
+                | Instr::Phi(..)
+                | Instr::Nop
                 | Instr::Halt => {}
                 Instr::ConstStr(_) => note("textos"),
                 Instr::ConstFloat(_) => note("decimales"),
                 Instr::Unary(_) => note("operadores unarios"),
                 Instr::Print | Instr::Read => note("imprimir/leer"),
                 Instr::Binary(op) => match op {
-                    Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Equal
-                    | Op::NotEqual | Op::Less | Op::LessEqual | Op::Greater
-                    | Op::GreaterEqual | Op::BitOr | Op::BitAnd | Op::BitXor
-                    | Op::ShiftLeft | Op::ShiftRight => {}
+                    Op::Add
+                    | Op::Sub
+                    | Op::Mul
+                    | Op::Div
+                    | Op::Mod
+                    | Op::Equal
+                    | Op::NotEqual
+                    | Op::Less
+                    | Op::LessEqual
+                    | Op::Greater
+                    | Op::GreaterEqual
+                    | Op::BitOr
+                    | Op::BitAnd
+                    | Op::BitXor
+                    | Op::ShiftLeft
+                    | Op::ShiftRight => {}
                     _ => note("operadores lógicos/concatenación"),
                 },
                 Instr::Call(n, _) => {
@@ -785,11 +805,18 @@ pub fn llvm_supported(program: &Program) -> Vec<String> {
                         note(format!("builtins ({})", n).as_str());
                     }
                 }
-                Instr::ArrayNew(_) | Instr::ArrayGet | Instr::ArraySet | Instr::ArrayLen
-                | Instr::ArrayPush | Instr::ArrayPushVar(_) => note("listas"),
+                Instr::ArrayNew(_)
+                | Instr::ArrayGet
+                | Instr::ArraySet
+                | Instr::ArrayLen
+                | Instr::ArrayPush
+                | Instr::ArrayPushVar(_) => note("listas"),
                 Instr::StructNew(..) | Instr::StructGet | Instr::StructSet => note("estructuras"),
                 Instr::EnumCtor { .. } | Instr::MatchVariant(_) => note("enumeraciones"),
-                Instr::ResultOk | Instr::ResultErr | Instr::TryUnwrap | Instr::OptionSome
+                Instr::ResultOk
+                | Instr::ResultErr
+                | Instr::TryUnwrap
+                | Instr::OptionSome
                 | Instr::OptionNone => note("resultado/opción"),
                 Instr::MatchType(_) | Instr::MatchPayload => note("elegir con tipos"),
                 Instr::TupleNew(_) | Instr::TupleAccess(_) => note("tuplas"),
@@ -816,10 +843,21 @@ pub fn cranelift_supported(program: &Program) -> Vec<String> {
     for func in program.funcs.values() {
         for ins in &func.instrs {
             match ins {
-                Instr::ConstInt(_) | Instr::ConstBool(_) | Instr::ConstStr(_)
-                | Instr::Load(_) | Instr::Store(_) | Instr::StoreLocal(_) | Instr::Unary(_)
-                | Instr::Return | Instr::Jmp(_) | Instr::JmpIf(_) | Instr::Label(_)
-                | Instr::Print | Instr::Nop | Instr::Halt | Instr::Call(_, _) => {}
+                Instr::ConstInt(_)
+                | Instr::ConstBool(_)
+                | Instr::ConstStr(_)
+                | Instr::Load(_)
+                | Instr::Store(_)
+                | Instr::StoreLocal(_)
+                | Instr::Unary(_)
+                | Instr::Return
+                | Instr::Jmp(_)
+                | Instr::JmpIf(_)
+                | Instr::Label(_)
+                | Instr::Print
+                | Instr::Nop
+                | Instr::Halt
+                | Instr::Call(_, _) => {}
                 Instr::ConstFloat(_) => note("decimales"),
                 Instr::Binary(op) => match op {
                     Op::Add | Op::Sub | Op::Mul | Op::BitAnd | Op::BitOr | Op::BitXor => {}
@@ -1079,8 +1117,13 @@ pub fn compile_to_c(program: &Program) -> String {
         renames.insert(fname.clone(), m);
     }
     // Traduce un nombre de variable al slot real dentro de la función `fname`
-    let resolve_var =
-        |fname: &str, n: &str| -> String { renames.get(fname).and_then(|m| m.get(n)).cloned().unwrap_or_else(|| n.to_string()) };
+    let resolve_var = |fname: &str, n: &str| -> String {
+        renames
+            .get(fname)
+            .and_then(|m| m.get(n))
+            .cloned()
+            .unwrap_or_else(|| n.to_string())
+    };
 
     // Plan de slots por función (params renombrados + sombreado de bloques)
     let mut var_plans: HashMap<String, HashMap<usize, String>> = HashMap::new();
@@ -1096,8 +1139,11 @@ pub fn compile_to_c(program: &Program) -> String {
         }
         for (i, ins) in func.instrs.iter().enumerate() {
             match ins {
-                Instr::Load(_) | Instr::Store(_) | Instr::StoreLocal(_)
-                | Instr::ArrayPushVar(_) | Instr::MakeRef(_) => {
+                Instr::Load(_)
+                | Instr::Store(_)
+                | Instr::StoreLocal(_)
+                | Instr::ArrayPushVar(_)
+                | Instr::MakeRef(_) => {
                     if let Some(k) = plan.get(&i) {
                         add_name(k);
                     }
@@ -1120,11 +1166,7 @@ pub fn compile_to_c(program: &Program) -> String {
     let mut name_sets: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (name, func) in &program.funcs {
         // Slots reales de la función: params renombrados + keys planificadas
-        let mut set: Vec<String> = func
-            .params
-            .iter()
-            .map(|p| resolve_var(name, p))
-            .collect();
+        let mut set: Vec<String> = func.params.iter().map(|p| resolve_var(name, p)).collect();
         let plan = &var_plans[name];
         for k in plan.values() {
             if !set.iter().any(|x| x == k) {
@@ -1188,7 +1230,9 @@ pub fn compile_to_c(program: &Program) -> String {
 
     for (name, func) in &program.funcs {
         let plan = var_plans[name].clone();
-        out.push_str(&emit_func(name, func, program, &name_sets, &gv_of, &renames, &plan));
+        out.push_str(&emit_func(
+            name, func, program, &name_sets, &gv_of, &renames, &plan,
+        ));
     }
     for n in &unknown {
         out.push_str(&format!(
@@ -1287,10 +1331,7 @@ fn plan_var_keys(
                 };
                 plan.insert(i, key);
             }
-            Instr::Load(n)
-            | Instr::Store(n)
-            | Instr::ArrayPushVar(n)
-            | Instr::MakeRef(n) => {
+            Instr::Load(n) | Instr::Store(n) | Instr::ArrayPushVar(n) | Instr::MakeRef(n) => {
                 let key = resolve(&scopes, n).unwrap_or_else(|| n.to_string());
                 plan.insert(i, key);
             }
@@ -1348,8 +1389,13 @@ fn collect_ref_args(
     };
     for (idx, instr) in func.instrs.iter().enumerate() {
         match instr {
-            Instr::ConstInt(_) | Instr::ConstFloat(_) | Instr::ConstStr(_) | Instr::ConstBool(_)
-            | Instr::Load(_) | Instr::Read | Instr::FuncRef(_) => st.push(None),
+            Instr::ConstInt(_)
+            | Instr::ConstFloat(_)
+            | Instr::ConstStr(_)
+            | Instr::ConstBool(_)
+            | Instr::Load(_)
+            | Instr::Read
+            | Instr::FuncRef(_) => st.push(None),
             Instr::MakeRef(n) => {
                 // Usar el key planificado (con sombreado) para que la
                 // exclusión del save/restore coincida con name_sets
@@ -1362,9 +1408,17 @@ fn collect_ref_args(
                 }
                 st.push(None);
             }
-            Instr::Unary(_) | Instr::ArrayLen | Instr::TryUnwrap | Instr::MatchType(_)
-            | Instr::MatchPayload | Instr::TupleAccess(_) | Instr::MatchVariant(_)
-            | Instr::ResultOk | Instr::ResultErr | Instr::OptionSome | Instr::OptionNone => {
+            Instr::Unary(_)
+            | Instr::ArrayLen
+            | Instr::TryUnwrap
+            | Instr::MatchType(_)
+            | Instr::MatchPayload
+            | Instr::TupleAccess(_)
+            | Instr::MatchVariant(_)
+            | Instr::ResultOk
+            | Instr::ResultErr
+            | Instr::OptionSome
+            | Instr::OptionNone => {
                 if !popn(&mut st, 1) {
                     break;
                 }
@@ -1427,9 +1481,16 @@ fn collect_ref_args(
                     break;
                 }
             }
-            Instr::Return | Instr::Halt | Instr::Jmp(_) | Instr::Label(_)
-            | Instr::ScopePush | Instr::ScopePop | Instr::PushHandler(_)
-            | Instr::PopHandler | Instr::Nop | Instr::Phi(_, _) => {}
+            Instr::Return
+            | Instr::Halt
+            | Instr::Jmp(_)
+            | Instr::Label(_)
+            | Instr::ScopePush
+            | Instr::ScopePop
+            | Instr::PushHandler(_)
+            | Instr::PopHandler
+            | Instr::Nop
+            | Instr::Phi(_, _) => {}
         }
     }
     out
@@ -1459,9 +1520,8 @@ fn emit_func(
     ));
 
     // Resolvedor de slot por instrucción (params renombrados + sombreado)
-    let var_at = |i: usize, n: &str| -> String {
-        plan.get(&i).cloned().unwrap_or_else(|| n.to_string())
-    };
+    let var_at =
+        |i: usize, n: &str| -> String { plan.get(&i).cloned().unwrap_or_else(|| n.to_string()) };
     let mut handler_labels: Vec<usize> = Vec::new();
     for (i, instr) in func.instrs.iter().enumerate() {
         // ¿Instrucción cuyas llamadas al runtime pueden lanzar error?
@@ -1476,10 +1536,10 @@ fn emit_func(
                 | Instr::StructSet
                 | Instr::TryUnwrap
                 | Instr::MatchPayload
-            | Instr::Call(_, _)
-            | Instr::CallValue(_)
-    );
-    match instr {
+                | Instr::Call(_, _)
+                | Instr::CallValue(_)
+        );
+        match instr {
             Instr::ConstInt(n) => s.push_str(&format!("  PUSH(_v_int({}));\n", n)),
             Instr::ConstFloat(f) => {
                 if f.is_finite() {
@@ -2062,11 +2122,7 @@ mod tests {
         std::fs::write(&probe_c, "int main(void){return 0;}\n").unwrap();
         let _ = std::fs::remove_file(&probe_exe);
         match std::process::Command::new("gcc")
-            .args([
-                probe_c.to_str().unwrap(),
-                "-o",
-                probe_exe.to_str().unwrap(),
-            ])
+            .args([probe_c.to_str().unwrap(), "-o", probe_exe.to_str().unwrap()])
             .output()
         {
             Ok(o) if o.status.success() && probe_exe.exists() => {}
@@ -2114,8 +2170,7 @@ mod tests {
         let (mut program, _) = lumen_parser::Parser::new(tokens.0).parse();
         let sem_errors = lumen_sema::SemanticAnalyzer::new().analyze(&mut program);
         assert!(sem_errors.is_empty(), "sema fallo: {:?}", sem_errors);
-        lumen_ir::comptime::ComptimeEvaluator::new(&program)
-            .rewrite_program(&mut program);
+        lumen_ir::comptime::ComptimeEvaluator::new(&program).rewrite_program(&mut program);
         let ir = lumen_ir::IRBuilder::new().build(&program);
         let c = compile_to_c(&ir);
         // Dir único por corrida: el pid se reusa entre ejecuciones del binario
@@ -2124,11 +2179,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.subsec_nanos())
             .unwrap_or(0);
-        let dir = std::env::temp_dir().join(format!(
-            "lumen_aot_test_{}_{}",
-            std::process::id(),
-            nanos
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("lumen_aot_test_{}_{}", std::process::id(), nanos));
         std::fs::create_dir_all(&dir).unwrap();
         let c_path = dir.join("test_full.c");
         let exe_path = dir.join("test_full.exe");

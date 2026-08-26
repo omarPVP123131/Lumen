@@ -37,7 +37,10 @@ impl ComptimeEvaluator {
     pub fn new(program: &[DeclOrStmt]) -> Self {
         let mut funcs = HashMap::new();
         for node in program {
-            if let DeclOrStmt::Decl(Decl::Function { name, params, body, .. }) = node {
+            if let DeclOrStmt::Decl(Decl::Function {
+                name, params, body, ..
+            }) = node
+            {
                 if !params.iter().any(|p| p.default.is_some()) {
                     funcs.insert(
                         name.clone(),
@@ -49,10 +52,7 @@ impl ComptimeEvaluator {
                 }
             }
         }
-        Self {
-            funcs,
-            steps: 0,
-        }
+        Self { funcs, steps: 0 }
     }
 
     fn tick(&mut self) -> Result<(), ()> {
@@ -85,9 +85,9 @@ impl ComptimeEvaluator {
     fn rewrite_decl_or_stmt(&mut self, node: &mut DeclOrStmt) -> usize {
         match node {
             DeclOrStmt::Stmt(s) => self.rewrite_stmt(s),
-            DeclOrStmt::Decl(Decl::Variable { init: Some(init), .. }) => {
-                self.rewrite_expr(init)
-            }
+            DeclOrStmt::Decl(Decl::Variable {
+                init: Some(init), ..
+            }) => self.rewrite_expr(init),
             _ => 0,
         }
     }
@@ -105,15 +105,10 @@ impl ComptimeEvaluator {
     fn rewrite_expr(&mut self, expr: &mut Expr) -> usize {
         // Primero descender (los comptime anidados se pliegan de adentro hacia afuera)
         let mut folded = match expr {
-            Expr::Binary { left, right, .. } => {
-                self.rewrite_expr(left) + self.rewrite_expr(right)
-            }
+            Expr::Binary { left, right, .. } => self.rewrite_expr(left) + self.rewrite_expr(right),
             Expr::Unary { operand, .. } => self.rewrite_expr(operand),
             Expr::Grouping { expr: inner, .. } => self.rewrite_expr(inner),
-            Expr::List { items, .. } => items
-                .iter_mut()
-                .map(|i| self.rewrite_expr(i))
-                .sum(),
+            Expr::List { items, .. } => items.iter_mut().map(|i| self.rewrite_expr(i)).sum(),
             _ => 0,
         };
         if let Expr::Comptime { expr: inner, span } = expr {
@@ -129,12 +124,7 @@ impl ComptimeEvaluator {
         folded
     }
 
-    fn eval(
-        &mut self,
-        expr: &Expr,
-        env: &HashMap<String, CVal>,
-        depth: usize,
-    ) -> Result<CVal, ()> {
+    fn eval(&mut self, expr: &Expr, env: &HashMap<String, CVal>, depth: usize) -> Result<CVal, ()> {
         if depth > MAX_DEPTH {
             return Err(());
         }
@@ -156,7 +146,9 @@ impl ComptimeEvaluator {
                     _ => Err(()),
                 }
             }
-            Expr::Binary { op, left, right, .. } => {
+            Expr::Binary {
+                op, left, right, ..
+            } => {
                 let lt = self.eval(left, env, depth + 1)?;
                 let rt = self.eval(right, env, depth + 1)?;
                 eval_binary(*op, lt, rt)
@@ -204,7 +196,11 @@ impl ComptimeEvaluator {
                 DeclOrStmt::Stmt(Stmt::Return { value: Some(v), .. }) => {
                     return self.eval(v, env, depth + 1);
                 }
-                DeclOrStmt::Decl(Decl::Variable { name, init: Some(init), .. }) => {
+                DeclOrStmt::Decl(Decl::Variable {
+                    name,
+                    init: Some(init),
+                    ..
+                }) => {
                     let v = self.eval(init, env, depth + 1)?;
                     env.insert(name.clone(), v);
                 }

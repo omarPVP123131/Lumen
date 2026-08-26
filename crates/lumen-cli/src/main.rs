@@ -2378,8 +2378,13 @@ fn build_native(
             // Rechazo ruidoso: no generar artefactos rotos silenciosamente
             let unsupported = lumen_aot::llvm_supported(&ir);
             if !unsupported.is_empty() {
-                eprintln!("✗ El backend LLVM aún no soporta: {}", unsupported.join(", "));
-                eprintln!("  Sugerencia: usa `lumen build --native` (backend C, soporte completo).");
+                eprintln!(
+                    "✗ El backend LLVM aún no soporta: {}",
+                    unsupported.join(", ")
+                );
+                eprintln!(
+                    "  Sugerencia: usa `lumen build --native` (backend C, soporte completo)."
+                );
                 process::exit(1);
             }
             let llvm_ir = lumen_aot::compile_to_llvm_ir(&ir);
@@ -2498,8 +2503,13 @@ fn build_native(
             // Rechazo ruidoso: no generar artefactos rotos silenciosamente
             let unsupported = lumen_aot::cranelift_supported(&ir);
             if !unsupported.is_empty() {
-                eprintln!("✗ El backend Cranelift aún no soporta: {}", unsupported.join(", "));
-                eprintln!("  Sugerencia: usa `lumen build --native` (backend C, soporte completo).");
+                eprintln!(
+                    "✗ El backend Cranelift aún no soporta: {}",
+                    unsupported.join(", ")
+                );
+                eprintln!(
+                    "  Sugerencia: usa `lumen build --native` (backend C, soporte completo)."
+                );
                 process::exit(1);
             }
             let obj_path = out_name.with_extension("obj");

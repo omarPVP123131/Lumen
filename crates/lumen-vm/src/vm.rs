@@ -4538,12 +4538,7 @@ impl VM {
                 // prestado mut (bug #6): crear referencia al slot de la variable.
                 // Se busca el slot (scope, nombre) y se apila Value::Ref con el
                 // owner para que Ret haga write-back al llamador.
-                let name = self
-                    .bytecode
-                    .names
-                    .get(idx)
-                    .cloned()
-                    .unwrap_or_default();
+                let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
                 let mut target: Option<(usize, Value)> = None;
                 for (si, scope) in self.locals.iter().enumerate().rev() {
                     if let Some(v) = scope.get(&name) {
@@ -5120,8 +5115,7 @@ impl VM {
                     match crate::lumen_min_regex_new(&re_s) {
                         Ok(r) => {
                             let caps = r.captures(&text);
-                            let vs: Vec<Value> =
-                                caps.into_iter().map(Value::str).collect();
+                            let vs: Vec<Value> = caps.into_iter().map(Value::str).collect();
                             self.push(Value::arr(vs));
                         }
                         Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
@@ -5131,9 +5125,7 @@ impl VM {
                     let text = args.get(1).map(|v| format!("{}", v)).unwrap_or_default();
                     let rep = args.get(2).map(|v| format!("{}", v)).unwrap_or_default();
                     match crate::lumen_min_regex_new(&re_s) {
-                        Ok(r) => {
-                            self.push(Value::str(r.replace(&text, rep.as_str())))
-                        }
+                        Ok(r) => self.push(Value::str(r.replace(&text, rep.as_str()))),
                         Err(e) => self.push(Value::Error(Box::new(Value::str(e.to_string())))),
                     }
                 } else if name == "__unicode_normalize" || name == "__unicode_normalizar" {

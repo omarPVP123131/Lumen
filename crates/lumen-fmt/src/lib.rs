@@ -697,10 +697,7 @@ impl Formatter {
                 || p.name == "yo"
                 || p.name == "este"
                 || matches!(&p.param_type, Type::Struct(s) if s == "Self");
-            let is_mut_receiver = matches!(
-                &p.param_type,
-                Type::Prestado { mutable: true, .. }
-            );
+            let is_mut_receiver = matches!(&p.param_type, Type::Prestado { mutable: true, .. });
             if is_receiver && !is_mut_receiver {
                 self.push(&p.name);
             } else if is_mut_receiver {
@@ -1153,7 +1150,11 @@ mod tests_v338 {
         // v3.3.5+: receiver mutable de método sobrevive al formatter
         let src = "estructura C { saldo: entero }\nimpl C {\n\tfuncion vacio dup(prestado mut este) {\n\t\teste.saldo = este.saldo * 2;\n\t}\n}\n";
         let once = fmt_of(src);
-        assert!(once.contains("prestado mut este"), "fmt perdió el receiver: {}", once);
+        assert!(
+            once.contains("prestado mut este"),
+            "fmt perdió el receiver: {}",
+            once
+        );
         assert_eq!(once, fmt_of(&once), "fmt no es idempotente");
     }
 }
