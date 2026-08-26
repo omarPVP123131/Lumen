@@ -670,3 +670,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **v3.3.7 (25 Ago): motor regex propio en C (puerto min_regex.rs — fin de POSIX/stubs), harness scripts/fuzz_paridad.ps1 con normalización, corutinas PAR VM↔nativo, __str_upper/lower en backend C. Gap detectado: builtin PID inexistente en todas las capas. Pendiente sesión dedicada: LLVM/Cranelift vía shims _lw_*.**
 
 **v3.3.9 (25 Ago): F6 inferencia genérica desde args (Struct("T")-param unifica); F7 macro SET muerto en ArrayPushVar del C. Paridad gen_ref. Pendientes explícitos: self-hosting sync (prestado mut este en parser.nv) y LLVM/Cranelift _lw_*.**
+
+**Post-3.4.0: lote fuzz E — f-strings + tareas PAR VM↔nativo. Pendientes vivos: self-hosting sync (prestado mut este → parser.nv), LLVM/Cranelift _lw_* (sesión dedicada), perf _sv, mapas-anidados como claves.**

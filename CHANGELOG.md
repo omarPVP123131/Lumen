@@ -726,3 +726,8 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 - #5 perf: eliminar _sv por llamada (slots renombrados lo permiten)
 - #6 self-hosting sync: espejar prestado mut este en parser.nv + fixpoint
 - LLVM/Cranelift _lw_*: sesión dedicada
+
+### Paridad verificada (post-3.4.0)
+- Lote fuzz E: f-strings `f"hola {nombre}!"` con expresiones `{1+2}` y
+  tareas (`__tarea_lanzar`/`__tarea_esperar`) — PAR total VM↔nativo.
+  Queda pendiente: mapas anidados como claves, más patrones async.
