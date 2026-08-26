@@ -654,3 +654,27 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 - LLVM/Cranelift paridad completa vía shims del runtime C: sesión dedicada
   (arquitectura definida: valores = handles opacos hacia helpers _lw_* que
   envuelven Val; requiere ~35 helpers + reescritura del emisor)
+
+## [3.3.8] - 2026-08-25
+
+### Capturas regex + PID + fix del formatter (fuzzing continuo)
+
+#### __regex_capturar en backend C (paridad)
+- `_regex_caps` en lumen_rt.h sobre el motor propio: array `[match, grupo1..]`
+  idéntico al VM; corregido también el crash latente de alternancia top-level
+  (la raíz ALT ahora va envuelta en CAP)
+
+#### Nuevo builtin `__sistema_pid` / `__process_pid`
+- Hueco detectado por fuzz_paridad.ps1; implementado en VM (`std::process::id`),
+  backend C (`_rt_pid`: getpid/GetCurrentProcessId), sema (Entero) y builder
+
+#### fmt perdía el receiver mutable (bug clase QA#1)
+- `lumen fmt` imprimía `dup(este)` sin `prestado mut` — la pérdida silenciosa
+  cambiaba la semántica a paso por valor. Ahora emite `prestado mut este` y es
+  idempotente (test nuevo)
+
+#### Docs
+- docs/cli.md: sección scripts de verificación (fuzz_paridad.ps1, LUMEN_KEEP_C)
+
+#### Fuzzing con tolerancia (harness v2)
+- pid_caps.nv: PID + capturas regex — PAR total VM↔nativo

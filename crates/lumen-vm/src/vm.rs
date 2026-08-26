@@ -1047,6 +1047,12 @@ impl VM {
             return Some(Ok(()));
         }
 
+        // PID del proceso (v3.3.7 — hueco detectado por fuzz_paridad.ps1)
+        if name == "__sistema_pid" || name == "__process_pid" {
+            self.push(Value::Int(std::process::id() as i64));
+            return Some(Ok(()));
+        }
+
         if name == "__file_exists" || name == "__existe_archivo" {
             let path = args.first().map(|v| format!("{}", v)).unwrap_or_default();
             self.push(Value::Bool(std::path::Path::new(&path).exists()));

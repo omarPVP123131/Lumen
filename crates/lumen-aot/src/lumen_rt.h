@@ -55,6 +55,14 @@ typedef struct Val {
 #define T_MAP 14
 #define T_PTR 15
 
+static int64_t _rt_pid(void) {
+#ifdef _WIN32
+  return (int64_t)GetCurrentProcessId();
+#else
+  return (int64_t)getpid();
+#endif
+}
+
 static Val ST[16384];
 static int SP = 0;
 #define PUSH(v) (ST[(SP)++] = (v))
@@ -851,15 +859,23 @@ static RPc *_rp_alt(const char *s, int *i) {
     RPc *root = _rp(R_CAP); root->idx = 0; root->seq = alts[0]; root->nseq = ns[0];
     return root;
   }
+  /* Raíz con alternancia: envolver el ALT en un CAP raíz para que
+     root->seq/nseq siempre sean válidos en los escaneos */
   RPc *alt = _rp(R_ALT);
   alt->alts = alts; alt->alts_n = ns; alt->nalts = n;
-  return alt;
+  RPc *wrap = _rp(R_CAP);
+  wrap->idx = 0;
+  wrap->seq = (RPc**)malloc(sizeof(RPc*));
+  wrap->seq[0] = alt; wrap->nseq = 1;
+  return wrap;
 }
 
 static int _risdig(char c){ return c>='0'&&c<='9'; }
 static int _riswrd(char c){ return _risdig(c)||(c>='a'&&c<='z')||(c>='A'&&c<='Z')||c=='_'; }
 static int _risspc(char c){ return c==' '||c=='\t'||c=='\n'||c=='\r'||c=='\f'||c=='\v'; }
 
+static struct { int st, en; } _rcaps[16];
+static int _rcaps_on = 0;
 /* Backtracking: devuelve posición final o -1 (espejo de try_match_cap) */
 static int _rtry(RPc **seq, int n, const char *cs, int cl, int ci, int pi) {
   while (pi < n) {
@@ -901,6 +917,7 @@ static int _rtry(RPc **seq, int n, const char *cs, int cl, int ci, int pi) {
       case R_CAP: {
         int e = _rtry(p->seq, p->nseq, cs, cl, ci, 0);
         if (e < 0) return -1;
+        if (_rcaps_on && p->idx > 0 && p->idx < 16) { _rcaps[p->idx].st = ci; _rcaps[p->idx].en = e; }
         ci = e; pi++; break;
       }
       case R_ALT: {
@@ -917,7 +934,8 @@ static int _rtry(RPc **seq, int n, const char *cs, int cl, int ci, int pi) {
   return ci;
 }
 
-typedef struct { RPc *root; int anchored; } RegexC;
+
+typedef struct { RPc *root; int anchored; int ngroups; } RegexC;
 
 static RegexC _regex_compile(const char *pat) {
   RegexC r; r.root = NULL; r.anchored = 0;
@@ -926,6 +944,7 @@ static RegexC _regex_compile(const char *pat) {
   RPc *root = _rp_alt(pat, &i);
   if (!root || pat[i]) return r;
   r.root = root;
+  r.ngroups = _rp_groups;
   if (root->nseq > 0 && root->seq[0]->t == R_START) r.anchored = 1;
   return r;
 }
@@ -945,6 +964,34 @@ static int _regex_m(const char* pat, const char* s) {
   return 0;
 }
 
+/* Capturas: devuelve T_ARR de T_STR ([0]=match completo, [1..]=grupos) o vacío */
+static Val _regex_caps(const char* pat, const char* s) {
+  Val empty = { .t = T_ARR, .argc = 0, .items = (Val*)malloc(sizeof(Val)) };
+  RegexC r = _regex_compile(pat);
+  if (!r.root) return empty;
+  int cl = (int)strlen(s);
+  for (int pos = 0; pos <= cl; pos++) {
+    memset(_rcaps, 0, sizeof(_rcaps));
+    _rcaps_on = 1;
+    int end = _rtry(r.root->seq, r.root->nseq, s, cl, pos, 0);
+    _rcaps_on = 0;
+    if (end >= 0 && r.root->idx >= 0 && r.root->idx < 16) {
+      _rcaps[0].st = pos; _rcaps[0].en = end;
+      int n = r.ngroups + 1;
+      Val* arr = (Val*)malloc(sizeof(Val) * (n > 0 ? n : 1));
+      for (int k = 0; k < n; k++) {
+        int a = _rcaps[k].st, b = _rcaps[k].en;
+        if (b > a && b <= cl) {
+          char* m = (char*)malloc((size_t)(b - a) + 1);
+          memcpy(m, s + a, (size_t)(b - a)); m[b - a] = 0;
+          arr[k] = _v_str(m);
+        } else arr[k] = _v_str("");
+      }
+      return (Val){ .t = T_ARR, .argc = n, .items = arr };
+    }
+  }
+  return empty;
+}
 static char* _regex_rep(const char* pat, const char* s, const char* rep) {
   RegexC r = _regex_compile(pat);
   size_t cap = strlen(s) * 4 + strlen(rep) * 8 + 64;

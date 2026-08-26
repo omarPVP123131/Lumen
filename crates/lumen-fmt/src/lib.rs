@@ -690,12 +690,23 @@ impl Formatter {
             if i > 0 {
                 self.push(", ");
             }
-            // Receptor: `este`/`self`/`yo` o tipo especial Self del parser — sin anotación
+            // Receptor: `este`/`self`/`yo` o tipo especial Self del parser — sin anotación,
+            // SALVO que declare `prestado mut` (receiver mutable, v3.3.5+): el tipo
+            // DEBE imprimirse o el formatter perdería la semántica por referencia.
             let is_receiver = p.name == "self"
                 || p.name == "yo"
                 || p.name == "este"
                 || matches!(&p.param_type, Type::Struct(s) if s == "Self");
-            if is_receiver {
+            let is_mut_receiver = matches!(
+                &p.param_type,
+                Type::Prestado { mutable: true, .. }
+            );
+            if is_receiver && !is_mut_receiver {
+                self.push(&p.name);
+            } else if is_mut_receiver {
+                // `prestado mut este`: el interior es el placeholder Self del
+                // parser; la forma canónica usa solo el nombre del receptor
+                self.push("prestado mut ");
                 self.push(&p.name);
             } else {
                 self.push(&format_type(&p.param_type));
@@ -1123,5 +1134,26 @@ mod tests {
         let twice = format_source(&once).unwrap();
         assert_eq!(once, twice, "fmt no es idempotente");
         assert!(twice.contains("c.saldo = 2"));
+    }
+}
+
+#[cfg(test)]
+mod tests_v338 {
+    use super::*;
+    use lumen_lexer::Lexer;
+    use lumen_parser::Parser;
+
+    fn fmt_of(src: &str) -> String {
+        let once = format_source(src).expect("fmt fallo");
+        format_source(&once).expect("fmt 2do pase fallo")
+    }
+
+    #[test]
+    fn test_fmt_prestado_mut_este_idempotent() {
+        // v3.3.5+: receiver mutable de método sobrevive al formatter
+        let src = "estructura C { saldo: entero }\nimpl C {\n\tfuncion vacio dup(prestado mut este) {\n\t\teste.saldo = este.saldo * 2;\n\t}\n}\n";
+        let once = fmt_of(src);
+        assert!(once.contains("prestado mut este"), "fmt perdió el receiver: {}", once);
+        assert_eq!(once, fmt_of(&once), "fmt no es idempotente");
     }
 }

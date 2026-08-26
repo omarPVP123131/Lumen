@@ -1,0 +1,11 @@
+funcion vacio main() {
+    imprimir(pid_ok());
+    sea caps = __regex_capturar("(\\d+)-(\\d+)", "rango 10-20 fin");
+    imprimir(caps[0]);
+    imprimir(caps[1]);
+    imprimir(caps[2]);
+}
+funcion booleano pid_ok() {
+    sea p = __sistema_pid();
+    retornar p > 0;
+}

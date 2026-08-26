@@ -986,6 +986,8 @@ impl IRBuilder {
                                     | "__agregar_archivo"
                                     | "__file_exists"
                                     | "__existe_archivo"
+                                    | "__sistema_pid"
+                                    | "__process_pid"
                                     | "__time_now"
                                     | "__tiempo_ahora"
                                     | "__list_reverse"

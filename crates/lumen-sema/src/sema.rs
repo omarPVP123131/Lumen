@@ -2500,6 +2500,9 @@ impl SemanticAnalyzer {
                                         });
                                     }
                                     TypeInfo::Lista(Box::new(TypeInfo::Entero))
+                                } else if callee == "__sistema_pid" || callee == "__process_pid"
+                                {
+                                    TypeInfo::Entero
                                 } else if callee == "__file_exists" || callee == "__existe_archivo"
                                 {
                                     if args.len() != 1 {

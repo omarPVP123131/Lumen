@@ -181,3 +181,19 @@ lumen install http_router
 ### 4. `lumen doctor`
 Diagnostica automáticamente tu usuario, tu sistema operativo, los núcleos de tu CPU disponibles para el scheduler M:N y tus toolchains de compiladores C/Rust.
 
+
+## Scripts de verificación
+
+### `scripts/fuzz_paridad.ps1` — paridad VM ↔ binario nativo
+Corre cada programa `.nv` por la VM y por el backend C nativo, **normaliza el
+no-determinismo** (ids `coro_N`, timestamps epoch, duraciones, pids, punteros)
+y compara línea a línea: clasifica PAR / DIF / FALLA-COMPILA.
+
+```powershell
+pwsh scripts/fuzz_paridad.ps1 fuzz/mi_programa.nv          # un archivo
+pwsh scripts/fuzz_paridad.ps1                              # todo fuzz/*.nv
+```
+
+Variables de entorno útiles al depurar:
+- `LUMEN_KEEP_C=1` — conserva el `.c` intermedio del build nativo
+- `LUMEN_KEEP_OBJ=1` — conserva artefactos objeto (Cranelift)
