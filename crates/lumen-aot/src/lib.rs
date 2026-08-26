@@ -1693,9 +1693,9 @@ fn emit_func(
                     s.push_str("  { Val _s = POP(); PUSH(_json_parse(_s.s)); }\n");
                 } else if n == "__json_texto" {
                     s.push_str("  { Val _x = POP(); PUSH(_v_str(_json_text(_x))); }\n");
-                } else if n == "__str_mayusculas" {
+                } else if n == "__str_mayusculas" || n == "__str_upper" {
                     s.push_str("  { Val _s = POP(); PUSH(_v_str(_case_str(_s.s, 1))); }\n");
-                } else if n == "__str_minusculas" {
+                } else if n == "__str_minusculas" || n == "__str_lower" {
                     s.push_str("  { Val _s = POP(); PUSH(_v_str(_case_str(_s.s, 0))); }\n");
                 } else if n == "__str_contiene" {
                     s.push_str("  { Val _n = POP(); Val _h = POP(); PUSH(_v_bool(strstr(_h.s, _n.s) != NULL)); }\n");

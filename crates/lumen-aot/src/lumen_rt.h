@@ -740,47 +740,235 @@ static Val _heap_agregar(Val h, Val x) {
   return nv;
 }
 
-#if !defined(_WIN32) && !defined(__APPLE__)
-/* regex functions only on Linux (glibc) */
-static int _regex_m(const char* pat, const char* s) {
-  regex_t re;
-  if (regcomp(&re, pat, REG_EXTENDED) != 0) return 0;
-  int r = regexec(&re, s, 0, NULL, 0);
-  regfree(&re);
-  return r == 0;
+/* ── Motor regex PROPIO por backtracking (v3.3.7) ─────────────────────
+   Puerto fiel de crates/lumen-vm/src/min_regex.rs: misma sintaxis soportada
+   (^ $ . \d \D \w \W \s \S [a-z] clases con negación, * + ?, grupos (),
+   alternancia |), misma semántica greedy/backtracking — paridad exacta
+   VM↔nativo en TODAS las plataformas (elimina POSIX regex y stubs). */
+enum { R_LIT, R_ANY, R_DIG, R_NDIG, R_WRD, R_NWRD, R_SPC, R_NSPC,
+       R_CLASS, R_QUANT, R_START, R_END, R_CAP, R_ALT };
+typedef struct RPc RPc;
+struct RPc {
+  int t; char lit; int neg;
+  char ccls[128]; int nccls;
+  struct { char lo, hi; } crng[32]; int nrng;
+  RPc *inner; int qmin, qmax;      /* qmax < 0 = ilimitado */
+  RPc **seq; int nseq;             /* secuencia (raíz / captura) */
+  int idx;
+  RPc ***alts; int *alts_n; int nalts;
+};
+static RPc *_rp(int t) {
+  RPc *p = (RPc*)calloc(1, sizeof(RPc));
+  p->t = t; p->qmax = -1;
+  return p;
 }
+
+static int _rp_groups = 0;
+static RPc **_rp_seq(const char *s, int *i, int *out_n);
+static RPc *_rp_alt(const char *s, int *i);
+
+static RPc *_rp_piece(const char *s, int *i) {
+  char c = s[*i];
+  (*i)++;
+  if (c == '^') return _rp(R_START);
+  if (c == '$') return _rp(R_END);
+  if (c == '.') return _rp(R_ANY);
+  if (c == '\\') {
+    if (!s[*i]) return NULL;
+    char e = s[*i]; (*i)++;
+    switch (e) {
+      case 'd': return _rp(R_DIG);  case 'D': return _rp(R_NDIG);
+      case 'w': return _rp(R_WRD);  case 'W': return _rp(R_NWRD);
+      case 's': return _rp(R_SPC);  case 'S': return _rp(R_NSPC);
+      default: { RPc *p = _rp(R_LIT); p->lit = e; return p; }
+    }
+  }
+  if (c == '[') {
+    RPc *p = _rp(R_CLASS);
+    if (s[*i] == '^') { p->neg = 1; (*i)++; }
+    while (s[*i] && s[*i] != ']') {
+      if (s[*i+1] == '-' && s[*i+2] && s[*i+2] != ']' &&
+          p->nrng < 32) {
+        p->crng[p->nrng].lo = s[*i];
+        p->crng[p->nrng].hi = s[*i+2];
+        p->nrng++; (*i) += 3;
+      } else if (p->nccls < 128) {
+        p->ccls[p->nccls++] = s[*i]; (*i)++;
+      } else (*i)++;
+    }
+    if (s[*i]) (*i)++; /* ']' */
+    return p;
+  }
+  if (c == '(') {
+    RPc *cap = _rp(R_CAP);
+    cap->idx = ++_rp_groups;
+    cap->seq = (RPc**)_rp_seq(s, i, &cap->nseq);
+    if (s[*i] != ')') return NULL;
+    (*i)++;
+    return cap;
+  }
+  if (c == ')' || c == '|') return NULL;
+  { RPc *p = _rp(R_LIT); p->lit = c; return p; }
+}
+
+/* Parsea una secuencia hasta '|' o ')' (o fin); devuelve NULL en error */
+static RPc **_rp_seq(const char *s, int *i, int *out_n) {
+  RPc **items = (RPc**)malloc(sizeof(RPc*) * strlen(s));
+  int n = 0;
+  while (s[*i] && s[*i] != '|' && s[*i] != ')') {
+    RPc *p = _rp_piece(s, i);
+    if (!p) { return NULL; }
+    if (s[*i] == '*' || s[*i] == '+' || s[*i] == '?') {
+      RPc *q = _rp(R_QUANT);
+      q->inner = p;
+      if (s[*i] == '*') { q->qmin = 0; q->qmax = -1; }
+      else if (s[*i] == '+') { q->qmin = 1; q->qmax = -1; }
+      else { q->qmin = 0; q->qmax = 1; }
+      (*i)++;
+      items[n++] = q;
+      continue;
+    }
+    items[n++] = p;
+  }
+  *out_n = n;
+  return items;
+}
+
+static RPc *_rp_alt(const char *s, int *i) {
+  int cap = 4, n = 0;
+  RPc ***alts = (RPc***)malloc(sizeof(RPc**) * cap);
+  int *ns = (int*)malloc(sizeof(int) * cap);
+  for (;;) {
+    int sn = 0;
+    RPc **seq = _rp_seq(s, i, &sn);
+    if (!seq) return NULL;
+    if (n == cap) { cap *= 2; alts = realloc(alts, sizeof(RPc**)*cap); ns = realloc(ns, sizeof(int)*cap); }
+    alts[n] = seq; ns[n] = sn; n++;
+    if (s[*i] == '|') { (*i)++; continue; }
+    break;
+  }
+  if (n == 1) {
+    RPc *root = _rp(R_CAP); root->idx = 0; root->seq = alts[0]; root->nseq = ns[0];
+    return root;
+  }
+  RPc *alt = _rp(R_ALT);
+  alt->alts = alts; alt->alts_n = ns; alt->nalts = n;
+  return alt;
+}
+
+static int _risdig(char c){ return c>='0'&&c<='9'; }
+static int _riswrd(char c){ return _risdig(c)||(c>='a'&&c<='z')||(c>='A'&&c<='Z')||c=='_'; }
+static int _risspc(char c){ return c==' '||c=='\t'||c=='\n'||c=='\r'||c=='\f'||c=='\v'; }
+
+/* Backtracking: devuelve posición final o -1 (espejo de try_match_cap) */
+static int _rtry(RPc **seq, int n, const char *cs, int cl, int ci, int pi) {
+  while (pi < n) {
+    RPc *p = seq[pi];
+    switch (p->t) {
+      case R_START: if (ci != 0) return -1; pi++; break;
+      case R_END:   if (ci != cl) return -1; pi++; break;
+      case R_ANY:   if (ci >= cl || cs[ci] == '\n') return -1; ci++; pi++; break;
+      case R_LIT:   if (ci >= cl || cs[ci] != p->lit) return -1; ci++; pi++; break;
+      case R_DIG:   if (ci >= cl || !_risdig(cs[ci])) return -1; ci++; pi++; break;
+      case R_NDIG:  if (ci >= cl ||  _risdig(cs[ci])) return -1; ci++; pi++; break;
+      case R_WRD:   if (ci >= cl || !_riswrd(cs[ci])) return -1; ci++; pi++; break;
+      case R_NWRD:  if (ci >= cl ||  _riswrd(cs[ci])) return -1; ci++; pi++; break;
+      case R_SPC:   if (ci >= cl || !_risspc(cs[ci])) return -1; ci++; pi++; break;
+      case R_NSPC:  if (ci >= cl ||  _risspc(cs[ci])) return -1; ci++; pi++; break;
+      case R_CLASS: {
+        if (ci >= cl) return -1;
+        char ch = cs[ci];
+        int m = 0;
+        for (int k = 0; k < p->nccls; k++) if (p->ccls[k] == ch) m = 1;
+        for (int k = 0; k < p->nrng; k++)
+          if (ch >= p->crng[k].lo && ch <= p->crng[k].hi) m = 1;
+        if (p->neg) m = !m;
+        if (!m) return -1;
+        ci++; pi++; break;
+      }
+      case R_QUANT: {
+        int count = 0;
+        while (p->qmax < 0 || count < p->qmax) {
+          int e = _rtry(&p->inner, 1, cs, cl, ci, 0);
+          if (e < 0) break;
+          ci = e; count++;
+        }
+        if (count < p->qmin) return -1;
+        { int e = _rtry(seq, n, cs, cl, ci, pi + 1);
+          if (e >= 0) return e; }
+        return -1;
+      }
+      case R_CAP: {
+        int e = _rtry(p->seq, p->nseq, cs, cl, ci, 0);
+        if (e < 0) return -1;
+        ci = e; pi++; break;
+      }
+      case R_ALT: {
+        for (int k = 0; k < p->nalts; k++) {
+          int e = _rtry(p->alts[k], p->alts_n[k], cs, cl, ci, 0);
+          if (e >= 0) { ci = e; break; }
+          if (k == p->nalts - 1) return -1;
+        }
+        pi++; break;
+      }
+      default: return -1;
+    }
+  }
+  return ci;
+}
+
+typedef struct { RPc *root; int anchored; } RegexC;
+
+static RegexC _regex_compile(const char *pat) {
+  RegexC r; r.root = NULL; r.anchored = 0;
+  int i = 0;
+  _rp_groups = 0;
+  RPc *root = _rp_alt(pat, &i);
+  if (!root || pat[i]) return r;
+  r.root = root;
+  if (root->nseq > 0 && root->seq[0]->t == R_START) r.anchored = 1;
+  return r;
+}
+
+/* ¿La raíz casa empezando en pos? Devuelve fin o -1 */
+static int _rtry_root(RegexC *r, const char *cs, int cl, int pos) {
+  return _rtry(r->root->seq, r->root->nseq, cs, cl, pos, 0);
+}
+
+static int _regex_m(const char* pat, const char* s) {
+  RegexC r = _regex_compile(pat);
+  if (!r.root) return 0;
+  int cl = (int)strlen(s);
+  if (r.anchored) return _rtry_root(&r, s, cl, 0) >= 0;
+  for (int i = 0; i <= cl; i++)
+    if (_rtry_root(&r, s, cl, i) >= 0) return 1;
+  return 0;
+}
+
 static char* _regex_rep(const char* pat, const char* s, const char* rep) {
-  regex_t re;
-  if (regcomp(&re, pat, REG_EXTENDED) != 0) return (char*)s;
-  size_t cap = strlen(s) + strlen(rep) * 8 + 64;
+  RegexC r = _regex_compile(pat);
+  size_t cap = strlen(s) * 4 + strlen(rep) * 8 + 64;
   char* out = (char*)malloc(cap);
   size_t oi = 0;
-  const char* p = s;
-  regmatch_t m;
-  int first = 1;
-  while (regexec(&re, p, 1, &m, 0) == 0) {
-    size_t pre = (size_t)m.rm_so;
-    if (oi + pre + strlen(rep) + 32 > cap) { cap = oi + pre + strlen(rep) + 64; out = (char*)realloc(out, cap); }
-    memcpy(out + oi, p, pre); oi += pre;
-    memcpy(out + oi, rep, strlen(rep)); oi += strlen(rep);
-    size_t step = (size_t)m.rm_eo;
-    if (step == 0 && first) break;
-    first = 0;
-    if (step == 0) step = 1;
-    p += step;
+  if (!r.root) { strcpy(out, s); return out; }
+  int cl = (int)strlen(s);
+  int pos = 0;
+  while (pos < cl) {
+    int end = _rtry_root(&r, s, cl, pos);
+    if (end >= 0) {
+      size_t rl = strlen(rep);
+      while (oi + rl + 1 > cap) { cap *= 2; out = (char*)realloc(out, cap); }
+      memcpy(out + oi, rep, rl); oi += rl;
+      pos = end > pos ? end : pos + 1; /* evita bucle en match vacío */
+    } else {
+      if (oi + 2 > cap) { cap *= 2; out = (char*)realloc(out, cap); }
+      out[oi++] = s[pos];
+      pos++;
+    }
   }
-  size_t rest = strlen(p);
-  if (oi + rest + 1 > cap) { cap = oi + rest + 16; out = (char*)realloc(out, cap); }
-  memcpy(out + oi, p, rest);
-  out[oi + rest] = 0;
-  regfree(&re);
+  out[oi] = 0;
   return out;
 }
-#else
-/* Stubs for Windows/macOS */
-static int _regex_m(const char* pat, const char* s) { (void)pat; (void)s; return 0; }
-static char* _regex_rep(const char* pat, const char* s, const char* rep) { (void)pat; (void)s; (void)rep; return (char*)s; }
-#endif
 
 static const uint32_t _dec_tab[][3] = {
   {0x00C0,0x41,0x300},{0x00C1,0x41,0x301},{0x00C2,0x41,0x302},{0x00C3,0x41,0x303},{0x00C4,0x41,0x308},{0x00C5,0x41,0x30A},

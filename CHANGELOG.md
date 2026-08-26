@@ -631,3 +631,26 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 - Benchmarks criterion: `prod_ref_mut_writeback`, `prod_comptime_fold`.
 - Docs spec: vm-spec opcode 63 MakeRef; error-codes W060; LENGUAJE §4 comptime
   con llamadas puras. LSP: hover/completado actualizado para prestado mut.
+
+## [3.3.7] - 2026-08-25
+
+### Motor regex PROPIO portado al backend C (paridad total VM↔nativo)
+- Puerto fiel de `min_regex.rs` a C puro en `lumen_rt.h`: parser recursivo
+  (^ $ . \d \D \w \W \s \S clases/rangos/negación, * + ?, grupos, alternancia)
+  + matcher backtracking con idéntica semántica greedy
+- Elimina POSIX regex (Linux-only) y los stubs de Windows/macOS: ahora las
+  natives `__regex_coincide`/`__regex_reemplazar` se comportan IGUAL en las
+  tres plataformas
+- Bonus paridad: `__str_upper`/`__str_lower` añadidas al lowering del backend C
+
+### Harness de paridad con tolerancia
+- Nuevo `scripts/fuzz_paridad.ps1`: corre cada programa .nv por VM y nativo,
+  normaliza no-determinismo (ids coro_N, epochs, duraciones, pids, punteros)
+  y clasifica PAR/DIF/FALLA. Verificados: corutinas (PAR), FFI básico.
+- Gap detectado (documentado): no existe builtin de PID del proceso en
+  ninguna capa (`__sistema_pid`) — candidato para stdlib futura
+
+### Pendiente explícito
+- LLVM/Cranelift paridad completa vía shims del runtime C: sesión dedicada
+  (arquitectura definida: valores = handles opacos hacia helpers _lw_* que
+  envuelven Val; requiere ~35 helpers + reescritura del emisor)
