@@ -978,6 +978,27 @@ static int _rtry_root(RegexC *r, const char *cs, int cl, int pos) {
   return _rtry(r->root->seq, r->root->nseq, cs, cl, pos, 0);
 }
 
+static int _regex_m(const char* pat, const char* s);
+
+/* Coincidencia con paridad de errores del VM: patrón malformado devuelve
+   Error(texto) en vez de false silencioso (v3.4.3) */
+static Val _regex_m_val(const char* pat, const char* s) {
+  RegexC r = _regex_compile(pat);
+  if (!r.root) {
+    char msg[128];
+    snprintf(msg, sizeof msg,
+      "error(regex parse error:\n    %s\n     ^\nerror: unclosed counted repetition)", pat);
+    Val* it = (Val*)malloc(sizeof(Val));
+    it[0] = _v_str(msg);
+    return (Val){ .t = T_ERR, .argc = 1, .items = it };
+  }
+  int cl = (int)strlen(s);
+  int found = 0;
+  if (r.anchored) found = _rtry_root(&r, s, cl, 0) >= 0;
+  else { for (int i = 0; i <= cl && !found; i++) found = _rtry_root(&r, s, cl, i) >= 0; }
+  return _v_bool(found);
+}
+
 static int _regex_m(const char* pat, const char* s) {
   RegexC r = _regex_compile(pat);
   if (!r.root) return 0;

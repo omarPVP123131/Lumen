@@ -759,3 +759,14 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 
 ### Pendientes vivos
 - #4 `(?:...)`/lookaheads · #5 perf `_sv` · self-hosting sync · LLVM/Cranelift _lw_*
+
+## [3.4.3] - 2026-08-25
+
+### Regex: errores unificados entre capas
+- `_regex_m_val` en el backend C replica la conducta del VM: patrón malformado
+  devuelve `Error(texto)` (no `false` silencioso); `__regex_coincide` lo usa.
+  Paridad re-verificada con regex_dollar.nv.
+
+### Pendientes vivos
+- `(?:...)` y lookaheads en ambos motores · perf `_sv`
+- Self-hosting sync (protocolo en 3.4.1) · LLVM/Cranelift _lw_* (sesión dedicada)

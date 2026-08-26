@@ -1634,7 +1634,7 @@ fn emit_func(
                 } else if n == "__enlazada_longitud" {
                     s.push_str("  { Val _l = POP(); PUSH(_v_int(_l.argc)); }\n");
                 } else if n == "__regex_coincide" {
-                    s.push_str("  { Val _s = POP(); Val _p = POP(); PUSH(_v_bool(_regex_m(_p.s, _s.s))); }\n");
+                    s.push_str("  { Val _s = POP(); Val _p = POP(); PUSH(_regex_m_val(_p.s, _s.s)); }\n");
                 } else if n == "__sistema_pid" || n == "__process_pid" {
                     s.push_str("  PUSH(_v_int(_rt_pid()));\n");
                 } else if n == "__regex_capturar" || n == "__regex_captures" {
