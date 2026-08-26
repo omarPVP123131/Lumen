@@ -770,3 +770,14 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 ### Pendientes vivos
 - `(?:...)` y lookaheads en ambos motores · perf `_sv`
 - Self-hosting sync (protocolo en 3.4.1) · LLVM/Cranelift _lw_* (sesión dedicada)
+
+## [3.4.4] - 2026-08-25
+
+### Regex: grupos no-capturantes `(?:...)` — paridad VM↔nativo
+- Ambos motores: descienden sin consumir índice de captura (Rust: Capture
+  idx::MAX supera el guard; C: idx=0 bajo el guard `idx > 0`)
+- Verificado: `(?:(?:ab)+c`, reemplazo `(?:v)(\d+)` → `n$1` (numeración de
+  grupos intacta), capturas sobre patrón mixto — PAR total (regex_ncg.nv)
+
+### Pendientes vivos
+- Lookaheads `(?=...)` · perf `_sv` · self-hosting sync · LLVM/Cranelift _lw_*

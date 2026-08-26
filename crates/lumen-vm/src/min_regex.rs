@@ -326,6 +326,15 @@ fn parse_piece(chars: &[char], pi: &mut usize, groups: &mut usize) -> Result<Pie
             Ok(Piece::Class { chars: cls_chars, ranges, negated })
         }
         '(' => {
+            // v3.4.4: grupo NO capturante `(?:...)` — desciende sin grabar
+            // captura (idx::MAX supera el guard `idx < caps.len()` del matcher)
+            if *pi + 1 < chars.len() && chars[*pi] == '?' && chars[*pi + 1] == ':' {
+                *pi += 2;
+                let (inner, _) = parse_alt(chars, pi)?;
+                if *pi >= chars.len() || chars[*pi] != ')' { return Err("Unmatched '('".into()); }
+                *pi += 1;
+                return Ok(Piece::Capture { inner, idx: usize::MAX });
+            }
             *groups += 1;
             let idx = *groups;
             let (inner, _) = parse_alt(chars, pi)?;

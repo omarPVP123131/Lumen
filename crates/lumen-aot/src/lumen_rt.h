@@ -809,7 +809,9 @@ static RPc *_rp_piece(const char *s, int *i) {
   }
   if (c == '(') {
     RPc *cap = _rp(R_CAP);
-    cap->idx = ++_rp_groups;
+    /* v3.4.4: `(?:...)` no capturante — idx=0 no graba en el matcher */
+    if (s[*i] == '?' && s[*i + 1] == ':') { (*i) += 2; cap->idx = 0; }
+    else cap->idx = ++_rp_groups;
     cap->seq = (RPc**)_rp_seq(s, i, &cap->nseq);
     if (s[*i] != ')') return NULL;
     (*i)++;

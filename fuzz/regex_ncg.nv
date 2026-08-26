@@ -1,0 +1,5 @@
+funcion vacio main() {
+    imprimir(__regex_coincide("(?:ab)+c", "ababc"));
+    imprimir(__regex_reemplazar("(?:v)(\\d+)", "v1 v2", "n$1"));
+    imprimir(__regex_capturar("(a(?:b)c)(d)", "abcd")[0]);
+}

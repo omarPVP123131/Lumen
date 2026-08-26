@@ -677,3 +677,4 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 
 **v3.4.2 (25 Ago): cuantificador acotado {m,n} en el motor C con paridad verificada (fuzz/regex_braces.nv); divergencia documentada en malformados. Pendientes: (?:...)/lookaheads, perf _sv, self-hosting sync, LLVM/Cranelift.**
 **v3.4.3: errores regex unificados VM-C (_regex_m_val). Pendientes: (?:...)/lookaheads, perf _sv, self-hosting sync, LLVM/Cranelift _lw_*.**
+**v3.4.4: (?:...) no-capturante en ambos motores, PAR total (regex_ncg.nv). Pendientes: lookaheads, perf _sv, self-hosting, LLVM/Cranelift.**
