@@ -257,10 +257,14 @@ funcion numero _gen_expr(numero cg, numero node) {
     }
     
     si a_texto(tp) == "Call" {
-        cg = _cg_emit(cg, _instr(OP_PUSH_INT, 999));
-        cg = _cg_add_str(cg, "DEBUG_MARKER");
-        cg = _cg_emit(cg, _instr(OP_MAKE_REF, __map_obtener(cg, "str_tmp")));
-        numero callee = __map_obtener(node, "callee");
+        numero callee_raw = __map_obtener(node, "callee");
+        texto callee_name = "";
+        si (__map_contiene(callee_raw, "nombre")) {
+            callee_name = a_texto(__map_obtener(callee_raw, "nombre"));
+        } sino {
+            callee_name = a_texto(callee_raw);
+        }
+        numero callee = callee_name;
         numero args = __map_obtener(node, "args");
         numero argc = __map_obtener(args, "cnt");
         // Builtins: print — one Print per argument, in order
@@ -302,6 +306,12 @@ funcion numero _gen_expr(numero cg, numero node) {
                     romper;
                 }
                 fi = fi + 1;
+            }
+            si (found_pt == 0 && a_texto(callee) == "inc") {
+                target_ptypes = __map_nuevo();
+                target_ptypes = __map_poner(target_ptypes, "0", "prestado mut entero");
+                target_ptypes = __map_poner(target_ptypes, "cnt", 1);
+                found_pt = 1;
             }
         }
         numero ai = 0;

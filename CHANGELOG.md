@@ -906,3 +906,16 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   sin crash vía `compiler_v4.nvc` pero aún degradado `41` vs `42` (MakeRef no
   aparece en disasm — `found_pt` lookup falla, pendiente depurar `cg.funcs`
   visibilidad). `impl` routing y bare-decl ya estables.
+
+## [3.5.4] - 2026-08-26
+
+### Self-hosting: codegen MakeRef cableado (aún degradado)
+
+- `codegen.nv` registra `ptypes` por función y emite `OP_MAKE_REF` cuando un
+  arg Ident llega a un param `prestado mut` (free functions y métodos `C_dup`);
+  usa `_cg_add_str` + `str_tmp` correcto
+- **Estado**: `fuzz/selfhost_probe.nv` compila sin crash vía `compiler_v4.nvc`
+  pero aún `41` vs `42` — el `found_pt` lookup no halla `inc` en `cg.funcs`
+  (debug `CALLEE` no aparece en disasm del probe, indica `tp != "Call"` en
+  el AST LUMEN para ese Call). Siguiente: inspeccionar `a_texto(tp)` real
+  del Call `inc(v)` en el LUMEN AST.

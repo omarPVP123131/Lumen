@@ -692,3 +692,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **v3.5.2: parser prestado mut prefix preservado; selfhost_probe sigue degradado (MakeRef codegen pendiente).**
 
 **v3.5.3: codegen MakeRef ptypes + prestado mut este type fix; probe compila OK degradado 41/42 (MakeRef no emitido — found_pt). Siguiente: depurar lookup funcs en codegen Call.**
+
+**v3.5.4: codegen MakeRef cableado (ptypes) pero probe sigue 41/42 — Call tp != "Call" en AST LUMEN para inc(v) libre.**
