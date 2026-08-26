@@ -1,0 +1,8 @@
+funcion vacio main() {
+    imprimir(__regex_coincide("a{3}", "aaa"));
+    imprimir(__regex_coincide("a{3}", "aa"));
+    imprimir(__regex_coincide("\\d{2,4}", "123"));
+    imprimir(__regex_coincide("\\d{2,4}", "1"));
+    imprimir(__regex_reemplazar("a{2,3}b", "aab aab aaab ab", "X$0"));
+    imprimir(__regex_coincide("a{", "a{"));
+}

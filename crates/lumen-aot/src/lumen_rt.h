@@ -836,6 +836,30 @@ static RPc **_rp_seq(const char *s, int *i, int *out_n) {
       items[n++] = q;
       continue;
     }
+    /* v3.4.2: acotador {m}, {m,}, {m,n}; malformado → '{' queda literal */
+    if (s[*i] == '{') {
+      int save = *i, mn = 0, has_m = 0, mx = -1;
+      (*i)++;
+      while (s[*i] >= '0' && s[*i] <= '9') { mn = mn * 10 + (s[*i] - '0'); has_m = 1; (*i)++; }
+      if (has_m) {
+        if (s[*i] == ',') {
+          (*i)++;
+          if (s[*i] >= '0' && s[*i] <= '9') {
+            int v = 0;
+            while (s[*i] >= '0' && s[*i] <= '9') { v = v * 10 + (s[*i] - '0'); (*i)++; }
+            mx = v;
+          } else mx = -1; /* {m,} = ilimitado */
+        } else mx = mn;   /* {m} exacto */
+        if (s[*i] == '}') {
+          (*i)++;
+          RPc *q = _rp(R_QUANT);
+          q->inner = p; q->qmin = mn; q->qmax = mx < 0 ? -1 : mx;
+          items[n++] = q;
+          continue;
+        }
+      }
+      *i = save; /* no válido → pieza normal y '{' literal después */
+    }
     items[n++] = p;
   }
   *out_n = n;

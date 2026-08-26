@@ -745,3 +745,17 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   `lumen run compiler_v4.nv` → .nvc → self-compile ×2 → comparar SHA-256.
   El espejo de `prestado mut este` en parser.nv sigue pendiente ANTES de esa
   regeneración para que el self-hosted compile programas nuevos con refs.
+
+## [3.4.2] - 2026-08-25
+
+### Regex: cuantificador acotado {m}, {m,}, {m,n} — paridad VM↔nativo
+- Añadido al motor propio del backend C y verificado contra el VM
+  (que usa la crate externa): `a{3}`, `\d{2,4}`, reemplazo con `$0`
+- Malformados (`a{`): divergencia documentada — VM reporta error de la crate,
+  C devuelve no-match. Pendiente unificar tratamiento de errores
+
+### Docs (LENGUAJE.md apéndice actualizado)
+- `{m,n}` ahora soportado; siguen pendientes `(?:...)` y lookaheads
+
+### Pendientes vivos
+- #4 `(?:...)`/lookaheads · #5 perf `_sv` · self-hosting sync · LLVM/Cranelift _lw_*

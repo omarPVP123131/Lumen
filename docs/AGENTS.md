@@ -674,3 +674,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **Post-3.4.0: lote fuzz E — f-strings + tareas PAR VM↔nativo. Pendientes vivos: self-hosting sync (prestado mut este → parser.nv), LLVM/Cranelift _lw_* (sesión dedicada), perf _sv, mapas-anidados como claves.**
 
 **v3.4.1 (25 Ago): paridad mapas-como-claves verificada (persistencia = reasignar, ambas capas). compiler_v4.nvc inexistente desde limpieza ago — regeneración documentada paso a paso en CHANGELOG 3.4.1; espejar prestado mut este en parser.nv ANTES de regenerar.**
+
+**v3.4.2 (25 Ago): cuantificador acotado {m,n} en el motor C con paridad verificada (fuzz/regex_braces.nv); divergencia documentada en malformados. Pendientes: (?:...)/lookaheads, perf _sv, self-hosting sync, LLVM/Cranelift.**

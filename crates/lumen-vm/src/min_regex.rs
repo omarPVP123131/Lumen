@@ -251,6 +251,34 @@ fn parse_concat(chars: &[char], pi: &mut usize) -> Result<(Vec<Piece>, usize), S
                 '*' => { *pi += 1; pieces.push(Piece::Quant { inner: Box::new(piece), min: 0, max: usize::MAX }); continue; }
                 '+' => { *pi += 1; pieces.push(Piece::Quant { inner: Box::new(piece), min: 1, max: usize::MAX }); continue; }
                 '?' => { *pi += 1; pieces.push(Piece::Quant { inner: Box::new(piece), min: 0, max: 1 }); continue; }
+                '{' => {
+                    // v3.4.2: cuantificador acotado {m}, {m,}, {m,n}; malformado → '{' literal
+                    let save = *pi;
+                    *pi += 1;
+                    let mut min_s = String::new();
+                    while *pi < chars.len() && chars[*pi].is_ascii_digit() { min_s.push(chars[*pi]); *pi += 1; }
+                    if !min_s.is_empty() {
+                        let mut max_opt: Option<String> = None;
+                        if *pi < chars.len() && chars[*pi] == ',' {
+                            *pi += 1;
+                            let mut ms = String::new();
+                            while *pi < chars.len() && chars[*pi].is_ascii_digit() { ms.push(chars[*pi]); *pi += 1; }
+                            max_opt = Some(ms);
+                        }
+                        if *pi < chars.len() && chars[*pi] == '}' {
+                            *pi += 1;
+                            let min: usize = min_s.parse().unwrap_or(0);
+                            let max: usize = match &max_opt {
+                                None => min,
+                                Some(ms) if ms.is_empty() => usize::MAX,
+                                Some(ms) => ms.parse().unwrap_or(min),
+                            };
+                            pieces.push(Piece::Quant { inner: Box::new(piece), min, max });
+                            continue;
+                        }
+                    }
+                    *pi = save; // no acotador válido → cae como pieza normal
+                }
                 _ => {}
             }
         }
