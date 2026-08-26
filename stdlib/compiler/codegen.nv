@@ -44,6 +44,7 @@ numero OP_ENUM_VAR = 44;
 numero OP_ENUM_ARGC = 45;
 numero OP_TUPLE_NEW = 47;
 numero OP_TUPLE_GET = 48;
+numero OP_MAKE_REF = 63;
 
 numero dt_cnt = 0;
 
@@ -256,6 +257,9 @@ funcion numero _gen_expr(numero cg, numero node) {
     }
     
     si a_texto(tp) == "Call" {
+        cg = _cg_emit(cg, _instr(OP_PUSH_INT, 999));
+        cg = _cg_add_str(cg, "DEBUG_MARKER");
+        cg = _cg_emit(cg, _instr(OP_MAKE_REF, __map_obtener(cg, "str_tmp")));
         numero callee = __map_obtener(node, "callee");
         numero args = __map_obtener(node, "args");
         numero argc = __map_obtener(args, "cnt");
@@ -284,9 +288,38 @@ funcion numero _gen_expr(numero cg, numero node) {
             cg = _cg_emit(cg, _instr(41, 0)); // OptionSome
             retornar cg;
         }
-        // Generate code for arguments
+        numero target_ptypes = 0;
+        entero found_pt = 0;
+        {
+            numero funcs2 = __map_obtener(cg, "funcs");
+            numero fcnt2 = __map_obtener(cg, "func_cnt");
+            entero fi = 0;
+            mientras fi < fcnt2 {
+                numero ff = __map_obtener(funcs2, a_texto(fi));
+                si (a_texto(__map_obtener(ff, "nombre")) == a_texto(callee)) {
+                    target_ptypes = __map_obtener(ff, "ptypes");
+                    found_pt = 1;
+                    romper;
+                }
+                fi = fi + 1;
+            }
+        }
         numero ai = 0;
         mientras ai < argc {
+            si (found_pt == 1) {
+                texto pty = a_texto(__map_obtener(target_ptypes, a_texto(ai)));
+                texto pre8 = __str_subcadena(pty, 0, 8);
+                si (pre8 == "prestado" || __str_contiene(pty, "prestado")) {
+                    numero anode = __map_obtener(args, a_texto(ai));
+                    si (a_texto(__map_obtener(anode, "tipo")) == "Ident") {
+                        texto vname = a_texto(__map_obtener(anode, "nombre"));
+                        cg = _cg_add_str(cg, vname);
+                        cg = _cg_emit(cg, _instr(OP_MAKE_REF, __map_obtener(cg, "str_tmp")));
+                        ai = ai + 1;
+                        continuar;
+                    }
+                }
+            }
             cg = _gen_expr(cg, __map_obtener(args, a_texto(ai)));
             ai = ai + 1;
         }
@@ -867,6 +900,14 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
             pi = pi + 1;
         }
         pm = __map_poner(pm, "cnt", pn);
+        numero ptm = __map_nuevo();
+        entero pk = 0;
+        mientras pk < pn {
+            numero pp = __map_obtener(params, a_texto(pk));
+            ptm = __map_poner(ptm, a_texto(pk), __map_obtener(pp, "tipo"));
+            pk = pk + 1;
+        }
+        ptm = __map_poner(ptm, "cnt", pn);
         numero pd = __map_nuevo();
         entero pj = 0;
         mientras pj < pn {
@@ -880,6 +921,7 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
         numero f = __map_nuevo();
         f = __map_poner(f, "nombre", nombre);
         f = __map_poner(f, "params", pm);
+        f = __map_poner(f, "ptypes", ptm);
         f = __map_poner(f, "defectos", pd);
         f = __map_poner(f, "start", start);
         funcs = __map_poner(funcs, a_texto(fc), f);

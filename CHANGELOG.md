@@ -893,3 +893,16 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 - Evidencia: selfhost_probe compila OK (131B) vía nvc, aún degradado 41 vs 42
 
 ### Regex: negativos (?!...) ya en 3.4.9, unificados en 3.5.x
+
+## [3.5.3] - 2026-08-26
+
+### Self-hosting: codegen MakeRef para prestado mut (parcial)
+
+- `codegen.nv`: registra `ptypes` por función y emite `OP_MAKE_REF` (63)
+  cuando un arg Ident llega a un param `prestado mut` (free functions y
+  métodos `C_dup`); usa `_cg_add_str` + `str_tmp` correcto
+- `parser.nv`: `prestado mut este` type_nm corregido a `C` (no "Self" genérico)
+- **Estado**: `fuzz/selfhost_probe.nv` (`inc(prestado mut entero x)`) compila
+  sin crash vía `compiler_v4.nvc` pero aún degradado `41` vs `42` (MakeRef no
+  aparece en disasm — `found_pt` lookup falla, pendiente depurar `cg.funcs`
+  visibilidad). `impl` routing y bare-decl ya estables.

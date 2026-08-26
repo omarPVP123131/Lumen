@@ -690,3 +690,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **v3.5.1: builder bare-decl fix + parser prestado tolerante; self-hosting compila prestado mut libre (degradado). Impl mangling inherente corregido pero codegen MakeRef pendiente para write-back real.**
 
 **v3.5.2: parser prestado mut prefix preservado; selfhost_probe sigue degradado (MakeRef codegen pendiente).**
+
+**v3.5.3: codegen MakeRef ptypes + prestado mut este type fix; probe compila OK degradado 41/42 (MakeRef no emitido — found_pt). Siguiente: depurar lookup funcs en codegen Call.**

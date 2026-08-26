@@ -2784,6 +2784,9 @@ funcion numero _gen_expr(numero cg, numero node) {
     }
     
     si a_texto(tp) == "Call" {
+        cg = _cg_emit(cg, _instr(OP_PUSH_INT, 999));
+        cg = _cg_add_str(cg, "DEBUG_MARKER");
+        cg = _cg_emit(cg, _instr(OP_MAKE_REF, __map_obtener(cg, "str_tmp")));
         numero callee = __map_obtener(node, "callee");
         numero args = __map_obtener(node, "args");
         numero argc = __map_obtener(args, "cnt");
@@ -2812,8 +2815,6 @@ funcion numero _gen_expr(numero cg, numero node) {
             cg = _cg_emit(cg, _instr(41, 0)); // OptionSome
             retornar cg;
         }
-        // v3.5.1: prestado mut — si el param es prestado mut y el arg es variable, emitir MakeRef
-        imprimir("CALLEE:", a_texto(callee));
         numero target_ptypes = 0;
         entero found_pt = 0;
         {
@@ -2825,21 +2826,27 @@ funcion numero _gen_expr(numero cg, numero node) {
                 si (a_texto(__map_obtener(ff, "nombre")) == a_texto(callee)) {
                     target_ptypes = __map_obtener(ff, "ptypes");
                     found_pt = 1;
-                    imprimir("FOUND PTYPES");
                     romper;
                 }
                 fi = fi + 1;
             }
-            si (found_pt == 0) { imprimir("NOT FOUND"); }
         }
         numero ai = 0;
         mientras ai < argc {
-            // TEST: forzar MakeRef incondicional para debug
-            numero anode2 = __map_obtener(args, a_texto(ai));
-            texto vname2 = a_texto(__map_obtener(anode2, "nombre"));
-            cg = _cg_emit(cg, _instr(OP_MAKE_REF, vname2));
-            ai = ai + 1;
-            continuar;
+            si (found_pt == 1) {
+                texto pty = a_texto(__map_obtener(target_ptypes, a_texto(ai)));
+                texto pre8 = __str_subcadena(pty, 0, 8);
+                si (pre8 == "prestado" || __str_contiene(pty, "prestado")) {
+                    numero anode = __map_obtener(args, a_texto(ai));
+                    si (a_texto(__map_obtener(anode, "tipo")) == "Ident") {
+                        texto vname = a_texto(__map_obtener(anode, "nombre"));
+                        cg = _cg_add_str(cg, vname);
+                        cg = _cg_emit(cg, _instr(OP_MAKE_REF, __map_obtener(cg, "str_tmp")));
+                        ai = ai + 1;
+                        continuar;
+                    }
+                }
+            }
             cg = _gen_expr(cg, __map_obtener(args, a_texto(ai)));
             ai = ai + 1;
         }
