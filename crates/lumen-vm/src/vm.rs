@@ -1183,7 +1183,7 @@ impl VM {
                     return Some(Ok(()));
                 }
             };
-            let sema = lumen_sema::sema::SemanticAnalyzer::new();
+            let mut sema = lumen_sema::sema::SemanticAnalyzer::new();
             let sem_errors = sema.analyze(&mut program);
             if !sem_errors.is_empty() {
                 let msg = sem_errors

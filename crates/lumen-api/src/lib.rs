@@ -62,7 +62,7 @@ impl LumenEngine {
             return Err(parse_errors.iter().map(|e| format!("{:?}", e)).collect());
         }
 
-        let sema = SemanticAnalyzer::new();
+        let mut sema = SemanticAnalyzer::new();
         let sem_errors = sema.analyze(&mut program);
 
         if !sem_errors.is_empty() {
@@ -90,7 +90,7 @@ impl LumenEngine {
             return Err(format!("{:?}", parse_errors[0]));
         }
 
-        let sema = SemanticAnalyzer::new();
+        let mut sema = SemanticAnalyzer::new();
         let sem_errors = sema.analyze(&mut program);
 
         if !sem_errors.is_empty() {

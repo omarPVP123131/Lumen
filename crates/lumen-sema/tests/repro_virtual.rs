@@ -68,7 +68,7 @@ fn repro_virtual_flatten_stdlib() {
                 }
             };
 
-        let sema = lumen_sema::SemanticAnalyzer::new();
+        let mut sema = lumen_sema::SemanticAnalyzer::new();
         let mut prog = program;
         let sem_errors = sema.analyze(&mut prog);
         if !sem_errors.is_empty() {

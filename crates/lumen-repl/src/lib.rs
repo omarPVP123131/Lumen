@@ -71,7 +71,7 @@ impl Repl {
         }
 
         // 3. Semántica
-        let sema = SemanticAnalyzer::new();
+        let mut sema = SemanticAnalyzer::new();
         let sem_errors = sema.analyze(&mut program);
         if !sem_errors.is_empty() {
             let mut msg = String::new();

@@ -300,7 +300,7 @@ fn run_lumen_with_files(source: &str, project_files: HashMap<String, String>) ->
         };
 
     // Semantic analysis
-    let sema = lumen_sema::SemanticAnalyzer::new();
+    let mut sema = lumen_sema::SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         return format!("Error semántico: {}", sem_errors[0].message);
@@ -331,7 +331,7 @@ pub fn run_lumen(source: &str) -> String {
         };
 
     // Semantic analysis
-    let sema = lumen_sema::SemanticAnalyzer::new();
+    let mut sema = lumen_sema::SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         return format!("Error semántico: {}", sem_errors[0].message);
@@ -372,7 +372,7 @@ pub fn compile_to_bytes(source: &str) -> Result<Vec<u8>, String> {
     let mut program = loader
         .resolve_imports(source, std::path::Path::new("__lumen_mem__/main.nv"))
         .map_err(|e| module_error_str(&e))?;
-    let sema = lumen_sema::SemanticAnalyzer::new();
+    let mut sema = lumen_sema::SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         return Err(format!("Error semántico: {}", sem_errors[0].message));
@@ -392,7 +392,7 @@ pub fn check_lumen(source: &str) -> Option<String> {
             Err(e) => return Some(format!("Error de imports: {}", module_error_str(&e))),
         };
 
-    let sema = lumen_sema::SemanticAnalyzer::new();
+    let mut sema = lumen_sema::SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         return Some(format!("Error semántico: {}", sem_errors[0].message));

@@ -382,15 +382,19 @@ impl IRBuilder {
                 let end_label = self.new_label();
                 self.gen_expr(condition);
                 self.emit(Instr::JmpIf(else_label));
+                self.emit(Instr::ScopePush);
                 for node in then_body {
                     self.gen_decl_or_stmt(node);
                 }
+                self.emit(Instr::ScopePop);
                 self.emit(Instr::Jmp(end_label));
                 self.emit(Instr::Label(else_label));
                 if let Some(else_body) = else_body {
+                    self.emit(Instr::ScopePush);
                     for node in else_body {
                         self.gen_decl_or_stmt(node);
                     }
+                    self.emit(Instr::ScopePop);
                 }
                 self.emit(Instr::Label(end_label));
             }
@@ -407,9 +411,11 @@ impl IRBuilder {
                     continue_label: start_label,
                     loop_name: None,
                 });
+                self.emit(Instr::ScopePush);
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
+                self.emit(Instr::ScopePop);
                 self.loop_labels.pop();
                 self.emit(Instr::Jmp(start_label));
                 self.emit(Instr::Label(end_label));
@@ -433,9 +439,11 @@ impl IRBuilder {
                     continue_label,
                     loop_name: None,
                 });
+                self.emit(Instr::ScopePush);
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
+                self.emit(Instr::ScopePop);
                 self.loop_labels.pop();
                 self.emit(Instr::Label(continue_label));
                 self.gen_stmt(update);
@@ -676,7 +684,9 @@ impl IRBuilder {
                         self.emit(Instr::JmpIf(fail_label));
                     }
                     for node in &arm.body {
+                        self.emit(Instr::ScopePush);
                         self.gen_decl_or_stmt(node);
+                        self.emit(Instr::ScopePop);
                     }
                     self.emit(Instr::Jmp(end_label));
                 }
@@ -725,10 +735,12 @@ impl IRBuilder {
                 self.emit(Instr::Load(arr_temp.clone()));
                 self.emit(Instr::Load(idx_temp.clone()));
                 self.emit(Instr::ArrayGet);
+                self.emit(Instr::ScopePush);
                 self.emit(Instr::StoreLocal(var_name.clone()));
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
+                self.emit(Instr::ScopePop);
                 self.emit(Instr::Load(idx_temp.clone()));
                 self.emit(Instr::ConstInt(1));
                 self.emit(Instr::Binary(Op::Add));
@@ -751,15 +763,19 @@ impl IRBuilder {
                 let el = self.new_label();
                 let end_l = self.new_label();
                 self.emit_if_let_pattern(&temp, pattern, el);
+                self.emit(Instr::ScopePush);
                 for n in then_body {
                     self.gen_decl_or_stmt(n);
                 }
+                self.emit(Instr::ScopePop);
                 self.emit(Instr::Jmp(end_l));
                 self.emit(Instr::Label(el));
                 if let Some(eb) = else_body {
+                    self.emit(Instr::ScopePush);
                     for n in eb {
                         self.gen_decl_or_stmt(n);
                     }
+                    self.emit(Instr::ScopePop);
                 }
                 self.emit(Instr::Label(end_l));
             }
@@ -1364,8 +1380,22 @@ impl IRBuilder {
                     .clone()
                     .or_else(|| self.impl_method_map.get(method.as_str()).cloned());
                 if let Some(fname) = func_name {
-                    // Trait method: receiver pushed as first arg
-                    self.gen_expr(expr);
+                    // Trait method: receiver pushed as first arg.
+                    // Si el método declara `prestado mut este` y el receptor es
+                    // una variable simple, pasar por referencia (bug #6).
+                    let ref_recv = self
+                        .ref_mut_params
+                        .get(&fname)
+                        .map_or(false, |v| v.contains(&0));
+                    if ref_recv {
+                        if let Expr::Ident { name: rn, .. } = expr.as_ref() {
+                            self.emit(Instr::MakeRef(rn.clone()));
+                        } else {
+                            self.gen_expr(expr);
+                        }
+                    } else {
+                        self.gen_expr(expr);
+                    }
                     for arg in args {
                         self.gen_expr(arg);
                     }

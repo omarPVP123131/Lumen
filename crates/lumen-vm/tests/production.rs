@@ -17,7 +17,7 @@ fn run_source(source: &str) -> Result<Vec<String>, String> {
     if !parse_errors.is_empty() {
         return Err(format!("ParseError: {}", parse_errors[0].message));
     }
-    let sema = SemanticAnalyzer::new();
+    let mut sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         return Err(format!("SemError: {}", sem_errors[0].message));

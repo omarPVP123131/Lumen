@@ -563,7 +563,7 @@ fn analyze(source: &str, _uri: &str) -> Vec<serde_json::Value> {
         return diagnostics;
     }
 
-    let sema = SemanticAnalyzer::new();
+    let mut sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     for e in &sem_errors {
         diagnostics.push(serde_json::json!({

@@ -107,6 +107,8 @@ pub struct SemanticAnalyzer {
     seen_impls: std::collections::HashSet<ImplKey>,
     type_param_bounds: HashMap<String, Vec<(String, String)>>,
     errors: Vec<SemError>,
+    /// Avisos no fatales (ej: prestado mut con argumento no-lvalue)
+    pub warnings: Vec<String>,
     loop_depth: usize,
 }
 
@@ -129,11 +131,17 @@ impl SemanticAnalyzer {
             seen_impls: std::collections::HashSet::new(),
             type_param_bounds: HashMap::new(),
             errors: Vec::new(),
+            warnings: Vec::new(),
             loop_depth: 0,
         }
     }
 
-    pub fn analyze(mut self, program: &mut Program) -> Vec<SemError> {
+    /// Extrae los avisos acumulados durante el análisis
+    pub fn take_warnings(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.warnings)
+    }
+
+    pub fn analyze(&mut self, program: &mut Program) -> Vec<SemError> {
         self.collect_enums(program);
         self.collect_traits(program);
         self.collect_structs(program);
@@ -141,7 +149,7 @@ impl SemanticAnalyzer {
         self.collect_functions(program);
         self.analyze_program(program);
         self.resolve_operator_overloads(program);
-        self.errors
+        std::mem::take(&mut self.errors)
     }
 
     fn resolve_operator_overloads(&self, program: &mut Program) {
@@ -1054,16 +1062,32 @@ impl SemanticAnalyzer {
                         let mut m = method.clone();
                         if let Decl::Function { params, .. } = &mut m {
                             for p in params.iter_mut() {
-                                if let Type::Struct(s) = &p.param_type {
-                                    if s == "Self"
-                                        || s == "self"
-                                        || s == "este"
-                                        || s.ends_with("_Self")
-                                        || s.ends_with("_self")
-                                        || s.ends_with("_este")
+                                match &p.param_type {
+                                    Type::Struct(s)
+                                        if s == "Self"
+                                            || s == "self"
+                                            || s == "este"
+                                            || s.ends_with("_Self")
+                                            || s.ends_with("_self")
+                                            || s.ends_with("_este") =>
                                     {
                                         p.param_type = target_type.clone();
                                     }
+                                    // `prestado mut este`: receiver por referencia
+                                    Type::Prestado { inner, mutable } => {
+                                        if let Type::Struct(s) = &**inner {
+                                            if s == "Self"
+                                                || s == "self"
+                                                || s == "este"
+                                            {
+                                                p.param_type = Type::Prestado {
+                                                    inner: Box::new(target_type.clone()),
+                                                    mutable: *mutable,
+                                                };
+                                            }
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -2037,6 +2061,22 @@ impl SemanticAnalyzer {
                                 for (i, (got, expected)) in
                                     arg_types.iter().zip(subst_param_types.iter()).enumerate()
                                 {
+                                    // prestado mut con argumento no-lvalue: se pasa
+                                    // por valor y las mutaciones se pierden (aviso)
+                                    if let TypeInfo::Prestado {
+                                        mutable: true, ..
+                                    } = expected
+                                    {
+                                        if !matches!(
+                                            args.get(i),
+                                            Some(Expr::Ident { .. })
+                                        ) {
+                                            self.warnings.push(format!(
+                                                "W060 [{}:{}]: '{}' espera 'prestado mut' en el argumento {}; se pasa por valor y las mutaciones no se verán fuera",
+                                                span.start.line, span.start.col, callee, i + 1
+                                            ));
+                                        }
+                                    }
                                     if !can_assign(expected, got) {
                                         self.errors.push(SemError {
                                             code: "E041".to_string(),
@@ -4238,7 +4278,7 @@ mod tests {
         let parser = Parser::new(tokens);
         let (mut program, parse_errors) = parser.parse();
         assert!(parse_errors.is_empty(), "Parse errors: {:?}", parse_errors);
-        let sema = SemanticAnalyzer::new();
+        let mut sema = SemanticAnalyzer::new();
         sema.analyze(&mut program)
     }
 

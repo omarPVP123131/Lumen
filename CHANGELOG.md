@@ -1,3 +1,28 @@
+## [3.3.5] - 2026-08-25
+
+### Lenguaje — hacia producción sin limitantes
+
+#### Sombreado de bloques real (VM + builder + AOT C)
+- El builder ahora emite ScopePush/ScopePop en los cuerpos de si/sino,
+  mientras, para, para cada, si-let, elegir y match (antes solo bloques `{}`)
+- `sea x = 1; si ... { sea x = 2 }` conserva x=1 fuera del bloque en AMBOS motores
+  (antes el VM y el C filtraban la declaración al scope exterior)
+- Backend AOT C: planificador estático de slots (`plan_var_keys`) — cada sitio
+  textual de declaración recibe su propio key gv[] con sombreado correcto;
+  los bucles reusan su slot (planeo por instrucción, no por ejecución)
+
+#### Métodos con receiver mutable: `prestado mut este`
+- Nuevo soporte de sintaxis en parse_param: `prestado mut este|self|yo`
+- Sema sustituye Self por el tipo objetivo del impl dentro de Prestado
+- Builder emite MakeRef del receptor cuando el método lo declara mutable:
+  las mutaciones del método SÍ afectan a la instancia llamadora (VM y AOT)
+
+#### Aviso W060: prestado mut con argumento no-lvalue
+- sema ahora acumula avisos no fatales (`SemanticAnalyzer::warnings`)
+- Pasar `o.campo`, `arr[i]` o una expresión a un parámetro `prestado mut`
+  imprime ⚠ W060 explicando que se pasa por valor (las mutaciones se pierden)
+- `analyze(&mut self)` permite leer los avisos desde CLI/repl/lsp/api
+
 ## [3.3.1] - 2026-08-25
 
 ### Lenguaje — Bugs QA completados

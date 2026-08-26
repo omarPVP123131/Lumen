@@ -1750,11 +1750,14 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
     lumen_ir::comptime::ComptimeEvaluator::new(&program).rewrite_program(&mut program);
     prof_time("imports+parse", &t);
     let t = prof_start();
-    let sema = SemanticAnalyzer::new();
+    let mut sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         show_sema_errors(&sem_errors, &source, path);
         process::exit(1);
+    }
+    for w in sema.take_warnings() {
+        eprintln!("  ⚠ {}", w);
     }
     prof_time("sema", &t);
     let t = prof_start();
@@ -1919,7 +1922,7 @@ fn check_project(root: &str, lib_dirs: &[PathBuf]) {
                 continue;
             }
         };
-        let sema = SemanticAnalyzer::new();
+        let mut sema = SemanticAnalyzer::new();
         let sem_errors = sema.analyze(&mut program);
         if !sem_errors.is_empty() {
             show_sema_errors(&sem_errors, &source, &f_str);
@@ -2022,7 +2025,7 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
     };
     // comptime (bug #7): plegar expresiones comptime evaluables antes de sema
     lumen_ir::comptime::ComptimeEvaluator::new(&flat).rewrite_program(&mut flat);
-    let sema = SemanticAnalyzer::new();
+    let mut sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut flat);
     if !sem_errors.is_empty() {
         for e in &sem_errors {
@@ -3180,7 +3183,7 @@ fn run_source_capture(source: &str, lib_dirs: &[PathBuf], base_path: &Path) -> (
         Ok(p) => p,
         Err(e) => return (String::new(), format!("Error de import/parse: {:?}", e)),
     };
-    let sema = SemanticAnalyzer::new();
+    let mut sema = SemanticAnalyzer::new();
     let sem_errors = sema.analyze(&mut program);
     if !sem_errors.is_empty() {
         let msgs: Vec<String> = sem_errors

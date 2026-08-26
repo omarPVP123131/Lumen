@@ -1082,15 +1082,25 @@ pub fn compile_to_c(program: &Program) -> String {
     let resolve_var =
         |fname: &str, n: &str| -> String { renames.get(fname).and_then(|m| m.get(n)).cloned().unwrap_or_else(|| n.to_string()) };
 
+    // Plan de slots por función (params renombrados + sombreado de bloques)
+    let mut var_plans: HashMap<String, HashMap<usize, String>> = HashMap::new();
+    for (fname, func) in &program.funcs {
+        let pr = renames.get(fname).cloned().unwrap_or_default();
+        var_plans.insert(fname.clone(), plan_var_keys(func, &pr));
+    }
+
     for (name, func) in &program.funcs {
+        let plan = &var_plans[name];
         for p in &func.params {
             add_name(&resolve_var(name, p));
         }
-        for ins in &func.instrs {
+        for (i, ins) in func.instrs.iter().enumerate() {
             match ins {
-                Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n)
-                | Instr::ArrayPushVar(n) | Instr::MakeRef(n) => {
-                    add_name(&resolve_var(name, n));
+                Instr::Load(_) | Instr::Store(_) | Instr::StoreLocal(_)
+                | Instr::ArrayPushVar(_) | Instr::MakeRef(_) => {
+                    if let Some(k) = plan.get(&i) {
+                        add_name(k);
+                    }
                 }
                 Instr::FuncRef(n) => {
                     add_name(n);
@@ -1109,20 +1119,16 @@ pub fn compile_to_c(program: &Program) -> String {
 
     let mut name_sets: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (name, func) in &program.funcs {
-        // Slots reales de la función: params renombrados + variables del cuerpo
+        // Slots reales de la función: params renombrados + keys planificadas
         let mut set: Vec<String> = func
             .params
             .iter()
             .map(|p| resolve_var(name, p))
             .collect();
-        for ins in &func.instrs {
-            if let Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n)
-            | Instr::ArrayPushVar(n) | Instr::MakeRef(n) = ins
-            {
-                let key = resolve_var(name, n);
-                if !set.iter().any(|x| x == &key) {
-                    set.push(key);
-                }
+        let plan = &var_plans[name];
+        for k in plan.values() {
+            if !set.iter().any(|x| x == k) {
+                set.push(k.clone());
             }
         }
         name_sets.insert(name.clone(), set);
@@ -1181,7 +1187,8 @@ pub fn compile_to_c(program: &Program) -> String {
     };
 
     for (name, func) in &program.funcs {
-        out.push_str(&emit_func(name, func, program, &name_sets, &gv_of, &renames));
+        let plan = var_plans[name].clone();
+        out.push_str(&emit_func(name, func, program, &name_sets, &gv_of, &renames, &plan));
     }
     for n in &unknown {
         out.push_str(&format!(
@@ -1230,6 +1237,68 @@ fn esc(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Plan de slots por instrucción: resuelve cada Load/Store/StoreLocal/
+/// ArrayPushVar/MakeRef al key real del namespace plano gv[], considerando
+/// params renombrados y SOMBRADO POR BLOQUES (ScopePush/ScopePop).
+/// El planeo es estático sobre el flujo lineal: cada sitio textual de
+/// `sea x` recibe su propio slot (`x#N`), así los bloques hermanos con el
+/// mismo nombre no se pisan y las iteraciones de un bucle reusan su slot.
+/// Fuente única de verdad para la colección de nombres, name_sets y el emisor.
+fn plan_var_keys(
+    func: &LumenFunc,
+    param_renames: &HashMap<String, String>,
+) -> HashMap<usize, String> {
+    let mut plan: HashMap<usize, String> = HashMap::new();
+    let mut scopes: Vec<HashMap<String, String>> = vec![HashMap::new()];
+    for (raw, key) in param_renames {
+        scopes[0].insert(raw.clone(), key.clone());
+    }
+    let mut counter = 0usize;
+    fn resolve(scopes: &[HashMap<String, String>], n: &str) -> Option<String> {
+        for s in scopes.iter().rev() {
+            if let Some(k) = s.get(n) {
+                return Some(k.clone());
+            }
+        }
+        None
+    }
+    for (i, ins) in func.instrs.iter().enumerate() {
+        match ins {
+            Instr::ScopePush => scopes.push(HashMap::new()),
+            Instr::ScopePop => {
+                if scopes.len() > 1 {
+                    scopes.pop();
+                }
+            }
+            Instr::StoreLocal(n) => {
+                // Declaración: siempre en el scope ACTUAL. Reusar key solo si
+                // ya fue declarada en este mismo nivel; un nombre de un nivel
+                // exterior se SOMBREA con key nueva.
+                let top = scopes.last_mut().expect("scope base siempre presente");
+                let key = match top.get(n) {
+                    Some(k) => k.clone(),
+                    None => {
+                        counter += 1;
+                        let k = format!("{}#{}", n, counter);
+                        top.insert(n.clone(), k.clone());
+                        k
+                    }
+                };
+                plan.insert(i, key);
+            }
+            Instr::Load(n)
+            | Instr::Store(n)
+            | Instr::ArrayPushVar(n)
+            | Instr::MakeRef(n) => {
+                let key = resolve(&scopes, n).unwrap_or_else(|| n.to_string());
+                plan.insert(i, key);
+            }
+            _ => {}
+        }
+    }
+    plan
+}
+
 fn op_code(op: &Op) -> i64 {
     match op {
         Op::Add => 1,
@@ -1262,7 +1331,10 @@ fn op_code(op: &Op) -> i64 {
 /// globals del llamador (_sv) alrededor de cada llamada; los slots que son
 /// objetivo de un prestado mut deben EXCLUIRSE del restore o la mutación se
 /// desharía. Devuelve índice de instrucción Call -> nombres referenciados.
-fn collect_ref_args(func: &LumenFunc) -> HashMap<usize, Vec<String>> {
+fn collect_ref_args(
+    func: &LumenFunc,
+    plan: &HashMap<usize, String>,
+) -> HashMap<usize, Vec<String>> {
     let mut out: HashMap<usize, Vec<String>> = HashMap::new();
     let mut st: Vec<Option<String>> = Vec::new();
     let popn = |st: &mut Vec<Option<String>>, k: usize| {
@@ -1276,7 +1348,12 @@ fn collect_ref_args(func: &LumenFunc) -> HashMap<usize, Vec<String>> {
         match instr {
             Instr::ConstInt(_) | Instr::ConstFloat(_) | Instr::ConstStr(_) | Instr::ConstBool(_)
             | Instr::Load(_) | Instr::Read | Instr::FuncRef(_) => st.push(None),
-            Instr::MakeRef(n) => st.push(Some(n.clone())),
+            Instr::MakeRef(n) => {
+                // Usar el key planificado (con sombreado) para que la
+                // exclusión del save/restore coincida con name_sets
+                let key = plan.get(&idx).cloned().unwrap_or_else(|| n.clone());
+                st.push(Some(key))
+            }
             Instr::Binary(_) => {
                 if !popn(&mut st, 2) {
                     break;
@@ -1363,16 +1440,9 @@ fn emit_func(
     name_sets: &BTreeMap<String, Vec<String>>,
     gv_of: &dyn Fn(&str) -> String,
     renames: &HashMap<String, HashMap<String, String>>,
+    plan: &HashMap<usize, String>,
 ) -> String {
-    // Resuelve el slot real de una variable dentro de ESTA función
-    let var_of = |n: &str| -> String {
-        renames
-            .get(name)
-            .and_then(|m| m.get(n))
-            .cloned()
-            .unwrap_or_else(|| n.to_string())
-    };
-    // Resuelve el slot de un param de una función llamada (callee)
+    // Slot de un param de una función llamada (callee)
     let callee_slot_of = |callee: &str, pn: &str| -> String {
         renames
             .get(callee)
@@ -1386,7 +1456,11 @@ fn emit_func(
         mangle(name)
     ));
 
-    let ref_args = collect_ref_args(func);
+    let ref_args = collect_ref_args(func, plan);
+    // Resolvedor de slot por instrucción (params renombrados + sombreado)
+    let var_at = |i: usize, n: &str| -> String {
+        plan.get(&i).cloned().unwrap_or_else(|| n.to_string())
+    };
     let mut handler_labels: Vec<usize> = Vec::new();
     for (i, instr) in func.instrs.iter().enumerate() {
         // ¿Instrucción cuyas llamadas al runtime pueden lanzar error?
@@ -1431,12 +1505,12 @@ fn emit_func(
                 ));
             }
             Instr::Load(n) => {
-                s.push_str(&format!("  PUSH(_deref({}));\n", gv_of(&var_of(n))));
+                s.push_str(&format!("  PUSH(_deref({}));\n", gv_of(&var_at(i, n))));
             }
             Instr::Store(n) | Instr::StoreLocal(n) => {
                 // Si el slot contiene una referencia (prestado mut), escribir
                 // a través del puntero; si no, asignación normal.
-                let g = gv_of(&var_of(n));
+                let g = gv_of(&var_at(i, n));
                 s.push_str(&format!(
                     "  {{ Val _sv_ = POP(); if ({g}.t == T_PTR && {g}.p) *{g}.p = _dcp(_sv_); else {g} = _dcp(_sv_); }}\n",
                     g = g
@@ -1661,7 +1735,7 @@ fn emit_func(
                         .cloned()
                         .unwrap_or_default()
                         .iter()
-                        .map(|rn| var_of(rn))
+                        .map(|rn| rn.clone())
                         .collect();
                     let caller_names: Vec<String> =
                         name_sets.get(name).cloned().unwrap_or_default();
@@ -1753,7 +1827,7 @@ fn emit_func(
             Instr::MakeRef(vname) => {
                 // prestado mut (bug #6): apilar puntero al slot gv[] de la variable.
                 // El slot gv es estático → la dirección es estable durante todo el run.
-                s.push_str(&format!("  PUSH(_v_ptr(&{}));\n", gv_of(&var_of(vname))));
+                s.push_str(&format!("  PUSH(_v_ptr(&{}));\n", gv_of(&var_at(i, vname))));
             }
             Instr::PushHandler(catch_label) => {
                 // intentar/atrapar sin unwinding: guardar SP; los chequeos
@@ -1778,7 +1852,7 @@ fn emit_func(
             }
             Instr::ArrayPushVar(vname) => {
                 // AOT: degradar a push + store al global/local equivalente
-                let vn = gv_of(&var_of(vname));
+                let vn = gv_of(&var_at(i, vname));
                 s.push_str("  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push(_a, _x)); }\n");
                 s.push_str(&format!("  SET({vn}, POP());\n"));
             }

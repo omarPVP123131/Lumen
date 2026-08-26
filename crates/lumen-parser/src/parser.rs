@@ -1155,6 +1155,43 @@ impl Parser {
 
     fn parse_param(&mut self) -> Option<Param> {
         let start = self.peek().span;
+        // Receiver mutable de método: `prestado mut este` (o self/yo/borrowed mut self).
+        // El receiver no lleva nombre aparte ni tipo explícito: se resuelve al
+        // tipo del impl en sema.
+        if matches!(
+            self.peek().kind,
+            TokenKind::Prestado | TokenKind::Borrowed
+        ) && self.pos + 2 < self.tokens.len()
+            && matches!(
+                self.tokens[self.pos + 1].kind,
+                TokenKind::Mut | TokenKind::Mutable
+            )
+            && matches!(self.tokens[self.pos + 2].kind, TokenKind::Ident(_))
+            && matches!(
+                match &self.tokens[self.pos + 2].kind {
+                    TokenKind::Ident(s) => s.as_str(),
+                    _ => "",
+                },
+                "este" | "self" | "yo"
+            )
+        {
+            self.advance(); // prestado
+            self.advance(); // mut
+            let name_tok = self.advance();
+            let name = match name_tok.map(|t| t.kind) {
+                Some(TokenKind::Ident(s)) => s,
+                _ => unreachable!("verificado arriba"),
+            };
+            return Some(Param {
+                param_type: Type::Prestado {
+                    inner: Box::new(Type::Struct("Self".to_string())),
+                    mutable: true,
+                },
+                name,
+                default: None,
+                span: Span::merge(&start, &self.previous().span),
+            });
+        }
         // Unificación sintáctica (QA #2): se aceptan ambas convenciones:
         //   1. `Tipo nombre`        (clásica, ej: `entero a`)
         //   2. `nombre: Tipo`       (estilo struct/campo, ej: `a: entero`)
