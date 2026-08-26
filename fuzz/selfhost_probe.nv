@@ -1,0 +1,9 @@
+estructura C { saldo: entero }
+impl C {
+    funcion vacio dup(prestado mut este) { este.saldo = este.saldo * 2; }
+}
+funcion vacio main() {
+    sea c = C { saldo: 21 };
+    c.dup();
+    imprimir(c.saldo);
+}

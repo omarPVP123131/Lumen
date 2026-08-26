@@ -672,3 +672,5 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **v3.3.9 (25 Ago): F6 inferencia genérica desde args (Struct("T")-param unifica); F7 macro SET muerto en ArrayPushVar del C. Paridad gen_ref. Pendientes explícitos: self-hosting sync (prestado mut este en parser.nv) y LLVM/Cranelift _lw_*.**
 
 **Post-3.4.0: lote fuzz E — f-strings + tareas PAR VM↔nativo. Pendientes vivos: self-hosting sync (prestado mut este → parser.nv), LLVM/Cranelift _lw_* (sesión dedicada), perf _sv, mapas-anidados como claves.**
+
+**v3.4.1 (25 Ago): paridad mapas-como-claves verificada (persistencia = reasignar, ambas capas). compiler_v4.nvc inexistente desde limpieza ago — regeneración documentada paso a paso en CHANGELOG 3.4.1; espejar prestado mut este en parser.nv ANTES de regenerar.**

@@ -731,3 +731,17 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
 - Lote fuzz E: f-strings `f"hola {nombre}!"` con expresiones `{1+2}` y
   tareas (`__tarea_lanzar`/`__tarea_esperar`) — PAR total VM↔nativo.
   Queda pendiente: mapas anidados como claves, más patrones async.
+
+## [3.4.1] - 2026-08-25
+
+### Fuzzing paridad + estado self-hosting verificado
+
+- **Mapas como claves** (map_claves.nv): VM y nativo coinciden — semántica de
+  mapa persistente requiere reasignación (`m = __map_poner(m, ...)`), ambas
+  capas idénticas incluida la clave lista<entero>
+- **Self-hosting (#1)**: `compiler_v4.nvc` no existe (borrado en la limpieza de
+  agosto; queda solo el source). Para regenerar el fixpoint: restaurar
+  `stdlib/compiler/target.txt`, correr desde la RAÍZ con pwsh 7, luego
+  `lumen run compiler_v4.nv` → .nvc → self-compile ×2 → comparar SHA-256.
+  El espejo de `prestado mut este` en parser.nv sigue pendiente ANTES de esa
+  regeneración para que el self-hosted compile programas nuevos con refs.
