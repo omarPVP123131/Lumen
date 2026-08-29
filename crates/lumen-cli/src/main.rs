@@ -2437,6 +2437,8 @@ fn build_native(
             let mut cc_args = vec![
                 c_path.to_str().unwrap(),
                 "-O3",
+                "-flto",
+                "-march=native",
                 "-o",
                 exe_name.to_str().unwrap(),
                 "-lm",

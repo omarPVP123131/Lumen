@@ -11,7 +11,12 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LUMEN = os.path.join(ROOT, "target", "release", "lumen")
+def _find_lumen():
+    for cand in [os.path.join(ROOT, "target", "release", "lumen"), os.path.join(ROOT, "target", "release", "lumen.exe")]:
+        if os.path.exists(cand):
+            return cand
+    return os.path.join(ROOT, "target", "release", "lumen")
+LUMEN = _find_lumen()
 RES = os.path.join(ROOT, "benchmarks", "results")
 TASKS = ["fib", "sum", "primes", "strings", "arrays"]
 EXPECTED = {
@@ -29,16 +34,16 @@ def run_measured(cmd, cwd=ROOT):
     p = subprocess.Popen(
         cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
     )
-    out = p.stdout.read()
-    p.stdout.close()
+    out, _ = p.communicate()
     try:
-        _, _, rusage = os.wait4(p.pid, 0)
+        # Linux: uso preciso de wait4; Windows: AttributeError
+        _, _, rusage = os.wait4(p.pid, 0)  # type: ignore[attr-defined]
         rss_mb = rusage.ru_maxrss / 1024.0  # KB → MB (Linux)
-    except ChildProcessError:
-        p.wait()
+    except Exception:
+        # Windows u otro: no hay wait4, usar p.returncode
         rss_mb = float("nan")
     dt = time.perf_counter() - t0
-    return dt, rss_mb, out.decode(errors="replace").strip()
+    return dt, rss_mb, out.decode(errors="replace").strip() if isinstance(out, bytes) else str(out).strip()
 
 
 def build_lumen_variants():
@@ -51,20 +56,45 @@ def build_lumen_variants():
             [LUMEN, "build", "--c", src], capture_output=True, text=True
         )
         exe_c = os.path.join(ROOT, "benchmarks", "lumen", t)
-        if r.returncode == 0 and os.path.exists(exe_c):
+        exe_c_exe = exe_c + ".exe"
+        exe_found = exe_c if os.path.exists(exe_c) else (exe_c_exe if os.path.exists(exe_c_exe) else None)
+        if r.returncode == 0 and exe_found:
             dest = os.path.join(RES, f"exe_{t}_aotc")
-            os.replace(exe_c, dest)
-            variants.setdefault(t, {})["aotc"] = [dest]
+            if os.path.exists(dest):
+                os.remove(dest)
+            if dest + ".exe" and os.path.exists(dest + ".exe"):
+                try: os.remove(dest + ".exe")
+                except: pass
+            # en Windows el binario es .exe, lo movemos sin extensión para que run_measured lo encuentre con la misma lógica
+            if exe_found.endswith(".exe"):
+                # mover como dest.exe y usar dest.exe en variants
+                dest_exe = dest + ".exe"
+                os.replace(exe_found, dest_exe)
+                variants.setdefault(t, {})["aotc"] = [dest_exe]
+            else:
+                os.replace(exe_found, dest)
+                variants.setdefault(t, {})["aotc"] = [dest]
         else:
             print(f"[aviso] AOT-C fallo en {t}: {r.stderr[:200]}")
         # Cranelift
         r = subprocess.run(
             [LUMEN, "build", "--rust", src], capture_output=True, text=True
         )
-        if r.returncode == 0 and os.path.exists(exe_c):
+        exe_found = exe_c if os.path.exists(exe_c) else (exe_c_exe if os.path.exists(exe_c_exe) else None)
+        if r.returncode == 0 and exe_found:
             dest = os.path.join(RES, f"exe_{t}_cranelift")
-            os.replace(exe_c, dest)
-            variants.setdefault(t, {})["cranelift"] = [dest]
+            if os.path.exists(dest):
+                os.remove(dest)
+            if os.path.exists(dest + ".exe"):
+                try: os.remove(dest + ".exe")
+                except: pass
+            if exe_found.endswith(".exe"):
+                dest_exe = dest + ".exe"
+                os.replace(exe_found, dest_exe)
+                variants.setdefault(t, {})["cranelift"] = [dest_exe]
+            else:
+                os.replace(exe_found, dest)
+                variants.setdefault(t, {})["cranelift"] = [dest]
         else:
             print(f"[aviso] Cranelift fallo en {t}: {r.stderr[:200]}")
         # LLVM (solo si hay clang)
@@ -72,16 +102,33 @@ def build_lumen_variants():
             [LUMEN, "build", "--llvm", src], capture_output=True, text=True
         )
         ll = os.path.join(ROOT, "benchmarks", "lumen", f"{t}.ll")
-        exe_ll = os.path.join(ROOT, "benchmarks", "lumen", t)
-        if r.returncode == 0 and os.path.exists(exe_ll):
+        exe_ll = exe_c if os.path.exists(exe_c) else (exe_c_exe if os.path.exists(exe_c_exe) else None)
+        if r.returncode == 0 and exe_ll:
             dest = os.path.join(RES, f"exe_{t}_llvm")
-            os.replace(exe_ll, dest)
-            variants.setdefault(t, {})["llvm"] = [dest]
+            if os.path.exists(dest):
+                os.remove(dest)
+            if os.path.exists(dest + ".exe"):
+                try: os.remove(dest + ".exe")
+                except: pass
+            if exe_ll.endswith(".exe"):
+                dest_exe = dest + ".exe"
+                os.replace(exe_ll, dest_exe)
+                variants.setdefault(t, {})["llvm"] = [dest_exe]
+            else:
+                os.replace(exe_ll, dest)
+                variants.setdefault(t, {})["llvm"] = [dest]
         elif os.path.exists(ll):
             print(f"[info] LLVM genero IR de {t} (sin clang no se enlaza aqui)")
     return variants
 
 
+def _exe(p):
+    # en Windows el binario puede ser p o p+.exe
+    if os.path.exists(p):
+        return p
+    if os.path.exists(p + ".exe"):
+        return p + ".exe"
+    return p
 def build_refs():
     """Compila las referencias C/C++/Rust si faltan o no son ejecutables."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -95,19 +142,25 @@ def build_refs():
         rustc = "rustc"
     jobs[2] = (os.path.join(RES, "bench_rs"), [rustc, "-O", os.path.join(root, "benchmarks", "rust", "bench.rs"), "-o", os.path.join(RES, "bench_rs")])
     for out, cmd in jobs:
-        if os.path.exists(out) and os.access(out, os.X_OK):
+        exe = _exe(out)
+        if os.path.exists(exe) and (os.access(exe, os.X_OK) or sys.platform == "win32"):
             continue
         try:
             subprocess.run(cmd, check=True, capture_output=True)
-            os.chmod(out, 0o755)
+            exe2 = _exe(out)
+            if os.path.exists(exe2):
+                try: os.chmod(exe2, 0o755)
+                except: pass
         except Exception as e:
             print(f"[aviso] no pude compilar {out}: {e}")
 
 
+def _lumen_exists():
+    return os.path.exists(LUMEN) or os.path.exists(LUMEN + ".exe")
 def main():
     os.makedirs(RES, exist_ok=True)
     build_refs()
-    if not os.path.exists(LUMEN):
+    if not _lumen_exists():
         print("Falta target/release/lumen — ejecuta cargo build --release primero")
         sys.exit(1)
     print("Compilando variantes Lúmen (AOT-C / Cranelift / LLVM)...")
@@ -132,9 +185,9 @@ def main():
         for var in ("aotc", "cranelift", "llvm"):
             if t in variants and var in variants[t]:
                 add(t, f"lumen-{var}", variants[t][var])
-        add(t, "c", [os.path.join(RES, "bench_c"), t])
-        add(t, "cpp", [os.path.join(RES, "bench_cpp"), t])
-        add(t, "rust", [os.path.join(RES, "bench_rs"), t])
+        add(t, "c", [_exe(os.path.join(RES, "bench_c")), t])
+        add(t, "cpp", [_exe(os.path.join(RES, "bench_cpp")), t])
+        add(t, "rust", [_exe(os.path.join(RES, "bench_rs")), t])
         add(t, "python", [sys.executable, os.path.join(ROOT, "benchmarks", "python", "bench.py"), t])
 
     # CSV

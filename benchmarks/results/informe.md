@@ -1,12 +1,12 @@
-# Benchmark LÃšMEN vs C / C++ / Rust / Python (v3.5.29)
+# Benchmark LÚMEN vs C / C++ / Rust / Python (v3.5.29)
 
-Mismo algoritmo en cada lenguaje. `Tiempo` = segundos de pared (mejor mediciÃ³n Ãºnica);
+Mismo algoritmo en cada lenguaje. `Tiempo` = segundos de pared (mejor medición única);
 `RSS` = memoria pico del proceso en MB.
 
 | Tarea | lumen-vm | lumen-aotc | lumen-cranelift | c | cpp | rust | python |
 |---|---|---|---|---|---|---|---|
-| **fib** | 0.181s / 12MB | 0.006s / 12MB | 0.002s / 12MB | 0.001s / 12MB | 0.002s / 12MB | 0.002s / 12MB | 0.027s / 12MB |
-| **sum** | 2.488s / 12MB | 0.002s / 12MB | 0.020s / 12MB | 0.001s / 12MB | 0.002s / 12MB | 0.002s / 12MB | 0.536s / 12MB |
-| **primes** | 0.090s / 12MB | 0.003s / 12MB | 0.003s / 12MB | 0.002s / 12MB | 0.003s / 12MB | 0.002s / 12MB | 0.025s / 12MB |
-| **strings** | 0.225s / 12MB | 0.015s / 14MB | 0.073s / 28MB | 0.010s / 12MB | 0.009s / 12MB | 0.011s / 12MB | 0.053s / 12MB |
-| **arrays** | 0.153s / 20MB | 0.002s / 12MB | 0.003s / 12MB | 0.002s / 12MB | 0.002s / 12MB | 0.002s / 12MB | 0.035s / 16MB |
+| **fib** | 0.222s / nanMB | 0.052s / nanMB | 0.068s / nanMB | 0.008s / nanMB | 0.011s / nanMB | 0.009s / nanMB | 0.054s / nanMB |
+| **sum** | 2.716s / nanMB | 0.038s / nanMB | 0.124s / nanMB | 0.007s / nanMB | 0.011s / nanMB | 0.008s / nanMB | 0.573s / nanMB |
+| **primes** | 0.087s / nanMB | 0.037s / nanMB | 0.062s / nanMB | 0.007s / nanMB | 0.010s / nanMB | 0.008s / nanMB | 0.046s / nanMB |
+| **strings** | 0.294s / nanMB | 0.045s / nanMB | 0.349s / nanMB | 0.015s / nanMB | 0.015s / nanMB | 0.019s / nanMB | 0.082s / nanMB |
+| **arrays** | 0.151s / nanMB | 0.039s / nanMB | 0.138s / nanMB | 0.007s / nanMB | 0.010s / nanMB | 0.008s / nanMB | 0.064s / nanMB |
