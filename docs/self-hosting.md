@@ -1,14 +1,14 @@
-# PLAN: LÚMEN — Independencia Total (Self-Hosting como C/Rust) — v3.3.0 Producción Real
+# PLAN: LÚMEN — Independencia Total (Self-Hosting como C/Rust) — v3.5.7 Producción Real
 
 **Objetivo:** LÚMEN se autocompila sin depender de Rust. El compilador, la VM y el runtime están escritos en LÚMEN. Bootstrap ocurre UNA sola vez con Rust. A partir de ahí, LÚMEN vive por sí mismo.
 
-> **Producción Real v3.1.4 (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` (`LUMEN_HEADLESS`/`CI`), bench 8 (`cargo bench -p lumen-bench`), 616 e2e + 9 production = 673 vm tests (917 workspace), CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`. Ver [docs/produccion.md](produccion.md). Ahora autosuficiente + producción real.
+> **Producción Real v3.5.7 (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` (`LUMEN_HEADLESS`/`CI`), bench 8 (`cargo bench -p lumen-bench`), 636 e2e + 9 production = 695 vm tests (956 workspace), CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`. Ver [docs/produccion.md](produccion.md). Ahora autosuficiente + producción real.
 
 ---
 
-## Estado Actual — 21 Agosto 2026 (v3.3.0 Producción Real ✅)
+## Estado Actual — 21 Agosto 2026 (v3.5.7 Producción Real ✅)
 
-> **v3.3.0 Producción Real PUBLICADO (21 Ago 2026):** **917 tests** (616 e2e incluye 4 regresión + 9 production, 673 vm tests), **bench 8** criterion (4 prod nuevos: fallthrough, defaults, matematicas, headless), **headless `es_headless()`** centralizado, **CHUNK_VERSION 7** con defaults persistidos, fixes escalables (builder fallthrough + VM aridad + `matematicas.nv` `Variable 'n'`), CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Antes **v3.1.4 (20 Ago 2026)** 167 bugs, 720 pruebas, 393/393 `lumen check`, 372 ejemplos, clippy, 4 fuzzers — el hito de self-hosting/bootstrapping doble se mantiene intacto y ahora suma producción real.
+> **v3.5.7 Producción Real PUBLICADO (21 Ago 2026):** **956 tests** (636 e2e incluye 4 regresión + 9 production, 695 vm tests), **bench 8** criterion (4 prod nuevos: fallthrough, defaults, matematicas, headless), **headless `es_headless()`** centralizado, **CHUNK_VERSION 7** con defaults persistidos, fixes escalables (builder fallthrough + VM aridad + `matematicas.nv` `Variable 'n'`), CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Antes **v3.5.7 (20 Ago 2026)** 167 bugs, 720 pruebas, 393/393 `lumen check`, 372 ejemplos, clippy, 4 fuzzers — el hito de self-hosting/bootstrapping doble se mantiene intacto y ahora suma producción real.
 
 ## Estado Histórico — 4 Agosto 2026 (Sprint 7 🟢 — VM en LÚMEN funcional)
 
@@ -24,8 +24,8 @@
 | **Optimización fixpoint** | ✅ **861s → 20.1s (43x)** | COW con `Arc` en Value (vm.rs) — clonado O(1) de strings/arrays grandes; fixpoint v4 byte-IDENTICAL |
 | **Bootstrapping doble** (vm.nv compilada por LÚMEN y auto-ejecutándose) | ⏳ | Próximo hito — 0 dependencias de Rust |
 | **Optimización fixpoint** | ✅ | Fixpoint v4 re-verificado en **5s** (112,368 B byte-IDENTICAL, 4 Ago) |
-| **Sprint 8: Dogfooding + release v2.4.6** | ✅ | **fuego: 389/389 compilan · 75/116 CORRECTOS (+14)** con la cadena 100% LÚMEN (**opcion.nv + resultado.nv ahora OK+CORRECTO** vía Option/Result reales; 38 no-corregidos son gaps: traits, closures, FFI/GUI, tuplas, timing) — fixpoint v4 **113,857 B byte-IDENTICAL** |
-| **v3.3.0 Producción Real** | ✅ **21 Ago 2026** | **917 tests** (616 e2e + 9 production), **bench 8**, **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, `es_headless()` centralizado, `headless-check` CI (`LUMEN_HEADLESS=1 CI=1`), `lumen check` 389/389 — ver `docs/produccion.md` |
+| **Sprint 8: Dogfooding + release v2.4.6** | ✅ | **fuego: 396/396 compilan · 75/116 CORRECTOS (+14)** con la cadena 100% LÚMEN (**opcion.nv + resultado.nv ahora OK+CORRECTO** vía Option/Result reales; 38 no-corregidos son gaps: traits, closures, FFI/GUI, tuplas, timing) — fixpoint v4 **113,857 B byte-IDENTICAL** |
+| **v3.5.7 Producción Real** | ✅ **21 Ago 2026** | **956 tests** (636 e2e + 9 production), **bench 8**, **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, `es_headless()` centralizado, `headless-check` CI (`LUMEN_HEADLESS=1 CI=1`), `lumen check` 396/396 — ver `docs/produccion.md` |
 
 ### Arquitectura (actualizada)
 
@@ -238,7 +238,7 @@ si (_st_ch(st, 4, "<")) {
 >
 > ⚠️ **mini_fuego.ps1**: correr desde la raíz; los ejemplos van como parámetro (`mini_fuego.ps1 test_arr foreach`); el bucle del script corta si un ejemplo tarda demasiado (correr de a 1-2).
 
-**Siguiente**: ✅ COMPLETADO — `estructura`/`enum` reales vía desugar (6.4: enum/elegir/sea REALES — nodo `EnumInit`, `defecto:` con cadenas de `sino` reconstruidas desde el final por la persistencia de `im::HashMap`), cortocircuito `&&`/`||` real con JmpIf (6.5), **fixpoint v4 CONFIRMADO** (112,368 B byte-IDÉNTICO en self/self2) y **fuego.ps1: 389/389 compilan, 61 CORRECTOS, 0 fallos**. Detalles en AGENTS.md (Fixes 1-2 Agosto 2026).
+**Siguiente**: ✅ COMPLETADO — `estructura`/`enum` reales vía desugar (6.4: enum/elegir/sea REALES — nodo `EnumInit`, `defecto:` con cadenas de `sino` reconstruidas desde el final por la persistencia de `im::HashMap`), cortocircuito `&&`/`||` real con JmpIf (6.5), **fixpoint v4 CONFIRMADO** (112,368 B byte-IDÉNTICO en self/self2) y **fuego.ps1: 396/396 compilan, 61 CORRECTOS, 0 fallos**. Detalles en AGENTS.md (Fixes 1-2 Agosto 2026).
 
 ---
 
@@ -255,7 +255,7 @@ si (_st_ch(st, 4, "<")) {
 | TryUnwrap top-level con error visible | ✅ | Cubierto por driver nuevo (`__tipo_de(fin)` en main de generar_v4.ps1) |
 | Cortocircuito `&&`/`\|\|` en codegen puro | ✅ | Helper `_cg_and_or` con JmpIf/Jmp reales (fixpoint v4 regresionado por And eager) |
 | Traits `rasgo`/`impl`/`este` | ✅ | `impl Trait para Tipo` → métodos mangled `Tipo_Trait_metodo` + resolución `n.metodo()` por tipo de var (commit 9328fec) |
-| Fixpoint v4 + `fuego.ps1` | ✅ | Fixpoint: self/self2 byte-IDÉNTICOS (SHA-256 90048DC9…) · fuego: **389/389 compilan, 108 CORRECTOS, 0 fallos** |
+| Fixpoint v4 + `fuego.ps1` | ✅ | Fixpoint: self/self2 byte-IDÉNTICOS (SHA-256 90048DC9…) · fuego: **396/396 compilan, 108 CORRECTOS, 0 fallos** |
 
 ### 🟢 Sprint 7 — VM en LÚMEN + optimización
 
@@ -271,8 +271,8 @@ si (_st_ch(st, 4, "<")) {
 
 | Tarea | Estado | Notas |
 |-------|--------|-------|
-| Compilar stdlib completo con compiler_v5 | ✅ | matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos — stdlib completo compila con el pipeline puro (fuego 389/389 compilan) |
-| Ejecutar 115 ejemplos con cadena 100% LÚMEN | ✅ | **fuego.ps1: 389/389 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos** (restantes: SDL/negativos por diseño/no-deterministas/GUI/FFI) |
+| Compilar stdlib completo con compiler_v5 | ✅ | matematicas, texto, coleccion, fecha, json, csv, red, tui, graficos — stdlib completo compila con el pipeline puro (fuego 396/396 compilan) |
+| Ejecutar 115 ejemplos con cadena 100% LÚMEN | ✅ | **fuego.ps1: 396/396 compilan · 112 CORRECTOS · 1 INCOMPATIBLE · 4 TIMEOUT · 0 fallos** (restantes: SDL/negativos por diseño/no-deterministas/GUI/FFI) |
 | Benchmarks vs Rust | ✅ | `scripts/benchmark_vs_rust.ps1`: compile x5.4, run x231 (intérprete-en-intérprete; mediana x2-6) |
 | Docs + AGENTS + release | ✅ | Docs sincronizadas (8-14 Ago 2026); **release v2.4.6 con tag CI-autogenerado** (Fases 61-63 self-hosted, AOT optimized, Playground L1) |
 

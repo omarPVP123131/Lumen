@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-3.3.0-orange)
-![Tests](https://img.shields.io/badge/tests-917%20passing-brightgreen)
+![Version](https://img.shields.io/badge/version-3.5.7-orange)
+![Tests](https://img.shields.io/badge/tests-956%20passing-brightgreen)
 ![Bench](https://img.shields.io/badge/bench-8%20criterion-blue)
 ![Headless](https://img.shields.io/badge/headless-LUMEN__HEADLESS-lightgrey)
-![Fases](https://img.shields.io/badge/fases-0--185%20+%20self--hosting-blueviolet)
+![Fases](https://img.shields.io/badge/fases-0--220%20+%20self--hosting-blueviolet)
 
 > **El primer lenguaje de programación moderno de sistemas y aplicaciones con el español y el inglés como ciudadanos de primera clase.**
 > Pipeline completo: Lexer → Parser → Sema (Borrow Checker & Comptime) → IR (Neuro-Optimizador) → Bytecode JIT (Cranelift Tier-3 OSR) → AOT (C99 / LLVM / Stage-3 Autónomo).
@@ -33,7 +33,7 @@ lumen bundle src/main.nv -o mi_app
 
 ---
 
-## 💡 Características Principales de LÚMEN v3.3.0
+## 💡 Características Principales de LÚMEN v3.5.7
 
 ### 1. Paridad Bilingüe 100% Nativa (Español / English)
 ```lumen
@@ -105,20 +105,20 @@ function integer calculate_fibonacci(integer n) {
 | **Self-Hosting (Compilador + VM en LÚMEN)** | ✅ Bootstrapping doble certificado — fixpoint byte-idéntico |
 | **AI/ML (Fases 186-200)** | 🔜 Próximo hito |
 
-**Verificación v3.3.0 — Producción Real:** **917 pruebas en verde** (616 e2e + 9 production + resto workspace), **673 vm tests** (616 e2e + 9 production + 48 unit), 389/389 en `lumen check`, 389 ejemplos `run` OK con `CI=1`, clippy sin avisos, **8 benches criterion** (`cargo bench -p lumen-bench`) y cuatro fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con defaults persistidos (`FuncMeta.defaults`) y modo headless centralizado (`stdlib/graficos.nv:es_headless()` via `LUMEN_HEADLESS`/`CI`). Ver checklist completo en [docs/produccion.md](docs/produccion.md).
+**Verificación v3.5.7 — Producción Real:** **956 pruebas en verde** (636 e2e + 11 production + resto workspace), **695 vm tests** (636 e2e + 11 production + 48 unit), 396/396 en `lumen check`, 396 ejemplos `run` OK con `CI=1`, clippy sin avisos (`cargo clippy --all -- -D warnings`), **8 benches criterion** (`cargo bench -p lumen-bench`) y cuatro fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con defaults persistidos (`FuncMeta.defaults`) y modo headless centralizado (`stdlib/graficos.nv:es_headless()` via `LUMEN_HEADLESS`/`CI`). AOT Industrial: C/Cranelift/LLVM completos con memoria nativa (`long long` sin tags, `_lw_*` handles). Ver checklist completo en [docs/produccion.md](docs/produccion.md).
 
-### Producción Real (v3.3.0) — Checklist y Comandos
+### Producción Real (v3.5.7) — Checklist y Comandos
 
 > Fixes escalables ya aplicados: `builder last_significant()` + `label_counter` global (fix fallthrough `Variable 'a'/'n'`), `vm FuncMeta.defaults` persistidos `CHUNK_VERSION 7` + `bind_args` unificado, `stdlib/graficos.nv es_headless()` centralizado.
 
 ```bash
-# Suite completa (workspace 917)
+# Suite completa (workspace 956)
 cargo test --workspace
 
-# E2E + regresión (616 e2e incluye 4 regresión fallthrough/matematicas/defaults/lambda)
+# E2E + regresión (636 e2e incluye fallthrough/matematicas/defaults/lambda/refs/comptime)
 cargo test -p lumen-vm --test e2e
 
-# Producción: aceptación + performance + integración (9 tests)
+# Producción: aceptación + performance + integración (11 tests)
 cargo test --test production
 
 # Bench formal 8 benches (lexer, parser, pipeline, vm_fib_20 + 4 prod)
@@ -145,10 +145,10 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 * **[Guía Rápida & Cheat Sheet](docs/GUIA_RAPIDA_UX.md)** — Referencia rápida de comandos y sintaxis.
 * **[Manual del Lenguaje](docs/LENGUAJE.md)** — Especificación técnica completa de la gramática.
 * **[Guía de Herramientas](docs/HERRAMIENTAS.md)** — CLI, REPL, Debugger, LSP y AOT.
-* **[Roadmap y Arquitectura](docs/roadmap.md)** — Plan de evolución del ecosistema.
-* **[Producción Real v3.2.0](docs/produccion.md)** — Checklist de producción, bench 8, headless `es_headless()`, `CHUNK_VERSION 7`.
+* **[Roadmap y Arquitectura](docs/roadmap.md)** — Plan de evolución del ecosistema (fases 0-220).
+* **[Producción Real v3.5.7](docs/produccion.md)** — Checklist de producción, bench 8, headless `es_headless()`, `CHUNK_VERSION 7`, AOT Industrial.
 
 ---
 
-*LÚMEN v3.3.0 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.5.7 — © 2026 LÚMEN Core Team & Comunidad. 956 tests, 396 ejemplos, AOT C/Cranelift/LLVM completos.*
 

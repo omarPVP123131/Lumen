@@ -1,7 +1,7 @@
 # 📖 Aprende a Programar con LÚMEN: De Principiante a Ingeniero de Software
 ### *Learn to Code with LÚMEN: From Zero to Software Engineer*
 
-**Versión Oficial v3.3.0 — Guía Completa de Computación, IA y Sistemas**
+**Versión Oficial v3.5.7 — Guía Completa de Computación, IA y Sistemas**
 
 ---
 
@@ -545,13 +545,13 @@ imprimir(dataframe_df_a_csv(df));
 
 ---
 
-*LÚMEN v3.3.0 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.5.7 — © 2026 LÚMEN Core Team & Comunidad.*
 
-> **Producción Real (21 Ago 2026):** ver [docs/produccion.md](produccion.md) — 917 tests, bench 8, `es_headless()`, `CHUNK_VERSION 7`.
+> **Producción Real (21 Ago 2026):** ver [docs/produccion.md](produccion.md) — 956 tests, bench 8, `es_headless()`, `CHUNK_VERSION 7`.
 
 ---
 
-# CAPÍTULO 17.5: Producción Real v3.3.0 — De Código a Deploy (21 Ago 2026)
+# CAPÍTULO 17.5: Producción Real v3.5.7 — De Código a Deploy (21 Ago 2026)
 
 En este capítulo llevamos **LÚMEN a producción real** con fixes escalables (no parches por demo), suite formal y CI headless.
 
@@ -562,8 +562,8 @@ En este capítulo llevamos **LÚMEN a producción real** con fixes escalables (n
 
 ### 17.5.2 Suite y Bench Formal (8 benches)
 ```bash
-cargo test --workspace                          # 917 (616 e2e + 9 production, 673 vm tests)
-cargo test -p lumen-vm --test e2e               # 616 e2e (4 regresión: fallthrough, matematicas, defaults, lambda)
+cargo test --workspace                          # 956 (636 e2e + 9 production, 695 vm tests)
+cargo test -p lumen-vm --test e2e               # 636 e2e (4 regresión: fallthrough, matematicas, defaults, lambda)
 cargo test --test production                    # 9 production (aceptación 3 + performance 2 + integración)
 cargo bench -p lumen-bench                      # 8: lexer_tokenize, parser_parse, pipeline_full, vm_fib_20 + prod_fallthrough, prod_defaults, prod_matematicas, prod_graficos_headless
 cargo bench -p lumen-bench -- --quick           # smoke CI — reporte target/criterion/report/index.html
@@ -728,5 +728,5 @@ imprimir("Paneo estéreo (L/R) : ", 3d.balance_paneo);
 
 ---
 
-*LÚMEN v3.3.0 — © 2026 LÚMEN Core Team & Comunidad.*
+*LÚMEN v3.5.7 — © 2026 LÚMEN Core Team & Comunidad.*
 

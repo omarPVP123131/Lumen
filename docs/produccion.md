@@ -1,13 +1,13 @@
-# ⚡ LÚMEN v3.3.0 — Listo para Producción Real — CERTIFICADO APTO
+# ⚡ LÚMEN v3.5.7 — Listo para Producción Real — CERTIFICADO APTO
 
-> Última validación: `2026-08-21` · **Artefacto empaquetado verificado** (`lumen-v3.2.0-windows-x64.zip` SHA-256 OK, gate sobre el paquete: 393 PASS / 0 FAIL / 1 TIMEOUT @interactive / 0 CRASH) · `cargo test --release` 680 verde (621 e2e + 11 production + 48 vm) · `CHUNK_VERSION 7` · `LUMEN_HEADLESS` + `es_headless()` centralizado · bench 8
+> Última validación: `2026-08-21` · **Artefacto empaquetado verificado** (`lumen-v3.5.7-windows-x64.zip` SHA-256 OK, gate sobre el paquete: 393 PASS / 0 FAIL / 1 TIMEOUT @interactive / 0 CRASH) · `cargo test --release` 680 verde (621 e2e + 11 production + 48 vm) · `CHUNK_VERSION 7` · `LUMEN_HEADLESS` + `es_headless()` centralizado · bench 8
 
-## ✅ Certificación v3.3.0 — Evidencia sobre artefacto de release
+## ✅ Certificación v3.5.7 — Evidencia sobre artefacto de release
 
 | Prueba | Resultado |
 |---|---|
-| SHA-256 `lumen-v3.2.0-windows-x64.zip` | `d5cb2b99…` == `SHA256SUMS.txt` ✓ |
-| SHA-256 `lumen-v3.2.0-linux-x64.tar.gz` | `559e468b…` == `SHA256SUMS.txt` ✓ |
+| SHA-256 `lumen-v3.5.7-windows-x64.zip` | `d5cb2b99…` == `SHA256SUMS.txt` ✓ |
+| SHA-256 `lumen-v3.5.7-linux-x64.tar.gz` | `559e468b…` == `SHA256SUMS.txt` ✓ |
 | Contenido del paquete | `lumen.exe` + 69 stdlib + **394 ejemplos** (389 + 5 stress) + docs + web |
 | `ci_gate.py` sobre binario del paquete (LUMEN_HEADLESS=1, timeout 8s, 8 workers) | **393 PASS / 0 FAIL / 1 TIMEOUT permitido / 0 CRASH — Gate PASSED** |
 | Único omitido explícito | `test_quick_connect.nv` (`// @interactive` — red) |
@@ -71,7 +71,7 @@ benchmarks::benches::prod_graficos_headless          // nuevo: pipeline sin SDL
 Reporte HTML: `target/criterion/report/index.html`.
 
 ### 2.3 Barrido `lumen check/run`
-- `cargo run --bin lumen -- check examples` → 389 ejemplos válidos (con `CI=1` 389/389 OK, sin CI algunos headless retornan `init_fail_ok` sin `Variable 'a'`).
+- `cargo run --bin lumen -- check examples` → 396 ejemplos válidos (con `CI=1` 396/396 OK, sin CI algunos headless retornan `init_fail_ok` sin `Variable 'a'`).
 - `lumen run examples/hello.nv` → `¡Hola, LÚMEN!`
 - `lumen run` con `importar "matematicas.nv"` → `1024`
 
@@ -126,7 +126,7 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 - [x] `CHUNK_VERSION 7` con fallback v6
 - [x] `stdlib/graficos.nv` central headless, no per-demo patch obligatorio
 - [x] Docs actualizados: `README`, `AGENTS`, `roadmap`, `plan-v3.1`, `HERRAMIENTAS`, `MARKETING`, `siguiente`, etc. (ver diffs en commit producción)
-- [x] `VERSION` `3.2.0` y `CHANGELOG` v3.2.0 con certificación de artefacto
+- [x] `VERSION` `3.2.0` y `CHANGELOG` v3.5.7 con certificación de artefacto
 
 Si todo en verde, el lenguaje es deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`.
 

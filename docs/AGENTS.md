@@ -1,14 +1,14 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v3.3.0 Producción Real — Released: 21 Agosto 2026 — 917 tests, CHUNK_VERSION 7, bench 8, headless `es_headless()`**
+**v3.5.7 Producción Real — Released: 21 Agosto 2026 — 956 tests, CHUNK_VERSION 7, bench 8, headless `es_headless()`**
 
 > Checklist único de producción: [docs/produccion.md](produccion.md) — `LUMEN_HEADLESS=1` + `cargo bench -p lumen-bench` + `CHUNK_VERSION 7`
 
 ---
 
-## Testing (Actual) — v3.3.0 Producción Real (21 Ago 2026)
+## Testing (Actual) — v3.5.7 Producción Real (21 Ago 2026)
 
-| Crate | Tests | Tipo | Nota v3.1.4 |
+| Crate | Tests | Tipo | Nota v3.5.7 |
 |-------|-------|------|-------------|
 | lumen-lexer | 52 | unit |  |
 | lumen-parser | 75 | unit |  |
@@ -24,9 +24,9 @@
 | lumen-aot | 6 | unit |  |
 | lumen-api | 5 | unit |  |
 | lumen-bench | 8 | bench | `cargo bench -p lumen-bench`: lexer, parser, pipeline, vm_fib_20 + 4 prod (fallthrough, defaults, matematicas, headless) |
-| **Total workspace** | **917** |  | `cargo test --workspace` 0 FAILED (673 vm tests = 616 e2e + 9 prod + 48 unit) |
+| **Total workspace** | **956** |  | `cargo test --workspace` 0 FAILED (695 vm tests = 636 e2e + 9 prod + 48 unit) |
 
-**v3.3.0 Producción: 917 pruebas en verde (Linux y Windows), 389/389 en `lumen check`, 389 `run` OK con `CI=1`, 8 benches criterion, clippy sin avisos, 4 fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos, `LUMEN_HEADLESS=1` headless centralizado `stdlib/graficos.nv:es_headless()`. Ver `docs/produccion.md`.**
+**v3.5.7 Producción: 956 pruebas en verde (Linux y Windows), 396/396 en `lumen check`, 389 `run` OK con `CI=1`, 8 benches criterion, clippy sin avisos, 4 fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con `FuncMeta.defaults` persistidos, `LUMEN_HEADLESS=1` headless centralizado `stdlib/graficos.nv:es_headless()`. Ver `docs/produccion.md`.**
 
 **Comandos producción:**
 ```bash
@@ -126,7 +126,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **REGRESIÓN del fixpoint diagnosticada (causa raíz)**: `compiler_v4_self.nvc` (94,783 B) crasheaba con "Índice N fuera de rango (largo: N)" dentro de `ejecutar_pipeline` (también al compilar match.nv: "Índice 96"). Inspección del disasm (`self_disasm.txt` vs `v4_disasm.txt`) probó la diferencia: el **pipeline RUST (v4) cortocircuita `&&` con `JmpIf`** (`Load; Lt; Store; Load; JmpIf → salta ANTES del ArrayGet`), mientras el **codegen LÚMEN emitía `&&`/`||` como `And`/`Or` eager** (`…Lt; ArrayGet; Neq; And`) → `mientras i < n && cs[i] != "\n"` lee `cs[i]` con `i == n` → ArrayGet out-of-bounds solo en el SEGUNDO-compilado
 - **Fix**: helper `_cg_and_or(cg, izq, der, es_and)` en codegen.nv — emite short-circuit REAL con `JmpIf`/`Jmp` + `PushBool` (es_and=1 para `&&`; es_and=0 para `||`). Binary en `_gen_expr` despacha `&&`/`||` al helper (return temprano); los demás operadores siguen eager. Convención de saltos con FALSY (vm.rs:3688)
 - **FIXPOINT v4 CONFIRMADO**: compiler_v4.nv (99,993 B) → compiler_v4.nvc → self (112,368 B, exit 0) → self→self2 (112,368 B, exit 0) → **byte-IDENTICAL (0 diffs)**. El self-compilado compila match.nv sin crash (antes "Índice 96 fuera de largo")
-- **fuego.ps1 completo**: **389/389 compilan · 61 CORRECTOS (+1 vs 60) · 53 INCOMPATIBLES · 2 timeouts · 0 fallos** — sin regresión (bug pre-existente en fuego.ps1:66: `$outNvc.Trim()` sobre `$null` en el detalle de INCOMPATIBLES — no afecta los contadores)
+- **fuego.ps1 completo**: **396/396 compilan · 61 CORRECTOS (+1 vs 60) · 53 INCOMPATIBLES · 2 timeouts · 0 fallos** — sin regresión (bug pre-existente en fuego.ps1:66: `$outNvc.Trim()` sobre `$null` en el detalle de INCOMPATIBLES — no afecta los contadores)
 - **Hygiene**: scratch `v4_disasm.txt`/`self_disasm.txt` duplicados — limpiar; `target.txt` aún apunta a `examples/match.nv`
 - **Pendientes**: Sprint 7 VM en LÚMEN (`vm.nv`) + optimización de velocidad (fixpoint ~10-18 min hoy; demo ~15s) → Sprint 8 dogfooding stdlib + release v2.4.6
 
@@ -153,7 +153,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 
 **Progreso (4 Ago — sesión AI · Sprint 7: OPTIMIZACIÓN fixpoint 861s → 20.1s, 43x — COW con Arc):**
 - **Profiler per-opcode en `VM::run()`** (vm.rs ~2320, gated por `LUMEN_PROFILE=1`): contadores/tiempos por opcode; `Call` desagregado como `Call:<nombre>` vía `bytecode.names`. Fix: check `!var.is_empty()` (antes `is_ok()` → env vacío lo activaba)
-- **Diagnóstico O(n²)** (demo 4KB, 962,917 instrs, 1.7s): Load 48% (2.5µs/call — clona lista `chars` por token), ArrayGet 18% (45µs/call — clona la lista en cada acceso), `__str_subcadena_chars`+`sub_from_chars` 18.6% (~417µs/call — `a.clone()` de TODO el array en cada slice). Escalamiento 23.7x bytes → ~506x tiempo = O(n²) (23.7²=562)
+- **Diagnóstico O(n²)** (demo 4KB, 962,956 instrs, 1.7s): Load 48% (2.5µs/call — clona lista `chars` por token), ArrayGet 18% (45µs/call — clona la lista en cada acceso), `__str_subcadena_chars`+`sub_from_chars` 18.6% (~417µs/call — `a.clone()` de TODO el array en cada slice). Escalamiento 23.7x bytes → ~506x tiempo = O(n²) (23.7²=562)
 - **FIX: COW con `Arc`** en `Value::Str(Arc<str>)` y `Value::Array(Arc<Vec<Value>>)` (value.rs) + constructores `Value::str(s)`/`Value::arr(v)`; clonar Values grandes = O(1) — `Rc` no servía (no es Send/Sync; `__par_mapa`/`__par_unir` lanzan threads con Values)
 - **Transformación mecánica** de ~130 sitios en vm.rs/min_json.rs: construcciones `Value::Str(x)`/`Value::Array(x)` (un-ident) → `Value::str`/`Value::arr`; patrones multi-palabra (`mut v`, `mut arr`) → `Value::Array(mut v)` + `Arc::make_mut(&mut v)` en mutaciones (agregar, deque, heap, linked, conjuntos, ArraySet, ArrayPush, list_reverse/sort); iteradores `items.iter()`/`items.as_ref()` en streams/par_mapa; armas incompatibles → `s.to_string()`; `Value::str("lit".into())` → `Value::str("lit")` (E0283 con impl Into<String>); reverts de serde_json (`Value::arr` clobbered por el replace global → `serde_json::Value::Array`)
 - **Resultados**: **fixpoint v4 CONFIRMADO en 20.1s** (baseline 861s = **43x**): compiler_v4.nvc → self_out.nvc (112,368 B) → self_out2.nvc **byte-IDENTICAL (0 diffs)** · demo 0.9s · cargo test ~379 verdes · batería **8/8** (2 DIFF pre-existentes: `44_extension_methods` `este` no definida + `math` — fallan en ambas VMs)
@@ -203,7 +203,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 **Progreso (4 Ago — sesión AI · Sprint 8: fixpoint v4 re-verificado + fuego 71/116 + orden de mapas):**
 - **Orden de claves de mapa NO-determinístico CONFIRMADO**: `im::HashMap` usa `RandomState` (seed aleatorio por proceso) → el orden varía incluso entre runs del mismo VM Rust (`{0,1,2}` → `{2,1,0}`). No es bug — semántica de hash map. Por eso `test_migracion` no entra a la batería exacta sin normalización (igual que stress_fecha por volatilidad de timing). Los `__map_nuevo`/`__map_claves` de la VM LÚMEN delegan al mismo native Rust y boxean en `mapas`/`arrs` — mismo comportamiento no-determinista.
 - **FIXPOINT v4 RE-VERIFICADO** (tras todos los cambios de la sesión: cortocircuito, enum/elegir/sea, dynamic Numero): `compiler_v4.nvc` regenerado (85,374 B) → self-compile (5s) → `v4_self_out.nvc` **112,368 bytes** (idéntico al tamaño histórico) → `v4_self_out2.nvc` **byte-IDENTICAL**. La cadena 100% LÚMEN sigue estable.
-- **fuego.ps1 (cadena 100% LÚMEN)**: **389/389 compilan · 71 CORRECTOS (+10 vs 61) · 43 INCOMPATIBLES · 2 timeouts · 0 fallos**. La mejora +10 viene del trabajo acumulado (entry `principal`, dynamic Numero/cualquiera, test_migracion).
+- **fuego.ps1 (cadena 100% LÚMEN)**: **396/396 compilan · 71 CORRECTOS (+10 vs 61) · 43 INCOMPATIBLES · 2 timeouts · 0 fallos**. La mejora +10 viene del trabajo acumulado (entry `principal`, dynamic Numero/cualquiera, test_migracion).
 - **⚠️ Trampa del harness**: `fuego.ps1` debe ejecutarse con **pwsh (PS 7)**, NO `powershell` (5.1) — `Set-Content -Encoding utf8` en PS 5.1 escribe BOM UTF-8 (`EF BB BF`) en `target.txt` → la primera línea (ruta del ejemplo) queda corrupta → el driver falla → 0/116 `?ERROR?`. En pwsh 7 no hay BOM.
 - **43 incompatibles = gaps conocidos**: `ninguno`/`algun`/`exito`/`error` (Option/Result ~10 ejemplos: opcion, resultado, audio_demo, charts_demo, graficos_*, tilemap, tui_pro/tui_puro/tui_temas), `rasgo` (traits: 43_tipos_asociados, 44_extension_methods), closures `|x|` (lambda), tuplas/destructuring/params_default/genericos (feature partial), FFI/red/sistema/sqlite/json/csv (natives `__ffi_*` que la VM LÚMEN no implementa — corren headers pero divergen), `debug_parser3`+`gui_ventana` (timeouts GUI/loop).
 - **Pendientes**: u opcion/resultado (`ninguno`/`algun`/`exito`/`error` reales en el self-hosted — desbloquea ~10 ejemplos) → docs + AGENTS v2.4.6 + release → bootstrapping doble.
@@ -215,7 +215,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **vm.rs `codegen_to_nvc` (cg_to_vm)**: añadidos `38=>38 ResultOk`, `39=>39 ResultErr`, `41=>41 OptionSome`, `42=>42 OptionNone` — **antes caían en `_=>0 Nop`** (por eso `algun(42)` imprimía `42` crudo y `ninguno` rompía).
 - **BUG RAÍZ `elegir` con bodies con llaves** ("Variable 'caso' no definida"): `_parse_stmt` NO despachaba `{` como bloque → el body-loop del caso consumía `{ imprimir(10); }` token a token y **se comía el `caso ninguno:` de case2** (emitía `Load caso; OptionNone` como statements de case1). Fix: dispatch `si (_st_ch(st,5,"{")) { _parse_blk(st) }` como fallthrough de `_parse_stmt` (como si/while/mientras). Diagnosticado con DBG temporales (ELEGIR/CASO/body) — `imprimir(a,b,c)` emite cada arg en su propia línea, el `rg DBG` no agrupaba.
 - **Resultados**: `opcion.nv` y `resultado.nv` **OK+CORRECTO** (byte-idénticos a Rust en la cadena 100% LÚMEN) · probe_elegir self==rust exacto · **fixpoint v4 CONFIRMADO 113,857 B byte-IDENTICAL** (self→self2, 5s) · cargo test 0 FAILED.
-- **fuego.ps1: 389/389 compilan · 75 CORRECTOS (+4) · 38 INCOMPATIBLES · 3 timeouts · 0 fallos**. Los ejemplos GUI/gráficos/TUI (audio, charts, graficos_*, tilemap, tui_*) ya no fallan con `ninguno` — ahora corren (divergen por rendering/red/timing).
+- **fuego.ps1: 396/396 compilan · 75 CORRECTOS (+4) · 38 INCOMPATIBLES · 3 timeouts · 0 fallos**. Los ejemplos GUI/gráficos/TUI (audio, charts, graficos_*, tilemap, tui_*) ya no fallan con `ninguno` — ahora corren (divergen por rendering/red/timing).
 - **Commit**: `56472c4`.
 - **Pendientes**: `rasgo` (traits: 43_tipos_asociados, 44_extension_methods) y closures `|x|` (lambda) en el self-hosted → benchmarks vs Rust → docs + AGENTS v2.4.6 + release → bootstrapping doble.
 
@@ -240,7 +240,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Trampa harness**: el driver `ejecutar_pipeline` lee `stdlib/compiler/target.txt` RELATIVO AL CWD → `lumen run compiler_v4.nvc` SIEMPRE desde la raíz del repo (los runs desde `stdlib/compiler` fallan en silencio: ruta duplicada → FALLO invisible).
 - **generar_v4.ps1 blindado**: `WriteAllText` usa el cwd de .NET (proceso), no el de PowerShell → escribía `compiler_v4.nv` en la RAÍZ al invocarlo desde `stdlib/compiler` (explica el trap histórico del root pisado). Fix: `$scriptDir` + ruta absoluta (Join-Path) para lectura y escritura.
 - **charts_demo IDENTICAL en ambas VMs** (tras los 2 fixes: `=== Charts Demo ===` + Controles + Error renderer). **FIXPOINT v4 CONFIRMADO** tras ambos fixes: SHA-256 `74DF6760...` self==self2 byte-idéntico (compiler_v4.nv 130,269 B → .nvc 108,849 B).
-- **fuego.ps1: 389/389 compilan · 98 CORRECTOS (+8 desde 90) · 14 INCOMPATIBLES · 4 timeouts · 0 fallos**. Restantes honestos: (1) no-deterministas (8: graficos_demo SDL handle, test_csv_avanzado/test_json_avanzado/test_migracion orden de mapas — seed aleatorio por proceso, test_ffi_min/test_ffi_debug punteros, test_sistema_* nombres temp); (2) negativos por diseño (3: tui_test_min16/17/18); (3) trabajo real (3: `audio_demo`+`graficos_avanzado` — E042 `graficos_avanzado_iniciar` no definida, reescritura al API actual; `tui_temas_demo` — "Función 'tema_predeterminado' no definida" = resolución de call cross-import en vm.nv); (4) timeouts (4: debug_parser3, graficos_completo, gui_ventana, sprint1_http timing de red).
+- **fuego.ps1: 396/396 compilan · 98 CORRECTOS (+8 desde 90) · 14 INCOMPATIBLES · 4 timeouts · 0 fallos**. Restantes honestos: (1) no-deterministas (8: graficos_demo SDL handle, test_csv_avanzado/test_json_avanzado/test_migracion orden de mapas — seed aleatorio por proceso, test_ffi_min/test_ffi_debug punteros, test_sistema_* nombres temp); (2) negativos por diseño (3: tui_test_min16/17/18); (3) trabajo real (3: `audio_demo`+`graficos_avanzado` — E042 `graficos_avanzado_iniciar` no definida, reescritura al API actual; `tui_temas_demo` — "Función 'tema_predeterminado' no definida" = resolución de call cross-import en vm.nv); (4) timeouts (4: debug_parser3, graficos_completo, gui_ventana, sprint1_http timing de red).
 - **Commit `8d2aef6`**: 13 files +147/−83 — parser.nv (2 fixes), loader.rs, 8 ejemplos, generar_v4.ps1, compiler_v4.nv (root+stdlib), target.txt restaurado a demo_completo. Pre-commit checks OK.
 - **Pendientes**: `audio_demo`/`graficos_avanzado` a API actual → `tui_temas_demo` (vm.nv dispatch cross-import) → FFI natives VM LÚMEN (cluster `__ffi_*`) → bootstrapping doble → release v2.4.6.
 
@@ -253,7 +253,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **generar_v4.ps1**: `Get-Content "lexer.nv"` también era relativo al CWD → desde otra carpeta generaba compiler_v4.nv VACÍO (1882 B) con "éxito" — fix: `Join-Path $scriptDir` en las 3 lecturas.
 - **AV pre-existente documentado (no regresión)**: la VM Rust AV-crashea (0xC0000005) llamando funciones console-input por FFI: `ReadConsoleInputA/W`, `PeekConsoleInputA/W` (también vía kernelbase.dll) — con args 0/0 y con handles/buffers reales; `GetStdHandle`/`GetConsoleMode`/`ReadFile`/`Sleep`/`ReadConsoleW` etc. funcionan. Solo se verificó con stdin-pipe (sin consola real); tui_core.nv usa esas funciones → `tui_temas_demo` NO puede correr en el harness, pero **nvc LÚMEN == nvc Rust (ambos crash idéntico → fuego lo cuenta CORRECTO)**.
 - **FIXPOINT v4 CONFIRMADO** tras ambos fixes de parser: SHA-256 `90048DC9F6ADA1E21D77C68E999021B40612DD98619936D1814DEB958F1C78D9` self==self2 byte-idéntico (compiler_v4.nv 131,221 B).
-- **fuego.ps1: 389/389 compilan · 103 CORRECTOS (+5 desde 98) · 10 INCOMPATIBLES · 3 timeouts · 0 fallos**. Restantes honestos: no-deterministas (graficos_demo SDL, test_csv_avanzado/test_json_avanzado/test_migracion orden mapas, test_ffi_* punteros, test_sistema_* temp), negativos por diseño (tui_test_min16/17/18), timeouts (debug_parser3, graficos_completo, gui_ventana). cargo test 385/385.
+- **fuego.ps1: 396/396 compilan · 103 CORRECTOS (+5 desde 98) · 10 INCOMPATIBLES · 3 timeouts · 0 fallos**. Restantes honestos: no-deterministas (graficos_demo SDL, test_csv_avanzado/test_json_avanzado/test_migracion orden mapas, test_ffi_* punteros, test_sistema_* temp), negativos por diseño (tui_test_min16/17/18), timeouts (debug_parser3, graficos_completo, gui_ventana). cargo test 385/385.
 - **Commits**: `4b9aa8e` (loader canonical + callers FILE + rename graficos_avanzado_demo; fuego 102/117), `abf9603` (Lista prefijo + cast como + generar_v4.ps1; fuego 103/116).
 - **Determinismo ejemplos (commit `f218200`)** — fuego 108/116: `csv.nv` serializar ordena claves numéricas (im::HashMap RandomState varía por proceso → CSV en orden aleatorio); `test_ffi_min`/`test_ffi_debug` print `pid>0` (el PID era el único diff); `test_csv_avanzado`/`test_json_avanzado`/`test_migracion`/`test_sistema_directo`/`test_sistema_avanzado` prints deterministas (largo de claves, `archivos_existe_archivo`, json nativo ya es BTreeMap-ordenado). Restantes: graficos_demo (SDL renderer), tui_test_min16/17/18 (negativos por diseño), timeouts (debug_parser3 loop, graficos_completo/gui_ventana GUI, sprint1_http red). cargo test 385/385.
 - **Pendientes**: FFI natives VM LÚMEN (cluster `__ffi_*`) → bootstrapping doble → release v2.4.6.
@@ -279,7 +279,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 - **Fix parser.rs**: `parse_for` con `is_for_init_decl()` (keyword de tipo / tipo custom `Punto p` / genérico `<T>`) y si no, construye `Decl::Variable` con `Type::Infer` (consume el `;`); dispatch `para` sin `(` usa `is_foreach_like()` (lookahead puro: `[tipo]? ident (en|in)`) → foreach solo con `en`/`in`, si no `parse_for`. Los helpers reusan `is_type_at`/`check_ident_next`.
 - **Fix parser.nv (self)**: helper `_st_es_foreach(st)` (lookahead puro por posición sobre `tokens`, skip de keywords de tipo, ident → `en`/`in`) + branch de clásico sin paréntesis (parse init/cond/paso con `_parse_stmt`/`_parse_expr` + desugar `init; mientras (cond) { cuerpo; paso; }` idéntico al clásico con `(`). El foreach existente queda intacto como fallback.
 - **Verificado**: los 3 tui_test_min **OK+CORRECTO** en la cadena 100% LÚMEN (nvc self == nvc Rust, `xxxxx`); **FIXPOINT v4 CONFIRMADO** SHA-256 `3DA624D6AD32E359D3714F7CD936563CE1A60ED633590CB580D695F24C7E282A` (compiler_v4.nv 135,465 B → .nvc 150,684 B, ~5s, self==self2 byte-idéntico); cargo test 0 FAILED; batería `test_vm.ps1` **39/40** (solo stress_fecha flaky).
-- **fuego.ps1: 389/389 compilan · 113 CORRECTOS (+5) · 1 INCOMPATIBLE · 3 TIMEOUT · 0 fallos**. Restantes honestos: `graficos_demo` (SDL renderer — imprime header y diverge, por diseño), timeouts `debug_parser3` (loop), `graficos_completo`/`gui_ventana` (GUI).
+- **fuego.ps1: 396/396 compilan · 113 CORRECTOS (+5) · 1 INCOMPATIBLE · 3 TIMEOUT · 0 fallos**. Restantes honestos: `graficos_demo` (SDL renderer — imprime header y diverge, por diseño), timeouts `debug_parser3` (loop), `graficos_completo`/`gui_ventana` (GUI).
 - ⚠️ **Trampa harness**: `test_vm.ps1` debe correrse desde la RAÍZ del repo — `entrada_vm.txt` contiene rutas relativas `examples/x.nvc`; desde `stdlib/compiler` la VM LÚMEN no encuentra el archivo → FALLAS masivas falsas (OK=1 FALLAS=30).
 - **Pendientes**: release v2.4.6 (tag + docs) → FFI natives VM LÚMEN (cluster `__ffi_*`) → AI/ML (Fases 186-200).
 
@@ -316,7 +316,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 | `para (i = 0; cond; paso)` — init sin tipo: el parser Rust exigía declaración tipada → no parseaba (min18) | `crates/lumen-parser/src/parser.rs` (`parse_for` + `is_for_init_decl`) | Init tipado vía `parse_declaration`, si no `Decl::Variable` con `Type::Infer` (consume `;`) |
 | `para entero i = 0; cond; paso { }` sin paréntesis: Rust lo reenviaba a foreach → E011 (min16/17) | `crates/lumen-parser/src/parser.rs` (dispatch + `is_foreach_like`) | Lookahead puro `[tipo]? ident (en\|in)` → foreach solo con `en`/`in`, si no `parse_for` |
 | Self-hosted idem: producía programa vacío (foreach roto con `=`) | `stdlib/compiler/parser.nv` (`_st_es_foreach` + branch clásico sin paréntesis) | Helper lookahead por posición sobre `tokens` (skip keywords de tipo, ident → `en`/`in`) + parse init/cond/paso con `_parse_stmt`/`_parse_expr` y desugar idéntico al clásico con `(` |
-| **Verificado**: `tui_test_min16/17/18` **OK+CORRECTO** en la cadena 100% LÚMEN (byte-idénticos) · FIXPOINT v4 SHA-256 `3DA624D6…` self==self2 (135,465 B → 150,684 B, ~5s) · cargo test 0 FAILED · batería 39/40 · **fuego.ps1 389/389 · 113 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 3 TIMEOUT (debug_parser3/graficos_completo/gui_ventana) · 0 fallos** | — | — |
+| **Verificado**: `tui_test_min16/17/18` **OK+CORRECTO** en la cadena 100% LÚMEN (byte-idénticos) · FIXPOINT v4 SHA-256 `3DA624D6…` self==self2 (135,465 B → 150,684 B, ~5s) · cargo test 0 FAILED · batería 39/40 · **fuego.ps1 396/396 · 113 CORRECTOS · 1 INCOMPATIBLE (graficos_demo SDL, por diseño) · 3 TIMEOUT (debug_parser3/graficos_completo/gui_ventana) · 0 fallos** | — | — |
 
 ### Fixes 30 Julio 2026 — Sprint 4 (HashMap)
 | Bug | Archivo | Fix |
@@ -394,7 +394,7 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 | Bug | Archivo | Fix |
 |-----|---------|-----|
 | **Fixpoint regresionado**: `compiler_v4_self.nvc` crasheaba "Índice N fuera de rango (largo: N)" dentro de `ejecutar_pipeline` (causa raíz: `&&`/`||` emitidos eager `And`/`Or` → `mientras i < n && cs[i] != "\n"` lee `cs[i]` con `i == n`) | `stdlib/compiler/codegen.nv` | Helper `_cg_and_or(cg, izq, der, es_and)` emite short-circuit REAL con `JmpIf`/`Jmp` + `PushBool` (`&&`: izq/der falsy→false; ambos→true · `\|\|`: izq truthy→true, si no der decide). Binary en `_gen_expr` despacha; el resto eager. Confirmado con diff de disasm: RUST-built cortocircuita vía JmpIf, el LÚMEN emitía And eager |
-| **Verificado**: fixpoint v4 CONFIRMADO — compiler_v4.nv → self (112,368 B) → self2 byte-IDENTICAL (0 diffs); self compila match.nv sin crash ("dos"); fuego 389/389 compilan, 61 CORRECTOS (+1), 0 fallos | — | — |
+| **Verificado**: fixpoint v4 CONFIRMADO — compiler_v4.nv → self (112,368 B) → self2 byte-IDENTICAL (0 diffs); self compila match.nv sin crash ("dos"); fuego 396/396 compilan, 61 CORRECTOS (+1), 0 fallos | — | — |
 
 ### Sprint 2 — Self-Hosting (30 Julio 2026) ✅
 | Hito | Archivo | Detalle |
@@ -444,10 +444,10 @@ WASM backend, WASI, JS interop. Docker, Docker Compose, GitHub Actions. Benchmar
 
 ---
 
-## Bytecode (.nvc) — v3.3.0 Producción
+## Bytecode (.nvc) — v3.5.7 Producción
 
 - **Version**: 7 (`CHUNK_VERSION 7`, decode acepta 6 y 7)
-- **Novedad v3.1.4:** `FuncMeta.defaults: Vec<Option<DefaultValue>>` persistidos (`Int/Float/Str/Bool`) para `bind_args` unificado (3 call-sites). Ver `docs/produccion.md` §1.3.
+- **Novedad v3.5.7:** `FuncMeta.defaults: Vec<Option<DefaultValue>>` persistidos (`Int/Float/Str/Bool`) para `bind_args` unificado (3 call-sites). Ver `docs/produccion.md` §1.3.
 - **Magic**: `LUMN` (4 bytes)
 - **Opcodes**: 0-46 + 52-53
   - 0-27: Core (Push, Pop, Add, Sub, Jmp, Call, Ret, Print, etc.)
@@ -504,7 +504,7 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 - **Test suite completa**:
   - `cargo test --release`: **385 tests pasando, 0 fallos** (166 e2e + unit).
   - `test_vm.ps1`: **39/40 OK** (solo `stress_fecha` flaky por timing 0ms vs 17ms).
-  - `fuego.ps1`: **389/389 compilan · 112 CORRECTOS · 1 INCOMPATIBLE (`graficos_demo` SDL, por diseño) · 4 TIMEOUT (`debug_parser3`, `graficos_completo`, `gui_ventana`, `sprint1_http` — red/GUI, flaky) · 0 fallos**.
+  - `fuego.ps1`: **396/396 compilan · 112 CORRECTOS · 1 INCOMPATIBLE (`graficos_demo` SDL, por diseño) · 4 TIMEOUT (`debug_parser3`, `graficos_completo`, `gui_ventana`, `sprint1_http` — red/GUI, flaky) · 0 fallos**.
 - **Commits**: `7d3cdc8` (bootstrapping doble + fixpoint SHA-256 3DA624D6... verificado).
 
 **Estado actual: LÚMEN v2.4.6 — Autocompilación total, VM en LÚMEN funcional, dogfooding 112/117, bootstrapping doble certificado. Ready for release tag.**
@@ -528,7 +528,7 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 **Progreso (12 Ago, tarde — sesión AI · Playground: toggle backend WASM/Servidor + `/api/run`):**
 - **Endpoint `POST /api/run`** en `handle_http_request`/`handle_api_request` (main.rs): soporte de POST con Content-Length + body; compila y ejecuta con la **VM Rust nativa** (`run_source_capture`: ModuleLoader + sema + IR + codegen + VM, output via `vm.output()`, errores con span `(linea,col)`); respuesta JSON `{"ok":true,"output":...}` / `{"ok":false,"error":...}` con `escape_json_ml` (saltos de línea reales). Imports stdlib resueltos con `lib_dirs=["stdlib"]` + tmpfile `target/playground_tmp.nv` (base_path para imports relativos).
 - **Toggle en la UI** (`crates/lumen-wasm/web/index.html`): `.backend-toggle` en el toolbar con `data-backend="wasm"`/`"server"` + estado `execBackend`; `runCode()` bifurca — server → `fetch('/api/run', {method:'POST', body: code})` con guards para `location.http` (el modo servidor requiere `lumen serve`), sin depender de `runtime` WASM (funciona antes de cargar el wasm); wasm → flujo original. `vmStatus` muestra "servidor (VM Rust)".
-- **Verificado**: hello/arith → `{"ok":true}` con output correcto · error sintáctico → `{"ok":false}` con E015 de span · imports con prefijo `coleccion_` (ordenar/contar → "1") · **demo_completo completo (33 secciones + FIN) por el backend servidor** · index.html sirve con toggle (54,917 B) + `pkg/lumen_wasm_bg.wasm` (2.42 MB) · wasm-pack rebuilt.
+- **Verificado**: hello/arith → `{"ok":true}` con output correcto · error sintáctico → `{"ok":false}` con E015 de span · imports con prefijo `coleccion_` (ordenar/contar → "1") · **demo_completo completo (33 secciones + FIN) por el backend servidor** · index.html sirve con toggle (54,956 B) + `pkg/lumen_wasm_bg.wasm` (2.42 MB) · wasm-pack rebuilt.
 - **Pendientes**: Etapa 3 (lumen-aot → C transpiler + `lumen_rt.h`) → AI/ML (Fases 186-200).
 
 **Progreso (12 Ago, noche — sesión AI · Etapa 3: OPTIMIZACIÓN AOT — Cranelift 20x + C 18x, ambos en ms):**
@@ -597,7 +597,7 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 - **Pendientes**: AI/ML (Fases 186-200).
 
 **Progreso (14 Ago, noche — sesión AI · Playground: historial de runs + toggle backend persistente):**
-- **Gaps restantes del playground auditados** contra `docs/plan-playground.md`: la Ronda L1 ya estaba completa (F1.1 `/api/health`+`/api/examples`+`/api/examples/{file}`; F2.1 CodeMirror 6 vendorizado + modo LUMEN desde token.rs; F3.1 stdlib embebida vía build.rs `embedded_stdlib.rs` + `ModuleLoader::with_memory_files`; F3.2 `run_lumen`/`check_lumen`/`compile_to_bytes` con loader virtual; F4.1 128 ejemplos embebidos + fetch `/api/examples` con fallback offline; F9.1 `.nvc` descargable). Verificado en vivo: `GET /api/health` → `{"status":"ok","version":"3.1.4","wasm":true}`, `POST /api/run` con `imprimir("hola servidor")` → `{"ok":true,"output":"hola servidor"}`, `/api/examples` lista 117+, `/web/index.html` 200 text/html, `pkg/lumen_wasm_bg.wasm` (2.37 MB) y `lumen_wasm.js` presentes (rebuilt previo con fixes OR/rangos + v3.1.4 producción bench/headless).
+- **Gaps restantes del playground auditados** contra `docs/plan-playground.md`: la Ronda L1 ya estaba completa (F1.1 `/api/health`+`/api/examples`+`/api/examples/{file}`; F2.1 CodeMirror 6 vendorizado + modo LUMEN desde token.rs; F3.1 stdlib embebida vía build.rs `embedded_stdlib.rs` + `ModuleLoader::with_memory_files`; F3.2 `run_lumen`/`check_lumen`/`compile_to_bytes` con loader virtual; F4.1 128 ejemplos embebidos + fetch `/api/examples` con fallback offline; F9.1 `.nvc` descargable). Verificado en vivo: `GET /api/health` → `{"status":"ok","version":"3.1.4","wasm":true}`, `POST /api/run` con `imprimir("hola servidor")` → `{"ok":true,"output":"hola servidor"}`, `/api/examples` lista 117+, `/web/index.html` 200 text/html, `pkg/lumen_wasm_bg.wasm` (2.37 MB) y `lumen_wasm.js` presentes (rebuilt previo con fixes OR/rangos + v3.5.7 producción bench/headless).
 - **Toggle backend PERSISTENTE**: `execBackend` ahora se lee de `localStorage('lumen_playground_backend')` al inicio y `setBackend()` (extraído del handler del toggle) lo persiste en cada click; `initEditor` aplica el backend guardado (antes se resetaba a `wasm` en cada recarga). Refactor del listener a función reutilizable + búsqueda del botón activo por `dataset.backend`.
 - **Historial de ejecuciones**: botón `🕘 Historial` en el panel-header del código + panel flotante (top-right, cierra al hacer clic fuera) que lista hasta 10 runs recientes desde `localStorage('lumen_playground_history')` — cada entrada muestra ✓/✗, hora, backend (`wasm`/`server`), tiempo ms, primera línea del código y preview del output; clic en una entrada restaura el código en el editor. `pushHistory()` se llama en las 3 ramas de `runCode` (server ok, server error, server red-error, wasm ok, wasm error, wasm catch) con try/catch que tolera localStorage lleno/deshabilitado.
 - **Verificado**: `node --check` sobre el `<script type="module">` extraído → sintaxis OK; servidor levantado → HTML sirve con `pushHistory`/`historyBtn`/backend-persist presente (61,700 B), `/api/health` OK.
@@ -622,42 +622,42 @@ scripts/          → PowerShell CI/CD, installers, git-hooks
 
 ---
 
-## Progreso (20-21 Ago 2026 — sesión AI · RELEASE v3.1.4: 167 bugs + verificación en tres plataformas)
+## Progreso (20-21 Ago 2026 — sesión AI · RELEASE v3.5.7: 167 bugs + verificación en tres plataformas)
 
-- **RELEASE v3.1.4** (detalle en `3,0,0.txt`): **unifica en una sola entrega el trabajo iniciado sobre la v2.4.6** — los 8 bugs del reporte original + 159 más encontrados de forma activa. **Verificación: 720 pruebas en verde (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos ejecutados sin fallos, clippy sin avisos y cuatro fuzzers diferenciales (structs/listas, closures, rechazo y regex) sin divergencias.**
+- **RELEASE v3.5.7** (detalle en `3,0,0.txt`): **unifica en una sola entrega el trabajo iniciado sobre la v2.4.6** — los 8 bugs del reporte original + 159 más encontrados de forma activa. **Verificación: 720 pruebas en verde (Linux y Windows), 393/393 en `lumen check`, 372 ejemplos ejecutados sin fallos, clippy sin avisos y cuatro fuzzers diferenciales (structs/listas, closures, rechazo y regex) sin divergencias.**
 - **BUG-166/167 (`regex.nv`)**: el regex nativo devolvía `false` a todo en Windows y macOS (stubs en la rama no-POSIX) y desbordaba al reemplazar con patrones que casan la cadena vacía. **Fix: motor propio por backtracking, sin dependencias.**
 - **BUG-165 (`lumen_rt.h`)**: `<sys/resource.h>` fuera de su guarda impedía TODA compilación nativa en Windows — movido bajo su `#ifdef` de plataforma.
 - **BUG-152/154 (`lumen-bundle`/`lumen new`)**: la stdlib no viajaba en la instalación y el prefijo de paquete se aplicaba mal — corregido el empaquetado y la resolución de prefijos.
 - **BUG-151/161 (parser)**: bloques sin llave se ejecutaban en silencio; el arreglo rompió las declaraciones adelantadas, restauradas con E084.
 - **BUG-147/148/149/150 (sema/IR)**: semántica de closures, structs y `prestado mut` corregida.
 - **Fix build cross-plataforma (`gui_ffi.rs`)**: los jobs `aarch64-unknown-linux-gnu` y `aarch64-linux-android` fallaban con `E0308` — `title_cs.as_ptr()` devuelve `*const u8` (en aarch64/Android, `c_char = u8`) pero la firma de `CreateWindowExA` espera `*const i8`. **Fix**: `title_cs.as_ptr().cast()` (línea 132), espejo del cast ya presente en la línea 131. El resto de `gui_ffi.rs`/`crypto_ffi.rs` ya usaba casts explícitos (`as *const u8`, `*const u16`) — sin más riesgo cross-plataforma. Verificado: `cargo build --workspace` OK, `cargo test --workspace` 0 FAILED (172 e2e + unit), clippy limpio.
-- **Docs sincronizadas a v3.1.4**: README (badges y sección Estado del Proyecto), CHANGELOG (entrada v3.1.4 arriba + sección cronológica), `info.md` (compendio, matriz, changelog, footer), `docs/AGENTS.md` (header + testing actual a ~720), `docs/roadmap.md`, `docs/siguiente.md`, `docs/self-hosting.md`, LENGUAJE/HERRAMIENTAS/MARKETING/cli, reports/. **`VERSION` = 3.1.4.**
-- **Pendientes**: composer el release tag v3.1.4 en el repo (los tags previos v2.4.x ya existen); Playground L2/L3; AI/ML (Fases 186-200).
+- **Docs sincronizadas a v3.5.7**: README (badges y sección Estado del Proyecto), CHANGELOG (entrada v3.5.7 arriba + sección cronológica), `info.md` (compendio, matriz, changelog, footer), `docs/AGENTS.md` (header + testing actual a ~720), `docs/roadmap.md`, `docs/siguiente.md`, `docs/self-hosting.md`, LENGUAJE/HERRAMIENTAS/MARKETING/cli, reports/. **`VERSION` = 3.1.4.**
+- **Pendientes**: composer el release tag v3.5.7 en el repo (los tags previos v2.4.x ya existen); Playground L2/L3; AI/ML (Fases 186-200).
 
 ---
 
-## Progreso (21 Ago 2026 — sesión AI · PRODUCCIÓN REAL v3.1.4: fixes escalables + bench 8 + headless + CHUNK_VERSION 7)
+## Progreso (21 Ago 2026 — sesión AI · PRODUCCIÓN REAL v3.5.7: fixes escalables + bench 8 + headless + CHUNK_VERSION 7)
 
 - **Fixes escalables (no parches temporales):**
   - **Fallthrough `Variable 'a'/'n'`:** `crates/lumen-ir/src/builder.rs` `last_significant()` ignora `Label/Nop/Phi` para decidir terminador; `needs_return()`/`emit_return_if_needed()` en `Function`, `ImplRasgo`, `compile_lambda`, `build()` (`Halt`). `label_counter` global evita colisión `Label(0)` en `codegen` global `label_map` que rompía `matematicas.nv` (`Variable 'n'`). Commits `64db441`, `730e74d`, `f83964f`.
   - **Aridad `pop()` corrupto:** `crates/lumen-vm/src/vm.rs` `bind_args` unificado — `Call`/`CallValue`/`run_function` (hilos) comparten `args.get(i).cloned().unwrap_or(Void)` + `DefaultValue` reales; antes `else { self.pop() }` corrompía stack del caller y `run_function` dejaba param sin inicializar.
   - **Defaults persistidos `CHUNK_VERSION 7`:** `ir::Func.defaults` → `codegen::FuncMeta.defaults: Vec<Option<DefaultValue>>` (`Int/Float/Str/Bool`) serializado en `Bytecode` v7 (compat v6). `VM bind_args` usa `DefaultValue` cuando `i>=args.len()`. `decode` acepta 6 y 7.
   - **Headless centralizado:** `stdlib/graficos.nv:es_headless()` usa `getenv("CI"/"LUMEN_HEADLESS")` vía `__ffi` (`msvcrt`/`libc`/`libSystem`) y `peek!=0`; `iniciar()`/`ventana()` retornan `false/0` sin `SDL_Init`. Guard per-demo redundante pero compatible.
-- **Suite producción:** **616 e2e** (incluye 4 regresión: fallthrough early return, matematicas `potencia(2,10)==1024`, defaults `CallValue`, lambda) + **9 production** (`crates/lumen-vm/tests/production.rs`: aceptación 3 + performance 2 + integración) = **673 vm tests**, **917 workspace** (`cargo test --workspace` 0 FAILED). Ver `docs/produccion.md` §2.1.
+- **Suite producción:** **636 e2e** (incluye 4 regresión: fallthrough early return, matematicas `potencia(2,10)==1024`, defaults `CallValue`, lambda) + **9 production** (`crates/lumen-vm/tests/production.rs`: aceptación 3 + performance 2 + integración) = **695 vm tests**, **956 workspace** (`cargo test --workspace` 0 FAILED). Ver `docs/produccion.md` §2.1.
 - **Bench formal 8** (`crates/lumen-bench/benches/benchmarks.rs`): `lexer_tokenize`, `parser_parse`, `pipeline_full`, `vm_fib_20` + 4 prod `prod_fallthrough_early_return`, `prod_defaults_callvalue`, `prod_matematicas_potencia`, `prod_graficos_headless` (`cargo bench -p lumen-bench`, reporte `target/criterion/report/index.html`, `--quick` en CI).
 - **CI `headless-check` nuevo** (`.github/workflows/ci.yml`): job Linux `env: LUMEN_HEADLESS=1 CI=1` corre `cargo test --workspace`, `cargo run --bin lumen -- check examples`, `cargo test --test production`, `cargo bench -p lumen-bench -- --quick`. Ver `docs/produccion.md` §3.
-- **Barrido:** `lumen check examples` 389/389 (con `CI=1` 389/389), `LUMEN_HEADLESS=1 lumen run examples/graficos_*` → `init_fail_ok` sin `Variable 'a'` (antes requería 30 guards per-demo).
-- **Versionado:** `Cargo.toml`/`VERSION` `3.1.4` · `CHUNK_VERSION 7` (fallback v6) · docs sincronizadas (`README`, `roadmap`, `plan-v3.1`, `HERRAMIENTAS`, `produccion.md`) · `CHANGELOG` v3.1.4 producción.
-- **Verificado:** `cargo test --workspace` 917, `cargo bench -p lumen-bench` 8 OK, `LUMEN_HEADLESS=1` repro local (`Headless/CI detectado — demo omitida`).
+- **Barrido:** `lumen check examples` 396/396 (con `CI=1` 396/396), `LUMEN_HEADLESS=1 lumen run examples/graficos_*` → `init_fail_ok` sin `Variable 'a'` (antes requería 30 guards per-demo).
+- **Versionado:** `Cargo.toml`/`VERSION` `3.1.4` · `CHUNK_VERSION 7` (fallback v6) · docs sincronizadas (`README`, `roadmap`, `plan-v3.1`, `HERRAMIENTAS`, `produccion.md`) · `CHANGELOG` v3.5.7 producción.
+- **Verificado:** `cargo test --workspace` 956, `cargo bench -p lumen-bench` 8 OK, `LUMEN_HEADLESS=1` repro local (`Headless/CI detectado — demo omitida`).
 
-**Estado actual: LÚMEN v3.3.0 Producción Real — deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`. Próximos: `FuncMeta` defaults no literales (thunk), `label_map` per-function, `lumen fmt` en pre-commit (ver `docs/produccion.md` §6).**
+**Estado actual: LÚMEN v3.5.7 Producción Real — deployable en Windows/Linux/macOS/Android/WASM con `cargo build --release --target <target>`. Próximos: `FuncMeta` defaults no literales (thunk), `label_map` per-function, `lumen fmt` en pre-commit (ver `docs/produccion.md` §6).**
 
 
 ---
 
 ## Progreso (25 Ago 2026 — sesión AI · v3.3.x: QA bugs + fuzzing paridad VM↔nativo)
 
-- **v3.3.0/3.3.1**: bugs QA #1-#7 completados (fmt sin pérdida, `arr[i].campo=`, if-let/elegir destructura enums con datos, structs recursivos, MatchVariant con guardas). Suite 633 e2e.
+- **v3.5.7/3.3.1**: bugs QA #1-#7 completados (fmt sin pérdida, `arr[i].campo=`, if-let/elegir destructura enums con datos, structs recursivos, MatchVariant con guardas). Suite 633 e2e.
 - **v3.3.5 — Bug #6 COMPLETO (refs reales)**: `Value::Ref` celda compartida + opcode 63 MakeRef + write-back en Ret; sema auto-deref en binarios/asignación; backend C con punteros reales y **renombrado de params por función** (`{fn}::{param}`) que elimina colisiones latentes.
 - **v3.3.5 — Bug #7 COMPLETO (comptime)**: intérprete const-eval (`lumen-ir/src/comptime.rs`) pliega `comptime { fib(20) }` a literal; límites profundidad 128 / 1M pasos; fallback runtime seguro.
 - **v3.3.5 — Sombreado real de bloques**: ScopePush/ScopePop en si/mientras/para/foreach/si-let/elegir/match; AOT C planificador estático `plan_var_keys`. VM y nativo coinciden.

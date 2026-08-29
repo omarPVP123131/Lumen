@@ -1,4 +1,4 @@
-# 🚀 Guía Rápida de Experiencia de Usuario (DX / UX) — LÚMEN v3.3.0
+# 🚀 Guía Rápida de Experiencia de Usuario (DX / UX) — LÚMEN v3.5.7
 ### *The Ultimate LÚMEN Developer Experience & Cheat Sheet*
 
 Bienvenido a **LÚMEN**, el lenguaje de programación nativo bilingüe de ultra-alto rendimiento. Esta guía resume todo lo que necesitas para dominar el ecosistema en minutos.
@@ -103,12 +103,12 @@ Dentro del REPL interactivo puedes usar:
 
 ---
 
-## ⚡ 6. Producción Real v3.3.0 — Checklist Rápido
+## ⚡ 6. Producción Real v3.5.7 — Checklist Rápido
 
 > Detalle: [docs/produccion.md](produccion.md)
 
 ```bash
-cargo test --workspace                          # 917 (616 e2e + 9 production)
+cargo test --workspace                          # 956 (636 e2e + 9 production)
 cargo bench -p lumen-bench                      # 8 benches
 cargo bench -p lumen-bench -- --quick           # smoke CI
 LUMEN_HEADLESS=1 CI=1 cargo test --workspace
@@ -118,5 +118,5 @@ LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
 - **Fixes escalables:** `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` + `bind_args` unificado, `es_headless()` centralizado (`stdlib/graficos.nv`).
 - **CI `headless-check`:** `LUMEN_HEADLESS=1 CI=1` con `cargo test`, `lumen check`, `cargo test --test production`, `cargo bench -- --quick`.
 
-*LÚMEN v3.3.0 Producción Real — Diseñado con la mejor Experiencia de Usuario (DX) del mercado (917 tests, bench 8, headless `LUMEN_HEADLESS`).*
+*LÚMEN v3.5.7 Producción Real — Diseñado con la mejor Experiencia de Usuario (DX) del mercado (956 tests, bench 8, headless `LUMEN_HEADLESS`).*
 

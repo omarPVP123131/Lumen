@@ -1,6 +1,6 @@
 # 📖 LÚMEN — Compendio Técnico Integral y Enciclopedia Oficial (info.md)
 
-**Versión del Ecosistema: v3.0.0 — Compilación Unificada de Todos los Documentos del Proyecto**
+**Versión del Ecosistema: v3.5.7 — Compilación Unificada de Todos los Documentos del Proyecto (956 tests, 396 ejemplos, AOT Industrial)**
 
 ---
 
@@ -300,7 +300,7 @@ El compilador escrito en LÚMEN (`compiler_v4.nv`) emite directamente código m�
 
 | Lenguaje | Rendimiento Nativo | Seguridad Memoria | Ergonomía Bilingüe | Concurrencia Resiliente | IA Nativa | Cloud & Wire | Bajo Nivel & Hardware | Self-Hosting | DX & Tooling | Versatilidad | **PROMEDIO GLOBAL** |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **LÚMEN v3.0.0** | **98** | **97** | **100** | **99** | **99** | **97** | **98** | **100** | **98** | **99** | **98.5 / 100** 🥇 |
+| **LÚMEN v3.5.7** | **98** | **97** | **100** | **99** | **99** | **97** | **98** | **100** | **98** | **99** | **98.5 / 100** 🥇 |
 | **Rust** | **99** | **100** | 45 | 92 | 70 | 88 | 98 | 90 | 95 | 92 | **86.9 / 100** |
 | **Zig** | **98** | 88 | 40 | 80 | 60 | 75 | **100** | 98 | 85 | 86 | **81.0 / 100** |
 | **C++ (C++23)** | **100** | 65 | 35 | 82 | 75 | 80 | **100** | 92 | 82 | 88 | **79.9 / 100** |
@@ -337,7 +337,7 @@ El compilador escrito en LÚMEN (`compiler_v4.nv`) emite directamente código m�
 
 # 9. 📋 Historial de Versiones (Changelog) y Próximos Horizontes
 
-### v3.0.0 — 20 Agosto 2026 (167 bugs corregidos, unificación y verificación en tres plataformas)
+### v3.5.7 — 29 Agosto 2026 (167 bugs corregidos, unificación y verificación en tres plataformas)
 * Motor regex nativo propio por backtracking, sin dependencias (arregla el regex que devolvía "false" a todo en Windows/macOS y el desbordamiento en reemplazos con patrones que casan la cadena vacía).
 * Guarda de plataforma completa en `lumen_rt.h` (`<sys/resource.h>` bajo su guarda — desbloquea toda compilación nativa en Windows).
 * La stdlib viaja en la instalación y el prefijo de paquete se aplica correctamente.
@@ -371,7 +371,7 @@ El compilador escrito en LÚMEN (`compiler_v4.nv`) emite directamente código m�
 
 ---
 
-*LÚMEN v3.0.0 — Compendio Maestro Oficial Sincronizado.*
+*LÚMEN v3.5.7 — Compendio Maestro Oficial Sincronizado.*
 
 ---
 

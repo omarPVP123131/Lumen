@@ -1,4 +1,12 @@
-## [3.3.6] - 2026-08-25
+## [3.5.7] - 2026-08-29
+
+### AOT Industrial — Cranelift/LLVM completos + memoria nativa (Incremento B)
+- **Cranelift completo**: intentar/atrapar real (`_lw_err_active` + catch por block-param), enums completos (`EnumCtor`/`MatchVariant`/`MatchPayload`), `prestado mut`/`MakeRef` con celdas `Val` y write-through, funciones como valores (`func_addr` + `call_indirect`), sombreado por bloques, flujo de valores entre labels (block-params + `simulate_label_depths` → ternarios OK)
+- **LLVM IR reescrito** al modelo `_lw_*` (antes i64-only) + `merge-allocas` + floats hex + shim `lumen_rt.h` y link con `clang -O3 -lm -lpthread`; CLI `lumen build --llvm` funcional
+- **Memoria nativa**: todas las vars por celda, Stores con `_lw_dcp` (paridad `gv=_dcp`), args deep-copiados (`T_PTR` pasa tal cual), arrays con `cap` + `_lw_arr_push_ip` in-place → `stress_04_arrays` de O(n²)/OOM a instantáneo en C/Cranelift/LLVM; `sizeof(Val)=80`, `INT64_MIN` wrap, `div0` capturable, binding write-through fix, `MatchPayload` enums
+- **Globales reales** en nativo (`program_global_names` + celdas `lw_glob_*` compartidas → `logging`/`testing_sr` OK), decimales paridad VM (round-trip), arrays O(n) también en C
+- **Paridad 4-way**: VM↔C↔Cranelift↔LLVM byte-identical en `fuzz/*`, `examples/*`; barrido `239 OK / 7 divergencias` (closures con captura, sort complejos, guard-let+NaN, structs dinámicos, 3 demos hilos/baremetal/3D) / `150 skip`; `955` tests, `ci_gate 392 PASS 0 CRASH`
+- **DX**: `cargo fmt` 0, `clippy --all -- -D warnings` 0, `396/396` ejemplos `lumen check` OK, bench `c -O3 -flto -march=native` (strings 0.199→0.045s)
 
 ### Fuzzing manual VM↔nativo — 3 bugs encontrados y arreglados
 

@@ -1,19 +1,19 @@
-# Plan v3.1 — Mejoras Propuestas (21 Ago 2026) — Post-Producción v3.1.4
+# Plan v3.1 — Mejoras Propuestas (21 Ago 2026) — Post-Producción v3.5.7
 
-**Estado base:** v3.3.0 Producción Real publicado (21 Ago 2026) — **917 tests** (616 e2e + 9 production, 673 vm tests), **bench 8** (`cargo bench -p lumen-bench`), **headless `es_headless()`** centralizado (`stdlib/graficos.nv`, `LUMEN_HEADLESS`/`CI`), **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, **fixes escalables** `last_significant()` + `label_counter` global, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Ver [docs/produccion.md](produccion.md). Antes: 167 bugs v3.1.4 (720/393/372), aarch64 fix.
+**Estado base:** v3.5.7 Producción Real publicado (21 Ago 2026) — **956 tests** (636 e2e + 9 production, 695 vm tests), **bench 8** (`cargo bench -p lumen-bench`), **headless `es_headless()`** centralizado (`stdlib/graficos.nv`, `LUMEN_HEADLESS`/`CI`), **CHUNK_VERSION 7** con `FuncMeta.defaults` persistidos, **fixes escalables** `last_significant()` + `label_counter` global, CI `headless-check` (`LUMEN_HEADLESS=1 CI=1`). Ver [docs/produccion.md](produccion.md). Antes: 167 bugs v3.5.7 (720/393/372), aarch64 fix.
 
 Este plan prioriza **evidencia sobre promesas**. Cada ítem tiene criterio de aceptación medible. Parte del checklist `docs/produccion.md`.
 
 ---
 
-## P0 — Producción Real v3.1.4 ✅ COMPLETADO (21 Ago 2026)
+## P0 — Producción Real v3.5.7 ✅ COMPLETADO (21 Ago 2026)
 
 **Entregado:**
 - `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'` — `matematicas.nv` `Variable 'n'`)
 - `vm FuncMeta.defaults` persistidos `CHUNK_VERSION 7` (`Int/Float/Str/Bool`) + `bind_args` unificado (`Call`/`CallValue`/`run_function` con defaults reales)
 - `stdlib/graficos.nv:es_headless()` centralizado (`getenv CI/LUMEN_HEADLESS` vía `__ffi`, `peek!=0`)
 - Bench 8 (`cargo bench -p lumen-bench` — 4 prod: fallthrough, defaults, matematicas, headless) + reporte `target/criterion/report/index.html`
-- Tests 616 e2e (4 regresión) + 9 production = 673 vm tests, 917 workspace (`cargo test --workspace`)
+- Tests 636 e2e (4 regresión) + 9 production = 695 vm tests, 956 workspace (`cargo test --workspace`)
 - CI `headless-check` job Linux `env: LUMEN_HEADLESS=1 CI=1` con `cargo test`, `lumen check examples`, `cargo test --test production`, `cargo bench -- --quick`
 - Docs `docs/produccion.md` con checklist único; `VERSION` 3.1.4, decode v6+7
 
@@ -27,11 +27,11 @@ LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
 
 ---
 
-## P1 — Estabilidad de Demos (hecho v3.1.4, pendiente de fix profundo)
+## P1 — Estabilidad de Demos (hecho v3.5.7, pendiente de fix profundo)
 
 **Hecho 21 Ago:**
 - `charts_demo`, `graficos_avanzado_demo`, `tui_temas_demo` ahora detectan `CI=1` / `LUMEN_HEADLESS=1` y salen con `Headless/CI detectado — demo omitida` (0) en lugar de `Variable 'a/radius' no definida` o `AV 0xC0000005`.
-- `lumen check examples` sigue **389/389**; `lumen run` con `CI=1` ahora **no falla** en esas 3 demos.
+- `lumen check examples` sigue **396/396**; `lumen run` con `CI=1` ahora **no falla** en esas 3 demos.
 
 **Pendiente fix profundo (VM loader):**
 - **Síntoma:** `Variable 'a' / 'alpha' / 'radius' no definida` al llamar funciones de `graficos_canvas.nv` con param `a` (alpha) desde otro módulo (`graficos_charts`). Repro: `repro_b.nv` (init SDL + grafico_barras) falla incluso tras `cargo build --release`.
@@ -40,9 +40,9 @@ LUMEN_HEADLESS=1 CI=1 cargo run --bin lumen -- check examples
 
 ---
 
-## P2 — CI/CD y Benchmarks (completado v3.1.4 + próximo)
+## P2 — CI/CD y Benchmarks (completado v3.5.7 + próximo)
 
-**Hecho v3.1.4:**
+**Hecho v3.5.7:**
 - `reports/BENCHMARK.md` creado (VM 856ms / C 22ms / Cranelift 5.6ms; aot 38/38; self-hosting fixpoint 5s).
 - `gui_ffi.rs` fix verificado en `cargo build --release` (dev 7s, release 62s) y `cargo clippy -D warnings` 0.
 - **Nuevo:** `crates/lumen-bench` 8 benches (4 prod nuevos) — `cargo bench -p lumen-bench` + CI `headless-check` con `LUMEN_HEADLESS=1 CI=1` + `--quick` (ver `docs/produccion.md` §2.2 y §3).
@@ -83,9 +83,9 @@ Cada fase **requiere** 2 ejemplos + `cargo test -p lumen-vm` + `lumen check` + `
 
 ---
 
-## Cómo medir v3.1.4 DONE ✅
+## Cómo medir v3.5.7 DONE ✅
 
-- `cargo test --workspace` **917** (616 e2e + 9 production) 0 FAILED — **HECHO** (era 414→917)
+- `cargo test --workspace` **956** (636 e2e + 9 production) 0 FAILED — **HECHO** (era 414→956)
 - `cargo bench -p lumen-bench` **8 benches** (4 prod) — **HECHO**
 - `cargo test --test production` **9 production** — **HECHO**
 - `CHUNK_VERSION` **7** (decode v6+7) con `FuncMeta.defaults` — **HECHO**
@@ -93,7 +93,7 @@ Cada fase **requiere** 2 ejemplos + `cargo test -p lumen-vm` + `lumen check` + `
 
 ## Cómo medir v3.1 DONE (siguiente)
 
-- `cargo test --workspace` 917 → **≥925** (nuevos tests de loader alpha + tui headless profundos)
+- `cargo test --workspace` 956 → **≥925** (nuevos tests de loader alpha + tui headless profundos)
 - `lumen check examples` 389 → **389** (sin regresión)
 - `LUMEN_HEADLESS=1 CI=1 lumen run examples/charts_demo.nv` → **0** con mensaje headless (ya hecho, ahora centralizado)
 - `cargo bench -p lumen-bench` 8 → **8** con regresión <10% gate en CI

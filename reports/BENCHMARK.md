@@ -17,7 +17,7 @@
 
 ## 2. Verificación de Ejemplos
 
-- `lumen check examples`: **389/389 VÁLIDO, 0 errores** (21 Ago 2026)
+- `lumen check examples`: **396/396 VÁLIDO, 0 errores** (21 Ago 2026)
 - `lumen run demo_completo.nv` (VM, debug): **~2.1s** (33 secciones + FIN)
 - `lumen run demo_completo.nv` (VM, release esperado): **~0.9s** (medición previa Sprint 8)
 - Headless/CI demos (charts, graficos_avanzado, tui_temas): **omitidas con `CI=1` o `LUMEN_HEADLESS=1`** — requieren display SDL2 / consola interactiva; marcadas como `INCOMPATIBLE por diseño` en `fuego.ps1`

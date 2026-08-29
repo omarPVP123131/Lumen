@@ -1,6 +1,6 @@
 # LÚMEN — Guía Completa de Herramientas y Ecosistema (DX)
 
-**v3.3.0 — Herramientas Oficiales de Desarrollo, Depuración y Despliegue**
+**v3.5.7 — Herramientas Oficiales de Desarrollo, Depuración y Despliegue**
 
 ---
 
@@ -130,9 +130,9 @@ Inicia un servidor local en `http://localhost:8080` con:
 
 ---
 
-## 11. Producción Real v3.3.0 — Bench, Headless y Checklist
+## 11. Producción Real v3.5.7 — Bench, Headless y Checklist
 
-> Checklist único: [docs/produccion.md](produccion.md) — `VERSION` 3.1.4 · `CHUNK_VERSION 7` · 917 tests.
+> Checklist único: [docs/produccion.md](produccion.md) — `VERSION` 3.1.4 · `CHUNK_VERSION 7` · 956 tests.
 
 **Fixes escalables llevados a producción (21 Ago 2026):**
 - `builder last_significant()` + `label_counter` global (fallthrough `Variable 'a'/'n'`)
@@ -141,8 +141,8 @@ Inicia un servidor local en `http://localhost:8080` con:
 
 **Comandos producción:**
 ```bash
-cargo test --workspace                          # 917 (616 e2e + 9 production, 673 vm tests)
-cargo test -p lumen-vm --test e2e               # 616 e2e (4 regresión: fallthrough, matematicas, defaults, lambda)
+cargo test --workspace                          # 956 (636 e2e + 9 production, 695 vm tests)
+cargo test -p lumen-vm --test e2e               # 636 e2e (4 regresión: fallthrough, matematicas, defaults, lambda)
 cargo test --test production                    # 9 production (aceptación 3 + performance 2 + integración)
 cargo bench -p lumen-bench                      # 8 benches (lexer, parser, pipeline, vm_fib_20 + 4 prod)
 cargo bench -p lumen-bench -- --quick           # smoke CI
@@ -155,5 +155,5 @@ LUMEN_HEADLESS=1 cargo test --test production -- --nocapture
 
 **Bench formal 8** (`crates/lumen-bench/benches/benchmarks.rs`): `lexer_tokenize`, `parser_parse`, `pipeline_full`, `vm_fib_20`, `prod_fallthrough_early_return`, `prod_defaults_callvalue`, `prod_matematicas_potencia`, `prod_graficos_headless` — reporte `target/criterion/report/index.html`.
 
-*LÚMEN v3.3.0 Producción Real — Documentación de Herramientas Sincronizada (917 tests, bench 8, headless `es_headless()`).*
+*LÚMEN v3.5.7 Producción Real — Documentación de Herramientas Sincronizada (956 tests, bench 8, headless `es_headless()`).*
 

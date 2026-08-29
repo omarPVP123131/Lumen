@@ -1,6 +1,6 @@
 # LÚMEN — El Lenguaje que Ilumina
 
-**v3.3.0 — Documento de Posicionamiento y Visión**
+**v3.5.7 — Documento de Posicionamiento y Visión**
 
 > *"Programar no debería ser un lujo en inglés. Debería ser un derecho en tu idioma."*
 
@@ -36,7 +36,7 @@ importar ingles;   // Ahora puedes usar if/else/while/for también
 
 **No existe otro lenguaje que haga esto.** Python, JavaScript, Rust — todos asumen inglés.
 
-### 2. Compilador de Calidad Industrial — v3.3.0 Producción Real
+### 2. Compilador de Calidad Industrial — v3.5.7 Producción Real
 
 LÚMEN no es un intérprete de juguete. Tiene un pipeline de compilación completo:
 
@@ -47,10 +47,10 @@ Código Fuente (.nv)
   → Análisis Semántico (verificación de tipos)
   → IR Intermedio (builder last_significant() + label_counter global)
   → Codegen (bytecode CHUNK_VERSION 7 + FuncMeta.defaults)
-  → VM Stack-Based (bind_args unificado, 917 tests, bench 8)
+  → VM Stack-Based (bind_args unificado, 956 tests, bench 8)
 ```
 
-- **917 tests** automatizados (616 e2e + 9 production + resto workspace, 0 fallos) — ver `docs/produccion.md`
+- **956 tests** automatizados (636 e2e + 9 production + resto workspace, 0 fallos) — ver `docs/produccion.md`
 - **8 benches** criterion (`cargo bench -p lumen-bench`: lexer, parser, pipeline, vm_fib_20 + 4 prod) — bench formal producción
 - **Modo headless centralizado** (`stdlib/graficos.nv:es_headless()` con `LUMEN_HEADLESS`/`CI`, CI `headless-check`)
 - **Prop-testing** con miles de casos aleatorios
@@ -84,13 +84,13 @@ nombre = "Ana"; // El compilador deduce: texto
 - `Opcion<T>` para nulabilidad segura
 - Sum types con `enum`
 
-### 5. Baterías Incluidas (v3.3.0 Producción Real)
+### 5. Baterías Incluidas (v3.5.7 Producción Real)
 
-| Herramienta | Comando | Novedad v3.1.4 |
+| Herramienta | Comando | Novedad v3.5.7 |
 |-------------|---------|----------------|
 | Formateador | `lumen fmt archivo.nv` |  |
 | REPL Pro | `lumen repl` |  |
-| Test runner | `lumen test archivo.nv` | 917 tests (616 e2e + 9 production) |
+| Test runner | `lumen test archivo.nv` | 956 tests (636 e2e + 9 production) |
 | Lint estático | `lumen lint archivo.nv` |  |
 | Docs HTML | `lumen doc archivo.nv` |  |
 | Depurador | `lumen debug archivo.nv` |  |
@@ -145,16 +145,16 @@ imprimir("Hola {nombre}, tienes {edad} años y mides {altura}m");
 
 ---
 
-## ✅ Producción Real v3.1.4 (21 Ago 2026) — NUEVO
+## ✅ Producción Real v3.5.7 (21 Ago 2026) — NUEVO
 
-**LÚMEN v3.3.0 ya es deployable** con checklist de producción en [docs/produccion.md](produccion.md):
+**LÚMEN v3.5.7 ya es deployable** con checklist de producción en [docs/produccion.md](produccion.md):
 
 - Fixes escalables: `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` + `bind_args` unificado, `es_headless()` centralizado
-- 917 tests (616 e2e + 9 production), 8 benches (`cargo bench -p lumen-bench`), 389/389 `lumen check`, CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`
+- 956 tests (636 e2e + 9 production), 8 benches (`cargo bench -p lumen-bench`), 396/396 `lumen check`, CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`
 - `cargo build --release --target <target>` genera binarios Windows/Linux/macOS/Android/WASM listos para producción
 - Usa `LUMEN_HEADLESS=1` para CI/headless; `stdlib/graficos.nv:es_headless()` evita `SDL_Init` sin display
 
-## ⚠️ Lo Malo (Honestidad Total — actualizado v3.1.4)
+## ⚠️ Lo Malo (Honestidad Total — actualizado v3.5.7)
 
 ### 2. Ecosistema Emergente
 
@@ -205,7 +205,7 @@ LENGUAJE.md y HERRAMIENTAS.md son completos, pero faltan:
 | **Estudiante hispanohablante** aprendiendo a programar | ✅ Perfecto. Sin barrera de idioma. |
 | **Profesor de programación** en secundaria/universidad | ✅ Ideal. Diseñado para enseñar conceptos. |
 | **Autodidacta** que quiere crear scripts y herramientas | ✅ Bueno. Sintaxis clara, errores útiles, REPL. |
-| **Desarrollador profesional** buscando producción | ✅ Ya — v3.3.0 Producción Real (917 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`, ver `docs/produccion.md`) |
+| **Desarrollador profesional** buscando producción | ✅ Ya — v3.5.7 Producción Real (956 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`, ver `docs/produccion.md`) |
 | **Startup** que necesita backend en producción | ✅ Ya — `lumen bundle`/`lumen build --release` + `cargo test --workspace` + headless CI, ver `docs/produccion.md` |
 
 ### ¿Contra quién compite LÚMEN?
@@ -265,5 +265,5 @@ estáticos, genéricos, traits, pattern matching y mensajes de error pedagógico
 
 ---
 
-*LÚMEN v3.3.0 — Agosto 2026 · Hecho con convicción, no con hype.*
+*LÚMEN v3.5.7 — Agosto 2026 · Hecho con convicción, no con hype.*
 
