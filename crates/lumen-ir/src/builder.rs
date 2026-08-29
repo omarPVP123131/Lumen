@@ -50,6 +50,44 @@ impl IRBuilder {
         }
     }
 
+    /// v3.5.14: registra funciones recursivamente, incluyendo funciones anidadas
+    /// dentro de cuerpos de otras funciones (closures con nombre). Así las
+    /// llamadas a funciones anidadas se resuelven como llamadas directas en vez
+    /// de valores de primera clase (CallValue).
+    fn register_funcs(&mut self, nodes: &[DeclOrStmt]) {
+        self.register_funcs_inner(nodes, None);
+    }
+
+    /// v3.5.15: registra funciones recursivamente preservando la relación
+    /// padre-hijo (para resolución de capturas en backends nativos).
+    fn register_funcs_inner(&mut self, nodes: &[DeclOrStmt], parent: Option<String>) {
+        for node in nodes {
+            if let DeclOrStmt::Decl(Decl::Function {
+                name, params, body, ..
+            }) = node
+            {
+                if let Some(p) = &parent {
+                    self.program.parents.insert(name.clone(), p.clone());
+                }
+                if !self.program.funcs.contains_key(name) {
+                    let func = Func {
+                        name: name.clone(),
+                        params: params.iter().map(|p| p.name.clone()).collect(),
+                        defaults: params
+                            .iter()
+                            .map(|p| p.default.as_ref().and_then(|e| expr_to_ir_value(e)))
+                            .collect(),
+                        entry: 0,
+                        instrs: Vec::new(),
+                    };
+                    self.program.funcs.insert(name.clone(), func);
+                    self.fn_names.insert(name.clone());
+                }
+                self.register_funcs_inner(body, Some(name.clone()));
+            }
+        }
+    }
+
     pub fn build(mut self, program: &[DeclOrStmt]) -> crate::ir::Program {
         let has_toplevel_code = program.iter().any(|node| {
             !matches!(
@@ -62,22 +100,7 @@ impl IRBuilder {
             )
         });
 
-        for node in program {
-            if let DeclOrStmt::Decl(Decl::Function { name, params, .. }) = node {
-                let func = Func {
-                    name: name.clone(),
-                    params: params.iter().map(|p| p.name.clone()).collect(),
-                    defaults: params
-                        .iter()
-                        .map(|p| p.default.as_ref().and_then(|e| expr_to_ir_value(e)))
-                        .collect(),
-                    entry: 0,
-                    instrs: Vec::new(),
-                };
-                self.program.funcs.insert(name.clone(), func);
-                self.fn_names.insert(name.clone());
-            }
-        }
+        self.register_funcs(program);
 
         // Collect impl methods
         for node in program {
@@ -850,7 +873,14 @@ impl IRBuilder {
                 self.emit(Instr::ConstBool(*value));
             }
             Expr::Ident { name, .. } => {
-                self.emit(Instr::Load(name.clone()));
+                // v3.5.18: CLOSURAS LÉXICAS — un identificador que nombra una
+                // función registrada es una REFERENCIA de función (FuncRef),
+                // habilita `retornar inc` / `sea f = inc` / pasarla como arg.
+                if self.fn_names.contains(name) {
+                    self.emit(Instr::FuncRef(name.clone()));
+                } else {
+                    self.emit(Instr::Load(name.clone()));
+                }
             }
             Expr::Binary {
                 op,

@@ -106,6 +106,9 @@ pub struct Func {
 pub struct Program {
     pub funcs: BTreeMap<String, Func>,
     pub entry: String,
+    /// v3.5.15: función anidada -> función contenedora (para resolución de
+    /// capturas en los backends nativos). Vacío para funciones top-level.
+    pub parents: BTreeMap<String, String>,
 }
 
 impl Program {
@@ -113,6 +116,7 @@ impl Program {
         Self {
             funcs: BTreeMap::new(),
             entry: String::new(),
+            parents: BTreeMap::new(),
         }
     }
 }

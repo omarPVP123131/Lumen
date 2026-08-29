@@ -1,0 +1,7 @@
+funcion entero contador(entero n) {
+    funcion entero incrementar(entero x) {
+        retornar n + x;
+    }
+    retornar incrementar(3);
+}
+imprimir("param-captura:" + contador(10));

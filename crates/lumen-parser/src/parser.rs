@@ -2273,6 +2273,8 @@ impl Parser {
                 self.parse_call_or_ident(name, span)
             }
             TokenKind::Funcion | TokenKind::Function => self.parse_lambda(span),
+            // v3.5.14: lambda con pipes `|x| x + 1` / `|a, b| { ... }`
+            TokenKind::Pipe => self.parse_pipe_lambda(span),
             TokenKind::Imprimir | TokenKind::Print | TokenKind::Leer | TokenKind::Read => {
                 let name = match token.kind {
                     TokenKind::Imprimir => "imprimir",
@@ -2618,6 +2620,68 @@ impl Parser {
             body,
             span: Span::merge(&span, &self.previous().span),
         })
+    }
+
+    /// v3.5.14: lambda con sintaxis de pipes: `|x| x + 1` o `|a, b| { ... }`.
+    /// El pipe de apertura YA fue consumido por `parse_primary`. El cuerpo puede
+    /// ser un bloque `{ ... }` o una expresión única (se envuelve en `retornar`).
+    fn parse_pipe_lambda(&mut self, span: Span) -> Option<Expr> {
+        let mut params = Vec::new();
+        if !self.check(&[TokenKind::Pipe]) {
+            params.push(self.parse_pipe_param()?);
+            while self.check(&[TokenKind::Comma]) {
+                self.advance();
+                params.push(self.parse_pipe_param()?);
+            }
+        }
+        if !self.check(&[TokenKind::Pipe]) {
+            self.error(
+                "E015",
+                "Se esperaba '|' para cerrar los parámetros del lambda",
+                span,
+                "Agrega '|' para cerrar la lista de parámetros",
+            );
+            return None;
+        }
+        self.advance(); // '|' de cierre
+        let body = if self.check(&[TokenKind::LeftBrace]) {
+            self.parse_block()?
+        } else {
+            let expr = self.parse_expression()?;
+            let espan = expr.span();
+            vec![DeclOrStmt::Stmt(Stmt::Return {
+                value: Some(Box::new(expr)),
+                span: espan,
+            })]
+        };
+        Some(Expr::Lambda {
+            params,
+            body,
+            span: Span::merge(&span, &self.previous().span),
+        })
+    }
+
+    /// Parámetro de lambda con pipes: acepta `tipo nombre`, `nombre: tipo` o un
+    /// `nombre` sin tipo (inferido como numero dinámico) seguido de ',' o '|'.
+    fn parse_pipe_param(&mut self) -> Option<Param> {
+        let start = self.peek().span;
+        let untyped = self.check_ident()
+            && !self.is_type_keyword(&self.peek().kind)
+            && self.pos + 1 < self.tokens.len()
+            && matches!(
+                self.tokens[self.pos + 1].kind,
+                TokenKind::Comma | TokenKind::Pipe
+            );
+        if untyped {
+            let name = self.expect_ident()?;
+            return Some(Param {
+                param_type: Type::Numero,
+                name,
+                default: None,
+                span: Span::merge(&start, &self.previous().span),
+            });
+        }
+        self.parse_param()
     }
 
     fn parse_fstring(&mut self, s: &str, span: Span) -> Option<Expr> {

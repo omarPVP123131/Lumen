@@ -1,0 +1,17 @@
+// v3.5.28 — regresión: colisión de nombre entre un PARAM de una función y
+// una variable top-level del entry (program_global_names la promovía a
+// global). Antes el análisis de params-int y compile_body divergían → el
+// llamador pasaba i64 crudo y el llamado leía handle → SEGFAULT.
+funcion entero doble(entero x) {
+    retornar x * 2;
+}
+
+funcion vacio main() {
+    imprimir(doble(21));
+    entero x = 1;
+    si (verdadero) {
+        entero x = 2;
+        imprimir(x);
+    }
+    imprimir(x);
+}

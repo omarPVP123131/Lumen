@@ -160,6 +160,34 @@ pub enum Instruction {
     WithStr(Opcode, String),
     WithBool(Opcode, bool),
     WithIdx(Opcode, usize),
+    /// v3.5.20 super-opcodes (solo el pipeline Rust los emite; el compilador
+    /// self-hosted nunca los genera → fixpoint intacto). `op` usa la
+    /// numeración del backend C: 1=Add 3=Sub 4=Mul 7=Eq 8=Ne 9=Lt 10=Le
+    /// 11=Gt 12=Ge.
+    FusedBinK {
+        op: u8,
+        a: usize,
+        k: i64,
+        d: usize,
+    },
+    FusedBin {
+        op: u8,
+        a: usize,
+        b: usize,
+        d: usize,
+    },
+    FusedCmpKJmp {
+        op: u8,
+        a: usize,
+        k: i64,
+        target: usize,
+    },
+    FusedCmpJmp {
+        op: u8,
+        a: usize,
+        b: usize,
+        target: usize,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -286,6 +314,34 @@ impl Bytecode {
                     buf.push(4);
                     buf.push(op.to_u8());
                     buf.extend_from_slice(&(*idx as u32).to_le_bytes());
+                }
+                Instruction::FusedBinK { op, a, k, d } => {
+                    buf.push(5);
+                    buf.push(*op);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&k.to_le_bytes());
+                    buf.extend_from_slice(&(*d as u32).to_le_bytes());
+                }
+                Instruction::FusedBin { op, a, b, d } => {
+                    buf.push(6);
+                    buf.push(*op);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*b as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*d as u32).to_le_bytes());
+                }
+                Instruction::FusedCmpKJmp { op, a, k, target } => {
+                    buf.push(7);
+                    buf.push(*op);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&k.to_le_bytes());
+                    buf.extend_from_slice(&(*target as u32).to_le_bytes());
+                }
+                Instruction::FusedCmpJmp { op, a, b, target } => {
+                    buf.push(8);
+                    buf.push(*op);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*b as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*target as u32).to_le_bytes());
                 }
             }
         }
@@ -605,6 +661,136 @@ impl Bytecode {
                     ]) as usize;
                     pos += 4;
                     instructions.push(Instruction::WithIdx(op, idx));
+                }
+                // v3.5.20 super-opcodes: el byte tras el tag es el sub-op
+                // (numeración del backend C), no un Opcode.
+                5 => {
+                    if pos + 16 > data.len() {
+                        break;
+                    }
+                    let a = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
+                    let k = i64::from_le_bytes([
+                        data[pos + 4],
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                        data[pos + 8],
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                    ]);
+                    let d = u32::from_le_bytes([
+                        data[pos + 12],
+                        data[pos + 13],
+                        data[pos + 14],
+                        data[pos + 15],
+                    ]) as usize;
+                    pos += 16;
+                    instructions.push(Instruction::FusedBinK {
+                        op: op_byte,
+                        a,
+                        k,
+                        d,
+                    });
+                }
+                6 => {
+                    if pos + 12 > data.len() {
+                        break;
+                    }
+                    let a = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
+                    let b = u32::from_le_bytes([
+                        data[pos + 4],
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                    ]) as usize;
+                    let d = u32::from_le_bytes([
+                        data[pos + 8],
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                    ]) as usize;
+                    pos += 12;
+                    instructions.push(Instruction::FusedBin {
+                        op: op_byte,
+                        a,
+                        b,
+                        d,
+                    });
+                }
+                7 => {
+                    if pos + 16 > data.len() {
+                        break;
+                    }
+                    let a = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
+                    let k = i64::from_le_bytes([
+                        data[pos + 4],
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                        data[pos + 8],
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                    ]);
+                    let target = u32::from_le_bytes([
+                        data[pos + 12],
+                        data[pos + 13],
+                        data[pos + 14],
+                        data[pos + 15],
+                    ]) as usize;
+                    pos += 16;
+                    instructions.push(Instruction::FusedCmpKJmp {
+                        op: op_byte,
+                        a,
+                        k,
+                        target,
+                    });
+                }
+                8 => {
+                    if pos + 12 > data.len() {
+                        break;
+                    }
+                    let a = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
+                    let b = u32::from_le_bytes([
+                        data[pos + 4],
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                    ]) as usize;
+                    let target = u32::from_le_bytes([
+                        data[pos + 8],
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                    ]) as usize;
+                    pos += 12;
+                    instructions.push(Instruction::FusedCmpJmp {
+                        op: op_byte,
+                        a,
+                        b,
+                        target,
+                    });
                 }
                 _ => {
                     warnings.push((pos, format!("Tag de instrucción desconocido: {}", tag)));

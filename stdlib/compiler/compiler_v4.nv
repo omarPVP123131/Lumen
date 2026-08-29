@@ -4,13 +4,19 @@
 // stdlib/compiler/lexer.nv — Lexer LUMEN
 // Tokeniza texto fuente → tokens como mapa {t, v, linea, col}
 // Token types: 1=Ident, 2=Numero, 3=String, 4=Oper, 5=Punt, 6=Kw, 99=EOF
+// v3.5.10: lexer nativo Rust (__lexer_nativo), byte-identico al puro.
 
 funcion booleano _lx_es_ident(texto c) { retornar (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c == "_"; }
 funcion booleano _lx_es_digit(texto c) { retornar c >= "0" && c <= "9"; }
 funcion booleano _lx_es_hex(texto c) { retornar (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F"); }
 funcion booleano _lx_es_punct(texto c) { retornar c == ";" || c == "(" || c == ")" || c == "{" || c == "}" || c == "," || c == "." || c == "[" || c == "]" || c == ":"; }
-
+// 3.5.10: lexer_tokenizar delega al builtin nativo __lexer_nativo (~800x).
+// La implementación pura queda como lexer_tokenizar_puro (referencia/fallback).
 funcion numero lexer_tokenizar(texto s) {
+    retornar __lexer_nativo(s);
+}
+
+funcion numero lexer_tokenizar_puro(texto s) {
     numero kw = __map_nuevo();
     kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1);
     kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1);
@@ -253,9 +259,11 @@ funcion booleano _lx_es_ident_o_digito(texto c) {
 funcion texto sub_from_chars(lista<texto> cs, entero st, entero fin) {
     retornar __str_subcadena_chars(cs, st, fin);
 }
-
 // stdlib/compiler/parser.nv — Recursive Descent Parser for LÚMEN
-importar "lexer.nv";
+// 3.5.7: SIN `importar "lexer.nv"` — el lexer YA está inline arriba (líneas 1-250).
+// El import redundante hacía que el resolver self-hosted (que no deduplica,
+// a diferencia del resolver Rust) fusionara el lexer dos veces al
+// autocompilar → funciones duplicadas + compilador auto-compilado roto.
 // ═══════════════════════════════════════════════════════════════
 // Takes a token map from the lexer (format: {t, v}) and produces AST.
 // Token types: 1=Ident, 2=Numero, 3=String, 4=Oper, 5=Punt, 6=Kw, 99=EOF
@@ -1966,11 +1974,14 @@ funcion numero _parse_decl(numero st) {
                         si (_st_ch(nxr, 5, ",") || _st_ch(nxr, 5, ")") || _st_eof(nxr)) {
                             numero pmr = __map_nuevo();
                             pmr = __map_poner(pmr, "nombre", p1);
-                            pmr = __map_poner(pmr, "tipo", type_nm);
+                            // 3.5.5: fuera de un impl no hay tipo concreto:
+                            // "Self" es el marcador (v3.4.7). type_nm solo
+                            // existe en _parse_stmt, no aqui (E033).
+                            pmr = __map_poner(pmr, "tipo", "Self");
                             pmr = __map_poner(pmr, "defecto", 0);
                             // marcar receiver mut con tag en tipo para codegen
                             si (mut_tag != "") {
-                                pmr = __map_poner(pmr, "tipo", "prestado mut " + type_nm);
+                                pmr = __map_poner(pmr, "tipo", "prestado mut Self");
                             }
                             prms = __map_poner(prms, a_texto(pc), pmr);
                             pc = pc + 1;
@@ -2572,6 +2583,7 @@ numero OP_ENUM_ARGC = 45;
 numero OP_TUPLE_NEW = 47;
 numero OP_TUPLE_GET = 48;
 numero OP_MAKE_REF = 63;
+numero OP_STORE_LOCAL = 59;
 
 numero dt_cnt = 0;
 
@@ -2591,10 +2603,13 @@ funcion numero _codegen_nuevo() {
     cg = __map_poner(cg, "pos", 0);
     cg = __map_poner(cg, "strings", __map_nuevo());
     cg = __map_poner(cg, "str_cnt", 0);
+    cg = __map_poner(cg, "str_index", __map_nuevo());
     cg = __map_poner(cg, "ints", __map_nuevo());
     cg = __map_poner(cg, "int_cnt", 0);
+    cg = __map_poner(cg, "int_index", __map_nuevo());
     cg = __map_poner(cg, "funcs", __map_nuevo());
     cg = __map_poner(cg, "func_cnt", 0);
+    cg = __map_poner(cg, "func_by_name", __map_nuevo());
     cg = __map_poner(cg, "loop_stack", __map_nuevo());
     cg = __map_poner(cg, "loop_cnt", 0);
     retornar cg;
@@ -2608,29 +2623,34 @@ funcion numero _cg_emit(numero cg, numero instr) {
 }
 
 funcion numero _cg_add_str(numero cg, numero s) {
+    // 3.5.8: dedup O(1) con mapa reverso str_index (antes scan lineal O(n)
+    // por cada string => O(n^2) global, cuello de botella del self-compile).
+    numero str_index = __map_obtener(cg, "str_index");
+    si __map_contiene(str_index, s) {
+        cg = __map_poner(cg, "str_tmp", __map_obtener(str_index, s));
+        retornar cg;
+    }
     numero strs = __map_obtener(cg, "strings");
     numero sc = __map_obtener(cg, "str_cnt");
-    // Check if string already exists
-    numero i = 0;
-    mientras i < sc {
-        si __map_obtener(strs, a_texto(i)) == s { cg = __map_poner(cg, "str_tmp", i); retornar cg; }
-        i = i + 1;
-    }
     cg = __map_poner(cg, "strings", __map_poner(strs, a_texto(sc), s));
+    cg = __map_poner(cg, "str_index", __map_poner(str_index, s, sc));
     cg = __map_poner(cg, "str_cnt", sc + 1);
     cg = __map_poner(cg, "str_tmp", sc);
     retornar cg;
 }
 
 funcion numero _cg_add_int(numero cg, numero n) {
+    // 3.5.8: dedup O(1) con mapa reverso int_index (key = texto del entero).
+    numero int_index = __map_obtener(cg, "int_index");
+    texto nk = a_texto(n);
+    si __map_contiene(int_index, nk) {
+        cg = __map_poner(cg, "int_tmp", __map_obtener(int_index, nk));
+        retornar cg;
+    }
     numero ints = __map_obtener(cg, "ints");
     numero ic = __map_obtener(cg, "int_cnt");
-    numero i = 0;
-    mientras i < ic {
-        si __map_obtener(ints, a_texto(i)) == n { cg = __map_poner(cg, "int_tmp", i); retornar cg; }
-        i = i + 1;
-    }
     cg = __map_poner(cg, "ints", __map_poner(ints, a_texto(ic), n));
+    cg = __map_poner(cg, "int_index", __map_poner(int_index, nk, ic));
     cg = __map_poner(cg, "int_cnt", ic + 1);
     cg = __map_poner(cg, "int_tmp", ic);
     retornar cg;
@@ -2786,7 +2806,11 @@ funcion numero _gen_expr(numero cg, numero node) {
     si a_texto(tp) == "Call" {
         numero callee_raw = __map_obtener(node, "callee");
         texto callee_name = "";
-        si (__map_contiene(callee_raw, "nombre")) {
+        // 3.5.5: callee puede ser texto plano ("inc") o mapa {nombre}.
+        // __map_contiene sobre texto lanza "espera diccionario"; se chequea
+        // el tipo ANTES de interrogar el mapa (fix crash self-hosting).
+        texto cdr_tp = a_texto(__tipo_de(callee_raw));
+        si ((cdr_tp == "diccionario" || cdr_tp == "mapa") && __map_contiene(callee_raw, "nombre")) {
             callee_name = a_texto(__map_obtener(callee_raw, "nombre"));
         } sino {
             callee_name = a_texto(callee_raw);
@@ -2794,16 +2818,10 @@ funcion numero _gen_expr(numero cg, numero node) {
         numero callee = callee_name;
         numero args = __map_obtener(node, "args");
         numero argc = __map_obtener(args, "cnt");
-        // Builtins: print — one Print per argument, in order
-        si a_texto(callee) == "imprimir" || a_texto(callee) == "print" {
-            numero pi = 0;
-            mientras pi < argc {
-                cg = _gen_expr(cg, __map_obtener(args, a_texto(pi)));
-                cg = _cg_emit(cg, _instr(OP_PRINT, 0));
-                pi = pi + 1;
-            }
-            retornar cg;
-        }
+        // v3.5.12: imprimir/print ya NO se tratan como caso especial —
+        // van por el path genérico de llamada (Call "imprimir" + argc) y el
+        // builtin de la VM/AOT concatena todos los args en UNA línea, igual
+        // que el codegen Rust (antes: un Print por arg → líneas separadas).
         si a_texto(callee) == "exito" && argc == 1 {
             cg = _gen_expr(cg, __map_obtener(args, "0"));
             cg = _cg_emit(cg, _instr(38, 0)); // ResultOk
@@ -2822,24 +2840,16 @@ funcion numero _gen_expr(numero cg, numero node) {
         numero target_ptypes = 0;
         entero found_pt = 0;
         {
-            numero funcs2 = __map_obtener(cg, "funcs");
-            numero fcnt2 = __map_obtener(cg, "func_cnt");
-            entero fi = 0;
-            mientras fi < fcnt2 {
-                numero ff = __map_obtener(funcs2, a_texto(fi));
-                si (a_texto(__map_obtener(ff, "nombre")) == a_texto(callee)) {
-                    target_ptypes = __map_obtener(ff, "ptypes");
-                    found_pt = 1;
-                    romper;
-                }
-                fi = fi + 1;
-            }
-            si (found_pt == 0 && a_texto(callee) == "inc") {
-                target_ptypes = __map_nuevo();
-                target_ptypes = __map_poner(target_ptypes, "0", "prestado mut entero");
-                target_ptypes = __map_poner(target_ptypes, "cnt", 1);
+            // 3.5.8: lookup O(1) en func_by_name (antes scan lineal O(funcs)
+            // por cada Call => O(calls*funcs)). Equivalente al scan previo.
+            numero fbn = __map_obtener(cg, "func_by_name");
+            si __map_contiene(fbn, a_texto(callee)) {
+                numero ff = __map_obtener(fbn, a_texto(callee));
+                target_ptypes = __map_obtener(ff, "ptypes");
                 found_pt = 1;
             }
+            // 3.5.5: sin fallback hardcodeado — el registro de ptypes en la
+            // rama Func (Pass 1) ya cubre cualquier nombre de función.
         }
         numero ai = 0;
         mientras ai < argc {
@@ -2939,12 +2949,12 @@ funcion numero _gen_expr(numero cg, numero node) {
         cg = _cg_emit(cg, _instr(OP_ARRAY_NEW, 0));
         cg = _gen_expr(cg, lo);
         cg = _cg_add_str(cg, vi);
-        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        cg = _cg_emit(cg, _instr(OP_STORE_LOCAL, __map_obtener(cg, "str_tmp")));
         numero rloop = __map_obtener(cg, "pos");
         cg = _cg_add_str(cg, vi);
         cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
         cg = _cg_add_str(cg, vc);
-        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        cg = _cg_emit(cg, _instr(OP_STORE_LOCAL, __map_obtener(cg, "str_tmp")));
         cg = _cg_add_str(cg, vc);
         cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
         cg = _gen_expr(cg, hi);
@@ -3134,7 +3144,7 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
             cg = _gen_expr(cg, valor);
         }
         cg = _cg_add_str(cg, nombre);
-        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        cg = _cg_emit(cg, _instr(OP_STORE_LOCAL, __map_obtener(cg, "str_tmp")));
         retornar cg;
     }
     
@@ -3157,7 +3167,7 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
                 cg = _cg_emit(cg, _instr(OP_PUSH_INT, __map_obtener(cg, "int_tmp")));
                 cg = _cg_emit(cg, _instr(OP_ARRAY_GET, 0));
                 cg = _cg_add_str(cg, onm);
-                cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+                cg = _cg_emit(cg, _instr(OP_STORE_LOCAL, __map_obtener(cg, "str_tmp")));
             }
             oi = oi + 1;
         }
@@ -3237,7 +3247,7 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
         dt_cnt = dt_cnt + 1;
         cg = _gen_expr(cg, valor);
         cg = _cg_add_str(cg, temp);
-        cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+        cg = _cg_emit(cg, _instr(OP_STORE_LOCAL, __map_obtener(cg, "str_tmp")));
         numero p_tipo = __map_obtener(patron, "tipo");
         numero p_kind = -1;
         numero bind_nombre = 0;
@@ -3297,14 +3307,14 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
                 cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
                 cg = _cg_emit(cg, _instr(54, 0));
                 cg = _cg_add_str(cg, bind_nombre);
-                cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+                cg = _cg_emit(cg, _instr(OP_STORE_LOCAL, __map_obtener(cg, "str_tmp")));
             }
         } sino {
             // Ident puro: Store directo sin test
             cg = _cg_add_str(cg, temp);
             cg = _cg_emit(cg, _instr(OP_LOAD, __map_obtener(cg, "str_tmp")));
             cg = _cg_add_str(cg, bind_nombre);
-            cg = _cg_emit(cg, _instr(OP_STORE, __map_obtener(cg, "str_tmp")));
+            cg = _cg_emit(cg, _instr(OP_STORE_LOCAL, __map_obtener(cg, "str_tmp")));
         }
         cg = _gen_stmt(cg, cuerpo);
         numero e_tp = __map_obtener(rama_else, "tipo");
@@ -3464,6 +3474,9 @@ funcion numero _gen_stmt(numero cg, numero stmt) {
         funcs = __map_poner(funcs, a_texto(fc), f);
         cg = __map_poner(cg, "funcs", funcs);
         cg = __map_poner(cg, "func_cnt", fc + 1);
+        // 3.5.8: indice nombre->func para lookup O(1) de ptypes en Calls
+        numero fbn = __map_obtener(cg, "func_by_name");
+        cg = __map_poner(cg, "func_by_name", __map_poner(fbn, a_texto(nombre), f));
         // Emit body
         cg = _gen_stmt(cg, cuerpo);
         // Emit RET at end of function
@@ -3494,11 +3507,16 @@ funcion numero codegen_generar(numero ast) {
     }
     
     // Pass 1: emit functions (register + body + RET)
+    // 3.5.8: barra de progreso (cada 8 funciones) para self-compile largo.
     entero i = 0;
     mientras i < cnt {
         numero stmt = __map_obtener(cuerpo, a_texto(i));
         numero stp = __map_obtener(stmt, "tipo");
         si a_texto(stp) == "Func" {
+            si (i % 8 == 0) {
+                numero pct = (i * 100) / cnt;
+                imprimir("[codegen] ", pct, "%  funcion ", i, "/", cnt);
+            }
             cg = _gen_stmt(cg, stmt);
         }
         i = i + 1;

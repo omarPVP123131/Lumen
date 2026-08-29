@@ -39,6 +39,25 @@ pub fn disassemble(bc: &Bytecode) -> String {
             Instruction::WithIdx(op, idx) => {
                 output.push_str(&format!("{:?} @{}\n", op, idx));
             }
+            // v3.5.20 super-opcodes
+            Instruction::FusedBinK { op, a, k, d } => {
+                output.push_str(&format!("FUSED_BIN_K op={} @{} k={} -> @{}\n", op, a, k, d));
+            }
+            Instruction::FusedBin { op, a, b, d } => {
+                output.push_str(&format!("FUSED_BIN op={} @{} @{} -> @{}\n", op, a, b, d));
+            }
+            Instruction::FusedCmpKJmp { op, a, k, target } => {
+                output.push_str(&format!(
+                    "FUSED_CMP_K_JMP op={} @{} k={} -> @{}\n",
+                    op, a, k, target
+                ));
+            }
+            Instruction::FusedCmpJmp { op, a, b, target } => {
+                output.push_str(&format!(
+                    "FUSED_CMP_JMP op={} @{} @{} -> @{}\n",
+                    op, a, b, target
+                ));
+            }
         }
     }
 

@@ -80,23 +80,41 @@ impl Codegen {
         let warnings = Vec::new();
 
         // First pass: compute label positions (instruction indices)
+        // v3.5.20: el conteo considera la FUSIÓN de super-opcodes (4 IR → 1).
         let mut running_offset = 0;
         for (func_name, func) in &program.funcs {
             self.func_starts.insert(func_name.clone(), running_offset);
-            for instr in &func.instrs {
-                if let Instr::Label(l) = instr {
+            let live = live_label_indices(&func.instrs);
+            let mut i = 0;
+            while i < func.instrs.len() {
+                if let Instr::Label(l) = &func.instrs[i] {
                     self.label_map.insert(*l, running_offset);
                 }
-                running_offset += instr_count(instr);
+                if try_fuse(&func.instrs, i, &live).is_some() {
+                    running_offset += 1;
+                    i += 4;
+                } else {
+                    running_offset += instr_count(&func.instrs[i]);
+                    i += 1;
+                }
             }
         }
 
         // Second pass: emit instructions
+        // v3.5.20: con super-opcodes fusionados.
         for (func_name, func) in &program.funcs {
             let offset = self.bytecode.instructions.len();
             self.func_starts.insert(func_name.clone(), offset);
-            for instr in &func.instrs {
-                self.emit_ir(instr);
+            let live = live_label_indices(&func.instrs);
+            let mut i = 0;
+            while i < func.instrs.len() {
+                if let Some((fused, consumed)) = try_fuse(&func.instrs, i, &live) {
+                    self.emit_fused(fused);
+                    i += consumed;
+                    continue;
+                }
+                self.emit_ir(&func.instrs[i]);
+                i += 1;
             }
         }
 
@@ -141,6 +159,56 @@ impl Codegen {
         }
 
         (self.bytecode, warnings)
+    }
+
+    /// v3.5.20: emite un super-opcode fusionado (interna nombres/labels).
+    fn emit_fused(&mut self, fused: Fused) {
+        match fused {
+            Fused::BinK { op, a, k, d } => {
+                let a_idx = self.intern_name(&a);
+                let d_idx = self.intern_name(&d);
+                self.bytecode.instructions.push(Instruction::FusedBinK {
+                    op,
+                    a: a_idx,
+                    k,
+                    d: d_idx,
+                });
+            }
+            Fused::Bin { op, a, b, d } => {
+                let a_idx = self.intern_name(&a);
+                let b_idx = self.intern_name(&b);
+                let d_idx = self.intern_name(&d);
+                self.bytecode.instructions.push(Instruction::FusedBin {
+                    op,
+                    a: a_idx,
+                    b: b_idx,
+                    d: d_idx,
+                });
+            }
+            Fused::CmpKJmp { op, a, k, label } => {
+                let a_idx = self.intern_name(&a);
+                let offset = self.label_map.get(&label).copied().unwrap_or(0);
+                let t_idx = self.intern_num(offset as f64);
+                self.bytecode.instructions.push(Instruction::FusedCmpKJmp {
+                    op,
+                    a: a_idx,
+                    k,
+                    target: t_idx,
+                });
+            }
+            Fused::CmpJmp { op, a, b, label } => {
+                let a_idx = self.intern_name(&a);
+                let b_idx = self.intern_name(&b);
+                let offset = self.label_map.get(&label).copied().unwrap_or(0);
+                let t_idx = self.intern_num(offset as f64);
+                self.bytecode.instructions.push(Instruction::FusedCmpJmp {
+                    op,
+                    a: a_idx,
+                    b: b_idx,
+                    target: t_idx,
+                });
+            }
+        }
     }
 
     fn emit_ir(&mut self, instr: &Instr) {
@@ -446,4 +514,167 @@ fn instr_count(instr: &Instr) -> usize {
         Instr::EnumCtor { .. } => 3,
         _ => 1,
     }
+}
+
+/// v3.5.20: sub-op numérico de los super-opcodes (numeración backend C).
+fn fused_op_code(op: &lumen_ir::ir::Op) -> Option<u8> {
+    use lumen_ir::ir::Op;
+    Some(match op {
+        Op::Add => 1,
+        Op::Sub => 3,
+        Op::Mul => 4,
+        Op::Equal => 7,
+        Op::NotEqual => 8,
+        Op::Less => 9,
+        Op::LessEqual => 10,
+        Op::Greater => 11,
+        Op::GreaterEqual => 12,
+        _ => return None,
+    })
+}
+
+fn is_fusable_arith(op: &lumen_ir::ir::Op) -> bool {
+    matches!(
+        op,
+        lumen_ir::ir::Op::Add | lumen_ir::ir::Op::Sub | lumen_ir::ir::Op::Mul
+    )
+}
+
+fn is_fusable_cmp(op: &lumen_ir::ir::Op) -> bool {
+    use lumen_ir::ir::Op;
+    matches!(
+        op,
+        Op::Equal | Op::NotEqual | Op::Less | Op::LessEqual | Op::Greater | Op::GreaterEqual
+    )
+}
+
+/// Resultado del peephole: qué super-opcode emitir (con nombres/constes;
+/// el llamador interna los índices).
+enum Fused {
+    BinK {
+        op: u8,
+        a: String,
+        k: i64,
+        d: String,
+    },
+    Bin {
+        op: u8,
+        a: String,
+        b: String,
+        d: String,
+    },
+    CmpKJmp {
+        op: u8,
+        a: String,
+        k: i64,
+        label: usize,
+    },
+    CmpJmp {
+        op: u8,
+        a: String,
+        b: String,
+        label: usize,
+    },
+}
+
+/// v3.5.20: PEEPHOLE de super-opcodes. Detecta los patrones canónicos de
+/// bucle (4 instrucciones IR → 1 super-opcode). `live_label_idx`: índices
+/// que son destino de algún salto — ninguna posición INTERIOR del patrón
+/// puede serlo (un salto que caiga a mitad del patrón lo invalida).
+fn try_fuse(
+    instrs: &[lumen_ir::ir::Instr],
+    i: usize,
+    live_label_idx: &std::collections::HashSet<usize>,
+) -> Option<(Fused, usize)> {
+    use lumen_ir::ir::Instr;
+    if i + 4 > instrs.len() {
+        return None;
+    }
+    for off in 1..4 {
+        if live_label_idx.contains(&(i + off)) {
+            return None;
+        }
+    }
+    match (&instrs[i], &instrs[i + 1], &instrs[i + 2], &instrs[i + 3]) {
+        (Instr::Load(a), Instr::ConstInt(k), Instr::Binary(op), Instr::Store(d))
+        | (Instr::Load(a), Instr::ConstInt(k), Instr::Binary(op), Instr::StoreLocal(d))
+            if is_fusable_arith(op) =>
+        {
+            Some((
+                Fused::BinK {
+                    op: fused_op_code(op)?,
+                    a: a.clone(),
+                    k: *k,
+                    d: d.clone(),
+                },
+                4,
+            ))
+        }
+        (Instr::Load(a), Instr::Load(b), Instr::Binary(op), Instr::Store(d))
+        | (Instr::Load(a), Instr::Load(b), Instr::Binary(op), Instr::StoreLocal(d))
+            if is_fusable_arith(op) =>
+        {
+            Some((
+                Fused::Bin {
+                    op: fused_op_code(op)?,
+                    a: a.clone(),
+                    b: b.clone(),
+                    d: d.clone(),
+                },
+                4,
+            ))
+        }
+        (Instr::Load(a), Instr::ConstInt(k), Instr::Binary(op), Instr::JmpIf(label))
+            if is_fusable_cmp(op) =>
+        {
+            Some((
+                Fused::CmpKJmp {
+                    op: fused_op_code(op)?,
+                    a: a.clone(),
+                    k: *k,
+                    label: *label,
+                },
+                4,
+            ))
+        }
+        (Instr::Load(a), Instr::Load(b), Instr::Binary(op), Instr::JmpIf(label))
+            if is_fusable_cmp(op) =>
+        {
+            Some((
+                Fused::CmpJmp {
+                    op: fused_op_code(op)?,
+                    a: a.clone(),
+                    b: b.clone(),
+                    label: *label,
+                },
+                4,
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// Índices de instrucción (dentro de `instrs`) que son destino de algún
+/// salto/manejador: esas posiciones no pueden quedar dentro de un patrón
+/// fusionado.
+fn live_label_indices(instrs: &[lumen_ir::ir::Instr]) -> std::collections::HashSet<usize> {
+    use lumen_ir::ir::Instr;
+    let mut targets: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    for ins in instrs {
+        match ins {
+            Instr::Jmp(l) | Instr::JmpIf(l) | Instr::PushHandler(l) => {
+                targets.insert(*l);
+            }
+            _ => {}
+        }
+    }
+    let mut idxs = std::collections::HashSet::new();
+    for (i, ins) in instrs.iter().enumerate() {
+        if let Instr::Label(l) = ins {
+            if targets.contains(l) {
+                idxs.insert(i);
+            }
+        }
+    }
+    idxs
 }

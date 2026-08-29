@@ -1,0 +1,6 @@
+funcion vacio incrementar(prestado mut entero n) { n = n + 1; }
+funcion vacio main() {
+    entero z = 99;
+    incrementar(z);
+    imprimir(z);
+}

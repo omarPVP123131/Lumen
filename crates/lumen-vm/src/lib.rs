@@ -4,7 +4,10 @@ pub mod coro_ffi;
 pub mod crypto_ffi;
 #[cfg(feature = "full")]
 pub mod gui_ffi;
+#[cfg(feature = "aot")]
+pub mod jit;
 pub mod min_regex;
+pub mod native_lex;
 pub mod value;
 pub mod vm;
 

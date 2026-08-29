@@ -1,7 +1,7 @@
 // Fase 65 — Guard Let con Result (let-else): desenrolla resultado o diverge
 // `sea exito(v) = res sino { ... }` extrae el valor de Exito/Ok o ejecuta
 // el cuerpo `sino` cuando el resultado es Error/Err
-funcion numero raiz(numero x) {
+funcion numero raiz_resultado(numero x) {
     resultado<numero, texto> res = raiz_cuadrada(x);
     sea exito(v) = res sino {
         imprimir("error: no soportado");
@@ -16,7 +16,7 @@ funcion resultado<numero, texto> raiz_cuadrada(numero x) {
 }
 
 funcion entero principal() {
-    imprimir(raiz(25.0));
-    imprimir(raiz(-1.0));
+    imprimir(raiz_resultado(25.0));
+    imprimir(raiz_resultado(-1.0));
     retornar 0;
 }

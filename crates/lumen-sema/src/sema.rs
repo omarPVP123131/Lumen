@@ -616,30 +616,43 @@ impl SemanticAnalyzer {
     }
 
     fn collect_functions(&mut self, program: &Program) {
-        for node in program {
+        self.collect_functions_in_nodes(program);
+    }
+
+    /// v3.5.14: registra funciones recursivamente, incluyendo funciones anidadas
+    /// dentro de cuerpos de otras funciones (closures con nombre). Se registran
+    /// por su nombre simple en el mapa plano `functions` (primer nivel de
+    /// anidación gana ante colisiones de nombre).
+    fn collect_functions_in_nodes(&mut self, nodes: &[DeclOrStmt]) {
+        for node in nodes {
             if let DeclOrStmt::Decl(Decl::Function {
                 return_type,
                 name,
                 params,
                 type_params,
                 type_param_bounds,
+                body,
                 ..
             }) = node
             {
-                let ret = self.resolve_type(return_type.clone(), type_params);
-                let params_t: Vec<TypeInfo> = params
-                    .iter()
-                    .map(|p| self.resolve_type(p.param_type.clone(), type_params))
-                    .collect();
-                let default_count = params.iter().filter(|p| p.default.is_some()).count();
-                self.functions.insert(
-                    name.clone(),
-                    (ret, params_t, default_count, type_params.clone()),
-                );
-                if !type_param_bounds.is_empty() {
-                    self.type_param_bounds
-                        .insert(name.clone(), type_param_bounds.clone());
+                if !self.functions.contains_key(name) {
+                    let ret = self.resolve_type(return_type.clone(), type_params);
+                    let params_t: Vec<TypeInfo> = params
+                        .iter()
+                        .map(|p| self.resolve_type(p.param_type.clone(), type_params))
+                        .collect();
+                    let default_count = params.iter().filter(|p| p.default.is_some()).count();
+                    self.functions.insert(
+                        name.clone(),
+                        (ret, params_t, default_count, type_params.clone()),
+                    );
+                    if !type_param_bounds.is_empty() {
+                        self.type_param_bounds
+                            .insert(name.clone(), type_param_bounds.clone());
+                    }
                 }
+                // Recursión hacia funciones anidadas dentro del cuerpo.
+                self.collect_functions_in_nodes(body);
             }
         }
     }
@@ -976,6 +989,35 @@ impl SemanticAnalyzer {
                     let pt = self.resolve_type(p.param_type.clone(), type_params);
                     if let Err(e) = self.current_scope().define(&p.name, pt, p.span) {
                         self.errors.push(e);
+                    }
+                }
+                // v3.5.18: CLOSURAS LÉXICAS — pre-registra las funciones
+                // anidadas del cuerpo como VALORES en el scope actual para
+                // que `retornar inc` / `sea f = inc` resuelvan (Expr::Ident).
+                for node in body {
+                    if let DeclOrStmt::Decl(Decl::Function {
+                        name: fname,
+                        params: fparams,
+                        return_type: fret,
+                        span: fspan,
+                        ..
+                    }) = node
+                    {
+                        let param_types: Vec<TypeInfo> = fparams
+                            .iter()
+                            .map(|p| self.resolve_type(p.param_type.clone(), type_params))
+                            .collect();
+                        let rt = Box::new(self.resolve_type(fret.clone(), type_params));
+                        if let Err(e) = self.current_scope().define(
+                            fname,
+                            TypeInfo::Func {
+                                param_types,
+                                return_type: rt,
+                            },
+                            *fspan,
+                        ) {
+                            self.errors.push(e);
+                        }
                     }
                 }
                 for node in body {
@@ -2837,8 +2879,6 @@ impl SemanticAnalyzer {
                                     || callee == "__temporizador_esperar"
                                     || callee == "__tcp_connect_async"
                                     || callee == "__tcp_conectar_async"
-                                    || callee == "__hilo_esperar"
-                                    || callee == "__thread_join"
                                     || callee == "__canal_recibir"
                                     || callee == "__channel_recv"
                                     || callee == "__actor_recibir"
@@ -3100,14 +3140,13 @@ impl SemanticAnalyzer {
                                         Some(TypeInfo::TypeVar(_)) | Some(TypeInfo::Numero) => {
                                             TypeInfo::Numero
                                         }
-                                        Some(other) => {
-                                            self.errors.push(SemError {
-                                                code: "E058".to_string(),
-                                                message: format!("'{}' no es una función, es de tipo '{:?}'", callee, other),
-                                                span: *span,
-                                                suggestion: format!("'{}' no se puede llamar porque no es una función", callee),
-                                            });
-                                            TypeInfo::Void
+                                        Some(_other) => {
+                                            // v3.5.18: CLOSURAS LÉXICAS — la
+                                            // variable puede guardar una closure
+                                            // en runtime (CallValue dinámico);
+                                            // se permite la llamada con tipo
+                                            // dinámico en vez de E058.
+                                            TypeInfo::Numero
                                         }
                                         None => {
                                             self.errors.push(SemError {
@@ -3185,16 +3224,9 @@ impl SemanticAnalyzer {
                                 *return_type
                             }
                             _ => {
-                                self.errors.push(SemError {
-                                    code: "E058".to_string(),
-                                    message: format!(
-                                        "Solo puedes llamar funciones, no valores de tipo '{:?}'",
-                                        callee_type
-                                    ),
-                                    span: *span,
-                                    suggestion: "Usa un identificador de función".to_string(),
-                                });
-                                TypeInfo::Void
+                                // v3.5.18: llamada dinámica (closures como
+                                // valores de primera clase) — tipo dinámico.
+                                TypeInfo::Numero
                             }
                         }
                     }

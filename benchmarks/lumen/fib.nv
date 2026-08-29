@@ -1,0 +1,9 @@
+// Benchmark 1 — recursión: fib(26)
+funcion entero fib(entero n) {
+    si (n < 2) {
+        retornar n;
+    }
+    retornar fib(n - 1) + fib(n - 2);
+}
+
+imprimir("fib:" + fib(26));

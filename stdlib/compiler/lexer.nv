@@ -1,13 +1,19 @@
 // stdlib/compiler/lexer.nv — Lexer LUMEN
 // Tokeniza texto fuente → tokens como mapa {t, v, linea, col}
 // Token types: 1=Ident, 2=Numero, 3=String, 4=Oper, 5=Punt, 6=Kw, 99=EOF
+// v3.5.10: lexer nativo Rust (__lexer_nativo), byte-identico al puro.
 
 funcion booleano _lx_es_ident(texto c) { retornar (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c == "_"; }
 funcion booleano _lx_es_digit(texto c) { retornar c >= "0" && c <= "9"; }
 funcion booleano _lx_es_hex(texto c) { retornar (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F"); }
 funcion booleano _lx_es_punct(texto c) { retornar c == ";" || c == "(" || c == ")" || c == "{" || c == "}" || c == "," || c == "." || c == "[" || c == "]" || c == ":"; }
-
+// 3.5.10: lexer_tokenizar delega al builtin nativo __lexer_nativo (~800x).
+// La implementación pura queda como lexer_tokenizar_puro (referencia/fallback).
 funcion numero lexer_tokenizar(texto s) {
+    retornar __lexer_nativo(s);
+}
+
+funcion numero lexer_tokenizar_puro(texto s) {
     numero kw = __map_nuevo();
     kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1);
     kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1);

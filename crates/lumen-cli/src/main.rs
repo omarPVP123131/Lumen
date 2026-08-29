@@ -1762,7 +1762,8 @@ fn compile_source(path: &str, lib_dirs: &[PathBuf]) -> Bytecode {
     prof_time("sema", &t);
     let t = prof_start();
     let builder = IRBuilder::new();
-    let ir_program = builder.build(&program);
+    let mut ir_program = builder.build(&program);
+    lumen_ir::optimize::optimize(&mut ir_program); // v3.5.19
     prof_time("ir", &t);
     let t = prof_start();
     let codegen = Codegen::new();
@@ -1776,16 +1777,10 @@ fn run_source(path: &str, lib_dirs: &[PathBuf]) {
     let bytecode = compile_source(path, lib_dirs);
     let t = prof_start();
     let mut vm = VM::new(bytecode);
-    match vm.run() {
-        Ok(()) => {
-            for line in vm.output() {
-                println!("{}", line);
-            }
-        }
-        Err(e) => {
-            eprintln!("{}", e.with_stack(vm.call_stack()));
-            process::exit(1);
-        }
+    vm.set_echo_stdout(true); // salida EN VIVO (3.5.9)
+    if let Err(e) = vm.run() {
+        eprintln!("{}", e.with_stack(vm.call_stack()));
+        process::exit(1);
     }
     prof_time("vm.run", &t);
 }
@@ -1809,19 +1804,10 @@ fn run_bytecode(path: &str) {
             prof_time("decode", &t);
             let t = prof_start();
             let mut vm = VM::new(bc);
-            match vm.run() {
-                Ok(()) => {
-                    for line in vm.output() {
-                        println!("{}", line);
-                    }
-                }
-                Err(e) => {
-                    for line in vm.output() {
-                        println!("{}", line);
-                    }
-                    eprintln!("{}", e.with_stack(vm.call_stack()));
-                    process::exit(1);
-                }
+            vm.set_echo_stdout(true); // salida EN VIVO (3.5.9)
+            if let Err(e) = vm.run() {
+                eprintln!("{}", e.with_stack(vm.call_stack()));
+                process::exit(1);
             }
             prof_time("vm.run", &t);
         }
@@ -2034,7 +2020,8 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
         process::exit(1);
     }
     let builder = IRBuilder::new();
-    let ir = builder.build(&flat);
+    let mut ir = builder.build(&flat);
+    lumen_ir::optimize::optimize(&mut ir); // v3.5.19
     let codegen = Codegen::new();
     let (bytecode, _) = codegen.generate(&ir);
     let mut passed = 0u32;
@@ -2311,7 +2298,8 @@ fn build_native(
         show_sema_errors(&errors, &source, path);
         process::exit(1);
     }
-    let ir = IRBuilder::new().build(&prog);
+    let mut ir = IRBuilder::new().build(&prog);
+    lumen_ir::optimize::optimize(&mut ir); // v3.5.19
     prof_time("compilar_a_ir", &t);
 
     if !target.is_empty() {
@@ -2394,14 +2382,24 @@ fn build_native(
                 process::exit(1);
             });
             prof_time("codegen_llvm_ir", &t);
+            // v3.5.7: shim runtime _lw_* (lumen_rt.h + LW_RUNTIME) para el link
+            let shim_path = out_name.with_extension("llvm_rt.c");
+            fs::write(&shim_path, lumen_aot::lw_shim_source()).unwrap_or_else(|e| {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            });
             let clang_bin = if cfg!(windows) { "clang.exe" } else { "clang" };
             let mut clang_args = vec![
                 ll_path.to_str().unwrap(),
+                shim_path.to_str().unwrap(),
                 "-O3",
                 "-o",
                 exe_name.to_str().unwrap(),
                 "-lm",
             ];
+            if !cfg!(windows) {
+                clang_args.push("-lpthread"); // v3.5.10: hilos reales (__hilo_lanzar)
+            }
             if simd {
                 clang_args.push("-march=native");
                 clang_args.push("-mfma");
@@ -2415,6 +2413,7 @@ fn build_native(
                 .status();
             match s {
                 Ok(st) if st.success() => {
+                    let _ = fs::remove_file(&shim_path);
                     println!(
                         "✓ Binario optimizado con LLVM (-O3): {}",
                         exe_name.display()
@@ -2451,6 +2450,8 @@ fn build_native(
             }
             if cfg!(windows) {
                 cc_args.push("-lregex");
+            } else {
+                cc_args.push("-lpthread"); // v3.5.10: hilos reales (__hilo_lanzar)
             }
             if sanitize {
                 cc_args.push("-fsanitize=address,undefined");
@@ -2519,46 +2520,26 @@ fn build_native(
             }
             prof_time("codegen_cranelift", &t);
             let t = prof_start();
+            // v3.5.6: shim completo — runtime C probado (lumen_rt.h) + capa
+            // de helpers _lw_* con handles opacos (paridad VM/C en nativo).
             let shim_path = out_name.with_extension("rt.c");
-            fs::write(
-                &shim_path,
-                concat!(
-                    "#include <stdio.h>\n",
-                    "#include <stdlib.h>\n",
-                    "#include <string.h>\n",
-                    "void _rt_print_i64(long long v) { printf(\"%lld\\n\", v); }\n",
-                    "void _rt_print_str(const char* s) { printf(\"%s\\n\", s); }\n",
-                    "char* _rt_concat_ss(const char* a, const char* b) {\n",
-                    "  size_t n = strlen(a) + strlen(b) + 1; char* o = malloc(n);\n",
-                    "  strcpy(o, a); strcat(o, b); return o;\n",
-                    "}\n",
-                    "char* _rt_concat_si(const char* a, long long b) {\n",
-                    "  char buf[64]; snprintf(buf, 64, \"%lld\", b);\n",
-                    "  size_t n = strlen(a) + strlen(buf) + 1; char* o = malloc(n);\n",
-                    "  strcpy(o, a); strcat(o, buf); return o;\n",
-                    "}\n",
-                    "char* _rt_concat_is(long long a, const char* b) {\n",
-                    "  char buf[64]; snprintf(buf, 64, \"%lld\", a);\n",
-                    "  size_t n = strlen(buf) + strlen(b) + 1; char* o = malloc(n);\n",
-                    "  strcpy(o, buf); strcat(o, b); return o;\n",
-                    "}\n",
-                    "long long _rt_str_eq(const char* a, const char* b) { return strcmp(a, b) == 0; }\n",
-                ),
-            )
-            .unwrap_or_else(|e| {
+            // v3.5.17: shim con hilos REALES (tabla _lft de dispatch).
+            fs::write(&shim_path, lumen_aot::lw_shim_source_for(&ir)).unwrap_or_else(|e| {
                 eprintln!("Error: {}", e);
                 process::exit(1);
             });
-            let s = std::process::Command::new(cc)
-                .args([
-                    obj_path.to_str().unwrap(),
-                    shim_path.to_str().unwrap(),
-                    "-O2",
-                    "-o",
-                    exe_name.to_str().unwrap(),
-                    "-lm",
-                ])
-                .status();
+            let mut cc_args = vec![
+                obj_path.to_str().unwrap(),
+                shim_path.to_str().unwrap(),
+                "-O2",
+                "-o",
+                exe_name.to_str().unwrap(),
+                "-lm",
+            ];
+            if !cfg!(windows) {
+                cc_args.push("-lpthread"); // v3.5.17: hilos reales (__hilo_lanzar)
+            }
+            let s = std::process::Command::new(cc).args(&cc_args).status();
             match s {
                 Ok(st) if st.success() => {
                     prof_time("gcc_link", &t);
@@ -3209,7 +3190,8 @@ fn run_source_capture(source: &str, lib_dirs: &[PathBuf], base_path: &Path) -> (
             .collect();
         return (String::new(), msgs.join("\n"));
     }
-    let ir = IRBuilder::new().build(&program);
+    let mut ir = IRBuilder::new().build(&program);
+    lumen_ir::optimize::optimize(&mut ir); // v3.5.19
     let (bytecode, _) = Codegen::new().generate(&ir);
     let mut vm = VM::new(bytecode);
     match vm.run() {

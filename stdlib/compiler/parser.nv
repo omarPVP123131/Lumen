@@ -1710,11 +1710,14 @@ funcion numero _parse_decl(numero st) {
                         si (_st_ch(nxr, 5, ",") || _st_ch(nxr, 5, ")") || _st_eof(nxr)) {
                             numero pmr = __map_nuevo();
                             pmr = __map_poner(pmr, "nombre", p1);
-                            pmr = __map_poner(pmr, "tipo", type_nm);
+                            // 3.5.5: fuera de un impl no hay tipo concreto:
+                            // "Self" es el marcador (v3.4.7). type_nm solo
+                            // existe en _parse_stmt, no aqui (E033).
+                            pmr = __map_poner(pmr, "tipo", "Self");
                             pmr = __map_poner(pmr, "defecto", 0);
                             // marcar receiver mut con tag en tipo para codegen
                             si (mut_tag != "") {
-                                pmr = __map_poner(pmr, "tipo", "prestado mut " + type_nm);
+                                pmr = __map_poner(pmr, "tipo", "prestado mut Self");
                             }
                             prms = __map_poner(prms, a_texto(pc), pmr);
                             pc = pc + 1;

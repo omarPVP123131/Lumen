@@ -31,12 +31,16 @@ typedef struct Val {
   double f;
   const char* s;
   int argc;
+  int cap; /* capacidad de items (arrays) — crecimiento amortizado v3.5.7 */
   struct Val* items;
   struct Val (*fp)(void);
   const char* en;
   const char* vr;
   struct Val* p;
 } Val;
+/* LW_VAL_SIZE (80) debe coincidir con sizeof(Val) — fallo de compile si no.
+   (el campo cap rellenó el padding de argc: el tamaño no cambió) */
+typedef char _lw_val_size_check[(sizeof(Val) == 80) ? 1 : -1];
 
 #define T_INT 0
 #define T_FLT 1
@@ -63,24 +67,53 @@ static int64_t _rt_pid(void) {
 #endif
 }
 
-static Val ST[16384];
-static int SP = 0;
-#define PUSH(v) (ST[(SP)++] = (v))
+/* v3.5.10: ST/SP thread-local — cada hilo de __hilo_lanzar corre con su
+   propia pila de evaluación (las corutinas ya se coordinan por handshake
+   mutex/condvar y no intercambian valores por la pila, así que TLS es seguro
+   y además elimina el riesgo teórico de carrera que tenían antes). */
+#if defined(_WIN32)
+#define LW_TLS __declspec(thread)
+#else
+#define LW_TLS _Thread_local
+#endif
+
+/* v3.5.20: hot-helpers con inlining FORZADO — Val pesa 80B y la heurística
+   de GCC rechaza inlinearlas por tamaño de código; sin inlining cada op del
+   bucle paga una llamada real (45× más lento que C puro). */
+#if defined(__GNUC__) || defined(__clang__)
+#define LW_HOT static inline __attribute__((always_inline))
+#else
+#define LW_HOT static inline
+#endif
+static LW_TLS Val ST[16384];
+static LW_TLS int SP = 0;
+/* 3.5.5: PUSH vía función inline — el macro anterior (ST[SP++] = (v)) dejaba
+   sin secuencia el SP++ del subíndice frente a los efectos de (v). Con
+   PUSH(_arr_len(POP())) gcc evaluaba el RHS primero (correcto) pero clang
+   (macOS) calculaba la dirección ST[SP++] antes del --SP del POP, escribiendo
+   en el slot equivocado y desincronizando la pila (test_c_backend_gcc_runtime
+   imprimía "abc" en vez de 3). Como función, los argumentos (incluido POP)
+   se evalúan y secuencian ANTES de tocar SP (C11 6.5.2.2). */
+static inline void _push_impl(Val v) { ST[SP] = v; SP++; }
+#define PUSH(v) (_push_impl(v))
 /* Guard contra underflow: las funciones void retornan sin valor apilado;
    el VM hace pop().unwrap_or(Void), aquí devolvemos Void igualmente. */
 #define POP() ((SP) > 0 ? ST[--(SP)] : _v_void())
 #define TOP() (ST[SP - 1])
 
-static Val gv[16384];
-static const char* gn[16384];
-static int gc = 0;
+/* v3.5.10: globales/slots-de-param thread-local — los hilos de
+   __hilo_lanzar corren con sus propios slots (paridad con la VM, que crea
+   una VM nueva por hilo). El hilo main mantiene los suyos. */
+static LW_TLS Val gv[16384];
+static LW_TLS const char* gn[16384];
+static LW_TLS int gc = 0;
 
 /* ── intentar/atrapar (sin unwinding: bandera de error + chequeos estáticos) ──
    Cada operación riesgosa pone _err=1; el código generado chequea después de
    cada una y salta al manejador abierto más cercano (etiqueta estática).
    Es determinista, seguro con -O3 y no depende de setjmp/longjmp. */
-static char* _last_err_msg = 0;
-static int _err = 0;
+static LW_TLS char* _last_err_msg = 0;
+static LW_TLS int _err = 0;
 static int _h_sp[64];
 static int _hn = 0;
 static char* _fmt(Val v);
@@ -137,9 +170,9 @@ static int _fv(const char* n) {
 
 #define MAX_PARF 256
 #define MAX_PARP 32
-static const char* _pars[MAX_PARF][MAX_PARP];
-static int _parc[MAX_PARF];
-static int _parn = 0;
+static LW_TLS const char* _pars[MAX_PARF][MAX_PARP];
+static LW_TLS int _parc[MAX_PARF];
+static LW_TLS int _parn = 0;
 
 static void _regpars(const char* fn, const char** ps, int argc) {
   _pars[_parn][0] = fn;
@@ -162,23 +195,101 @@ static int _parcnt(const char* fn) {
 
 static inline Val _v_int(int64_t x) { return (Val){.i = x, .t = T_INT}; }
 static inline Val _v_flt(double x) { return (Val){.f = x, .t = T_FLT}; }
-static inline Val _v_bool(int x) { return (Val){.i = x ? 1 : 0, .t = T_BOL}; }
-static inline Val _v_void(void) { return (Val){.t = T_VOD}; }
+LW_HOT Val _v_bool(int x) { return (Val){.i = x ? 1 : 0, .t = T_BOL}; }
+LW_HOT Val _v_void(void) { return (Val){.t = T_VOD}; }
 /* Referencia mutable (prestado mut): apunta a un slot gv[] estable. */
-static inline Val _v_ptr(Val* p) { return (Val){.p = p, .t = T_PTR}; }
-static inline Val _deref(Val v) {
+LW_HOT Val _v_ptr(Val* p) { return (Val){.p = p, .t = T_PTR}; }
+LW_HOT Val _deref(Val v) {
   int guard = 0;
   while (v.t == T_PTR && v.p && guard++ < 1024) v = *v.p;
   return v;
 }
+/* v3.5.25: ARENA bump TLS para buffers de texto. Los strings de LÚMEN son
+   inmutables y nunca se liberan (no hay GC que los reclame), así que una
+   arena por hilo elimina el costo de malloc por concatenación/conversión.
+   IMPORTANTE: ningún buffer de esta arena puede pasar a free(). */
+#define LW_STR_ARENA_BLOCK (1 << 22)
+static LW_TLS char* lw_sa_cur;
+static LW_TLS size_t lw_sa_left;
+static inline char* _sa_alloc(size_t n) {
+  if (lw_sa_left < n) {
+    size_t sz = LW_STR_ARENA_BLOCK > n ? LW_STR_ARENA_BLOCK : n;
+    char* nb = (char*)malloc(sz);
+    if (!nb) return NULL;
+    lw_sa_cur = nb;
+    lw_sa_left = sz;
+  }
+  char* p = lw_sa_cur;
+  lw_sa_cur += n;
+  lw_sa_left -= n;
+  return p;
+}
 static Val _v_str(const char* s) {
   size_t n = strlen(s);
-  char* m = (char*)malloc(n + 1);
+  char* m = _sa_alloc(n + 1);
+  if (!m) m = (char*)malloc(n + 1);
   memcpy(m, s, n + 1);
   Val v = _v_int(0);
   v.t = T_STR;
   v.s = m;
   return v;
+}
+/* v3.5.24: adopta un buffer malloc'ado sin recopiarlo (el buffer de _fmt). */
+static Val _v_str_take(char* s) {
+  Val v = _v_int(0);
+  v.t = T_STR;
+  v.s = s;
+  return v;
+}
+/* v3.5.27: envuelve un literal estático SIN copiarlo (los textos son
+   inmutables; el literal vive en el binario para siempre). */
+static inline Val _v_str_lit(const char* s) {
+  Val v = _v_int(0);
+  v.t = T_STR;
+  v.s = (char*)s;
+  return v;
+}
+/* v3.5.27: itoa rápido (sin snprintf). Devuelve el largo escrito. */
+static inline int _itoa_ll(long long v, char* buf) {
+  unsigned long long u;
+  int neg = 0;
+  if (v < 0) { neg = 1; u = 0ULL - (unsigned long long)v; } else { u = (unsigned long long)v; }
+  char tmp[24];
+  int n = 0;
+  do { tmp[n++] = (char)('0' + (int)(u % 10)); u /= 10; } while (u);
+  int o = 0;
+  if (neg) buf[o++] = '-';
+  while (n > 0) buf[o++] = tmp[--n];
+  buf[o] = 0;
+  return o;
+}
+/* v3.5.27: entero → texto en el arena (sin malloc, sin snprintf). */
+static inline char* _itoa_sa(long long v) {
+  char* b = _sa_alloc(32);
+  if (!b) { b = (char*)malloc(32); if (!b) return (char*)""; }
+  _itoa_ll(v, b);
+  return b;
+}
+/* v3.5.24: concat rápido STR+STR — un solo malloc, sin ida/vuelta por _fmt.
+   El camino general (otros tipos) delega en _bin(2, ...). */
+static inline Val _bin(int op, Val a, Val b); /* forward (definida más abajo) */
+static inline Val _concat2(Val a, Val b) {
+  a = _deref(a);
+  b = _deref(b);
+  if (a.t == T_STR && b.t == T_STR) {
+    const char* sa = a.s ? a.s : "";
+    const char* sb = b.s ? b.s : "";
+    size_t la = strlen(sa), lb = strlen(sb);
+    char* m = _sa_alloc(la + lb + 1);
+    if (!m) m = (char*)malloc(la + lb + 1);
+    memcpy(m, sa, la);
+    memcpy(m + la, sb, lb + 1);
+    Val v = _v_int(0);
+    v.t = T_STR;
+    v.s = m;
+    return v;
+  }
+  return _bin(2, a, b);
 }
 static Val _vfref(const char* n, Val (*fp)(void)) {
   Val v = _v_int(0);
@@ -229,7 +340,7 @@ static inline int _lts(Val a, Val b) {
   return a.t < b.t;
 }
 
-static int _truthy(Val v) {
+LW_HOT int _truthy(Val v) {
   v = _deref(v);
   switch (v.t) {
     case T_BOL:
@@ -260,8 +371,8 @@ static Val _arith(int op, Val a, Val b) {
       case 1: return _v_int(x + y);
       case 3: return _v_int(x - y);
       case 4: return _v_int(x * y);
-      case 5: if (!y) { _rt_throw("Error: Division por cero"); } return _v_int(x / y);
-      case 6: if (!y) { _rt_throw("Error: Division por cero"); } return _v_int(x % y);
+      case 5: if (!y) { _rt_throw("Error: Division por cero"); return _v_void(); } if (x == INT64_MIN && y == -1) return _v_int(x); return _v_int(x / y);
+      case 6: if (!y) { _rt_throw("Error: Division por cero"); return _v_void(); } if (x == INT64_MIN && y == -1) return _v_int(0); return _v_int(x % y);
     }
     return _v_int(0);
   }
@@ -270,23 +381,23 @@ static Val _arith(int op, Val a, Val b) {
     case 1: return _v_flt(x + y);
     case 3: return _v_flt(x - y);
     case 4: return _v_flt(x * y);
-    case 5: return _v_flt(x / y);
-    case 6: return _v_flt(fmod(x, y));
+    case 5: if (y == 0.0) { _rt_throw("Error: Division por cero"); return _v_void(); } return _v_flt(x / y);
+    case 6: if (y == 0.0) { _rt_throw("Error: Division por cero"); return _v_void(); } return _v_flt(fmod(x, y));
   }
   return _v_flt(0);
 }
 
 static char* _fmt(Val v);
 
-static inline Val _bin(int op, Val a, Val b) {
+LW_HOT Val _bin(int op, Val a, Val b) {
   if (__builtin_expect(a.t == T_INT && b.t == T_INT, 1)) {
     int64_t x = a.i, y = b.i;
     switch (op) {
       case 1:  return (Val){.i = x + y, .t = T_INT};
       case 3:  return (Val){.i = x - y, .t = T_INT};
       case 4:  return (Val){.i = x * y, .t = T_INT};
-      case 5:  if (!y) { _rt_throw("Error: Division por cero"); } return (Val){.i = x / y, .t = T_INT};
-      case 6:  if (!y) { _rt_throw("Error: Division por cero"); } return (Val){.i = x % y, .t = T_INT};
+      case 5:  if (!y) { _rt_throw("Error: Division por cero"); return _v_void(); } if (x == INT64_MIN && y == -1) return (Val){.i = x, .t = T_INT}; return (Val){.i = x / y, .t = T_INT};
+      case 6:  if (!y) { _rt_throw("Error: Division por cero"); return _v_void(); } if (x == INT64_MIN && y == -1) return (Val){.i = 0, .t = T_INT}; return (Val){.i = x % y, .t = T_INT};
       case 7:  return (Val){.i = (x == y), .t = T_BOL};
       case 8:  return (Val){.i = (x != y), .t = T_BOL};
       case 9:  return (Val){.i = (x < y), .t = T_BOL};
@@ -303,14 +414,24 @@ static inline Val _bin(int op, Val a, Val b) {
     }
   }
   if (op == 1 && (a.t == T_STR || b.t == T_STR)) {
-    char* as = _fmt(a);
-    char* bs = _fmt(b);
-    size_t l1 = strlen(as), l2 = strlen(bs);
-    char* m = (char*)malloc(l1 + l2 + 1);
-    memcpy(m, as, l1);
-    memcpy(m + l1, bs, l2);
+    /* v3.5.27: STR+STR → _concat2 (arena, 1 alloc, sin _fmt ni leaks).
+       Antes: _fmt(a) + _fmt(b) (2 malloc+copias) + malloc + _v_str (3ª copia
+       al arena) con 3 buffers perdidos por llamada — el hotspot del gap de
+       texto. Mixto (texto + otro tipo): solo se formatea el lado no-texto. */
+    if (a.t == T_STR && b.t == T_STR) return _concat2(a, b);
+    char* as = a.t == T_STR ? NULL : _fmt(a);
+    char* bs = b.t == T_STR ? NULL : _fmt(b);
+    const char* sa = a.t == T_STR ? (a.s ? a.s : "") : as;
+    const char* sb = b.t == T_STR ? (b.s ? b.s : "") : bs;
+    size_t l1 = strlen(sa), l2 = strlen(sb);
+    char* m = _sa_alloc(l1 + l2 + 1);
+    if (!m) m = (char*)malloc(l1 + l2 + 1);
+    memcpy(m, sa, l1);
+    memcpy(m + l1, sb, l2);
     m[l1 + l2] = 0;
-    return _v_str(m);
+    if (as) free(as);
+    if (bs) free(bs);
+    return _v_str_take(m);
   }
   if (op >= 1 && op <= 6) return _arith(op, a, b);
   switch (op) {
@@ -331,12 +452,19 @@ static inline Val _bin(int op, Val a, Val b) {
   return _v_int(0);
 }
 
-static Val _neg(Val a) {
+LW_HOT Val _neg(Val a) {
   if (a.t == T_FLT) return _v_flt(-a.f);
+  /* wrap de INT64_MIN (paridad VM: wrapping_neg) */
+  if (a.i == INT64_MIN) return a;
   return _v_int(-a.i);
 }
-static Val _not(Val a) { return _v_bool(!_truthy(a)); }
-static Val _bnot(Val a) { return _v_int(~(int64_t)_asf(a)); }
+LW_HOT Val _not(Val a) { return _v_bool(!_truthy(a)); }
+LW_HOT Val _bnot(Val a) { return _v_int(~(int64_t)_asf(a)); }
+
+/* v3.5.12: forward decls UTF-8 (definiciones más abajo, antes de _case_str) */
+static int _utf8_decode(const unsigned char* p, unsigned* cp);
+static int _utf8_encode(unsigned cp, char* out);
+static size_t _utf8_len(const char* s);
 
 static inline Val _dcp(Val v) {
   if (__builtin_expect(v.t <= T_BOL || v.t == T_STR || v.t == T_NON || v.t == T_VOD, 1)) return v;
@@ -344,7 +472,13 @@ static inline Val _dcp(Val v) {
   if (v.t == T_PTR || v.t == T_FRE) return v;
   if (v.t == T_ARR || v.t == T_TUP || v.t == T_ENM) {
     Val nv = v;
-    nv.items = (Val*)malloc(sizeof(Val) * (v.argc > 0 ? v.argc : 1));
+    /* v3.5.12: reservar también la CAPACIDAD sobrante. Antes se malloc(eabais)
+       argc slots pero nv heredaba cap (p.ej. 8 por crecimiento amortizado);
+       el siguiente push in-place (_arr_push_ip, cap>argc) escribía FUERA del
+       buffer → corrupción de heap (test_vectordb / iso: xs[0][0]=0, abort de
+       glibc con aliasing cur=xs; cur.agregar; xs=cur). */
+    size_t alloc = v.cap > 0 ? v.cap : (v.argc > 0 ? (size_t)v.argc : 1);
+    nv.items = (Val*)malloc(sizeof(Val) * alloc);
     for (int i = 0; i < v.argc; i++) nv.items[i] = _dcp(v.items[i]);
     return nv;
   }
@@ -367,6 +501,7 @@ static Val _arrn(Val* xs, int n) {
   Val v = _v_int(0);
   v.t = T_ARR;
   v.argc = n;
+  v.cap = n;
   v.items = (Val*)malloc(sizeof(Val) * (n > 0 ? n : 1));
   for (int i = 0; i < n; i++) v.items[i] = xs[i];
   return v;
@@ -377,25 +512,58 @@ static Val _tupn(Val* xs, int n) {
   return v;
 }
 static Val _arr_push(Val a, Val x) {
+  /* semántica de copia (receptores no-variables / builtins) */
   Val* ns = (Val*)malloc(sizeof(Val) * (a.argc + 1));
   for (int i = 0; i < a.argc; i++) ns[i] = a.items[i];
   ns[a.argc] = x;
   a.argc++;
+  a.cap = a.argc;
   a.items = ns;
   return a;
 }
-static Val _arr_get(Val a, int64_t ix) {
-  /* Fuzzing 3.3.6: indexado de textos "abc"[1] (paridad con VM) */
+/* v3.5.7: push in-place con crecimiento amortizado (O(1) amort). Solo para
+   ArrayPushVar: el buffer es exclusivo del slot (Stores y args de llamada se
+   copian en profundidad), así que mutar in-place preserva la semántica de
+   valores y da O(n) en bucles de agregar (stress_04). */
+static inline Val _arr_push_ip(Val a, Val x) {
+  if (__builtin_expect(a.cap > a.argc, 1)) {
+    a.items[a.argc++] = x;
+    return a;
+  }
+  int ncap = a.argc < 8 ? 8 : a.argc * 2;
+  Val* ns = (Val*)realloc(a.items, sizeof(Val) * ncap);
+  if (!ns) { ns = (Val*)malloc(sizeof(Val) * ncap); for (int i = 0; i < a.argc; i++) ns[i] = a.items[i]; }
+  ns[a.argc++] = x;
+  a.items = ns;
+  a.cap = ncap;
+  return a;
+}
+static inline Val _arr_get(Val a, int64_t ix) {
+  /* Fuzzing 3.3.6: indexado de textos "abc"[1] (paridad con VM).
+     v3.5.12: devuelve el CODEPOINT ix (no el byte).
+     v3.5.25: fast-path T_ARR con expectativas de rama. */
+  if (__builtin_expect(a.t == T_ARR, 1)) {
+    if (__builtin_expect(ix >= 0 && ix < a.argc, 1)) return a.items[ix];
+    char _eb[96];
+    snprintf(_eb, sizeof _eb, "Indice %lld fuera de rango (largo: %d)", (long long)ix, a.argc);
+    _rt_throw(_eb);
+    return _v_void();
+  }
   if (a.t == T_STR) {
-    int64_t n = (int64_t)strlen(a.s ? a.s : "");
+    const char* cs = a.s ? a.s : "";
+    int64_t n = (int64_t)_utf8_len(cs);
     if (ix < 0 || ix >= n) {
       char _eb[96];
       snprintf(_eb, sizeof _eb, "Índice %lld fuera de rango (largo: %lld)", (long long)ix, (long long)n);
       _rt_throw(_eb);
     }
-    char c2[2] = {a.s[ix], 0};
-    return _v_str(c2);
+    const unsigned char* p = (const unsigned char*)cs;
+    int64_t i = 0; unsigned cp = 0; int L = 1;
+    while (*p && i <= ix) { L = _utf8_decode(p, &cp); if (i == ix) break; p += L; i++; }
+    char buf[5]; int el = _utf8_encode(cp, buf); buf[el] = 0;
+    return _v_str(buf);
   }
+  /* v3.5.25: camino genérico (tuplas y demás) con bounds. */
   if (ix < 0 || ix >= a.argc) {
     char _eb[96];
     snprintf(_eb, sizeof _eb, "Indice %lld fuera de rango (largo: %d)", (long long)ix, a.argc);
@@ -418,9 +586,10 @@ static Val _arr_set(Val a, int64_t ix, Val x) {
   a.items[ix] = x;
   return a;
 }
-static Val _arr_len(Val a) {
-  /* Fuzzing 3.3.6: largo() sobre texto también (paridad con VM) */
-  if (a.t == T_STR) return _v_int((int64_t)strlen(a.s ? a.s : ""));
+LW_HOT Val _arr_len(Val a) {
+  /* Fuzzing 3.3.6: largo() sobre texto también (paridad con VM).
+     v3.5.12: cuenta CODEPOINTS UTF-8, no bytes (paridad chars().count()). */
+  if (a.t == T_STR) return _v_int((int64_t)_utf8_len(a.s ? a.s : ""));
   return _v_int(a.argc);
 }
 static Val _arr_rev(Val a) {
@@ -501,148 +670,250 @@ static Val _st_set(Val s, const char* f, Val x) {
   return s;
 }
 
+/* v3.5.18: _fmt con buffers de tamaño exacto. Antes: malloc(8192) por
+   llamada (leak de ~8-40KB por iteración en bucles de strings — descubierto
+   por el benchmark) y memcpy sin límite para T_STR/arrays (heap-overflow
+   con textos >8KB). Ahora cada caso reserva lo que necesita. */
+static char* _fmt_grow(char* b, size_t* cap, size_t need) {
+  if (need <= *cap) return b;
+  while (*cap < need) *cap *= 2;
+  return (char*)realloc(b, *cap);
+}
+
 static char* _fmt(Val v) {
-  char* b = (char*)malloc(8192);
-  if (!b) return (char*)"";
   v = _deref(v);
   switch (v.t) {
-    case T_INT:
-      snprintf(b, 8192, "%lld", (long long)v.i);
-      break;
+    case T_INT: {
+      char* b = (char*)malloc(32);
+      /* v3.5.27: itoa manual — snprintf("%lld") costaba ~100-300ns por llamada. */
+      _itoa_ll((long long)v.i, b);
+      return b;
+    }
     case T_FLT: {
       double d = v.f;
-      if (isinf(d)) { snprintf(b, 8192, "inf"); break; }
+      char* b = (char*)malloc(512);
+      if (isinf(d)) { snprintf(b, 512, "%s", d > 0 ? "inf" : "-inf"); return b; }
+      if (isnan(d)) { snprintf(b, 512, "NaN"); return b; }
       if (d == (double)(int64_t)d && fabs(d) < 1e16) {
-        snprintf(b, 8192, "%lld", (long long)d);
+        snprintf(b, 512, "%lld", (long long)d);
+        return b;
       } else {
+        /* Paridad VM (Display de Rust): notación decimal plana con los
+           dígitos mínimos que round-tripan — nunca notación científica.
+           1) %.*g con precisión mínima que round-tripa (dígitos exactos).
+           2) Conversión de esa cadena (quizá con e±XX) a decimal plano. */
         int _p; char _t[64];
         for (_p = 1; _p <= 17; _p++) {
           snprintf(_t, sizeof _t, "%.*g", _p, d);
-          if (strtod(_t, NULL) == d) { snprintf(b, 8192, "%s", _t); break; }
+          if (strtod(_t, NULL) == d) break;
         }
-        if (_p > 17) snprintf(b, 8192, "%.17g", d);
+        if (_p > 17) { snprintf(_t, sizeof _t, "%.17g", d); _p = 17; }
+        char* _src = _t;
+        int _neg = 0;
+        if (*_src == '-') { _neg = 1; _src++; }
+        char _dig[64]; int _nd = 0; int _exp = 0; int _frac = -1; int _i;
+        for (_i = 0; _src[_i] && _src[_i] != 'e' && _src[_i] != 'E'; _i++) {
+          if (_src[_i] == '.') { _frac = _nd; continue; }
+          _dig[_nd++] = _src[_i];
+        }
+        if (_src[_i] == 'e' || _src[_i] == 'E') _exp = atoi(_src + _i + 1);
+        if (_frac < 0) _frac = _nd; /* entero tipo 1e+30 */
+        int _pos = _frac + _exp; /* dígitos antes del punto decimal */
+        char* _o = b;
+        if (_neg) *_o++ = '-';
+        if (_pos <= 0) {
+          *_o++ = '0'; *_o++ = '.';
+          int _z; for (_z = 0; _z < -_pos && _o < b + 500; _z++) *_o++ = '0';
+          for (_i = 0; _i < _nd && _o < b + 500; _i++) *_o++ = _dig[_i];
+        } else if (_pos >= _nd) {
+          for (_i = 0; _i < _nd; _i++) *_o++ = _dig[_i];
+          for (_i = _nd; _i < _pos && _o < b + 500; _i++) *_o++ = '0';
+        } else {
+          for (_i = 0; _i < _pos; _i++) *_o++ = _dig[_i];
+          *_o++ = '.';
+          for (_i = _pos; _i < _nd && _o < b + 500; _i++) *_o++ = _dig[_i];
+        }
+        *_o = 0;
+        return b;
       }
-      break;
     }
-    case T_BOL:
-      snprintf(b, 8192, "%s", v.i ? "true" : "false");
-      break;
+    case T_BOL: {
+      char* b = (char*)malloc(8);
+      snprintf(b, 8, "%s", v.i ? "true" : "false");
+      return b;
+    }
     case T_STR: {
       const char* s = v.s ? v.s : "";
       size_t n = strlen(s);
+      char* b = (char*)malloc(n + 1);
       memcpy(b, s, n + 1);
-      break;
+      return b;
     }
-    case T_FRE:
-      snprintf(b, 8192, "<funcion %s>", v.s ? v.s : "?");
-      break;
-    case T_VOD:
-      snprintf(b, 8192, "void");
-      break;
-    case T_NON:
-      snprintf(b, 8192, "ninguno");
-      break;
+    case T_FRE: {
+      char* b = (char*)malloc(64 + (v.s ? strlen(v.s) : 1));
+      snprintf(b, 64 + (v.s ? strlen(v.s) : 1), "<funcion %s>", v.s ? v.s : "?");
+      return b;
+    }
+    case T_VOD: {
+      char* b = (char*)malloc(8); snprintf(b, 8, "void"); return b;
+    }
+    case T_NON: {
+      char* b = (char*)malloc(8); snprintf(b, 8, "ninguno"); return b;
+    }
     case T_OK: {
       char* x = _fmt(v.items[0]);
-      snprintf(b, 8192, "exito(%s)", x);
-      break;
+      char* b = (char*)malloc(strlen(x) + 16);
+      snprintf(b, strlen(x) + 16, "exito(%s)", x);
+      free(x);
+      return b;
     }
     case T_ERR: {
       char* x = _fmt(v.items[0]);
-      snprintf(b, 8192, "error(%s)", x);
-      break;
+      char* b = (char*)malloc(strlen(x) + 16);
+      snprintf(b, strlen(x) + 16, "error(%s)", x);
+      free(x);
+      return b;
     }
     case T_SOM: {
       char* x = _fmt(v.items[0]);
-      snprintf(b, 8192, "algun(%s)", x);
-      break;
+      char* b = (char*)malloc(strlen(x) + 16);
+      snprintf(b, strlen(x) + 16, "algun(%s)", x);
+      free(x);
+      return b;
     }
     case T_ARR: {
-      size_t off = 0;
+      size_t cap = 64, off = 0;
+      char* b = (char*)malloc(cap);
       b[off++] = '[';
       for (int i = 0; i < v.argc; i++) {
-        if (i > 0) { b[off++] = ','; b[off++] = ' '; }
+        if (i > 0) { b = _fmt_grow(b, &cap, off + 3); b[off++] = ','; b[off++] = ' '; }
         char* item = _fmt(v.items[i]);
         size_t n = strlen(item);
+        b = _fmt_grow(b, &cap, off + n + 2);
         memcpy(b + off, item, n);
         off += n;
+        free(item);
       }
+      b = _fmt_grow(b, &cap, off + 2);
       b[off++] = ']';
       b[off] = 0;
-      break;
+      return b;
     }
     case T_TUP: {
-      size_t off = 0;
+      size_t cap = 64, off = 0;
+      char* b = (char*)malloc(cap);
       b[off++] = '(';
       for (int i = 0; i < v.argc; i++) {
-        if (i > 0) { b[off++] = ','; b[off++] = ' '; }
+        if (i > 0) { b = _fmt_grow(b, &cap, off + 3); b[off++] = ','; b[off++] = ' '; }
         char* item = _fmt(v.items[i]);
         size_t n = strlen(item);
+        b = _fmt_grow(b, &cap, off + n + 2);
         memcpy(b + off, item, n);
         off += n;
+        free(item);
       }
+      b = _fmt_grow(b, &cap, off + 2);
       b[off++] = ')';
       b[off] = 0;
-      break;
+      return b;
     }
     case T_ENM: {
+      size_t cap = 64 + strlen(v.en ? v.en : "") + strlen(v.vr ? v.vr : "");
+      char* b = (char*)malloc(cap);
+      size_t off;
       if (v.argc == 0) {
-        snprintf(b, 8192, "%s::%s", v.en, v.vr);
-      } else {
-        size_t off = 0;
-        int n = snprintf(b, 8192, "%s::%s(", v.en, v.vr);
-        off = n > 0 ? (size_t)n : 0;
-        for (int i = 0; i < v.argc; i++) {
-          if (i > 0) { b[off++] = ','; b[off++] = ' '; }
-          char* item = _fmt(v.items[i]);
-          size_t n2 = strlen(item);
-          memcpy(b + off, item, n2);
-          off += n2;
-        }
-        b[off++] = ')';
-        b[off] = 0;
+        snprintf(b, cap, "%s::%s", v.en, v.vr);
+        return b;
       }
-      break;
+      int n0 = snprintf(b, cap, "%s::%s(", v.en, v.vr);
+      off = n0 > 0 ? (size_t)n0 : 0;
+      for (int i = 0; i < v.argc; i++) {
+        if (i > 0) { b = _fmt_grow(b, &cap, off + 3); b[off++] = ','; b[off++] = ' '; }
+        char* item = _fmt(v.items[i]);
+        size_t n2 = strlen(item);
+        b = _fmt_grow(b, &cap, off + n2 + 2);
+        memcpy(b + off, item, n2);
+        off += n2;
+        free(item);
+      }
+      b = _fmt_grow(b, &cap, off + 2);
+      b[off++] = ')';
+      b[off] = 0;
+      return b;
     }
     case T_STT: {
-      size_t off = 0;
+      size_t cap = 64, off = 0;
+      char* b = (char*)malloc(cap);
       b[off++] = '{';
       b[off++] = ' ';
       for (int i = 0; i < v.argc; i++) {
-        if (i > 0) { b[off++] = ','; b[off++] = ' '; }
+        if (i > 0) { b = _fmt_grow(b, &cap, off + 3); b[off++] = ','; b[off++] = ' '; }
         char* f = _fmt(v.items[2 * i]);
         char* fv = _fmt(v.items[2 * i + 1]);
         size_t n1 = strlen(f), n2 = strlen(fv);
+        b = _fmt_grow(b, &cap, off + n1 + n2 + 4);
         memcpy(b + off, f, n1); off += n1;
         b[off++] = ':'; b[off++] = ' ';
         memcpy(b + off, fv, n2); off += n2;
+        free(f); free(fv);
       }
+      b = _fmt_grow(b, &cap, off + 3);
       b[off++] = ' ';
       b[off] = '}';
       b[off + 1] = 0;
-      break;
+      return b;
     }
     case T_MAP: {
-      size_t off = 0;
+      size_t cap = 64, off = 0;
+      char* b = (char*)malloc(cap);
       b[off++] = '{';
       for (int i = 0; i < v.argc; i++) {
-        if (i > 0) { b[off++] = ','; b[off++] = ' '; }
+        if (i > 0) { b = _fmt_grow(b, &cap, off + 3); b[off++] = ','; b[off++] = ' '; }
         char* k = _fmt(v.items[2 * i]);
         char* kv = _fmt(v.items[2 * i + 1]);
         size_t n1 = strlen(k), n2 = strlen(kv);
+        b = _fmt_grow(b, &cap, off + n1 + n2 + 4);
         memcpy(b + off, k, n1); off += n1;
         b[off++] = ':'; b[off++] = ' ';
         memcpy(b + off, kv, n2); off += n2;
+        free(k); free(kv);
       }
+      b = _fmt_grow(b, &cap, off + 3);
       b[off++] = ' ';
       b[off] = '}';
       b[off + 1] = 0;
-      break;
+      return b;
     }
-    default:
+    default: {
+      char* b = (char*)malloc(1);
       b[0] = 0;
+      return b;
+    }
   }
-  return b;
+}
+
+/* v3.5.27: a_texto() como función del runtime. Fast-path entero: itoa manual
+   directo al arena (sin snprintf, sin malloc). El resto delega en _fmt, igual
+   que antes (_v_str_take adopta el buffer). */
+static inline Val _to_text_ll(long long v) {
+  Val r = _v_int(0);
+  r.t = T_STR;
+  r.s = _itoa_sa(v);
+  return r;
+}
+static inline Val _to_text(Val v) {
+  v = _deref(v);
+  if (__builtin_expect(v.t == T_INT, 1)) return _to_text_ll((long long)v.i);
+  if (v.t == T_STR) return v; /* inmutable: compartir == copiar */
+  return _v_str_take(_fmt(v));
+}
+/* v3.5.27: largo() como función del runtime (para el camino de expresiones).
+   MISMA tabla que la emisión legacy: ARR/TUP/MAP → argc, STR → utf8, resto 0. */
+static inline long long _largo_ll(Val x) {
+  x = _deref(x);
+  if (x.t == T_ARR || x.t == T_TUP || x.t == T_MAP) return (long long)x.argc;
+  if (x.t == T_STR) return (long long)_utf8_len(x.s ? x.s : "");
+  return 0;
 }
 
 static Val _read_ln(void) {
@@ -1191,17 +1462,19 @@ static char* _norm(const char* s, const char* form) {
 }
 
 static char* _pad_str(const char* s, int64_t len, const char* ch, int start) {
-  int64_t sl = (int64_t)strlen(s);
+  /* v3.5.12: ancho en CODEPOINTS (paridad VM); el relleno es ASCII (1 byte). */
+  int64_t slb = (int64_t)strlen(s);
+  int64_t sl = (int64_t)_utf8_len(s);
   int64_t need = len > sl ? len - sl : 0;
-  char* m = (char*)malloc((size_t)(sl + need + 1));
+  char* m = (char*)malloc((size_t)(slb + need + 1));
   char c = ch && ch[0] ? ch[0] : ' ';
   if (start) {
     for (int64_t k = 0; k < need; k++) m[k] = c;
-    memcpy(m + need, s, (size_t)sl + 1);
+    memcpy(m + need, s, (size_t)slb + 1);
   } else {
-    memcpy(m, s, (size_t)sl);
-    for (int64_t k = 0; k < need; k++) m[sl + k] = c;
-    m[sl + need] = 0;
+    memcpy(m, s, (size_t)slb);
+    for (int64_t k = 0; k < need; k++) m[slb + k] = c;
+    m[slb + need] = 0;
   }
   return m;
 }
@@ -1231,17 +1504,82 @@ static const char* _tipo_de_b(Val v) {
     default: return "opcion";
   }
 }
+/* ── v3.5.12: utilerías UTF-8 (paridad VM: largo/índice/case por codepoint) ── */
+static int _utf8_decode(const unsigned char* p, unsigned* cp) {
+  if (p[0] < 0x80) { *cp = p[0]; return 1; }
+  if ((p[0] & 0xE0) == 0xC0) { *cp = ((unsigned)(p[0]&0x1F)<<6) | (p[1]&0x3F); return 2; }
+  if ((p[0] & 0xF0) == 0xE0) { *cp = ((unsigned)(p[0]&0x0F)<<12) | ((unsigned)(p[1]&0x3F)<<6) | (p[2]&0x3F); return 3; }
+  if ((p[0] & 0xF8) == 0xF0) { *cp = ((unsigned)(p[0]&0x07)<<18) | ((unsigned)(p[1]&0x3F)<<12) | ((unsigned)(p[2]&0x3F)<<6) | (p[3]&0x3F); return 4; }
+  *cp = p[0]; return 1;
+}
+static int _utf8_encode(unsigned cp, char* out) {
+  if (cp < 0x80) { out[0] = (char)cp; return 1; }
+  if (cp < 0x800) { out[0] = (char)(0xC0|(cp>>6)); out[1] = (char)(0x80|(cp&0x3F)); return 2; }
+  if (cp < 0x10000) { out[0] = (char)(0xE0|(cp>>12)); out[1] = (char)(0x80|((cp>>6)&0x3F)); out[2] = (char)(0x80|(cp&0x3F)); return 3; }
+  out[0] = (char)(0xF0|(cp>>18)); out[1] = (char)(0x80|((cp>>12)&0x3F)); out[2] = (char)(0x80|((cp>>6)&0x3F)); out[3] = (char)(0x80|(cp&0x3F)); return 4;
+}
+static size_t _utf8_len(const char* s) {
+  size_t n = 0; const unsigned char* p = (const unsigned char*)s;
+  while (*p) { unsigned cp; int L = _utf8_decode(p, &cp); p += L; n++; }
+  return n;
+}
+/* Mapa de caso 1:1 (ASCII + Latin-1 + especiales comunes). Coincide con
+   char::to_uppercase de Rust para estos rangos; el resto queda igual. */
+static unsigned _cp_upper(unsigned cp) {
+  if (cp >= 'a' && cp <= 'z') return cp - 32;
+  if (cp >= 0x00E0 && cp <= 0x00F6) return cp - 0x20;
+  if (cp >= 0x00F8 && cp <= 0x00FE) return cp - 0x20;
+  if (cp == 0x00FF) return 0x0178;
+  if (cp == 0x00B5) return 0x039C;
+  return cp;
+}
+static unsigned _cp_lower(unsigned cp) {
+  if (cp >= 'A' && cp <= 'Z') return cp + 32;
+  if (cp >= 0x00C0 && cp <= 0x00D6) return cp + 0x20;
+  if (cp >= 0x00D8 && cp <= 0x00DE) return cp + 0x20;
+  if (cp == 0x0178) return 0x00FF;
+  return cp;
+}
+
 static char* _case_str(const char* s, int up) {
-  size_t n = strlen(s);
-  char* m = (char*)malloc(n + 1);
-  for (size_t i = 0; i < n; i++) {
-    char c = s[i];
-    if (up && c >= 'a' && c <= 'z') c = c - 32;
-    else if (!up && c >= 'A' && c <= 'Z') c = c + 32;
-    m[i] = c;
+  size_t blen = strlen(s);
+  char* m = (char*)malloc(blen * 4 + 4);
+  size_t o = 0; const unsigned char* p = (const unsigned char*)s;
+  while (*p) {
+    unsigned cp; int L = _utf8_decode(p, &cp); p += L;
+    cp = up ? _cp_upper(cp) : _cp_lower(cp);
+    o += _utf8_encode(cp, m + o);
   }
-  m[n] = 0;
+  m[o] = 0;
   return m;
+}
+/* ── v3.5.13: builtins matemáticos (paridad con la VM) ── */
+static Val _m_abs(Val a) {
+  a = _deref(a);
+  if (a.t == T_INT) { int64_t i = a.i; return _v_int(i < 0 ? -i : i); }
+  double d = _asf(a); if (d < 0) d = -d; return _v_flt(d);
+}
+static Val _m_sqrt(Val a) { return _v_flt(sqrt(_asf(_deref(a)))); }
+static Val _m_floor(Val a) { return _v_int((int64_t)floor(_asf(_deref(a)))); }
+static Val _m_ceil(Val a) { return _v_int((int64_t)ceil(_asf(_deref(a)))); }
+static Val _m_round(Val a) { return _v_int((int64_t)round(_asf(_deref(a)))); }
+static Val _m_pow(Val a, Val b) {
+  a = _deref(a); b = _deref(b);
+  if (a.t == T_INT && b.t == T_INT && b.i >= 0) {
+    int64_t r = 1; for (int64_t k = 0; k < b.i; k++) r *= a.i;
+    return _v_int(r);
+  }
+  return _v_flt(pow(_asf(a), _asf(b)));
+}
+static Val _m_min(Val a, Val b) {
+  a = _deref(a); b = _deref(b);
+  if (a.t == T_INT && b.t == T_INT) return _v_int(a.i < b.i ? a.i : b.i);
+  double x = _asf(a), y = _asf(b); return _v_flt(x < y ? x : y);
+}
+static Val _m_max(Val a, Val b) {
+  a = _deref(a); b = _deref(b);
+  if (a.t == T_INT && b.t == T_INT) return _v_int(a.i > b.i ? a.i : b.i);
+  double x = _asf(a), y = _asf(b); return _v_flt(x > y ? x : y);
 }
 static Val _time_now(void) { return _v_int((int64_t)time(NULL)); }
 static int64_t _time_parse(const char* s) {
@@ -1364,25 +1702,35 @@ static char* _trim(const char* s) {
   return m;
 }
 static char* _sub(const char* s, int64_t st, int64_t en) {
-  int64_t n = (int64_t)strlen(s);
+  int64_t n = (int64_t)_utf8_len(s);
   if (st < 0) st = 0; if (st > n) st = n;
   if (en < 0) en = n; if (en > n) en = n;
   if (en < st) en = st;
-  char* m = (char*)malloc((size_t)(en - st) + 1);
-  memcpy(m, s + st, (size_t)(en - st)); m[en - st] = 0;
+  const unsigned char* p = (const unsigned char*)s;
+  int64_t i = 0; size_t off = 0;
+  while (*p && i < st) { unsigned cp; int L = _utf8_decode(p, &cp); p += L; off += L; i++; }
+  size_t start_off = off;
+  while (*p && i < en) { unsigned cp; int L = _utf8_decode(p, &cp); p += L; off += L; i++; }
+  size_t len = off - start_off;
+  char* m = (char*)malloc(len + 1);
+  memcpy(m, s + start_off, len); m[len] = 0;
   return m;
 }
 static Val _to_chars(const char* s) {
-  size_t n = strlen(s);
+  size_t n = _utf8_len(s);
   Val* xs = (Val*)malloc(sizeof(Val) * (n + 1));
-  for (size_t i = 0; i < n; i++) { char c[2] = { s[i], 0 }; xs[i] = _v_str(c); }
+  const unsigned char* p = (const unsigned char*)s;
+  size_t i = 0;
+  while (*p) { unsigned cp; int L = _utf8_decode(p, &cp); p += L; char buf[5]; int el = _utf8_encode(cp, buf); buf[el] = 0; xs[i++] = _v_str(buf); }
   Val v = _arrn(xs, n); free(xs);
   return v;
 }
 static Val _str_codes(const char* s) {
-  size_t n = strlen(s);
+  size_t n = _utf8_len(s);
   Val* xs = (Val*)malloc(sizeof(Val) * (n + 1));
-  for (size_t i = 0; i < n; i++) xs[i] = _v_int((unsigned char)s[i]);
+  const unsigned char* p = (const unsigned char*)s;
+  size_t i = 0;
+  while (*p) { unsigned cp; int L = _utf8_decode(p, &cp); p += L; xs[i++] = _v_int((int64_t)cp); }
   Val v = _arrn(xs, n); free(xs);
   return v;
 }
@@ -1884,6 +2232,307 @@ static char* _json_text(Val v) {
   }
   (void)_jesc;
   return b;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Hilos reales (v3.5.10) — __hilo_lanzar / __hilo_esperar (+ __tarea_*).
+   Cada hilo: pila thread-local (ST/SP TLS), llama _call_by_name con sus
+   args pre-apilados y guarda el resultado en el registro lw_thr[].
+   ════════════════════════════════════════════════════════════════════ */
+static Val _call_by_name(const char* nm);
+static Val _call_by_name_thread(const char* nm); /* tabla _lft (wrappers _ft_) */
+static void _init(void);                          /* registro por hilo (TLS) */
+static LW_TLS Val lw_thr_args[8];
+static LW_TLS int lw_thr_argc;
+
+typedef struct {
+  const char* fn;
+  Val args[8];
+  int argc;
+  Val result;
+  volatile int done;
+#ifdef _WIN32
+  HANDLE th;
+#else
+  pthread_t th;
+#endif
+} LwThread;
+
+static LwThread lw_thr[256];
+static int lw_thr_n = 0;
+#ifdef _WIN32
+static CRITICAL_SECTION lw_thr_cs;
+static volatile int lw_thr_cs_ok = 0;
+static void lw_thr_lock_init(void) {
+  if (!lw_thr_cs_ok) { InitializeCriticalSection(&lw_thr_cs); lw_thr_cs_ok = 1; }
+}
+#else
+static pthread_mutex_t lw_thr_mu = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
+static void* lw_thr_main(void* p) {
+  LwThread* t = (LwThread*)p;
+  SP = 0;            /* pila thread-local */
+  _init();           /* registra nombres en las tablas TLS de este hilo */
+  lw_thr_argc = t->argc;
+  for (int k = 0; k < t->argc; k++) lw_thr_args[k] = t->args[k];
+  /* El wrapper _ft_<fn> (generado) copia lw_thr_args a los slots de
+     params (gv TLS) y llama a _f_<fn>. */
+  t->result = _call_by_name_thread(t->fn);
+  t->done = 1;
+  return NULL;
+}
+
+#ifdef _WIN32
+static DWORD WINAPI lw_thr_main_w(LPVOID p) { lw_thr_main(p); return 0; }
+#endif
+
+static int64_t _lw_thr_spawn(const char* fn, Val* args, int argc) {
+#ifdef _WIN32
+  lw_thr_lock_init();
+  EnterCriticalSection(&lw_thr_cs);
+#else
+  pthread_mutex_lock(&lw_thr_mu);
+#endif
+  if (lw_thr_n >= 256) {
+#ifdef _WIN32
+    LeaveCriticalSection(&lw_thr_cs);
+#else
+    pthread_mutex_unlock(&lw_thr_mu);
+#endif
+    return -1;
+  }
+  int id = lw_thr_n++;
+  LwThread* t = &lw_thr[id];
+  t->fn = fn;
+  t->argc = argc > 8 ? 8 : argc;
+  for (int k = 0; k < t->argc; k++) t->args[k] = args[k];
+  t->done = 0;
+#ifdef _WIN32
+  t->th = CreateThread(NULL, 0, lw_thr_main_w, t, 0, NULL);
+  LeaveCriticalSection(&lw_thr_cs);
+#else
+  pthread_create(&t->th, NULL, lw_thr_main, t);
+  pthread_mutex_unlock(&lw_thr_mu);
+#endif
+  return (int64_t)id;
+}
+
+static Val _lw_thr_join(int64_t id) {
+  if (id < 0 || id >= lw_thr_n) return _v_void();
+  LwThread* t = &lw_thr[id];
+#ifdef _WIN32
+  if (t->th) { WaitForSingleObject(t->th, INFINITE); CloseHandle(t->th); t->th = NULL; }
+#else
+  pthread_join(t->th, NULL);
+#endif
+  return t->result;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Canales y mutexes (v3.5.17) — __canal_* / __mutex_* en nativo.
+   Paridad VM: id de canal/mutex es un texto ("chan_N"/"mutex_N");
+   recv bloquea hasta que haya un valor; mutex_bloquear ejecuta la
+   función nombrada con su argumento bajo el cerrojo.
+   ════════════════════════════════════════════════════════════════════ */
+typedef struct LwChan {
+  Val* buf;
+  int head, count, cap;
+#ifdef _WIN32
+  CRITICAL_SECTION cs;
+  CONDITION_VARIABLE cv;
+#else
+  pthread_mutex_t mu;
+  pthread_cond_t cv;
+#endif
+} LwChan;
+
+static LwChan* lw_chan[256];
+static int lw_chan_n = 0;
+static LwChan* lw_mtx[256]; /* cerrojos: LwChan solo aporta mu/cs */
+static int lw_mtx_n = 0;
+
+static int64_t _parse_id(const char* s, const char* pfx) {
+  if (!s) return -1;
+  size_t pl = strlen(pfx);
+  if (strncmp(s, pfx, pl) != 0) return -1;
+  return strtoll(s + pl, NULL, 10);
+}
+
+static int64_t _lw_chan_new(void) {
+#ifdef _WIN32
+  lw_thr_lock_init();
+  EnterCriticalSection(&lw_thr_cs);
+#else
+  pthread_mutex_lock(&lw_thr_mu);
+#endif
+  if (lw_chan_n >= 256) {
+#ifdef _WIN32
+    LeaveCriticalSection(&lw_thr_cs);
+#else
+    pthread_mutex_unlock(&lw_thr_mu);
+#endif
+    return -1;
+  }
+  int id = lw_chan_n++;
+#ifdef _WIN32
+  LeaveCriticalSection(&lw_thr_cs);
+#else
+  pthread_mutex_unlock(&lw_thr_mu);
+#endif
+  LwChan* c = (LwChan*)calloc(1, sizeof(LwChan));
+  c->buf = (Val*)malloc(sizeof(Val) * 8);
+  c->cap = 8; c->head = 0; c->count = 0;
+#ifdef _WIN32
+  InitializeCriticalSection(&c->cs);
+  InitializeConditionVariable(&c->cv);
+#else
+  pthread_mutex_init(&c->mu, NULL);
+  pthread_cond_init(&c->cv, NULL);
+#endif
+  lw_chan[id] = c;
+  return id;
+}
+
+static int64_t _lw_chan_send(int64_t id, Val v) {
+  if (id < 0 || id >= lw_chan_n || !lw_chan[id]) return 0;
+  LwChan* c = lw_chan[id];
+#ifdef _WIN32
+  EnterCriticalSection(&c->cs);
+#else
+  pthread_mutex_lock(&c->mu);
+#endif
+  if (c->count == c->cap) {
+    int nc = c->cap * 2;
+    Val* nb = (Val*)malloc(sizeof(Val) * nc);
+    for (int k = 0; k < c->count; k++) nb[k] = c->buf[(c->head + k) % c->cap];
+    free(c->buf);
+    c->buf = nb; c->cap = nc; c->head = 0;
+  }
+  c->buf[(c->head + c->count) % c->cap] = v;
+  c->count++;
+#ifdef _WIN32
+  WakeConditionVariable(&c->cv);
+  LeaveCriticalSection(&c->cs);
+#else
+  pthread_cond_signal(&c->cv);
+  pthread_mutex_unlock(&c->mu);
+#endif
+  return 1;
+}
+
+static Val _lw_chan_recv(int64_t id) {
+  if (id < 0 || id >= lw_chan_n || !lw_chan[id])
+    return _res(_v_str("Canal no encontrado"), 0);
+  LwChan* c = lw_chan[id];
+#ifdef _WIN32
+  EnterCriticalSection(&c->cs);
+  while (c->count == 0) SleepConditionVariableCS(&c->cv, &c->cs, INFINITE);
+#else
+  pthread_mutex_lock(&c->mu);
+  while (c->count == 0) pthread_cond_wait(&c->cv, &c->mu);
+#endif
+  Val v = c->buf[c->head];
+  c->head = (c->head + 1) % c->cap;
+  c->count--;
+#ifdef _WIN32
+  LeaveCriticalSection(&c->cs);
+#else
+  pthread_mutex_unlock(&c->mu);
+#endif
+  return v;
+}
+
+static int64_t _lw_mutex_new(void) {
+#ifdef _WIN32
+  lw_thr_lock_init();
+  EnterCriticalSection(&lw_thr_cs);
+#else
+  pthread_mutex_lock(&lw_thr_mu);
+#endif
+  if (lw_mtx_n >= 256) {
+#ifdef _WIN32
+    LeaveCriticalSection(&lw_thr_cs);
+#else
+    pthread_mutex_unlock(&lw_thr_mu);
+#endif
+    return -1;
+  }
+  int id = lw_mtx_n++;
+#ifdef _WIN32
+  LeaveCriticalSection(&lw_thr_cs);
+#else
+  pthread_mutex_unlock(&lw_thr_mu);
+#endif
+  LwChan* m = (LwChan*)calloc(1, sizeof(LwChan));
+#ifdef _WIN32
+  InitializeCriticalSection(&m->cs);
+#else
+  pthread_mutex_init(&m->mu, NULL);
+#endif
+  lw_mtx[id] = m;
+  return id;
+}
+
+/* Ejecuta `_call_by_name_thread(fn)` con 1 argumento estagiado bajo el
+   cerrojo. Usa lw_thr_args (TLS) como zona de staging: cada hilo tiene la
+   suya, sin interferencia con hilos reales activos. */
+static Val _lw_mutex_lock_call(int64_t id, const char* fn, Val arg) {
+  if (id < 0 || id >= lw_mtx_n || !lw_mtx[id])
+    return _res(_v_str("Mutex no encontrado"), 0);
+  LwChan* m = lw_mtx[id];
+#ifdef _WIN32
+  EnterCriticalSection(&m->cs);
+#else
+  pthread_mutex_lock(&m->mu);
+#endif
+  lw_thr_argc = 1;
+  lw_thr_args[0] = arg;
+  Val r = _call_by_name_thread(fn);
+#ifdef _WIN32
+  LeaveCriticalSection(&m->cs);
+#else
+  pthread_mutex_unlock(&m->mu);
+#endif
+  return r;
+}
+
+/* v3.5.17: calendarios Hijri/Persa (porte exacto de la VM) */
+static Val _rt_calendario_hijri(int64_t ts) {
+  long long days = ts / 86400 + 719163;
+  long long hy = (long long)((double)days / 354.367) + 1;
+  long long rem = days - (long long)((double)(hy - 1) * 354.367);
+  long long hm = rem / 30; if (hm < 1) hm = 1; if (hm > 12) hm = 12;
+  long long hd = rem % 30 + 1; if (hd > 30) hd = 30;
+  char b[64]; snprintf(b, sizeof b, "%lld-%02lld-%02lld AH", hy, hm, hd);
+  return _v_str(b);
+}
+static Val _rt_calendario_persa(int64_t ts) {
+  long long days = ts / 86400;
+  long long py = (long long)(((double)days - 226899.0) / 365.242) + 1;
+  long long tm = (days % 365) / 31; if (tm > 11) tm = 11;
+  long long td = days % 31; if (td > 30) td = 30;
+  char b[64]; snprintf(b, sizeof b, "%lld-%02lld-%02lld AP", py, 1 + tm, 1 + td);
+  return _v_str(b);
+}
+
+/* Capa Val (usada directamente por el backend C) */
+static Val _rt_chan_new_v(void) {
+  char b[32]; snprintf(b, sizeof b, "chan_%lld", (long long)_lw_chan_new());
+  return _v_str(b);
+}
+static Val _rt_chan_send_v(Val cid, Val v) {
+  return _v_bool(_lw_chan_send(_parse_id(cid.s, "chan_"), v));
+}
+static Val _rt_chan_recv_v(Val cid) {
+  return _lw_chan_recv(_parse_id(cid.s, "chan_"));
+}
+static Val _rt_mutex_new_v(void) {
+  char b[32]; snprintf(b, sizeof b, "mutex_%lld", (long long)_lw_mutex_new());
+  return _v_str(b);
+}
+static Val _rt_mutex_lock_call_v(Val mid, Val fn, Val arg) {
+  return _lw_mutex_lock_call(_parse_id(mid.s, "mutex_"), fn.s ? fn.s : "", arg);
 }
 
 #endif

@@ -1,0 +1,8 @@
+sea total = 0;
+funcion entero acum(entero x) {
+    total = total + x;
+    retornar total;
+}
+acum(1);
+acum(2);
+imprimir("total=" + total);

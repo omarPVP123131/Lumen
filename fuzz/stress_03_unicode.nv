@@ -1,0 +1,13 @@
+// Stress 03 — Unicode: __str_a_caracteres, __str_mayusculas/__str_minusculas,
+// __str_padding_inicio/__str_padding_fin. Paridad VM vs C vs Cranelift.
+
+sea frase = "hola ñandú";
+imprimir("mayus:" + __str_mayusculas(frase));
+imprimir("minus:" + __str_minusculas("HOLA ÑANDÚ"));
+
+sea chars = __str_a_caracteres("añó");
+imprimir("nchars:" + largo(chars));
+imprimir("c0:" + chars[0] + " c1:" + chars[1] + " c2:" + chars[2]);
+
+imprimir("padI:[" + __str_padding_inicio("42", 6, "0") + "]");
+imprimir("padF:[" + __str_padding_fin("42", 6, ".") + "]");

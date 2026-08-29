@@ -919,3 +919,1136 @@ Lexer → Parser → Sema → IR → Codegen → VM. 21 fases completadas.
   (debug `CALLEE` no aparece en disasm del probe, indica `tp != "Call"` en
   el AST LUMEN para ese Call). Siguiente: inspeccionar `a_texto(tp)` real
   del Call `inc(v)` en el LUMEN AST.
+
+## [3.5.5] - 2026-08-26 — CI verde + consolidación self-hosting (prestado mut write-back 42/42)
+
+### Fix CI — `lumen check examples` (Linux y Headless): 6 errores E033
+
+- Regresión de 3.5.0 (a3d7d08): la rama receptor `prestado [mut] este|self|yo`
+  de `_parse_decl` pasó de `"Self"` a `type_nm`, pero `type_nm` solo existe en
+  `_parse_stmt` (bloque impl). Resultado: E033 en `stdlib/compiler/parser.nv`
+  (1713/1717), visible vía `examples/compiler/test_import2.nv`,
+  `test_import3.nv` y `test_parser_final2.nv` (2 errores c/u = 6)
+- Fix: restaurado el marcador `"Self"` (comportamiento 3.4.7) conservando la
+  intención 3.5.2 — el tag `"prestado mut Self"` sigue presente para que
+  codegen registre ptypes. Aplicado en `parser.nv` y en el amalgamado
+  `compiler_v4.nv`
+- Verificado: `lumen check examples` → **396 archivos, 0 errores, exit 0**
+
+### Fix CI — macOS `test_c_backend_gcc_runtime`: UB de orden de evaluación en `lumen_rt.h`
+
+- Síntoma: en macOS (`gcc` = Apple clang) `imprimir(s.largo())` imprimía
+  `"abc"` en vez de `3`; con gcc Linux pasaba. Reproducible con clang -O0/-O2
+- Causa: `#define PUSH(v) (ST[(SP)++] = (v))` dejaba **sin secuencia** el `SP++`
+  del subíndice frente a los efectos de `(v)` en patrones `PUSH(_arr_len(POP()))`.
+  C11 no ordena la computación de la dirección del LHS respecto del RHS: gcc
+  evalúa el RHS primero (correcto); clang calcula `&ST[SP++]` antes del `--SP`
+  del POP → el resultado se escribe en el slot equivocado y el POP siguiente
+  de `imprimir` lee el valor viejo
+- Fix: `PUSH` ahora llama a `static inline void _push_impl(Val v)` — los
+  argumentos (incluido cualquier `POP()`) se evalúan y secuencian ANTES de
+  tocar `SP` (C11 6.5.2.2). El resto del runtime ya usaba sentencias separadas
+- Verificado: salida correcta con gcc -O2, clang -O2 y clang -O0; suite
+  lumen-aot 6/6
+
+### Consolidación self-hosting — `prestado mut` con write-back REAL (41 → 42)
+
+- `codegen.nv` / `compiler_v4.nv` (rama Call): `__map_contiene(callee_raw, ...)`
+  crasheaba con "espera diccionario" cuando el callee es texto plano (`inc(v)`)
+  → el pipeline self-hosted abortaba. Ahora se chequea `__tipo_de` antes de
+  interrogar el mapa
+- Encoder nativo `__codegen_a_nvc` (vm.rs): opcode 63 (MakeRef) caía a Nop
+  (`_ => 0`) → stack underflow al ejecutar. Ahora mapea `63 → MakeRef` con
+  índice a la tabla de nombres (como Store/Load) y lo incluye en el build de
+  la tabla de nombres
+- Eliminado el fallback hardcodeado de `"inc"` en codegen: el registro de
+  ptypes en la rama Func (Pass 1) cubre cualquier función. Verificado con
+  `fuzz/probe2.nv` (`incrementar`, nombre arbitrario) → MakeRef emitido y
+  write-back correcto
+- **Resultado**: `fuzz/selfhost_probe.nv` imprime **42** (antes 41 degradado);
+  `fuzz/probe2.nv` imprime **100**. El disasm muestra `MakeRef @1` antes del
+  `Call`. Cerrado el pendiente vivo desde 3.5.0
+
+### Verificación completa (gate de consolidación)
+
+- `cargo test --workspace` → **952 tests, 0 FAILED**
+- `cargo clippy --all -- -D warnings` → limpio · `cargo fmt -- --check` → OK
+- Headless (`LUMEN_HEADLESS=1 CI=1`): workspace + `--test production` → verde
+- `scripts/ci_gate.py` sobre artefacto release empaquetado: **PASS 392, FAIL 4
+  (todos `@expected_failure`), 0 TIMEOUT, 0 CRASH — Gate PASSED**
+
+## [3.5.6] - 2026-08-26 — AOT Cranelift con runtime real (_lw_* handles opacos)
+
+### Lo que faltaba del AOT: backend Cranelift deja de ser un esqueleto
+
+- Hasta 3.5.5 el backend Cranelift (`lumen build --aot rust`) era un subconjunto
+  mínimo: solo enteros, con builtins de texto/colecciones como placeholders que
+  devolvían 0, y `cranelift_supported` rechazaba decimales, división,
+  comparaciones, listas, structs, `si`/`mientras` (todo programa real).
+- **Nuevo runtime `_lw_*` (40 helpers, handles opacos)** en `LW_RUNTIME`: el
+  código Cranelift solo ve `i64` (punteros a `Val`); la semántica completa
+  (formato, aritmética mixta entero/decimal, concat de texto, listas, structs,
+  tuplas, mapas, opción/resultado, errores) delega en el runtime C probado
+  (`lumen_rt.h`) — paridad VM/C/Cranelift sin reimplementar nada.
+  Acceso público: `lumen_aot::lw_shim_source()`.
+- **Emisor Cranelift reescrito** al modelo de handles: ConstInt/Float/Bool/Str,
+  Binary/Unary completos vía `_lw_bin`/`_lw_un` (mismos códigos que el backend
+  C), JmpIf por truthiness real, ArrayNew/Push/PushVar/Get/Set/Len,
+  StructNew/Add/Get/Set, TupleNew/Push/Get, OptionSome/None, ResultOk/Err,
+  imprimir multi-arg en UNA línea (`_lw_join`), leer, largo, agregar, a_texto,
+  __tipo_de, mapas (__map_*), __str_subcadena, __lista_invertir/ordenar.
+- **Fix de entry point**: una función `main` del usuario ya no colisiona con el
+  wrapper C (DuplicateDefinition) — se exporta directamente; fallback
+  main/principal como en los otros backends.
+- SSA: el stack de operandos se limpia en los cortes de bloque (los valores no
+  cruzan branches — igual que la máquina de pila de la VM).
+- `cranelift_supported` ampliado en consecuencia; sigue rechazando (con mensaje)
+  enums, closures, prestado mut, intentar/atrapar y `elegir` con tipos.
+  Limitación conocida: sombreado de variables dentro de bloques (requiere port
+  de `plan_var_keys`).
+- CLI: el link de `--aot rust` usa el shim completo; `is_pic=true` (sin
+  DT_TEXTREL en PIE).
+
+### Verificación
+
+- Nuevo test `test_cranelift_runtime_lw`: programa con structs, recursión,
+  textos (largo/index/concat), floats, div/mod, comparaciones, listas con
+  push/get/len, mapas, opcion/resultado, typeof, a_texto y bucles — salida
+  byte-identical a la VM (gcc + link del shim). lumen-aot: 7/7.
+- E2E: `lumen build --aot rust` genera binario nativo correcto sobre programa
+  con funciones + listas + si.
+
+## [3.5.7] - 2026-08-26 — Incremento B: Cranelift y LLVM completos + bugs de paridad
+
+### Incremento B en el backend Cranelift (objeto nativo)
+
+- **intentar/atrapar real**: `PushHandler`/`PopHandler`/`TryUnwrap` con
+  chequeo de `_lw_err_active` tras cada operación riesgosa; el catch recibe el
+  mensaje por block-param (paridad con `_ERRCHK` del backend C).
+- **enums completos**: `EnumCtor` (con payload vía lista), `MatchVariant`,
+  `MatchType` (algun/exito/error), `MatchPayload`.
+- **prestado mut / MakeRef**: las variables referenciadas (y TODOS los params)
+  viven en celdas `Val` de 80B (stack slots); `MakeRef` entrega `T_PTR` a la
+  celda; `Store` con write-through si la celda porta una referencia. Sin
+  información estática de tipos — dispatch runtime como el backend C.
+- **funciones como valores**: `FuncRef` (func_addr + nombre) y `CallValue`
+  (call_indirect con firma dinámica por aridad).
+- **sombreado por bloques**: `ScopePush`/`ScopePop` con scopes anidados de
+  bindings SSA — `StoreLocal` declara en el scope actual, `Store` asigna al
+  binding más cercano.
+- Nuevo test `test_cranelift_runtime_lw_b` (prestado mut + try/catch + enums +
+  elegir + closures + sombreado) — salida byte-identical a la VM.
+
+### Backend LLVM IR textual: de i64-only a cobertura completa
+
+- Reescrito al mismo modelo de handles opacos `_lw_*` que Cranelift: todo el
+  IR (binarios, textos, listas, structs, tuplas, mapas, enums, closures,
+  try/catch, scopes, MakeRef). Funciones de usuario con prefijo `lum_` y
+  `define i32 @main()` separado (antes duplicaba @main).
+- CLI `--aot llvm` ahora linkea el shim (`lw_shim_source()`).
+- Nuevo test `test_llvm_ir_runtime`: compila con clang y verifica salida
+  (fib, div/mod, texto, listas, floats).
+
+### Modelo de memoria de los backends nativos (v3.5.7)
+
+- **Variables por celda `Val` + deep-copy**: en Cranelift TODAS las variables
+  viven en celdas (stack slots); los Stores deep-copian el valor (`_lw_store_slot`
+  → `_dcp`) igual que el backend C (`gv[n] = _dcp(v)`). Consecuencia: semántica
+  de valores real (asignar una lista/struct crea copia independiente —
+  `structs.nv` y `fase_impl_inherente` ahora byte-identicales a la VM en los
+  3 backends nativos) y cada celda es dueña exclusiva de su buffer de array.
+- **Arrays O(n)**: campo `cap` en `Val` (rellena el padding de `argc`;
+  `sizeof(Val)` sigue siendo 80, verificado con `_lw_val_size_check`) +
+  `_lw_arr_push_ip` (realloc con duplicación de capacidad). `ArrayPushVar`
+  muta in-place en los 3 backends nativos → `stress_04_arrays` (20k agregar)
+  pasa de O(n²)/OOM a instantáneo. Los args de llamada y Stores se deep-copian,
+  así que el push in-place preserva la semántica de valores.
+- **Flujo de valores entre bloques** (Cranelift y LLVM): pre-pass
+  `simulate_label_depths` + block-params (Cranelift) / merge-allocas (LLVM) —
+  ternarios y `elegir` como expresión ya no pierden el valor al cruzar labels
+  (`junior/26_ternario`, `junior/81_stress_ternario_anidado` OK).
+- **Overflow con wrap (paridad VM)**: `INT64_MIN / -1`, `INT64_MIN % -1` y
+  `-INT64_MIN` ya no son SIGFPE en nativo; div/mod por cero lanzan error
+  capturable (`_rt_throw`) en vez de SIGFPE, también en decimales
+  (`stress_01_overflow` y `stress_02_arith_err` byte-identicales en los
+  3 backends).
+- **LLVM floats**: constantes float en hex (`0x…`) — `double inf` inválido
+  rompía el .ll con infinitos/NaNs.
+
+### Bugs de paridad corregidos (detectados por tests de paridad 4-way)
+
+- **`sizeof(Val)` = 80, no 72** — las celdas de 72B desbordaban el struct
+  (corrupción de stack en LLVM; Cranelift lo enmascaraba por redondeo de
+  slots). Constante `LW_VAL_SIZE`.
+- **Binding de entrada con write-through corrompía al llamador**: re-bind del
+  param en una celda que traía `T_PTR` de la llamada anterior escribía el
+  handle nuevo DENTRO de la variable del llamador (2ª llamada `prestado mut`
+  perdía el write-back; observado 15 en vez de 22). Nuevo helper
+  `_lw_store_slot_direct` para init/binding de entrada.
+- **`MatchPayload` con enums** (VM QA bug #3 en backends nativos): la VM
+  devuelve campo único / lista de campos; C y `_lw_payload` devolvían el enum
+  crudo → `elegir` con payload imprimía 0. Alineados C + shim con la VM.
+- **Args de llamada sin copiar** (Cranelift/LLVM): los métodos mutaban el
+  struct/lista del llamador sin `prestado mut` (350 en vez de 100 en
+  `fase_impl_inherente`). Ahora `_lw_dcp` en cada arg de llamada de usuario y
+  `CallValue` (T_PTR/T_FRE pasan tal cual → `prestado mut` intacto).
+
+### Variables globales reales en backends nativos
+
+- `program_global_names`: variables declaradas en la función de entrada y
+  usadas desde otras funciones reciben celda de datos compartida
+  (`lw_glob_*`, zeroinit 80B) en Cranelift y LLVM — paridad con `gv[]` del
+  backend C. Estado mutable global (contadores de logging, caches) ahora
+  funciona igual que en la VM (`sr/logging_sr`, `jr/logging_jr`,
+  `sr/testing_sr`, `real/testing_real` byte-identicales).
+
+### Formato de decimales paridad VM
+
+- `_fmt` T_FLT: notación decimal plana con dígitos mínimos round-trip
+  (paridad con Display de Rust) — nunca notación científica; inf/-inf/NaN
+  como la VM. `sr/matematicas_sr` byte-identical.
+
+### Verificación
+
+- Paridad 4-way (VM ↔ C ↔ Cranelift ↔ LLVM) byte-identical en programas con
+  enums+payload, prestado mut multi-llamada, try/catch, closures simples,
+  sombreado, structs por valor, div/mod por cero, overflow, arrays de 20k
+  elementos, estado global y trigonometría.
+- Barrido examples/ (VM ↔ Cranelift): **239 OK / 7 divergencias / 150 skip**
+  (rechazados por el gate o VM-interactivos). Divergencias restantes:
+  closures que capturan variables del enclosing scope (requiere entornos de
+  captura — incremento C), orden de sort sobre valores complejos
+  (`test_vectordb`), `guard let` con NaN (`fase65_guard_let2`), structs con
+  campos dinámicos (`test_siguiente_fase`) y 3 demos de hilos/baremetal/3D
+  (runtime no disponible en AOT — usar VM o backend C).
+- Barrido fuzz/: Cranelift 4/4 y LLVM 4/4 en los soportados, 0 divergencias.
+- lumen-aot: 9/9 tests · workspace: 955/0 · fmt/clippy limpios · ci_gate
+  392 PASS / 0 CRASH / 0 TIMEOUT.
+
+## [3.5.7-fixpoint] - 2026-08-27 — Causa raíz de la divergencia del fixpoint self-hosting
+
+### Problema
+La etapa 2 del fixpoint divergía: `v4_self.nvc` (el compilador auto-compilado)
+estaba roto — crasheaba con `Error de tipo: Add requires numbers or strings` en
+`_gen_stmts` incluso compilando un programa trivial, y su tabla de funciones
+tenía `lexer_tokenizar`/`lexer_tokenize` **duplicadas** (75 funcs vs 73 del build Rust).
+
+### Causa raíz
+`compiler_v4.nv` es un amalgama que contiene el lexer **inline** (líneas 1-250)
+pero conservaba el `importar "lexer.nv";` de la sección parser.nv (línea 258).
+Al autocompilar, `_imp_resolver_rec` importa lexer.nv y lo fusiona con el AST que
+YA tenía el lexer inline → el lexer queda **dos veces**. El resolver Rust deduplica
+(por eso el build Rust tiene 1 sola copia); el resolver self-hosted no deduplica.
+La duplicación desincroniza la tabla de funciones y corrompe el compilador
+auto-compilado. Preexistente desde el trabajo MakeRef (3.5.0-3.5.4); mi fix E033
+solo lo hizo visible al volver el amalgama compilable.
+
+### Fix
+Eliminado el `importar "lexer.nv";` redundante de `compiler_v4.nv` (el lexer ya
+está inline; verificado que el lexer inline es superconjunto de lexer.nv, nada se
+pierde). El build Rust sigue funcionando (probe=42). Pendiente: re-verificar la
+cadena completa self→self2 byte-identical.
+
+## [3.5.8] - 2026-08-27 — Optimización self-compile O(n²)→O(1) + barra de progreso
+
+### Cuellos de botella corregidos (self-compile de ~9.8h → minutos)
+- `_cg_add_str`/`_cg_add_int`: el dedup de strings/ints hacía un **scan lineal
+  O(n) por cada valor agregado** (cientos de millones de búsquedas en el
+  self-compile). Ahora usa mapas reversos `str_index`/`int_index` → **O(1)**.
+- Loop `found_pt` (búsqueda de ptypes por Call): escaneaba **todas las funciones
+  por cada Call** O(calls×funcs). Ahora usa índice `func_by_name` → **O(1)**.
+- Aplicado en `codegen.nv` y en el amalgama `compiler_v4.nv`.
+
+### Barra de progreso
+- `codegen_generar` Pass 1 imprime `[codegen] N%  funcion i/cnt` cada 8 funciones,
+  para ver el avance en el self-compile largo (fase dominante del proceso).
+- Los scripts `verificar_fixpoint.ps1`/`.sh` ahora muestran el stdout de los
+  stages EN VIVO (Tee-Object/tee) en vez de guardarlo en silencio al log —
+  antes no se veía nada durante horas.
+
+### Estado fixpoint
+- El bug `Add requires numbers or strings` (v4_self.nvc roto al compilar el
+  probe) es pre-existente, ligado a `prestado mut`/MakeRef en self-hosting.
+  En investigación; se itera con corrida local.
+
+## [3.5.9] - 2026-08-27 — Salida EN VIVO de la VM + JIT Tier-1 real (Cranelift)
+
+### Salida en vivo (fix del "silencio" en corridas largas)
+- La VM acumulaba TODO el `imprimir` en un buffer y lo emitía solo al terminar:
+  en el self-compile de horas no salía ni una línea. Nuevo modo **echo**:
+  `lumen run` imprime cada línea al momento (`emit_line` + `set_echo_stdout`).
+- `verificar_fixpoint.ps1/.sh` ahora muestran el stdout de los stages en vivo
+  (Tee-Object/tee) y lo guardan al reporte a la vez.
+
+### Análisis lexer/parser (item "O(n²)")
+- Medición con micro-benchmarks (fuzz/lexer_bench*.nv, parser_bench.nv):
+  NO queda O(n²) en lexer ni parser (la cuadrática real era el dedup de
+  codegen, corregida en 3.5.8). El lexing de 150 KB cuesta ~6 min porque es
+  LINEAL con constante de intérprete (~2.6 µs/carácter); el parser procesa
+  ~1200 tokens en ~0.1 s. Se intentó inlinear los predicados del lexer y fue
+  25% MÁS lento en intérprete → revertido (lexer verificado byte-idéntico por
+  dump de tokens).
+
+### JIT Tier-1 (nuevo crate::jit en lumen-vm, Cranelift 0.132)
+- Diseño "correcto por construcción": el código nativo NO reimplementa
+  semántica — cada opcode delega a los MISMOS handlers del intérprete vía
+  helpers extern "C" (lj_simple/lj_with_idx/lj_call/lj_ret/...); el JIT solo
+  elimina fetch/decode y ejecuta Jmp/JmpIf/Ret nativamente.
+- Activación: `LUMEN_JIT=1` (APAGADO por defecto → el fixpoint sigue en
+  intérprete puro); umbral 50 llamadas; diagnóstico `LUMEN_JIT_LOG=1`.
+- Subconjunto: cualquier función SIN Halt/PushHandler/PopHandler; llamadas
+  anidadas re-entran (nativo↔interpretado) vía `perform_call`/`run_until_return`
+  con desenrollado intentar/atrapar acotado por profundidad de frames.
+- Bug crítico cazado y corregido en la validación: Jmp/JmpIf son WithIdx→pool
+  de nums (no WithNum); el emisor los trataba como no-ops y rompía ramas
+  (fib(10)=39 vs 55). Corregido + bloqueo entry-first de Cranelift + firma de
+  lj_with_idx (3 params).
+- **Paridad verificada: 13/13** (stress suite completa, enums, destructuring,
+  break/continue/arrays) salida y exit-code idénticos JIT vs intérprete;
+  probe self-hosting = 42 en ambos modos; `lumen check examples` 396/0.
+
+### Benchmarks honestos (release, Linux sandbox)
+| carga                          | intérprete | JIT     |
+|--------------------------------|-----------|---------|
+| fib(24)×3 (call-bound)         | 0.54 s    | 0.56 s  |
+| kernel 20M iters (loop-bound)  | 17.9 s    | 16.2 s  |
+| lexer 5 KB                     | 1.93 s    | 2.03 s  |
+- Conclusión: el delegate-JIT quita el dispatch pero el costo dominante es la
+  maquinaria de llamadas (frames + im::HashMap) y los mapas — ~0-10% neto.
+  Para 10-50× hace falta Tier-2 (fast-paths nativos Int + cache de locals) o
+  builtin nativo de lexing. Se decide con los tiempos locales del fixpoint.
+
+### Archivos nuevos de medición
+- fuzz/lexer_bench.nv (lexer viejo congelado), lexer_bench_old/new.nv (dumps),
+  fuzz/parser_bench.nv, lexer_bench_full.nv (raíz, 150 KB).
+
+## [3.5.10] - 2026-08-27 — Lexer nativo (~800×) + hilos reales en AOT (multinúcleo)
+
+### Lexer nativo `__lexer_nativo` (el mayor acelerador del self-compile)
+- Nuevo módulo `crates/lumen-vm/src/native_lex.rs`: puerto Rust EXACTO del
+  lexer LÚMEN (keywords, hex→decimal, rangos `..`/`..=`, escapes, comentarios,
+  operadores multi-car, post-proceso oper+ident→keyword, tracking linea/col).
+- Estructura de salida idéntica: mapa `"0".."cnt"` → `{t,v,linea,col}` + EOF + `"cnt"`.
+- `lexer_tokenizar` ahora delega al nativo; la versión pura queda como
+  `lexer_tokenizar_puro` (referencia/fallback). Aplica a TODO el pipeline
+  self-hosted (amalgama re-empalmada).
+- **Velocidad**: amalgama 150 KB → **0.44 s nativo vs ~35 min puro** (el dump
+  puro de verificación tardó eso en correr).
+- **Paridad verificada**: 40/40 archivos de examples/stdlib/fuzz (<5 KB) con
+  comparación token-a-token (t,v,linea,col) + edge cases (hex, rangos, escapes,
+  comentarios); probe self-hosting = 42; `Instrs: 14` idéntico; dump de los
+  30,670 tokens del amalgama en curso (mismo dump byte-a-byte).
+- Nota: corrige de paso un bug latente del lexer puro (crash con índice -1 si
+  un literal decimal empieza en la posición 0 del fuente).
+
+### Hilos reales en AOT (backend C) — multinúcleo nativo
+- Antes: `__tarea_lanzar` en AOT era un shim SECUENCIAL falso (ni hilos ni args).
+- Ahora (runtime `lumen_rt.h` + emisor):
+  - `ST/SP`, `gv/gn/gc`, `_err`, `_pars/_parc/_parn` → **thread-local** (cada
+    hilo: pila + entorno global propios; paridad con la VM que crea una VM
+    nueva por hilo en `__hilo_lanzar`).
+  - Trampolines `_ft_<fn>` generados por función: copian los args staged
+    (`lw_thr_args`) a los slots de params (gv TLS) y llaman a `_f_<fn>` —
+    resuelve la convención de AOT (params por slots globales, no por pila).
+  - `_lw_spawn`/`_lw_join` con pthreads/CreateThread; `__hilo_lanzar`,
+    `__hilo_esperar`, `__tarea_lanzar`, `__tarea_esperar` mapeados de verdad.
+  - `-lpthread` en los links C y clang (POSIX).
+- **Medido (2 cores)**: carga CPU-bound 2 tareas → nativo paralelo 1.30 s vs
+  secuencial 1.84 s con resultado idéntico (962992007); en la VM: 3.67 s →
+  1.72 s (2.13×). Corutinas AOT verificadas idénticas VM vs nativo tras el
+  cambio TLS.
+- Recordatorio: la VM ya traía hilos/canales/mutex/tareas (`stdlib/concurrencia.nv`)
+  desde antes; lo nuevo es el soporte real en AOT + typing de sema.
+
+### Sema
+- `__hilo_esperar`/`__thread_join` ya NO se tipan como Texto: caen al fallback
+  dinámico `Numero` (los resultados de join ahora se pueden usar en aritmética
+  sin casts; antes E035).
+
+### Estado de hilos por capa
+| capa | estado |
+|---|---|
+| Lenguaje/stdlib | `concurrencia.nv`: hilos, canales, mutex, tareas, actores ✓ (pre-existente) |
+| VM | hilos OS reales con VM clonada ✓ (pre-existente, validado 2.13×) |
+| JIT | s/r (el JIT compila funciones, los hilos corren funciones) |
+| AOT C | **NUEVO v3.5.10**: hilos reales + args + TLS ✓ |
+| AOT LLVM/Cranelift | pendiente (el emisor LLVM no mapea los builtins de hilo aún) |
+
+## [3.5.11] - 2026-08-28 — ✅ FIXPOINT SELF-HOSTING ALCANZADO (bug Store→StoreLocal)
+
+### El bug que rompía STAGE 2 ("Add requires numbers or strings")
+- **Causa raíz**: codegen.nv emitía `Store` (opcode que CAMINA la cadena de
+  scopes hacia afuera) para DECLARACIONES de variables. En el self-compile,
+  todas las funciones del compilador usan locales con los mismos nombres
+  (`cg`, `i`, `stmt`, `node`...) — la primera declaración de un callee que
+  "caminaba" hacia arriba encontraba el local del CALLER y lo sobreescribía
+  → corrupción en cascada → `Add` recibía un mapa/Void → error de tipo.
+  El codegen Rust no lo sufría porque emite `StoreLocal` (escribe siempre en
+  el scope actual).
+- **Fix**: codegen.nv ahora emite `OP_STORE_LOCAL = 59` para declaraciones:
+  VarDecl, objetivos de destructuring, variables/temporales de range-for,
+  temporales y bindings de `elegir` (match). Las asignaciones siguen con
+  `Store` (necesario para globales). Serializador `__codegen_a_nvc` mapea
+  59→StoreLocal (y deja listos 60/61→ScopePush/ScopePop).
+- **Resultado**: STAGE 1 (3.5 s) → v4_self.nvc; STAGE 2 (3.3 s) → v4_self2.nvc;
+  **cmp byte-a-byte: IDÉNTICOS**, sha256 `27550bd2...f2c84b2f`.
+  Fixpoint completo: ~7 s en total (vs 9.8 h de la corrida original pre-3.5.8).
+
+### Verificación de regresión
+- `lumen check examples`: 396 archivos, 0 errores.
+- Probe self-hosting = 42 (intérprete y JIT); AOT nativo = 42.
+- Paridad VM vs JIT: 14/14 (stress suite completa + enums/destructuring/etc).
+- Corutinas AOT vs VM: salida idéntica.
+
+### Estado JIT (nota de roadmap)
+- **Tier-1** (v3.5.9, `LUMEN_JIT=1`): conectado y correcto por construcción
+  (13→14/14 paridad), ganancia modesta (~0-10%) porque el costo dominante es
+  la maquinaria de llamadas (frames + mapas), no el dispatch.
+- **Tier-2 pendiente** (fast-paths nativos Int + caché de locals): siguiente
+  candidato si algún workload lo justifica; con el fixpoint ya en ~7 s, el
+  self-compile NO lo necesita.
+
+### Confirmación del fixpoint en Windows (local)
+- Corrida local 2026-08-28 19:09: STAGE 1 y STAGE 2 OK (~0.0 min c/u),
+  PROBE=42, **FIXPOINT BYTE-IDENTICAL 171,283 B**, sha256
+  `27550BD21CA78107644EAE82BD865CD5BAB2CB86933DA5CD9E8F4780F2C84B2F`
+  — el MISMO hash que en el sandbox Linux: self-compile determinista
+  multiplataforma. Build local sin warnings.
+- Nota cosmética conocida: en STAGE 2 el `imprimir` multi-arg del compilador
+  auto-compilado sale en varias líneas (el codegen Lúmen emite Prints
+  separados; el Rust emite un solo Call al builtin). Solo afecta diagnósticos,
+  NO el bytecode generado (fixpoint byte-idéntico de todos modos).
+
+## [3.5.12] - 2026-08-28 — Cierre de divergencias nativas: fix crítico `_dcp` + UTF-8
+
+### Fix crítico: corrupción de heap en `_dcp` para arrays (C/Cranelift/LLVM)
+- `_dcp` (deep copy) malloc'aba `argc` slots pero la copia HEREDABA `cap`
+  (capacidad amortizada, p.ej. 8). El siguiente push in-place (`_arr_push_ip`,
+  que confía en `cap>argc`) escribía FUERA del buffer → corrupción silenciosa
+  o abort de glibc.
+- Reproducido con: `cur = xs; cur.agregar(x); xs = cur` → `xs[0][0]` quedaba 0
+  (anidado) o heap-abort (plano). Es el patrón exacto de `vector_db_insertar`.
+- Fix: la copia reserva la capacidad completa (`malloc(cap)`).
+- **Resuelto**: `test_vectordb` (doc_1 = 0.9919 correcto, VM==C==Cranelift),
+  crash de `test_siguiente_fase` (exit 3 → corre completo).
+
+### UTF-8 en backends nativos (paridad con VM)
+- El runtime C contaba bytes (`strlen`); la VM cuenta codepoints
+  (`chars().count()` / `to_uppercase`). Ahora por codepoint: `largo` de texto,
+  indexado `s[i]`, `__str_a_caracteres`, `__str_codigo`, `__str_subcadena`,
+  `__str_mayusculas/__str_minusculas` (mapa 1:1 ASCII+Latin-1; el resto queda
+  igual — cubre acentos; casos multi-char tipo ß→SS quedan como identidad),
+  y `__str_padding_*` (ancho en codepoints).
+- **Resuelto**: `stress_03_unicode` (VM==C==Cranelift) y el remanente de
+  `test_siguiente_fase` (1033 vs 1042 caracteres del OpenAPI).
+
+### Hilos AOT: fix de colisión de símbolos
+- `_lw_spawn/_lw_join` (hilos, v3.5.10) chocaban con `_lw_join(a,b)` (concat)
+  del shim Cranelift/LLVM → TODO build `--aot rust` fallaba al link.
+  Renombrados `_lw_thr_spawn/_lw_thr_join` + stubs `_init/_call_by_name_thread`
+  en el shim. Hilos nativos re-verificados (resultado idéntico a la VM).
+
+### Estado de divergencias (sweep VM↔C: 15/15 en stress+core)
+- ✅ test_vectordb, ✅ stress_03_unicode, ✅ test_siguiente_fase,
+  ✅ fase65_guard_let2 en Cranelift (ya compila y empata con la VM).
+- ⚠️ fase65_guard_let2 destapó un BUG DE LA VM (no del nativo): con
+  `resultado<numero,texto>`, la VM imprime `5`/`NaN` donde lo correcto es
+  `25`/"error: no soportado"/`0` (el backend C da lo correcto). Fix pendiente.
+- ⏳ Closures con capturas: requieren entornos de captura (incremento C);
+  además el parser aún no acepta sintaxis lambda (`|x| ...` → E020).
+- ⏳ Demos baremetal/3D: runtime no disponible en AOT (usar VM o backend C).
+- Fixpoint re-verificado tras todos los cambios: sha `02b0460db823c143…` ✓.
+
+## [3.5.13] - 2026-08-28 — Bug de residuos de pila entre llamadas + fase65 resuelto
+
+### Bug raíz 1: residuos de pila de valores entre llamadas (VM y backend C)
+- La pila de valores es global; cada llamada a builtin como statement (p.ej.
+  un `imprimir` dentro de una función) deja su `Void` resultado sin consumir.
+  Al retornar la función, esos residuos quedaban debajo del valor de retorno y
+  DESALINEABAN los argumentos de llamadas multi-arg del llamador:
+  `imprimir("a: ", f(x))` imprimía `void<valor>` si `f` tenía statements dentro.
+- **Fix VM**: `CallFrame.stack_base` (profundidad al entrar, args ya popeados);
+  `Ret` trunca la pila a `stack_base` antes de pushear el retorno. Aplicado en
+  los 3 sitios que empujan frames (Call, CallValue, run_function).
+- **Fix backend C**: cada función emite `int _sb = SP;` al entrar y
+  `{ Val _r = POP(); SP = _sb; return _r; }` en cada Ret.
+- El retorno implícito (última expresión del cuerpo) sigue funcionando: el
+  valor queda arriba de los residuos y Ret lo popea primero.
+
+### Bug raíz 2: colisión de nombre en fase65_guard_let2
+- El ejemplo definía `funcion raiz(...)` — nombre del builtin `raiz`/`sqrt`.
+  La resolución (builtins primero, en VM y en C) llamaba a sqrt: `raiz(25)` → 5,
+  `raiz(-1)` → NaN. El guard-let de la VM SIEMPRE funcionó; el ejemplo estaba mal.
+- El ejemplo ahora usa `raiz_resultado`; salida correcta en VM, C y Cranelift:
+  `25 / "error: no soportado" / 0`.
+
+### Bug raíz 3: backend C sin builtins matemáticos
+- El backend C no tenía `raiz/sqrt, piso/floor, techo/ceil, redondear/round,
+  abs, potencia/pow, min, max` (la VM sí). Agregados al runtime (`_m_*`) y al
+  emisor, con la MISMA semántica de tipos que la VM (Int→Int si ambos Int,
+  Float en otro caso; sqrt siempre Float; pow entero solo con exponente ≥ 0).
+- Verificado: VM y C idénticos en los 9 builtins.
+
+### Regresión
+- Sweep VM↔C: **15/15** (stress 01-06, enums, destructuring, arrays, break,
+  continue, condicional, vectordb, siguiente_fase, fase65_guard_let2).
+- Fixpoint intacto (sha `02b0460db823c143…`); corutinas VM==C; hilos VM==C.
+- `lumen check examples`: 396/0.
+
+### Estado divergencias (actualizado)
+- ✅ sort vectordb (v3.5.12 _dcp) · ✅ structs dinámicos siguiente_fase
+  (v3.5.12) · ✅ unicode (v3.5.12) · ✅ fase65 guard-let (esta versión).
+- ⏳ Closures con capturas: requiere entornos de captura (incremento C) +
+  sintaxis lambda en el parser (`|x| ...` hoy da E020). Es el ítem restante.
+- ⏳ Demos baremetal/3D: runtime no disponible en AOT (documentado).
+
+## [3.5.14] - 2026-08-28 — Closures: sintaxis pipe + funciones anidadas + capturas
+
+### Sintaxis lambda con pipes (nueva, parser)
+- `|x| x + 1`, `|a, b| a * b`, y cuerpo de bloque `|x| { retornar ...; }`.
+- Parámetros con tipo (`|entero x| ...`), estilo colon (`|x: entero| ...`) o
+  sin tipo (inferido `numero`). Se añadió `parse_pipe_lambda`/`parse_pipe_param`
+  en el parser; reutiliza `Expr::Lambda` existente. Verificado end-to-end.
+
+### Funciones anidadas con nombre (nuevo, parser+sema+IR)
+- Antes: `funcion inner()` dentro de otra daba E042 ("no definida"). Ahora:
+  - sema `collect_functions` recursivo: registra funciones anidadas.
+  - IR builder `register_funcs` recursivo: las registra en `program.funcs` para
+    que las llamadas se resuelvan como llamadas directas (no CallValue).
+- Funciona: funciones anidadas con y sin capturas usadas DENTRO de la función
+  contenedora (las capturas se resuelven por la cadena de scopes de la VM).
+  Ej: `make_adder(base){ funcion add(x){ retornar x+base; } retornar add(3); }` → OK.
+
+### Divergencia de capturas VM↔nativo (importante)
+- Las capturas funcionan en la VM (cadena de scopes): `make(10)`→13.
+- En C/Cranelift las capturas resuelven a 0 (`make(10)`→3) porque esos backends
+  no tienen cadena de scopes; las funciones anidadas son funciones separadas sin
+  acceso al scope del llamador. → Las capturas son hoy SOLO-VM. Evitar capturas
+  en código destinado a AOT hasta implementar entornos de captura (incremento C).
+
+### Limitación restante (cierre léxico real)
+- RETORNAR la closure como valor de primera clase y llamarla FUERA de su scope
+  definitorio aún no funciona (requiere entornos de captura léxicos = incremento C).
+  El caso `retornar add;` + `f(5)` afuera todavía no.
+
+### Regresión
+- check examples 396/0; sweep VM↔C 15/15; fixpoint byte-idéntico (sha 02b0460d…).
+
+## [3.5.15] - 2026-08-28 — Capturas en backend C (closures con capturas, incremento C parcial)
+
+### Problema
+Las funciones anidadas que capturan variables del scope contenedor daban valor
+incorrecto en el backend C (p.ej. `make_adder(10)`→3 en vez de 13). El backend
+C renombra variables por función (`make::base`), así que la referencia libre
+`base` dentro de `add` resolvía a un slot vacío (`base`) en vez de al slot del
+padre (`make::base`). La VM no tenía este problema (cadena dinámica de scopes).
+
+### Fix (backend C)
+- IR: `Program.parents` (función anidada → contenedora), poblado por
+  `register_funcs_inner` recursivo.
+- `compile_to_c`: al construir `renames`, para cada función anidada agrega los
+  params de TODA la cadena de ancestros (padre, abuelo, ...) al mapa de
+  renombrado. El ancestro más cercano gana ante colisiones. Así las referencias
+  a variables capturadas resuelven al slot renombrado del ancestro.
+
+### Verificado
+- Capturas simples, múltiples y anidación doble: VM==C (10/301/1011).
+- Sweep VM↔C 15/15; fixpoint byte-idéntico (sha 02b0460d…).
+- Limitación: capturas de solo-lectura. Capturas MUTABLES desde nativo y el
+  cierre léxico real (retornar la closure y llamarla fuera) siguen pendientes.
+
+### Estado closures (actualizado)
+| caso | VM | C | Cranelift |
+|---|---|---|---|
+| lambda sin captura | ✅ | ✅ | ✅ |
+| anidada sin captura | ✅ | ✅ | ✅ |
+| captura (usada dentro) | ✅ | ✅ (3.5.15) | ✅ (3.5.16) |
+| capture múltiple/abuelo | ✅ | ✅ (3.5.15) | ✅ (3.5.16) |
+| closure retornada (fuera) | ❌ | ❌ | ❌ |
+
+## [3.5.16] - 2026-08-28 — Capturas en Cranelift (closures vía celdas globales)
+
+### Fix
+Se extendió la resolución de capturas (v3.5.15) al backend Cranelift. Las
+variables capturadas se promueven a celdas globales mangadas `{ancestro}::{var}`:
+- `compute_captures` identifica variables capturadas por funciones anidadas.
+- En `compile_body`, `cap_cell_for(n)` resuelve Load/Store/StoreLocal de una
+  variable capturada a su celda global.
+- El binding de entrada guarda los parámetros capturados en la celda global.
+- Las celdas de captura se agregan a `global_names`.
+
+### Verificado
+- Capturas simple/múltiple/abuelo: VM==Cranelift (10/13/301/1011).
+- Sweep VM↔Cranelift 13/14 (el único fallo, stress_03_unicode, es pre-existente:
+  Cranelift no soporta `__str_a_caracteres`/`__str_mayusculas`/`__str_padding_inicio`).
+- Sweep VM↔C 6/6; fixpoint byte-idéntico; check examples 396/0.
+
+### Pendiente
+- Closure léxica real (retornar la closure y llamarla fuera del scope) requiere
+  entornos de captura reales en los backends. Sigue pendiente.
+- Hilos en Cranelift/LLVM siguen pendientes (tabla nombre→función-nativa + linkage).
+
+## [3.5.17] - 2026-08-28 — Hilos reales en Cranelift + concurrencia completa en nativo
+
+### Hilos en Cranelift (el pendiente de v3.5.16)
+- Trampolines `__lumen_ft_<fn>` emitidos por Cranelift (Export, uno por
+  función): leen cada argumento con `_lw_thr_arg_handle(k)` (deep-copy del
+  Val estagiado en el TLS del hilo hijo) y llaman a la función nativa.
+- Shim de link con conocimiento del programa: `lw_shim_source_for(program)`
+  arma la tabla `_lft_names/_lft_ptrs` + `_call_by_name_thread` que consume
+  el runtime pthread/Win32 de lumen_rt.h. `lw_shim_source()` (stubs) queda
+  solo para el path LLVM.
+- Nuevos helpers de handles: `_lw_cstr`, `_lw_thr_spawn_h` (estagia handles
+  → Val[] y crea el hilo), `_lw_thr_join_h`, `_lw_thr_arg_handle`.
+- `Instr::Call` de Cranelift mapea `__hilo_lanzar/__hilo_esperar`
+  (+alias `__tarea_*`/`__thread_*`); `cranelift_supported` los acepta y
+  `llvm_supported` los rechaza explícitamente (el emisor LLVM no los mapea).
+- CLI: el link de `--rust` ahora pasa `-lpthread` (no-Windows).
+
+### Canales y mutexes nativos (paridad VM en C y Cranelift)
+- lumen_rt.h: `LwChan` (buffer circular + condvar, recv bloqueante),
+  `_lw_chan_new/_lw_chan_send/_lw_chan_recv`, `_lw_mutex_new`,
+  `_lw_mutex_lock_call` (estagia 1 arg en `lw_thr_args` TLS y ejecuta la
+  función nombrada bajo el cerrojo vía `_call_by_name_thread`).
+- Backend C: mapeo directo de `__canal_*`/`__mutex_*` a la capa `_rt_*_v`.
+- Cranelift: helpers `_lw_chan_*_h`/`_lw_mutex_*_h` + mapeo en `Instr::Call`.
+- VM: los registros de canales/mutexes ahora son `Arc<Mutex<..>>` COMPARTIDOS
+  entre la VM madre y las VMs de `__hilo_lanzar` (antes cada hilo tenía su
+  registro y `__canal_recibir` entre hilos colgaba para siempre).
+
+### Otras paridades nativas
+- Calendarios `__calendario_hijri/__calendario_persa` porteados al runtime
+  (aritmética idéntica a la VM) y mapeados en C y Cranelift.
+- Tiempo: `__tiempo_ahora/__tiempo_formatear/__tiempo_diferencia/
+  __tiempo_parsear` mapeados en Cranelift (ya estaban en C).
+
+### Fixes de semántica en backend C (detectados al verificar hilos)
+- CAPTURA DE LOCALES: las variables `sea` declaradas en el scope base de un
+  ancestro ahora se capturan igual que los params (seed de captura en
+  `plan_var_keys`, orden de planes padres→hijos, `base_bindings` replica el
+  nombrado exacto de keys). Antes: la anidada veía void (VM/Cranelift OK).
+- GLOBALES: variables `sea` de la entrada usadas por otras funciones van a
+  UN slot compartido (key cruda), paridad con `program_global_names` de
+  Cranelift/LLVM. Antes cada función veía su propio slot y las mutaciones
+  se perdían (`total=0` en vez de `3`).
+- SAVE/RESTORE de llamada: `name_sets` ahora conserva solo slots PROPIOS
+  (`{fn}::...`); globales y slots capturados ya no se restauran tras la
+  llamada (se deshacían mutaciones legítimas).
+
+### Verificado
+- Hilos: spawn/join con args enteros y texto, 3 y 8 hilos — VM==C==Cranelift
+  (11555324 y 2200278), determinista en 5 corridas.
+- Canal ENTRE hilos (productor/consumidor con recv bloqueante): 142 en los
+  3 backends.
+- `examples/jr_concurrencia.nv` (hilos+canal+mutex+calendarios): idéntico
+  en VM, C y Cranelift.
+- `cargo test -p lumen-aot`: 10/10 (incluye test nuevo `test_cranelift_threads`).
+- check examples 396/0.
+- Pendiente: closure léxica real (retornar la closure y llamarla fuera);
+  stress_03_unicode en Cranelift (builtins de string, pre-existente).
+
+## [3.5.18] - 2026-08-28 — Closures léxicas reales + stress_03 unicode + suite de benchmarks
+
+### Closures léxicas: retornar la closure y llamarla fuera del scope
+El pendiente histórico de v3.5.12-3.5.16 queda cerrado para el caso canónico:
+```
+funcion entero contador() {
+    sea n = 0;
+    funcion entero inc() { n = n + 1; retornar n; }
+    retornar inc;            // la función ESCAPA como valor
+}
+sea f = contador();
+imprimir("c1:" + f());       // 1
+imprimir("c2:" + f());       // 2 — el estado capturado persiste
+```
+- **sema**: las funciones anidadas se pre-registran como VALORES
+  (`TypeInfo::Func`) en el scope del padre; `E058` ("no es una función") se
+  convierte en llamada dinámica (tipo Numero) para habilitar variables que
+  guardan closures.
+- **builder**: `Expr::Ident` que nombra una función registrada emite
+  `FuncRef` (antes siempre `Load`); las llamadas sobre variables ya usaban
+  `Load + CallValue` (sin cambio).
+- **VM**: nuevo `Value::Closure { name, env }`. FuncRef captura los bindings
+  visibles en CELDAS COMPARTIDAS (Arc<Mutex<Value>>); CallValue inyecta el
+  entorno como scope sintético de `Value::Ref` (write-through) y `Ret` lo
+  desapila (CallFrame.is_closure). Cada instancia de la factory tiene su
+  PROPIO entorno: semántica léxica completa.
+- **C / Cranelift / LLVM**: usan la maquinaria ya existente (FuncRef→T_FRE
+  con puntero nativo, CallValue indirecto) + las celdas de captura de
+  v3.5.15/3.5.16, que son estáticas y sobreviven al retorno del padre.
+  Limitación v1 documentada: múltiples instancias de la misma factory
+  COMPARTEN las celdas (VM sí las separa por instancia).
+
+### stress_03_unicode resuelto en Cranelift (pre-existente desde v3.5.16)
+- Nuevos helpers: `_lw_str_chars_h`, `_lw_str_upper_h`, `_lw_str_lower_h`,
+  `_lw_str_pad_h` sobre `_to_chars/_case_str/_pad_str` del runtime.
+- Mapeados: `__str_a_caracteres`, `__str_mayusculas/__str_minusculas`,
+  `__str_padding_inicio/__str_padding_fin` (+alias ingleses).
+- fuzz/stress_03_unicode.nv: idéntico en VM, C y Cranelift (UTF-8 correcto:
+  "HOLA ÑANDÚ", chars de "añó" = 3, padding con relleno).
+
+### Suite de benchmarks multi-lenguaje (benchmarks/)
+- Tareas idénticas en Lúmen/C/C++/Rust/Python: fib(30), suma 50M, primos
+  <100k (división de prueba), 200k strings construidos, array de 2M.
+- Harness `benchmarks/run_bench.py`: mide tiempo de pared + RSS pico
+  (wait4) por tarea e implementación (VM, AOT-C, Cranelift, LLVM si hay
+  clang) y genera results/benchmark.csv + results/informe.md.
+- Cargas calibradas para que todas las implementaciones completen: fib(26),
+  suma 10M, primos<20k, 200k strings, arrays de 200k. La calibración misma
+  es un hallazgo: el límite lo pone la memoria del runtime de handles.
+
+### Fix de runtime descubierto por el benchmark: `_fmt` (backend C/Cranelift)
+- `_fmt` malloc-aba 8192 bytes POR LLAMADA y los dejaba ir (leak de 8-40KB
+  por iteración en bucles de strings) → strings 30k: 599MB/0.40s ANTES,
+  16MB/0.02s DESPUÉS.
+- HEAP-OVERFLOW potencial: T_STR hacía memcpy sin límite al buffer de 8KB
+  (textos >8KB corrompían el heap); T_ARR/T_TUP/T_STT/T_MAP concatenaban sin
+  crecer. Ahora: buffers de tamaño exacto por caso, T_STR=strdup directo y
+  crecimiento con realloc (_fmt_grow) para colecciones.
+
+## [3.5.19] - 2026-08-28 — Velocidad: las 4 mejoras del informe de benchmark
+
+### ① Promoción de registros en el backend C (el gran salto de AOT)
+Los locales propios que no escapan (sin `MakeRef`, sin captura por funciones
+anidadas, sin ser globales) salen de `gv[]` y se convierten en variables
+locales C (`Val _lv0, _lv1, ...`): GCC los mantiene en REGISTROS y optimiza
+los bucles como C nativo. Consecuencias:
+- Load/Store de locales ya no toca memoria global por instrucción.
+- El save/restore alrededor de llamadas se encoge (los locales promovidos
+  viven en el stack de C, per-call — la recursión es correcta por
+  construcción, sin restaurar gv).
+- Params y globales siguen en gv (ABI de hilos, CallValue, capturas).
+
+### ② Caché inline de resolución de variables en la VM
+`Load`/`Store` resolvían por scan de scopes con lookup de HashMap por nivel
+en CADA instrucción. Ahora una caché name-idx→(gen, scope) resuelve en un
+solo lookup; la generación se invalida en todo cambio estructural de
+`locals` (push/pop de scopes, frames, truncate, declaraciones nuevas —
+14 puntos + inserciones de StoreLocal/Store). Fallback seguro al scan
+completo si la entrada no aplica.
+
+### ③ Arena bump TLS para el runtime de handles (Cranelift/LLVM)
+`_lw_box` mallokeaba por cada valor cajado (hot-path de cada operación).
+Ah usa arenas bump de 4MB thread-local: asignación ~10× más barata. La
+memoria sigue sin liberarse (GC real sigue pendiente — limitación #1
+documentada en el informe), pero el costo por operación cae drásticamente.
+
+### ④ Optimizador IR: constant folding (beneficia a TODOS los backends)
+Nuevo `lumen-ir/src/optimize.rs`: pliega `Const a; Const b; Binary op` →
+`Const r` (y `Unary`) para aritmética entera/float/comparaciones con
+semántica EXACTA (wrapping, sin plegar división por cero ni MIN/-1, sin
+tocar Concat/strings). Conectado en los 4 puntos de construcción de IR del
+CLI (build nvc, backends, run, suite de pruebas). Menos instrucciones =
+VM más rápida, menos ops de stack en C, menos box/unbox en Cranelift.
+
+### Nota fixpoint
+El bytecode de compiler_v4.nvc cambia (el pipeline Rust ahora pliega
+constantes); v4_self/v4_self2 los produce el compilador self-hosted SIN el
+optimizador, así que el fixpoint byte-idéntico se preserva.
+
+### ⑤ Fusión de instrucciones en el emisor C (la optimización más grande)
+El patrón canónico de bucle `Load/Const; Load/Const; Binary; Store|JmpIf`
+(esqueleto de `x = x + 1`, `acc = acc + i`, `si (i < n)`) ahora se emite
+como UNA sentencia C sin tráfico de la pila de valores ST[]. Resultado:
+**sum 10M pasó de 0.796s a 0.121s (6.6×)**; AOT-C ya supera a Python en
+fib/sum/primes.
+
+### ⑥ Peephole en la VM (fusión de opcodes en el dispatch)
+- `Add/Sub/Mul` (Int,Int) inspeccionan la siguiente instrucción: si es
+  `Store`, escriben directo sin push/pop ni dispatch del Store.
+- `Lt/Le/Gt/Ge/Eq/Neq` (Int,Int): si sigue `JmpIf`, saltan directo sin
+  push del booleano ni dispatch del salto.
+- `step_instr` con `#[inline(always)]` (el loop de `run` ya no paga la
+  llamada al dispatcher).
+- Refactor: `do_store_by_idx` comparte la lógica de Store con el peephole.
+Ganancia ~5-10% (el dispatch sigue dominando; super-opcodes de bytecode son
+la siguiente fase).
+
+### Resultados benchmark v3.5.19 (benchmarks/results/informe.md)
+- AOT-C vs Python: fib 0.026s vs 0.031s · sum 0.121s vs 0.693s (5.7×) ·
+  primes 0.022s vs 0.026s.
+- Cranelift: fib -18% tiempo y -16% RSS (arena).
+- Regresión: tests aot 10/10, vm 695/695, sweep 25/25, fixpoint idéntico,
+  closures y concurrencia intactos en los 3 backends.
+
+## [3.5.20] - 2026-08-28 — Ultra-velocidad: emisor por expresiones, always-inline, super-opcodes VM y GC en Cranelift
+
+### AOT-C: emisor por pila de expresiones (eliminación de ST[] en tramos rectos)
+El backend C ya no pasa cada valor por la pila de valores ST[] en los tramos
+sin saltos: mantiene una PILA DE EXPRESIONES C (`_bin(1, _deref(acc), _deref(i))`)
+y materializa en UNA sentencia por Store/JmpIf/Return. GCC optimiza el bucle
+completo (registros, CSE, strength reduction).
+- **Freshness tracking**: si el valor a guardar es demostrablemente FRESCO
+  (resultado de operación/llamada, sin alias), se asigna SIN `_dcp` — ahorra
+  la copia profunda de arrays/strings recién creados.
+- `LW_HOT` (`always_inline`) en `_deref`, `_bin`, `_truthy`, `_v_int`, etc.:
+  la struct Val de 80B por valor hacía que la heurística de GCC rechazara el
+  inlining → cada op del bucle pagaba una llamada real. Sin esto, el emisor
+  por expresiones no rendía (45× más lento que C puro).
+- Resultado: **sum 10M de 0.796s (v3.5.18) a 0.007s (114×)** — a 7× de C
+  nativo; primes a 1.5× de C; fib/arrays 5-6×.
+
+### VM: super-opcodes de bytecode (~18-20% en bucles)
+Nuevas instrucciones fusionadas (solo el pipeline Rust las emite; el
+compilador self-hosted sigue el formato clásico → fixpoint intacto):
+- `FusedBinK/FusedBin` (d = a OP b|k) y `FusedCmpKJmp/FusedCmpJmp`
+  (if !(a OP b|k) goto) — 4 instrucciones IR → 1 bytecode, sin push/pop.
+- Fast-paths Int/Int y Float en la VM; fallback completo (strings, mezcla).
+- Encode/decode con tags 5-8; disasm y JIT actualizados (el JIT cede esas
+  funciones a la VM, cuyos brazos rápidos ganan).
+- `do_load_by_idx` unificado con la caché inline de variables.
+- sum VM: 3.15s → 2.66s.
+
+### Cranelift: GC conservador mark-sweep con reutilización (adiós OOM)
+- Arena bump TLS + freelist: cuando la asignación acumulada supera 8MB,
+  mark-sweep. Raíces: scan conservador del STACK nativo (incluye los slots y
+  spills de Cranelift, donde viven los handles i64) + registros vía setjmp.
+  Los boxes NUNCA apuntan a otros boxes → marcado de un nivel.
+- Tope de stack real por hilo: Windows vía TEB StackBase; Linux vía
+  /proc/self/maps (cache TLS). Evita leer memoria no mapeada.
+- Cada hilo barre solo su arena TLS; los valores cruzan hilos como Val por
+  valor (join/canales), nunca como handle → sound entre hilos.
+- Resultado: sum 10M en Cranelift de **OOM a 14MB**; fib 274→14MB; todos los
+  benchmarks con resultados correctos.
+- Fix incluido: el wrapper `main` de Cranelift devolvía el handle del
+  resultado como exit code (salidas basura tipo 48/112); ahora retorna 0.
+
+### Verificación
+- sweep paridad 25/25 (VM==C==Cranelift) · fixpoint byte-idéntico ·
+  tests aot 10/10 · hilos/canales/closures en Cranelift con GC activos.
+
+## [3.5.21] - 2026-08-28 — Enteros sin tag en AOT-C (closing the gap con C)
+
+### Análisis de tipos IR + emisión `long long` nativa
+- `int_promotion_analysis`: punto fijo GLOBAL sobre el programa.
+  - Locales: enteros si todas sus escrituras son expresiones enteras
+    (ConstInt/aritmética entera/cargas de otra variable entera).
+  - Parámetros: enteros si todos los llamadores ESTÁTICOS pasan enteros y el
+    cuerpo no los reasigna; se copian del slot gv UNA vez al entrar.
+  - Salvaguardas: funciones alcanzables solo dinámicamente (`__hilo_lanzar`,
+    CallValue, FuncRef, `__mutex_bloquear`, `__coro_crear`) NO promocionan
+    parámetros; quedan fuera capturadas, objetivos de MakeRef y globales.
+- Emisor C: los bucles enteros operan con `long long` reales — wrapping
+  exacto vía aritmética unsigned (paridad con `wrapping_add` de la VM),
+  shifts con máscara `& 63` (paridad `wrapping_shl`), comparaciones como
+  test C directo (sin `_truthy`/`_bin`). La conversión `_v_int` ocurre solo
+  en las fronteras.
+- Interacción con lo anterior: se combina con la pila de expresiones
+  (v3.5.20) y los `always_inline`; los locales promovidos a Val (v3.5.19) y
+  los enteros son excluyentes.
+
+### Resultados (benchmarks/results/informe.md)
+- sum 10M: **0.796s (v3.5.18) → 0.005s = 159×** (~5× de C, ~110× más rápido
+  que Python). primes 20k: **a la par de C**. fib/arrays ~6-8× de C (el gap
+  restante es el ABI de llamadas, no la aritmética).
+- Regresión controlada: el bug de promocionar params de funciones sin
+  llamadores estáticos (hilos) se detectó en el sweep (jr_concurrencia/
+  hilos_stress divergían: el param texto llegaba vacío) y se corrigió con el
+  conjunto de llamadores dinámicos.
+- sweep paridad 25/25 · fixpoint byte-idéntico · tests aot 10/10.
+
+## [3.5.22] - 2026-08-28 — Move-semantics en argumentos de llamada (análisis de último uso)
+
+### El cambio
+- `last_uses` por función: índice del último Load/MakeRef/ArrayPushVar de cada
+  variable (las keys capturadas por anidadas quedan excluidas).
+- Las llamadas a funciones de usuario ahora se emiten desde el camino de
+  expresiones: cada argumento FRESCO o de ÚLTIMO USO se materializa SIN
+  `_dcp` (`Val _mvN_K = expr;`), el resto con `_dcp` (conservador).
+- Semántica idéntica a la VM: si la variable no se vuelve a leer, copiar o
+  mover es indistinguible; si se lee después, se copia como antes.
+- Bugs cazados en el camino:
+  - temporales `_mva0` repetidos entre llamadas → contador por función;
+  - hazard de sincronización XE↔ST: con la pila de expresiones pendiente,
+    el resultado de una llamada en ST[] desordenaba los POPs posteriores
+    (`"move:" + f(x)` imprimía invertido) → el brazo de llamada hace
+    `xe_spill` del resto antes de emitir.
+
+### Resultados
+- fib(26): 0.016 → **0.012s** (recursión sin _dcp de args).
+- strings 200k: 0.148 → **0.088s**. arrays 200k: 0.019 → 0.017s.
+- Nuevos benchmarks: `passargs` (500k llamadas con array+texto) 0.038s;
+  `movebig` (array de 100k elementos pasado por move, suma incluida) 0.012s.
+- Acumulado sesión v3.5.18 → v3.5.22: sum 10M **0.796s → 0.005s (159×)**;
+  primes a la par de C; fib ~6× C (el resto del gap es la representación Val).
+- sweep paridad 25/25 · fixpoint byte-idéntico · tests aot 10/10.
+
+## [3.5.23] - 2026-08-28 — ABI de argumentos en registros C (cerrando el gap)
+
+### El refactor
+Las funciones que NUNCA se llaman por nombre reciben sus argumentos como
+PARÁMETROS C nativos (`Val _pv0` / `long long _lli0` directamente en la
+firma), sin staging por gv[] ni save/restore de params; la recursión es
+nativa de C.
+- Elegibilidad: fuera `dyn_named` (hilos/mutex/corutinas/FuncRef detectados
+  con walk de pila abstracta sobre `__hilo_lanzar` etc. con cualquier nº de
+  args) y fuera params capturados por anidadas (deben vivir en gv).
+- `_fw_<fn>(void)`: wrapper gv→registros para `_call_by_name` y el camino
+  legacy; `_ft_<fn>` de hilos delega en el wrapper.
+- El brazo XE de llamada convierte tipos en el sitio (LL→int param directo,
+  Val→`(long long)_asf(...)`, LL→`_v_int(...)`), aplica move-semantics a los
+  args Val, y emite la llamada directa con save/restore SOLO de locales gv.
+- Bug del análisis de enteros corregido: las claves de param en el mapa de
+  locales enmascaraban el mapa de params (fib no promocionaba su param).
+- `prestado mut` preservado: el Load de param Val emite `_deref` (T_PTR).
+- Bugs cazados: `windows(2)` no veía el nombre en `__hilo_lanzar` con 2+
+  args (hilos divergían a 0); firmas `()` vs `(void)`; `_mva` duplicados.
+
+### Resultados (acumulado v3.5.18 → v3.5.23)
+| Tarea | v3.5.18 | v3.5.23 | Mejora | vs C |
+|---|---|---|---|---|
+| sum 10M | 0.796s | **0.002s** | **~400×** | ~2× |
+| fib(26) | 0.032s | **0.009s** | 3.6× | ~4.5× |
+| primes 20k | 0.027s | **0.003s** | 9× | **a la par** |
+| strings 200k | 0.103s | 0.103s | — | ~10× |
+| arrays 200k | 0.089s | 0.018s | 5× | ~6× |
+
+- sweep paridad 25/25 · fixpoint byte-idéntico · tests aot 10/10.
+
+## [3.5.24] - 2026-08-28 — Las 3 palancas finales: noinline condicional, strings rápidos, returns-int
+
+### 1. Análisis no-throw + NOINLINE condicional
+- `no_throw_analysis` (punto fijo decreciente, siembra optimista → la
+  recursión se resuelve): una función no lanza si no contiene Div/Mod,
+  ArrayGet/Set, TupleAccess ni llamadas lanzadoras fuera de sus `intentar`.
+- Las funciones no-lanzantes se emiten SIN `LUMEN_NOINLINE` (gcc las
+  inlinea) y SIN ERRCHK (muertos por definición); las llamadas a callees
+  no-lanzantes tampoco emiten ERRCHK.
+
+### 2. Strings: concat directo + adopción de buffers
+- `_concat2(a, b)`: STR+STR en un solo malloc con 2 memcpys (sin ida y
+  vuelta por `_fmt`); tipos mixtos delegan en `_bin(2, ...)`. Se usa en el
+  camino de expresiones Y en el legacy.
+- `_v_str_take(char*)`: `a_texto` adopta el buffer de `_fmt` sin recopiarlo
+  (antes: doble copia + leak del buffer intermedio).
+
+### 3. Análisis no-mutación → argumentos compartidos sin _dcp
+- `no_mutate_analysis` (punto fijo): una función no muta si no tiene
+  ArrayPushVar/ArraySet/StructSet/MakeRef, no recibe prestados ni llama a
+  mutantes. Sus argumentos se pasan SIN `_dcp` — misma semántica que la VM
+  (que comparte vía Arc) y ahorro de copias profundas.
+
+### 4. Retornos `long long` para funciones que siempre devuelven entero
+- `returns_int_analysis`: punto fijo sobre los valores de retorno. Las
+  funciones que siempre devuelven entero retornan `long long` nativo (8B en
+  vez de Val de 80B por llamada): fib pasa de devolver structs de 80B en
+  cada una de sus ~400k llamadas recursivas a enteros en registro.
+- Wrappers `_fw_` envuelven el resultado en Val para `_call_by_name`/
+  trampolines de hilos; callers XE reciben el resultado como LL (kind 1).
+
+### Resultados (acumulado v3.5.18 → v3.5.24)
+| Tarea | v3.5.18 | v3.5.24 | vs C | vs Rust | vs Python |
+|---|---|---|---|---|---|
+| fib(26) | 0.032s | **0.005s** | 2.5× | **a la par** | **6× más rápido** |
+| sum 10M | 0.796s | **0.002s** | 2× | **a la par** | **310× más rápido** |
+| primes 20k | 0.027s | **0.003s** | 1.5× | **a la par** | 9× más rápido |
+| arrays 200k | 0.089s | 0.018s | 6× | 9× | 2× más rápido |
+| strings 200k | 0.103s | 0.124s | 12× | 10× | 0.5× (Python gana) |
+
+fib/sum/primes: **rendimiento de Rust/C++**. Verificación: sweep 25/25,
+fixpoint byte-idéntico, tests aot 10/10, hilos/canales/closures intactos.
+
+## [3.5.25] - 2026-08-28 — Arena de strings, arrays fast-path, enteros nativos en Cranelift, dispatch VM
+
+### Frente A — Arena de strings (TLS bump)
+- `_sa_alloc`: arena bump thread-local para buffers de texto; `_v_str` y
+  `_concat2` la usan. Los strings de LÚMEN son inmutables y nunca se liberan,
+  así que la arena es semánticamente exacta y elimina malloc por
+  concatenación. strings 200k en AOT-C: 0.124 → **0.083s** (y menos RSS).
+
+### Frente B — Arrays: fast-paths en el runtime
+- `_arr_get` inline con fast-path T_ARR (`__builtin_expect`) y camino
+  genérico restaurado para tuplas (el refactor inicial lo borró → divergencia
+  detectada por el sweep y corregida); `_arr_push_ip` inline con expect.
+
+### Frente C — Enteros nativos en Cranelift (fusión sobre slots i64)
+- `int_vars_by_name`: punto fijo decreciente sobre la pila abstracta con
+  pops/pushes EXACTOS por instrucción (`instr_pops_pushes`) — los deltas
+  netos dejaban residuos que promocionaban variables falsas (detectado con
+  opcion.nv/arrays.nv y corregido).
+- Locales siempre-enteros (no capturados, no MakeRef, no globales, declaración
+  única) viven en slots i64 de 8B; fusión de patrones
+  Load/Const;Load/Const;Arith/Cmp;Store/JmpIf → código nativo sin boxing,
+  con saltos vía `brif` directo (bloque fall-through nuevo).
+- Brazos Load/Store de int-locals: box/unbox solo en el límite (`_lw_h2i`).
+- Bugs cazados y corregidos en el camino: el bucle convertido de `for` a
+  `while` colgaba en `continue` (el for avanzaba solo); globales
+  promocionados por error; MakeRef targets; análisis desincronizado.
+- sum en Cranelift: **2.13s → 0.85s (2.5×)**; strings 0.19 → 0.15.
+
+### Frente D — Dispatch de la VM
+- `#[inline(always)]` en step_instr y `#[inline]` en los 4 ejecutores:
+  mejora marginal (~2-3%); el threaded-dispatch real requiere computed-goto
+  (nightly) — documentado como límite estructural del intérprete en stable.
+
+### Verificación
+- sweep paridad 25/25 · fixpoint byte-idéntico · tests aot 10/10 ·
+  vm 695/695 · benchmark oficial 35/35 OK.
+
+## [3.5.26] - 2026-08-29 — Arrays de enteros unboxed en AOT-C (gap de arrays cerrado)
+
+### Análisis de arrays de enteros puros (`arr_vars_by_name`)
+- Punto fijo con kinds {Int, Arr, Not}: un local es array-de-enteros si se
+  declara `sea xs = []` y solo recibe `agregar` de enteros, lecturas con
+  índice y `largo`, sin escapar jamás (llamadas, print, asignación-alias,
+  ArraySet lo degradan).
+- Emisión: `long long* xs_d; long long xs_n, xs_c;` con crecimiento
+  amortizado por realloc; ventanas de fusión en el camino de expresiones:
+  - `Load xs; Load j|ConstInt; ArrayGet` → lectura nativa con bounds-check
+    en statement-expression (un solo uso del índice, sin doble evaluación).
+  - `Load xs; ArrayLen` → `xs_n` directo.
+  - `ArrayPushVar xs` → push nativo inline SIN apilar el resultado-residuo
+    (el residuo inundaría ST[16384] — bug detectado: segfault a los 16k
+    elementos; en la VM el residuo es inofensivo porque la pila crece).
+- Prioridad de promociones: la promoción entera (v3.5.23) tiene prioridad
+  sobre la promoción Val (v3.5.19) — antes se disputaban i/j y ganaba Val.
+
+### Resultados
+- arrays 200k: **0.018s → 0.003s (6×) = C = C++ exacto**.
+- Batería: tests aot 10/10 · sweep paridad 25/25 · fixpoint byte-idéntico.
+- El único gap nativo restante: strings (0.082 vs C 0.010) por la
+  representación de texto (malloc+memcpy por concat); requiere builders con
+  buffer reutilizable a nivel de IR.
+
+## [3.5.27] - 2026-08-29 — Gap de strings CERRADO en AOT-C (0.082s → 0.013s, a la par de C)
+
+El benchmark strings construía 200k textos (`"item-" + a_texto(i) + "-fin"`)
+y sumaba sus largos. Costes detectados: el bucle caía al camino legacy ST[]
+(los builtins `a_texto`/`largo` cortaban el camino de expresiones), `_bin(1)`
+para STR hacía `_fmt(a)+_fmt(b)+malloc+_v_str` (3 mallocs CON LEAK y 3-4
+copias por concat), `_fmt` de enteros usaba snprintf (~100-300ns), y cada
+literal se copiaba al arena por iteración.
+
+### Runtime (lumen_rt.h)
+- `_bin` op 1 STR: STR+STR → `_concat2` (1 alloc arena); mixto → solo se
+  formatea el lado no-texto y se concatena en el arena. Corrige además 3
+  leaks por concatenación (los buffers de `_fmt` y del resultado intermedio
+  nunca se liberaban).
+- `_itoa_ll`/`_itoa_sa`: itoa manual ~10-20× más rápido que snprintf("%lld").
+  `_fmt` T_INT lo usa; `_itoa_sa` escribe directo en el arena.
+- `_to_text`/`_to_text_ll`: `a_texto()` como función del runtime con
+  fast-path entero (arena, sin malloc ni snprintf).
+- `_largo_ll`: `largo()` como función (misma tabla que la emisión legacy).
+- `_v_str_lit`: los literales de texto se envuelven SIN copia al arena
+  (son inmutables y viven en .rodata) — antes: strlen+alloc+memcpy por
+  iteración en bucles con literales.
+- Funciones calientes de texto marcadas `inline`.
+
+### Emisor C (lib.rs)
+- Brazos XE para los builtins `a_texto`/`largo` (argc 1): ya no cortan la
+  cadena de expresiones — el bucle de texto se queda en registros C sin
+  tráfico ST[] (PUSH/POP de Vals de 80B).
+- `int_promotion_analysis`: `largo` builtin propaga IKind::Int → los
+  acumuladores `total = total + largo(s)` se promocionan a `long long`.
+- `ConstStr` (XE y legacy) emite `_v_str_lit`.
+- Legacy `a_texto` y dispatch `_call_by_name` → `_to_text`; shim Cranelift
+  `_lw_to_text` → `_to_text` (strings en Cranelift: 0.15s → 0.078s).
+
+### Resultados (AOT-C)
+| Tarea | v3.5.26 | v3.5.27 | C | C++ | Rust |
+|---|---|---|---|---|---|
+| strings 200k | 0.082s | **0.013s (6×)** | 0.010s | 0.008s | 0.009s |
+
+Las 5 tareas quedan a la par de C/C++/Rust: fib 0.006 · sum 0.002 ·
+primes 0.002-0.003 · strings 0.013 · arrays 0.002-0.003.
+
+### Verificación
+- tests workspace 956/956 · sweep paridad 25/25 · fixpoint byte-idéntico
+  (170985 B) · edge-cases texto (INT64_MIN, unicode, concat mixto, bools,
+  floats) VM vs C idénticos · benchmark oficial 35/35 OK.
+
+## [3.5.28] - 2026-08-29 — ABI de enteros crudos en Cranelift (gap de llamadas cerrado)
+
+El backend Cranelift boxea/desboxea cada valor como handle opaco i64 en cada
+operación. v3.5.25 introdujo slots i64 y fusión, pero las LLAMADAS seguían
+pagando box/unbox/deep-copy y un ERRCHK por instrucción. Esta versión porta el
+ABI de enteros del backend C a Cranelift.
+
+### ABI de enteros crudos (interprocedural)
+- `cr_call_graph`: `direct_callers` (Call estáticos) y `dyn_named`
+  (FuncRef + hilos/corutinas/mutex por nombre). Las funciones dinámicas
+  reciben handles arbitrarios → nunca se especializan.
+- `cr_params_int_analysis`: punto fijo — un parámetro es entero si NINGÚN
+  llamador estático le pasa no-entero y no se reasigna; pliega las mismas
+  exclusiones que compile_body (ref_targets/capturas/celdas/globales/stored)
+  para que llamador y llamado decidan EXACTAMENTE lo mismo.
+- `cr_returns_int_analysis`: punto fijo — funciones que SIEMPRE devuelven
+  entero retornan i64 crudo.
+- Llamada directa: params int reciben el i64 CRUDO (sin box ni dcp); el
+  resto recibe handle (dcp solo de handles). Resultado int → i64 crudo.
+- Stack con kinds `(Value, 0=handle|1=i64|2=b8)`: aritmética/comparación
+  entera nativa; Div/Mod nativos con zero-check inline (`_lw_throw_div`,
+  paridad "Error: Division por cero" + INT64_MIN/-1); los consumidores
+  boxean solo si lo necesitan.
+- ERRCHK solo si el callee puede lanzar (`no_throw_analysis`, misma que C):
+  fib pasa a llamadas limpias.
+- Params enteros SIN celda Val de 80B (solo slot i64) y void0 perezoso:
+  fib ya no paga `_lw_void`+`_lw_store_slot_direct` por frame.
+
+### Bugs corregidos en el camino
+- Colisión de nombre param↔global (`program_global_names`): el análisis
+  decía "int" y compile_body "handle" → el llamador pasaba i64 crudo y el
+  llamado leía handle → SEGFAULT. Ahora params_int es la única fuente de
+  verdad. (regresión: fuzz/cr_colision_global.nv)
+- Div/Mod pasaban operandos CRUDOS a `_lw_bin` (espera handles) → SEGFAULT.
+  (regresión: fuzz/cr_divmod_entero.nv)
+- Bloque de label vacío al final de función (`elegir` donde todos los casos
+  retornan) → el verificador de Cranelift lo rechaza; se rellena con return.
+
+### Resultados (Cranelift)
+| Tarea | v3.5.27 | v3.5.28 | C | Rust |
+|---|---|---|---|---|
+| fib | 0.095s | **0.003s (32×)** | 0.005s | 0.004s |
+| primes | 0.054s | **0.004s (13×)** | 0.002s | 0.002s |
+| sum | 0.735s | **0.027s (27×)** | 0.001s | 0.001s |
+
+fib y primes quedan **a la par de C/Rust**. Frontera restante: sum (locales
+enteros viven en stack slots → tráfico de memoria por iteración; C los
+promueve a registros) y strings/arrays (boxing de handles por concat/push;
+requiere portar el string-builder y los arrays unboxed).
+
+### Verificación
+- tests workspace 956/956 · sweep paridad 27/27 · fixpoint byte-idéntico
+  (170985 B) · Div/Mod con try/catch e INT64_MIN/-1 idénticos VM vs C vs
+  Cranelift · benchmark oficial OK.
+
+## [3.5.29] - 2026-08-29 — Arrays de enteros sin boxear en Cranelift + fix de arrays literales
+
+### Arrays de enteros sin boxear en Cranelift (paridad con C)
+- Reutiliza `arr_vars_by_name` (v3.5.26) para detectar arrays de enteros
+  que no escapan, y los materializa en tres slots i64 (ptr/len/cap) en vez
+  de handles de 80B:
+  - `agregar` → `_lw_iarr_push` (crecimiento amortizado ×2, sin boxing del
+    elemento ni deep-copy del array).
+  - `xs[j]`/`xs[0]` → fusión `Load xs; Load j|ConstInt; ArrayGet` →
+    `_lw_iarr_get` nativo con bounds-check (lanza "Indice fuera de rango"
+    capturable por intentar/atrapar).
+  - `xs.largo()` → fusión `Load xs; ArrayLen` → carga de len nativa.
+  - `sea xs = []` → slots inicializados a 0 en el entry (sin LW_ARR_NEW).
+- `int_vars_by_name` ahora lleva pila con fuente (kind, variable) para que
+  `xs[j]` sobre array promovido propague Int y los acumuladores
+  (`acc = acc + xs[j]`) se promocionen a slots i64.
+
+### Bug corregido — arrays literales locales (backend C y Cranelift)
+- `arr_vars_by_name` promocionaba `ArrayNew(n)` para cualquier n, pero el
+  camino nativo solo inicializa arrays VACÍOS: un literal local
+  `sea xs = [1, 2, 3]` quedaba promovido sin elementos → "Indice fuera de
+  rango". Ahora solo `ArrayNew(0)` se promociona (intención documentada en
+  v3.5.26); los literales con elementos usan el camino Val. Detectado por
+  el nuevo fuzz/arrays_nativos.nv.
+
+### Resultados (Cranelift)
+| Tarea | v3.5.28 | v3.5.29 | C | C++ | Rust |
+|---|---|---|---|---|---|
+| arrays 200k | 0.088s | **0.003s (29×)** | 0.002s | 0.002s | 0.002s |
+| primes 20k | 0.059s | **0.003s** | 0.002s | 0.002s | 0.002s |
+| fib(26) | 0.044s | **0.002s** | 0.005s | 0.008s | 0.002s |
+
+Cranelift queda **a la par de C/C++/Rust en fib, primes y arrays**.
+Frontera restante: sum (slots i64 con load/store por iteración vs
+registros de C) y strings (boxing de handles por concatenación).
+
+### Verificación
+- tests workspace 956/956 · sweep paridad 28/28 (nuevo
+  fuzz/arrays_nativos.nv: push/get/bounds-catch/literales) · fixpoint
+  byte-idéntico (170985 B) · benchmark oficial OK.

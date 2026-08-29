@@ -127,6 +127,14 @@ pub enum Value {
     Bool(bool),
     Array(Arc<Vec<Value>>),
     Func(String),
+    /// v3.5.18: closure léxica escapada — nombre de la función + entorno
+    /// capturado en el momento del FuncRef. Cada binding capturado es una
+    /// celda compartida (Arc<Mutex<Value>>): las mutaciones dentro de la
+    /// closure persisten entre llamadas y son propias de cada instancia.
+    Closure {
+        name: String,
+        env: std::collections::HashMap<String, std::sync::Arc<std::sync::Mutex<Value>>>,
+    },
     Struct {
         name: String,
         fields: Vec<(String, Value)>,
@@ -251,6 +259,11 @@ impl Hash for Value {
             Value::Func(name) => {
                 6u8.hash(state);
                 name.hash(state);
+            }
+            Value::Closure { name, env } => {
+                30u8.hash(state);
+                name.hash(state);
+                env.len().hash(state);
             }
             Value::Struct { name, fields } => {
                 7u8.hash(state);
@@ -415,6 +428,7 @@ impl Value {
             Value::Str(s) => !s.is_empty(),
             Value::Array(v) => !v.is_empty(),
             Value::Func(_) => true,
+            Value::Closure { .. } => true,
             Value::Struct { .. } => true,
             Value::Enum { .. } => true,
             Value::Exito(_) => true,
@@ -446,6 +460,7 @@ impl fmt::Display for Value {
                 write!(f, "[{}]", items.join(", "))
             }
             Value::Func(s) => write!(f, "<funcion {}>", s),
+            Value::Closure { name, .. } => write!(f, "<closure {}>", name),
             Value::Struct { name: _, fields } => {
                 let items: Vec<String> = fields
                     .iter()

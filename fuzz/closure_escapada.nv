@@ -1,0 +1,11 @@
+funcion entero contador() {
+    sea n = 0;
+    funcion entero inc() {
+        n = n + 1;
+        retornar n;
+    }
+    retornar inc;
+}
+sea f = contador();
+imprimir("c1:" + f());
+imprimir("c2:" + f());

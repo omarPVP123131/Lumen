@@ -1,0 +1,3 @@
+x = 12.5; 0xFF .. ..= "a\nb\t\"c" si(x) ++ <= != || && << >> 3.14 // comentario
+/* bloque */ ident123 _priv
+0x8B4513 rango 1..10 ..=  "cadena larga sin escapes aqui" 		  fin

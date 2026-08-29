@@ -1,0 +1,13 @@
+// Benchmark 4 — strings: construir 200k textos y sumar longitudes
+funcion entero bench_strings(entero n) {
+    sea total = 0;
+    entero i = 0;
+    mientras (i < n) {
+        sea s = "item-" + a_texto(i) + "-fin";
+        total = total + largo(s);
+        i = i + 1;
+    }
+    retornar total;
+}
+
+imprimir("strings:" + bench_strings(200000));
