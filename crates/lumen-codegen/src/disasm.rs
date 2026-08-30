@@ -58,6 +58,45 @@ pub fn disassemble(bc: &Bytecode) -> String {
                     op, a, b, target
                 ));
             }
+            Instruction::FusedBinCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                c,
+                target,
+            } => {
+                output.push_str(&format!(
+                    "FUSED_BIN_CMP_JMP op1={} op2={} @{} @{} @{} -> @{}\n",
+                    op1, op2, a, b, c, target
+                ));
+            }
+            Instruction::FusedBinKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                target,
+            } => {
+                output.push_str(&format!(
+                    "FUSED_BIN_K_CMP_JMP op1={} op2={} @{} @{} k={} -> @{}\n",
+                    op1, op2, a, b, k, target
+                ));
+            }
+            Instruction::FusedBinKKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                target,
+            } => {
+                output.push_str(&format!(
+                    "FUSED_BIN_KK_CMP_JMP op1={} op2={} @{} b={} k={} -> @{}\n",
+                    op1, op2, a, b, k, target
+                ));
+            }
         }
     }
 

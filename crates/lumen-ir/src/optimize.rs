@@ -201,27 +201,71 @@ fn optimize_func(func: &mut Func) {
                 st.pop();
                 out.push(ins.clone());
             }
+            // v3.5.34 (bug real del folder): las instrucciones que CONSUMEN
+            // operandos y producen un valor (neto 0 o mixto) deben
+            // desapilar explícitamente lo consumido: el modelo por delta
+            // neto NO lo hacía y pliegues posteriores BORRABAN del `out`
+            // constantes que eran argumentos (p.ej. `f(3) + 1` perdía el
+            // `3` y el `Add` → "Stack underflow" en runtime).
+            Instr::Call(_, argc) | Instr::EnumCtor { argc, .. } => {
+                for _ in 0..*argc {
+                    st.pop();
+                }
+                out.push(ins.clone());
+                st.push((Abs::Unknown, None));
+            }
+            Instr::CallValue(argc) => {
+                // argc args + el valor-función debajo.
+                for _ in 0..(argc + 1) {
+                    st.pop();
+                }
+                out.push(ins.clone());
+                st.push((Abs::Unknown, None));
+            }
+            Instr::ArrayNew(n) => {
+                for _ in 0..*n {
+                    st.pop();
+                }
+                out.push(ins.clone());
+                st.push((Abs::Unknown, None));
+            }
+            Instr::StructNew(_, n) => {
+                for _ in 0..(2 * *n) {
+                    st.pop();
+                }
+                out.push(ins.clone());
+                st.push((Abs::Unknown, None));
+            }
+            Instr::TupleNew(n) => {
+                for _ in 0..*n {
+                    st.pop();
+                }
+                out.push(ins.clone());
+                st.push((Abs::Unknown, None));
+            }
+            Instr::OptionSome
+            | Instr::ResultOk
+            | Instr::ResultErr
+            | Instr::MatchType(_)
+            | Instr::MatchPayload
+            | Instr::MatchVariant(_)
+            | Instr::TupleAccess(_)
+            | Instr::TryUnwrap => {
+                st.pop();
+                out.push(ins.clone());
+                st.push((Abs::Unknown, None));
+            }
             other => {
                 // Regla general por delta de profundidad de pila.
                 let delta: i32 = match other {
                     Instr::Load(_) | Instr::Read | Instr::FuncRef(_) | Instr::OptionNone => 1,
-                    Instr::Call(_, argc) => 1 - *argc as i32,
-                    Instr::CallValue(argc) => -(*argc as i32),
-                    Instr::ArrayNew(n) => 1 - *n as i32,
                     Instr::ArrayPush => -1,
                     Instr::ArrayGet => -1,
                     Instr::ArraySet => -2,
                     Instr::ArrayLen => 0,
                     Instr::ArrayPushVar(_) => 0,
-                    Instr::StructNew(_, n) => 1 - 2 * (*n as i32),
                     Instr::StructGet => -1,
                     Instr::StructSet => -2,
-                    Instr::TupleNew(n) => 1 - *n as i32,
-                    Instr::TupleAccess(_) => 0,
-                    Instr::OptionSome | Instr::ResultOk | Instr::ResultErr => 0,
-                    Instr::TryUnwrap => 0,
-                    Instr::MatchType(_) | Instr::MatchPayload | Instr::MatchVariant(_) => 0,
-                    Instr::EnumCtor { argc, .. } => 1 - *argc as i32,
                     Instr::MakeRef(_) => 1,
                     Instr::Return | Instr::Halt => -1,
                     Instr::Print => -1,
@@ -241,7 +285,21 @@ fn optimize_func(func: &mut Func) {
                     | Instr::JmpIf(_)
                     | Instr::Phi(..)
                     | Instr::Store(_)
-                    | Instr::StoreLocal(_) => unreachable!(),
+                    | Instr::StoreLocal(_)
+                    | Instr::Call(_, _)
+                    | Instr::CallValue(_)
+                    | Instr::ArrayNew(_)
+                    | Instr::StructNew(_, _)
+                    | Instr::TupleNew(_)
+                    | Instr::OptionSome
+                    | Instr::ResultOk
+                    | Instr::ResultErr
+                    | Instr::MatchType(_)
+                    | Instr::MatchPayload
+                    | Instr::MatchVariant(_)
+                    | Instr::TupleAccess(_)
+                    | Instr::TryUnwrap
+                    | Instr::EnumCtor { .. } => unreachable!(),
                 };
                 let mut d = delta;
                 while d < 0 {

@@ -146,3 +146,22 @@ variable nombrada para implementar `prestado mut` con write-back real.
 - AOT C: baja a un puntero real (`T_PTR` → `_v_ptr(&gv[slot])`) con escritura
   inmediata; los params se renombran por función (`{fn}::{param}`) y las
   declaraciones locales por sitio (`plan_var_keys`) para sombreado correcto.
+
+---
+
+## Estado actual del VM (v3.5.7 + rondas v3.5.31→v3.5.37)
+
+- **Arena de valores `flat`**: los scopes mapean nombre → slot (u32); el valor
+  vive en `flat`. Slots liberados van a una freelist (el flat nunca se encoge).
+- **Scopes de parámetros posicionales**: sin mapa hash — `params[i] ↔ slots[i]`.
+- **Pools de buffers de scope** (v3.5.36): los Vec de slots y mapas se reciclan
+  (sin alloc/free por llamada ni por bloque).
+- **Caché de variables**: por name-idx → (slot, scope_idx, scope_id, gen) con
+  invalidación SELECTIVA (solo el nombre sombreado se invalida al entrar a una
+  llamada o insertar un nombre nuevo).
+- **`CallFrame.has_refs`** (v3.5.34): `Ret` solo escanea write-backs de `Ref`
+  cuando el frame almacenó alguno con owner.
+- **Integración JIT**: los cuerpos nativos invocan helpers `pub` del VM
+  (`probe_int_pub`, `resolve_slot_pub`, `concat_pub`, …) que comparten la
+  semántica del intérprete; contrato de retorno 0/1/2 (2 = re-ejecutar el
+  frame en el intérprete). Ver [../arquitectura/jit.md](../arquitectura/jit.md).

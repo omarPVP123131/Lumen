@@ -1,6 +1,8 @@
 # 📖 LÚMEN — Compendio Técnico Integral y Enciclopedia Oficial (info.md)
 
-**Versión del Ecosistema: v3.5.7 — Compilación Unificada de Todos los Documentos del Proyecto (956 tests, 396 ejemplos, AOT Industrial)**
+**Versión del Ecosistema: v3.5.7 + rondas JIT v3.5.31→v3.5.37 — Compilación Unificada de Todos los Documentos del Proyecto (956 tests ×2, 396 ejemplos, AOT Industrial, JIT Tier-1/Tier-2/Tier-R, TOTAL benchmarks 267.1 ms = 5.8×)**
+
+> 📚 La documentación está reorganizada por carpetas — índice en [`docs/README.md`](docs/README.md). Arquitectura del JIT en [`docs/arquitectura/jit.md`](docs/arquitectura/jit.md).
 
 ---
 

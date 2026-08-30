@@ -1,3 +1,33 @@
+# Changelog de LÚMEN
+
+## [3.5.7 + Rondas JIT v3.5.31→v3.5.37] - 2026-08-30
+
+> Trabajo de rendimiento benchmark-driven posterior a la v3.5.7 de producción:
+> JIT VM + AOT, con paridad byte-a-byte ON/OFF en cada ronda. Detalle técnico en
+> [docs/arquitectura/jit.md](docs/arquitectura/jit.md); números en
+> [docs/informes/BENCHMARK.md](docs/informes/BENCHMARK.md) y
+> [benchmarks/results/informe.md](benchmarks/results/informe.md).
+
+### Rendimiento (TOTAL de benchmarks, min-of-15, release): 590 → 267.1 ms (5.8× vs intérprete)
+- **Tier-R (v3.5.34)**: recursión auto-nativa en registros — fib 74 → **4.4 ms** (23× vs intérprete, ~2× el C)
+- **Tier-2 (v3.5.31+)**: bucles con aritmética de pila nativa sobre la arena de slots; arrays y strings nativos; super-opcodes Fused de 3 y 6 instrucciones; JmpIf nativo (v3.5.35); análisis estático de tipos VTag con concat rápido `lj_concat` y Load/Store nativos por etiqueta (v3.5.37)
+- **Tier-1**: delegación por shims con prólogo de 1 call por nombre (`lj_probe_int`) y `lj_call_fast` para nombres no-builtin (decisión estática)
+- **VM (intérprete, v3.5.36)**: pools de buffers de scope (sin alloc por llamada) + invalidación SELECTIVA de la caché de variables → fib OFF 107.7 → 100.4 ms
+
+### Bugs reales encontrados y arreglados por las rondas
+- v3.5.33 — constant folder IR: `i64::MIN / -1` paniqueaba y `%` era truncante (no `rem_euclid`) — paridad exacta con el runtime
+- v3.5.34 — folder optimize.rs: modelo de pila por delta NETO → `f(3) + 1` borraba el argumento y el `Add` ("Stack underflow" en ambos modos)
+- v3.5.35 — Tier-2: puntero `flat` obsoleto tras realocación (calls a usuario asignan slots) → lecturas nativas a memoria liberada (primes daba 1 o bucles infinitos)
+- v3.5.37 — Load/Store nativos por etiqueta indexaban `slots[nidx]` sin verificar resolución del prólogo → panic en el fixpoint
+
+### Estado de verificación (2026-08-30)
+`cargo fmt --check` 0 · `clippy --all -- -D warnings` 0 · 956/956 tests ×2 (JIT ON/OFF) ·
+`lumen check examples` 396/396 · ci_gate 392 PASS / 0 crashes ×2 · fixpoint self-hosting byte-idéntico (sha256 `02b0460d…`)
+
+### Limpieza y documentación
+- Documentación reorganizada: `docs/` con índice central ([docs/README.md](docs/README.md)) y subcarpetas guias/referencia/arquitectura/desarrollo/spec/informes; `reports/` → `docs/informes/`; nuevo [docs/arquitectura/jit.md](docs/arquitectura/jit.md)
+- Raíz del repo limpia: artefactos de tests de archivos eliminados y cubiertos por `.gitignore`; `scripts/update_docs.py` (obsoleto, regeneraba docs v1.6.0) eliminado; script de fixpoint actualizado a la nueva ruta
+
 ## [3.5.7] - 2026-08-29
 
 ### AOT Industrial — Cranelift/LLVM completos + memoria nativa (Incremento B)

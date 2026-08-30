@@ -429,12 +429,20 @@ pub const MAX_CALL_STACK_DEPTH: usize = 10_000;
 
 #[derive(Debug, Clone)]
 pub struct CallFrame {
-    pub func_name: String,
+    /// v3.5.31: índice del nombre en `bytecode.names` (cero allocs por
+    /// llamada; resolver con `VM::frame_func_name` bajo demanda).
+    pub func_name: usize,
+    /// Solo para nombres SINTÉTICOS (closures sin entrada en el pool):
+    /// `func_name == usize::MAX` y el nombre vive aquí.
+    pub func_label: Option<String>,
     pub return_ip: usize,
     /// Nivel de `locals` al entrar a la función (antes del scope de params).
     /// Se usa en Ret para desapilar todos los scopes del frame y hacer
     /// write-back de referencias prestado mut (bug #6).
     pub locals_base: usize,
+    /// v3.5.34: ¿algún slot de ESTE frame recibió un Value::Ref con owner?
+    /// Si no, Ret salta el escaneo de write-backs (el caso dominante).
+    pub has_refs: bool,
     /// v3.5.13: profundidad de la pila de valores al entrar (args ya popeados).
     /// En Ret se trunca hasta aquí para descartar residuos de llamadas a
     /// statements (p.ej. el Void que deja un `imprimir` interior) que antes
@@ -471,7 +479,9 @@ impl std::fmt::Display for VmError {
 }
 
 impl VmError {
-    pub fn with_stack(self, stack: &[CallFrame]) -> String {
+    /// v3.5.31: recibe la VM para resolver los nombres de los marcos bajo
+    /// demanda (CallFrame guarda solo el índice del nombre).
+    pub fn with_stack(self, vm: &VM) -> String {
         let msg = match &self {
             VmError::Runtime(s) => format!("Error: {}", s),
             VmError::StackUnderflow => "Error: Stack underflow".to_string(),
@@ -480,16 +490,390 @@ impl VmError {
             VmError::DivisionByZero => "Error: División por cero".to_string(),
             VmError::TypeError(s) => format!("Error de tipo: {}", s),
         };
+        let stack = &vm.call_stack;
         if stack.is_empty() {
             msg
         } else {
             let trace: Vec<String> = stack
                 .iter()
-                .map(|f| format!("  · {}", f.func_name))
+                .map(|f| format!("  · {}", vm.frame_func_name(f)))
                 .collect();
             format!("{}\n\nPila de llamadas:\n{}", msg, trace.join("\n"))
         }
     }
+}
+/// v3.5.31: nombres de los builtins (generado por scripts/gen_builtin_names.py
+/// desde call_core_builtin / call_extra_builtin). Solo se usa como
+/// pre-filtro O(1) en el camino caliente de Call: si el nombre NO está aquí,
+/// es función de usuario y se despacha SIN clonar el String (los builtins
+/// conservan la precedencia: se despachan primero).
+// 352 nombres (generado por scripts/gen_builtin_names.py)
+pub(crate) const BUILTIN_NAMES: &[&str] = &[
+    "__a_f64_bytes",
+    "__actor_enviar",
+    "__actor_new",
+    "__actor_nuevo",
+    "__actor_recibir",
+    "__actor_recv",
+    "__actor_send",
+    "__aes_decrypt",
+    "__aes_desencriptar",
+    "__aes_encriptar",
+    "__aes_encrypt",
+    "__agregar_archivo",
+    "__arc_asignar",
+    "__arc_get",
+    "__arc_new",
+    "__arc_nuevo",
+    "__arc_obtener",
+    "__arc_set",
+    "__buf_reader",
+    "__buf_writer",
+    "__bytes_a_f64",
+    "__calendar_hijri",
+    "__calendar_persian",
+    "__calendario_hijri",
+    "__calendario_persa",
+    "__canal_enviar",
+    "__canal_nuevo",
+    "__canal_recibir",
+    "__channel_new",
+    "__channel_recv",
+    "__channel_send",
+    "__cluster_conectar",
+    "__cluster_connect",
+    "__cluster_enviar",
+    "__cluster_send",
+    "__codegen_a_nvc",
+    "__codificacion_utf8",
+    "__compilar_nv",
+    "__compile_nv",
+    "__conjunto_agregar",
+    "__conjunto_diferencia",
+    "__conjunto_interseccion",
+    "__conjunto_nuevo",
+    "__conjunto_tiene",
+    "__conjunto_unir",
+    "__coro_ceder",
+    "__coro_crear",
+    "__coro_create",
+    "__coro_reanudar",
+    "__coro_resume",
+    "__coro_yield",
+    "__deque_agregar_final",
+    "__deque_agregar_frente",
+    "__deque_len",
+    "__deque_longitud",
+    "__deque_new",
+    "__deque_nuevo",
+    "__deque_pop_back",
+    "__deque_pop_front",
+    "__deque_push_back",
+    "__deque_push_front",
+    "__deque_quitar_final",
+    "__deque_quitar_frente",
+    "__desde_utf8",
+    "__dormir",
+    "__duracion_nueva",
+    "__duracion_segundos",
+    "__duration_new",
+    "__duration_secs",
+    "__encoding_from_utf8",
+    "__encoding_utf8",
+    "__enlazada_agregar_final",
+    "__enlazada_agregar_frente",
+    "__enlazada_longitud",
+    "__enlazada_nuevo",
+    "__enlazada_quitar_final",
+    "__enlazada_quitar_frente",
+    "__env_list",
+    "__env_listar",
+    "__escribir_archivo",
+    "__escribir_archivo_async",
+    "__escribir_archivo_bin",
+    "__escritor_buffer",
+    "__existe_archivo",
+    "__ffi_alloc",
+    "__ffi_asignar",
+    "__ffi_asm",
+    "__ffi_c_eval",
+    "__ffi_call",
+    "__ffi_cargar",
+    "__ffi_escribir",
+    "__ffi_free",
+    "__ffi_leer",
+    "__ffi_liberar",
+    "__ffi_llamar",
+    "__ffi_llamar_nv",
+    "__ffi_load",
+    "__ffi_peek",
+    "__ffi_peek64",
+    "__ffi_peek_byte",
+    "__ffi_peek_ptr",
+    "__ffi_peek_u32",
+    "__ffi_peek_u8",
+    "__ffi_poke",
+    "__ffi_poke_byte",
+    "__ffi_poke_u32",
+    "__ffi_poke_u8",
+    "__ffi_read",
+    "__ffi_rust_eval",
+    "__ffi_write",
+    "__file_append",
+    "__file_bytes",
+    "__file_exists",
+    "__file_read",
+    "__file_read_async",
+    "__file_size",
+    "__file_write",
+    "__file_write_async",
+    "__file_write_binary",
+    "__fs_listar",
+    "__fs_listdir",
+    "__generador_nuevo",
+    "__generador_siguiente",
+    "__generator_new",
+    "__generator_next",
+    "__gui_cerrar",
+    "__gui_close",
+    "__gui_esperar",
+    "__gui_hwnd",
+    "__gui_id",
+    "__gui_mostrar",
+    "__gui_poll",
+    "__gui_show",
+    "__gui_ventana",
+    "__gui_window",
+    "__hash_sha256",
+    "__hash_sha512",
+    "__heap_len",
+    "__heap_new",
+    "__heap_peek",
+    "__heap_pop",
+    "__heap_push",
+    "__hilo_esperar",
+    "__hilo_lanzar",
+    "__http_enviar",
+    "__http_get",
+    "__http_obtener",
+    "__http_post",
+    "__http_server",
+    "__http_servidor",
+    "__js_call",
+    "__js_eval",
+    "__js_evaluar",
+    "__js_llamar",
+    "__json_parse",
+    "__json_parsear",
+    "__json_stringify",
+    "__json_texto",
+    "__jwt_codificar",
+    "__jwt_decode",
+    "__jwt_decodificar",
+    "__jwt_encode",
+    "__lector_buffer",
+    "__leer_archivo",
+    "__leer_archivo_async",
+    "__leer_bytes",
+    "__lex_native",
+    "__lexer_nativo",
+    "__linked_len",
+    "__linked_new",
+    "__linked_pop_back",
+    "__linked_pop_front",
+    "__linked_push_back",
+    "__linked_push_front",
+    "__list_reverse",
+    "__list_sort",
+    "__lista_invertir",
+    "__lista_ordenar",
+    "__main__",
+    "__map_claves",
+    "__map_contains",
+    "__map_contiene",
+    "__map_get",
+    "__map_keys",
+    "__map_len",
+    "__map_longitud",
+    "__map_new",
+    "__map_nuevo",
+    "__map_obtener",
+    "__map_poner",
+    "__map_set",
+    "__monticulo_agregar",
+    "__monticulo_longitud",
+    "__monticulo_nuevo",
+    "__monticulo_quitar",
+    "__monticulo_ver",
+    "__mutex_bloquear",
+    "__mutex_lock",
+    "__mutex_new",
+    "__mutex_nuevo",
+    "__num_a_f64_bytes",
+    "__numero_a_bytes_f64",
+    "__par_join",
+    "__par_map",
+    "__par_mapear",
+    "__par_unir",
+    "__process_pid",
+    "__regex_capturar",
+    "__regex_captures",
+    "__regex_coincide",
+    "__regex_is_match",
+    "__regex_new",
+    "__regex_nuevo",
+    "__regex_reemplazar",
+    "__regex_replace",
+    "__rwlock_escribir",
+    "__rwlock_leer",
+    "__rwlock_new",
+    "__rwlock_nuevo",
+    "__rwlock_read",
+    "__rwlock_write",
+    "__scope_cancel",
+    "__scope_cancelar",
+    "__scope_lanzar",
+    "__scope_new",
+    "__scope_nuevo",
+    "__scope_spawn",
+    "__seleccionar",
+    "__select",
+    "__self_healing_estado",
+    "__self_healing_invocar",
+    "__self_healing_registrar_parche",
+    "__serial_abrir",
+    "__serial_open",
+    "__set_add",
+    "__set_diff",
+    "__set_has",
+    "__set_inter",
+    "__set_new",
+    "__set_union",
+    "__sistema_pid",
+    "__sleep",
+    "__str_a_caracteres",
+    "__str_a_entero",
+    "__str_caracter",
+    "__str_chr",
+    "__str_codigo",
+    "__str_concat_list",
+    "__str_concatenar_lista",
+    "__str_contains",
+    "__str_contiene",
+    "__str_dividir",
+    "__str_empieza_con",
+    "__str_from",
+    "__str_len",
+    "__str_longitud",
+    "__str_lower",
+    "__str_mayusculas",
+    "__str_minusculas",
+    "__str_ord",
+    "__str_pad_end",
+    "__str_pad_start",
+    "__str_padding_fin",
+    "__str_padding_inicio",
+    "__str_recortar",
+    "__str_reemplazar",
+    "__str_replace",
+    "__str_slice",
+    "__str_slice_chars",
+    "__str_split",
+    "__str_starts_with",
+    "__str_subcadena",
+    "__str_subcadena_chars",
+    "__str_to_chars",
+    "__str_trim",
+    "__str_upper",
+    "__stream_chunks",
+    "__stream_colectar",
+    "__stream_collect",
+    "__stream_desde",
+    "__stream_filter",
+    "__stream_filtrar",
+    "__stream_from",
+    "__stream_map",
+    "__stream_mapear",
+    "__stream_trozos",
+    "__supervisor_add",
+    "__supervisor_agregar",
+    "__supervisor_iniciar",
+    "__supervisor_new",
+    "__supervisor_nuevo",
+    "__supervisor_start",
+    "__tamano_archivo",
+    "__tarea_esperar",
+    "__tarea_lanzar",
+    "__task_await",
+    "__task_spawn",
+    "__tcp_accept",
+    "__tcp_aceptar",
+    "__tcp_conectar",
+    "__tcp_conectar_async",
+    "__tcp_connect",
+    "__tcp_connect_async",
+    "__tcp_escuchar",
+    "__tcp_listen",
+    "__temporizador_esperar",
+    "__texto_a_entero",
+    "__thread_join",
+    "__thread_spawn",
+    "__tiempo_ahora",
+    "__tiempo_diferencia",
+    "__tiempo_formatear",
+    "__tiempo_parsear",
+    "__time_diff",
+    "__time_format",
+    "__time_now",
+    "__time_parse",
+    "__timer_delay",
+    "__timezone_info",
+    "__tipo_de",
+    "__typeof",
+    "__unicode_normalizar",
+    "__unicode_normalize",
+    "__zona_info",
+    "a_texto",
+    "abs",
+    "absoluto",
+    "agregar",
+    "ceil",
+    "floor",
+    "imprimir",
+    "largo",
+    "leer",
+    "len",
+    "main",
+    "max",
+    "maximo",
+    "min",
+    "minimo",
+    "piso",
+    "potencia",
+    "pow",
+    "principal",
+    "print",
+    "push",
+    "raiz",
+    "read",
+    "redondear",
+    "round",
+    "sqrt",
+    "techo",
+    "to_texto",
+];
+
+/// v3.5.31: conjunto estático para el pre-filtro (OnceLock).
+pub(crate) fn builtin_name_set() -> &'static std::collections::HashSet<&'static str> {
+    use std::sync::OnceLock;
+    static SET: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
+    SET.get_or_init(|| {
+        let mut h = std::collections::HashSet::new();
+        for n in BUILTIN_NAMES {
+            h.insert(*n);
+        }
+        h
+    })
 }
 
 #[cfg(any(feature = "extra", feature = "full"))]
@@ -503,36 +887,124 @@ pub struct VmSnapshot {
     pub ip: usize,
     pub instr_count: usize,
     pub stack: Vec<Value>,
-    pub locals: Vec<HashMap<String, Value, FixHasher>>,
+    pub locals: Vec<ScopeFrame>,
+    pub flat: Vec<Value>,
+    pub free_slots: Vec<u32>,
     pub call_stack: Vec<CallFrame>,
     pub output_len: usize,
 }
 
+/// v3.5.31: marco de scope con los VALORES en la arena `flat` (VM::flat).
+/// El mapa nombre → slot evita hashear el nombre en cada acceso (el caché
+/// var_cache apunta directo al slot); `slots` es el inventario para liberar
+/// al cerrar el scope; `id` es una identidad única para validar el caché
+/// (un pop+push en el mismo índice NO revalida entradas muertas).
+#[derive(Debug, Clone)]
+pub struct ScopeFrame {
+    pub map: HashMap<String, u32, FixHasher>,
+    pub slots: Vec<u32>,
+    pub id: u64,
+    /// v3.5.31: scope de PARÁMETROS de la función `Some(func_idx)`. El mapa
+    /// va VACÍO (cero allocs y cero clones de String por llamada): el
+    /// nombre→slot se resuelve por POSICIÓN — params[i] ↔ slots[i].
+    pub param_func: Option<usize>,
+}
+
+impl ScopeFrame {
+    pub fn new(id: u64) -> Self {
+        Self {
+            map: HashMap::with_hasher(FixHasher::default()),
+            slots: Vec::new(),
+            id,
+            param_func: None,
+        }
+    }
+    pub fn with_capacity(cap: usize, id: u64) -> Self {
+        Self {
+            map: HashMap::with_capacity_and_hasher(cap, FixHasher::default()),
+            slots: Vec::new(),
+            id,
+            param_func: None,
+        }
+    }
+    /// v3.5.31: scope de parámetros SIN mapa — la identidad de la función
+    /// basta para resolver nombres posicionalmente.
+    pub fn params(func_idx: usize, id: u64) -> Self {
+        Self {
+            map: HashMap::with_hasher(FixHasher::default()),
+            slots: Vec::new(),
+            id,
+            param_func: Some(func_idx),
+        }
+    }
+    /// v3.5.36: construcción con partes (buffers reutilizados del pool).
+    pub fn with_parts(
+        map: HashMap<String, u32, FixHasher>,
+        slots: Vec<u32>,
+        id: u64,
+        param_func: Option<usize>,
+    ) -> Self {
+        Self {
+            map,
+            slots,
+            id,
+            param_func,
+        }
+    }
+}
+
 pub struct VM {
     stack: Vec<Value>,
-    locals: Vec<HashMap<String, Value, FixHasher>>,
+    locals: Vec<ScopeFrame>,
+    /// v3.5.31: arena que POSEE los valores de las variables. Los mapas de
+    /// scope solo mapean nombre → slot (u32). Un único dueño del Arc de un
+    /// array preserva el O(1) de `Arc::make_mut` en `agregar` (un espejo
+    /// clonado reintroduciría O(n²)).
+    flat: Vec<Value>,
+    /// slots liberados por scopes cerrados (reuso; flat nunca se encoge).
+    free_slots: Vec<u32>,
+    // v3.5.36: pools de buffers de scopes (slots y mapas) — evitan el
+    // alloc/free por llamada (scope de parámetros) y por bloque de bucle.
+    slot_pool: Vec<Vec<u32>>,
+    map_pool: Vec<HashMap<String, u32, FixHasher>>,
+    /// contador de identidades de scope.
+    scope_id_next: u64,
     /// v3.5.19: caché inline de resolución de variables (Load/Store):
-    /// por name-idx → (scope_idx, locals_len, gen). La entrada es válida si
-    /// `gen == var_cache_gen` Y `locals.len() == len` (los push/pop de
-    /// scopes y frames cambian len → invalidación natural que SE REVIERTE al
-    /// retornar la llamada: la caché sobrevive la recursión). `gen` solo se
-    /// incrementa al INSERTAR nombres nuevos (StoreLocal/Store) o reemplazar
-    /// `locals` de golpe (corutinas/snapshots).
-    var_cache: Vec<(u32, u32, u64)>,
+    /// por name-idx → (slot_flat, scope_idx, scope_id, gen). La entrada es
+    /// válida si `gen == var_cache_gen` Y `scope_idx < locals.len()` Y
+    /// `locals[scope_idx].id == scope_id`. La identidad de scope hace la
+    /// caché inmune a push/pop de scopes VACÍOS (antes, el len oscilaba y
+    /// cada acceso re-escaneaba). `gen` se incrementa al INSERTAR nombres
+    /// nuevos (StoreLocal/Store) o reemplazar `locals` de golpe
+    /// (corutinas/snapshots).
+    var_cache: Vec<(u32, u32, u64, u64)>,
     var_cache_gen: u64,
+    /// v3.5.36: índices de nombre de los PARÁMETROS por función — para la
+    /// invalidación SELECTIVA de la caché de variables al entrar a una
+    /// llamada (solo los nombres sombreados por los params se invalidan;
+    /// el resto del llamador sigue cacheado a través de la llamada).
+    params_name_idx: Vec<Vec<usize>>,
+    /// v3.5.31: destinos de salto resueltos una vez (idx de nums → ip real).
+    jump_targets: Vec<Option<usize>>,
+    /// v3.5.31: ejecución dentro de un cuerpo JIT nativo (ip obsoleto).
+    native_exec: bool,
     ip: usize,
     bytecode: Bytecode,
     output: Vec<String>,
     echo_stdout: bool,
     call_stack: Vec<CallFrame>,
     func_index_cache: HashMap<String, usize>,
+    /// v3.5.31: búsqueda de función por ÍNDICE de nombre (sin hash ni alloc
+    /// por llamada — el camino caliente de Call usa esto).
+    func_index_by_name_idx: Vec<Option<usize>>,
     pub debug: bool,
     pub breakpoints: Vec<usize>,
     step_mode: bool,
     last_instr: Option<Instruction>,
     pub instr_count: usize,
     pub snapshots: Vec<VmSnapshot>,
-    pub call_counts: HashMap<String, usize>,
+    /// v3.5.31: contador de llamadas por índice de nombre (umbral JIT).
+    pub call_counts: Vec<usize>,
     pub jit_threshold: usize,
     #[cfg(feature = "aot")]
     pub jit_engine: Option<lumen_aot::JitEngine>,
@@ -552,7 +1024,7 @@ pub struct VM {
     current_coro: Option<String>,
     #[cfg(any(feature = "extra", feature = "full"))]
     #[allow(clippy::type_complexity)]
-    main_saved: Option<(Vec<Value>, Vec<HashMap<String, Value, FixHasher>>, usize)>,
+    main_saved: Option<(Vec<Value>, Vec<ScopeFrame>, Vec<Value>, Vec<u32>, usize)>,
     tcp_listener: Option<std::net::TcpListener>,
     #[cfg(feature = "full")]
     #[allow(dead_code)]
@@ -626,6 +1098,23 @@ impl VM {
         for (i, func) in bytecode.funcs.iter().enumerate() {
             func_index_cache.insert(func.name.clone(), i);
         }
+        // v3.5.31: búsqueda por índice de nombre (Vec directa, sin hash).
+        let n_names = bytecode.names.len();
+        let mut func_index_by_name_idx = vec![None; n_names];
+        for (nidx, name) in bytecode.names.iter().enumerate() {
+            func_index_by_name_idx[nidx] = func_index_cache.get(name).copied();
+        }
+        // v3.5.36: índices de nombre de los parámetros por función.
+        let params_name_idx: Vec<Vec<usize>> = bytecode
+            .funcs
+            .iter()
+            .map(|f| {
+                f.params
+                    .iter()
+                    .filter_map(|p| bytecode.names.iter().position(|n| n == p))
+                    .collect()
+            })
+            .collect();
         #[cfg(feature = "full")]
         let bcrypt = match Bcrypt::load() {
             Ok(b) => Some(Arc::new(b)),
@@ -635,30 +1124,46 @@ impl VM {
         let jit_engine = lumen_aot::JitEngine::new().ok();
         Self {
             stack: Vec::new(),
-            locals: vec![HashMap::with_hasher(FixHasher::default())],
-            // v3.5.19: gen inicial 1 + entradas u64::MAX (gen no coincide
-            // nunca con el empaquetado por defecto).
-            var_cache: Vec::new(),
+            locals: vec![ScopeFrame::new(0)],
+            flat: Vec::new(),
+            free_slots: Vec::new(),
+            slot_pool: Vec::new(),
+            map_pool: Vec::new(),
+            params_name_idx,
+            scope_id_next: 1,
+            // v3.5.31: pre-dimensionado a names.len() para indexar SIN
+            // bounds-check en el fast-path (entradas (0,0,0,0) con gen=0
+            // quedan inválidas de nacimiento — el slow-path las rellena).
+            var_cache: vec![(0u32, 0u32, 0u64, 0u64); bytecode.names.len()],
             var_cache_gen: 1,
+            jump_targets: Vec::new(),
+            native_exec: false,
             ip,
             bytecode,
             output: Vec::new(),
             echo_stdout: false,
             call_stack: Vec::new(),
             func_index_cache,
+            func_index_by_name_idx,
             debug: false,
             breakpoints: Vec::new(),
             step_mode: false,
             last_instr: None,
             instr_count: 0,
             snapshots: Vec::new(),
-            call_counts: HashMap::new(),
+            call_counts: vec![0; n_names],
             jit_threshold: 50,
             #[cfg(feature = "aot")]
             jit_engine,
-            jit_enabled: std::env::var("LUMEN_JIT")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false),
+            // v3.5.31: JIT PREDETERMINADO — Tier-1 + Tier-2 validados en
+            // 956 tests y ci_gate completo (0 fallos no permitidos).
+            // LUMEN_JIT=0/off lo desactiva (intérprete puro, diagnóstico).
+            jit_enabled: {
+                let v = std::env::var("LUMEN_JIT").unwrap_or_default();
+                let off =
+                    v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off");
+                !off && cfg!(feature = "aot")
+            },
             #[cfg(feature = "aot")]
             jit_rt: None,
             jit_error: None,
@@ -708,7 +1213,6 @@ impl VM {
     }
 
     fn call_core_builtin(&mut self, name: &str, args: &[Value]) -> Option<Result<(), VmError>> {
-        let args = args.to_vec();
         if name == "imprimir" || name == "print" {
             let mut combined = String::new();
             for arg in args {
@@ -873,7 +1377,7 @@ impl VM {
         }
 
         if name == "largo" || name == "len" {
-            match args.clone().into_iter().next() {
+            match args.first().cloned() {
                 Some(Value::Array(v)) => self.push(Value::Int(v.len() as i64)),
                 Some(Value::Str(s)) => self.push(Value::Int(s.chars().count() as i64)),
                 Some(other) => {
@@ -892,7 +1396,7 @@ impl VM {
         }
 
         if name == "agregar" || name == "push" {
-            let mut iter = args.clone().into_iter();
+            let mut iter = args.iter().cloned();
             let list = iter.next().unwrap_or(Value::arr(vec![]));
             let item = iter.next().unwrap_or(Value::Void);
             match list {
@@ -1287,7 +1791,7 @@ impl VM {
         }
 
         if name == "__list_reverse" || name == "__lista_invertir" {
-            let mut arr = match args.clone().into_iter().next() {
+            let mut arr = match args.first().cloned() {
                 Some(Value::Array(v)) => v,
                 Some(other) => {
                     return builtin_err(VmError::TypeError(format!(
@@ -1307,7 +1811,7 @@ impl VM {
         }
 
         if name == "__list_sort" || name == "__lista_ordenar" {
-            let mut arr = match args.clone().into_iter().next() {
+            let mut arr = match args.first().cloned() {
                 Some(Value::Array(v)) => v,
                 Some(other) => {
                     return builtin_err(VmError::TypeError(format!(
@@ -1336,7 +1840,7 @@ impl VM {
         }
 
         if name == "__map_set" || name == "__map_poner" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let m = it
                 .next()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
@@ -1353,7 +1857,7 @@ impl VM {
         }
 
         if name == "__map_get" || name == "__map_obtener" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let m = it
                 .next()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
@@ -1369,9 +1873,8 @@ impl VM {
 
         if name == "__map_len" || name == "__map_longitud" {
             let m = args
-                .clone()
-                .into_iter()
-                .next()
+                .first()
+                .cloned()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match m {
                 Value::Map(m) => self.push(Value::Int(m.len() as i64)),
@@ -1382,13 +1885,12 @@ impl VM {
 
         if name == "__map_keys" || name == "__map_claves" {
             let m = args
-                .clone()
-                .into_iter()
-                .next()
+                .first()
+                .cloned()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
             match m {
                 Value::Map(m) => {
-                    let keys: Vec<Value> = m.into_iter().map(|(k, _)| k).collect();
+                    let keys: Vec<Value> = m.keys().cloned().collect();
                     self.push(Value::arr(keys));
                 }
                 _ => {
@@ -1399,7 +1901,7 @@ impl VM {
         }
 
         if name == "__map_contains" || name == "__map_contiene" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let m = it
                 .next()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
@@ -1421,7 +1923,7 @@ impl VM {
         }
 
         if name == "__set_add" || name == "__conjunto_agregar" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let s = it
                 .next()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
@@ -1437,7 +1939,7 @@ impl VM {
         }
 
         if name == "__set_has" || name == "__conjunto_tiene" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let s = it
                 .next()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
@@ -1450,7 +1952,7 @@ impl VM {
         }
 
         if name == "__set_union" || name == "__conjunto_unir" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let a = it
                 .next()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
@@ -1472,7 +1974,7 @@ impl VM {
         }
 
         if name == "__set_inter" || name == "__conjunto_interseccion" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let a = it
                 .next()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
@@ -1491,7 +1993,7 @@ impl VM {
         }
 
         if name == "__set_diff" || name == "__conjunto_diferencia" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let a = it
                 .next()
                 .unwrap_or(Value::Map(ImMap::with_hasher(FixHasher::default())));
@@ -1517,7 +2019,7 @@ impl VM {
         }
 
         if name == "__deque_push_front" || name == "__deque_agregar_frente" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let d = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match d {
@@ -1535,7 +2037,7 @@ impl VM {
         }
 
         if name == "__deque_push_back" || name == "__deque_agregar_final" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let d = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match d {
@@ -1551,11 +2053,7 @@ impl VM {
         }
 
         if name == "__deque_pop_front" || name == "__deque_quitar_frente" {
-            let d = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let d = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match d {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
@@ -1570,11 +2068,7 @@ impl VM {
         }
 
         if name == "__deque_pop_back" || name == "__deque_quitar_final" {
-            let d = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let d = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match d {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
@@ -1589,11 +2083,7 @@ impl VM {
         }
 
         if name == "__deque_len" || name == "__deque_longitud" {
-            let d = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let d = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match d {
                 Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                 _ => return builtin_err(VmError::TypeError("__deque_len espera deque".into())),
@@ -1607,7 +2097,7 @@ impl VM {
         }
 
         if name == "__heap_push" || name == "__monticulo_agregar" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let h = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match h {
@@ -1626,11 +2116,7 @@ impl VM {
         }
 
         if name == "__heap_pop" || name == "__monticulo_quitar" {
-            let h = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let h = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match h {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
@@ -1643,11 +2129,7 @@ impl VM {
         }
 
         if name == "__heap_peek" || name == "__monticulo_ver" {
-            let h = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let h = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match h {
                 Value::Array(v) => self.push(if v.is_empty() {
                     Value::Void
@@ -1660,11 +2142,7 @@ impl VM {
         }
 
         if name == "__heap_len" || name == "__monticulo_longitud" {
-            let h = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let h = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match h {
                 Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                 _ => return builtin_err(VmError::TypeError("__heap_len espera heap".into())),
@@ -1678,7 +2156,7 @@ impl VM {
         }
 
         if name == "__linked_push_front" || name == "__enlazada_agregar_frente" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let l = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match l {
@@ -1696,7 +2174,7 @@ impl VM {
         }
 
         if name == "__linked_push_back" || name == "__enlazada_agregar_final" {
-            let mut it = args.clone().into_iter();
+            let mut it = args.iter().cloned();
             let l = it.next().unwrap_or(Value::arr(vec![]));
             let item = it.next().unwrap_or(Value::Void);
             match l {
@@ -1714,11 +2192,7 @@ impl VM {
         }
 
         if name == "__linked_pop_front" || name == "__enlazada_quitar_frente" {
-            let l = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let l = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match l {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
@@ -1735,11 +2209,7 @@ impl VM {
         }
 
         if name == "__linked_pop_back" || name == "__enlazada_quitar_final" {
-            let l = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let l = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match l {
                 Value::Array(mut v) => self.push(if v.is_empty() {
                     Value::Void
@@ -1756,11 +2226,7 @@ impl VM {
         }
 
         if name == "__linked_len" || name == "__enlazada_longitud" {
-            let l = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let l = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match l {
                 Value::Array(v) => self.push(Value::Int(v.len() as i64)),
                 _ => return builtin_err(VmError::TypeError("__linked_len espera linked".into())),
@@ -1871,11 +2337,7 @@ impl VM {
         }
 
         if name == "__encoding_from_utf8" || name == "__desde_utf8" {
-            let arr = args
-                .clone()
-                .into_iter()
-                .next()
-                .unwrap_or(Value::arr(vec![]));
+            let arr = args.first().cloned().unwrap_or(Value::arr(vec![]));
             match arr {
                 Value::Array(v) => {
                     let bytes: Vec<u8> = v
@@ -1998,7 +2460,6 @@ impl VM {
 
     #[cfg(any(feature = "extra", feature = "full"))]
     fn call_extra_builtin(&mut self, name: &str, args: &[Value]) -> Option<Result<(), VmError>> {
-        let args = args.to_vec();
         #[cfg(feature = "full")]
         if name == "__tcp_connect" || name == "__tcp_conectar" {
             #[allow(unused_variables)]
@@ -2694,14 +3155,17 @@ impl VM {
                 if let Some(coro) = self.coroutines.get_mut(coro_id) {
                     coro.stack = self.stack.clone();
                     coro.locals = self.locals.clone();
+                    coro.flat = self.flat.clone();
+                    coro.free_slots = self.free_slots.clone();
                     coro.ip = self.ip;
                 }
             }
             // Restore main saved state
-            if let Some((saved_stack, saved_locals, saved_ip)) = self.main_saved.take() {
+            if let Some((saved_stack, saved_locals, saved_flat, saved_free, saved_ip)) =
+                self.main_saved.take()
+            {
                 self.stack = saved_stack;
-                self.locals = saved_locals;
-                self.bump_var_cache(); // v3.5.19
+                self.replace_locals_full(saved_locals, saved_flat, saved_free);
                 self.ip = saved_ip;
             }
             self.current_coro = None;
@@ -2718,14 +3182,24 @@ impl VM {
                 }
             }
             // Save main state before resuming coroutine
-            self.main_saved = Some((self.stack.clone(), self.locals.clone(), self.ip));
-            if let Some(coro) = self.coroutines.get_mut(&coro_id) {
-                self.stack = coro.stack.clone();
-                self.locals = coro.locals.clone();
-                self.ip = coro.ip;
+            self.main_saved = Some((
+                self.stack.clone(),
+                self.locals.clone(),
+                self.flat.clone(),
+                self.free_slots.clone(),
+                self.ip,
+            ));
+            if let Some(coro) = self.coroutines.get(&coro_id) {
+                let coro_stack = coro.stack.clone();
+                let coro_locals = coro.locals.clone();
+                let coro_flat = coro.flat.clone();
+                let coro_free = coro.free_slots.clone();
+                let coro_ip = coro.ip;
+                self.stack = coro_stack;
+                self.replace_locals_full(coro_locals, coro_flat, coro_free);
+                self.ip = coro_ip;
                 self.current_coro = Some(coro_id.clone());
             }
-            self.bump_var_cache(); // v3.5.19
             self.push(Value::Void);
             return Some(Ok(()));
         }
@@ -2804,7 +3278,7 @@ impl VM {
         // ██ Async/Task builtins ██
         if name == "__tarea_lanzar" || name == "__task_spawn" {
             let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            let fn_args: Vec<Value> = args.into_iter().skip(1).collect();
+            let fn_args: Vec<Value> = args.iter().skip(1).cloned().collect();
             let id = self.task_counter;
             self.task_counter += 1;
             let task_id = format!("task_{}", id);
@@ -3050,7 +3524,7 @@ impl VM {
 
         if name == "__hilo_lanzar" || name == "__thread_spawn" {
             let fn_name = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-            let fn_args: Vec<Value> = args.into_iter().skip(1).collect();
+            let fn_args: Vec<Value> = args.iter().skip(1).cloned().collect();
             #[cfg(not(target_arch = "wasm32"))]
             let hid = format!("thread_{}", self.thread_handles.len());
             #[cfg(target_arch = "wasm32")]
@@ -3555,6 +4029,12 @@ impl VM {
         self.ip += 1;
         self.instr_count += 1;
         let exec_result = match self.bytecode.instructions[cur_ip] {
+            // v3.5.31: Jmp inline — es la instrucción MÁS caliente de los
+            // bucles; evita el salto a execute_with_idx y su match completo.
+            Instruction::WithIdx(Opcode::Jmp, idx) => {
+                self.ip = self.resolve_target(idx);
+                Ok(())
+            }
             Instruction::Simple(op) => self.execute_simple(op),
             Instruction::WithIdx(op, idx) => self.execute_with_idx(op, idx),
             Instruction::WithNum(op, n) => self.execute_with_num(op, n),
@@ -3564,13 +4044,41 @@ impl VM {
                 self.execute_with_str(op, &s_clone)
             }
             // v3.5.20 super-opcodes: bucles sin push/pop ni dispatch extra.
-            Instruction::FusedBinK { .. }
-            | Instruction::FusedBin { .. }
-            | Instruction::FusedCmpKJmp { .. }
-            | Instruction::FusedCmpJmp { .. } => {
-                let ins = self.bytecode.instructions[cur_ip].clone();
-                self.exec_fused(&ins)
+            // v3.5.31: destructuring escalar SIN clonar la instrucción
+            // (antes: memcpy de ~48 B por instrucción del bucle).
+            Instruction::FusedBinK { op, a, k, d } => self.exec_fused_bink(op, a, k, d),
+            Instruction::FusedBin { op, a, b, d } => self.exec_fused_bin(op, a, b, d),
+            Instruction::FusedCmpKJmp { op, a, k, target } => {
+                self.exec_fused_cmpkjmp(op, a, k, target)
             }
+            Instruction::FusedCmpJmp { op, a, b, target } => {
+                self.exec_fused_cmpjmp(op, a, b, target)
+            }
+            // v3.5.31: aritmética + comparación + salto (6 IR → 1).
+            Instruction::FusedBinCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                c,
+                target,
+            } => self.exec_fused_bincmpjmp(op1, op2, a, b, c, target),
+            Instruction::FusedBinKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                target,
+            } => self.exec_fused_binkcmpjmp(op1, op2, a, b, k, target),
+            Instruction::FusedBinKKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                target,
+            } => self.exec_fused_binkkcmpjmp(op1, op2, a, b, k, target),
         };
         if let Err(e) = exec_result {
             // intentar/atrapar: desenrollar al manejador más cercano si existe
@@ -3583,7 +4091,7 @@ impl VM {
                 {
                     let (catch_ip, sl, ll, cl) = self.handlers.pop().unwrap();
                     self.stack.truncate(sl);
-                    self.locals.truncate(ll);
+                    self.scope_truncate(ll);
                     self.call_stack.truncate(cl);
                     let msg = vm_error_message(&e);
                     self.push(Value::str(msg));
@@ -3614,18 +4122,53 @@ impl VM {
 
     /// Empuja CallFrame + scope de parámetros (idéntico al camino del
     /// intérprete). NO toca `ip`.
-    fn setup_call_frame(&mut self, name: String, func_idx: usize, args: &[Value]) {
-        let param_count = self.bytecode.funcs[func_idx].params.len();
+    fn setup_call_frame(&mut self, name_idx: usize, func_idx: usize, args: &[Value]) {
         self.call_stack.push(CallFrame {
-            func_name: name,
+            func_name: name_idx,
+            func_label: None,
             return_ip: self.ip,
             locals_base: self.locals.len(),
             stack_base: self.stack.len(),
             is_closure: false,
+            has_refs: false,
         });
-        let mut scope = HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
+        self.push_params_scope(func_idx, args);
+    }
+
+    /// Empuja el scope de parámetros de la función `func_idx` con los
+    /// argumentos ya evaluados.
+    /// v3.5.31: SIN mapa ni clones de String — el scope guarda SOLO el
+    /// func_idx y los slots en orden de parámetro (params[i] ↔ slots[i]).
+    fn push_params_scope(&mut self, func_idx: usize, args: &[Value]) {
+        let param_count = self.bytecode.funcs[func_idx].params.len();
+        let id = self.next_scope_id();
+        // v3.5.36: buffer de slots REUTILIZADO del pool — sin alloc por
+        // llamada (la maquinaria de llamadas de fib OFF paga esto ~317k
+        // veces por fib(27)).
+        let mut slots: Vec<u32> = self.slot_pool.pop().unwrap_or_default();
+        slots.clear();
+        self.locals.push(ScopeFrame::with_parts(
+            HashMap::with_hasher(FixHasher::default()),
+            slots,
+            id,
+            Some(func_idx),
+        ));
+        // v3.5.36: invalidación SELECTIVA — solo los nombres que los
+        // parámetros SOMBREAN pierden su entrada de caché; los demás
+        // accesos del llamador siguen cacheados a través de la llamada
+        // (ganancia real en bucles con calls: contar_primos OFF, etc.).
+        if let Some(pis) = self.params_name_idx.get(func_idx) {
+            for &pidx in pis {
+                if pidx < self.var_cache.len() && self.var_cache_slot(pidx).is_some() {
+                    self.var_cache[pidx] = (0, 0, 0, 0);
+                }
+            }
+        }
+        if param_count == 0 {
+            return;
+        }
+        let top = self.locals.len() - 1;
         for i in 0..param_count {
-            let param_name = self.bytecode.funcs[func_idx].params[i].clone();
             let arg = if i < args.len() {
                 args[i].clone()
             } else if let Some(Some(dv)) = self.bytecode.funcs[func_idx].defaults.get(i) {
@@ -3638,30 +4181,108 @@ impl VM {
             } else {
                 Value::Void
             };
-            scope.insert(param_name, arg);
+            let slot = self.alloc_slot(arg);
+            self.locals[top].slots.push(slot);
         }
-        self.locals.push(scope);
+    }
+
+    /// v3.5.31: lookup nombre→slot dentro de UN scope. Para scopes de
+    /// parámetros (mapa vacío) resuelve posicionalmente: params[i] ↔
+    /// slots[i] — sin hash y sin alloc.
+    #[inline(always)]
+    fn scope_get(&self, scope: &ScopeFrame, name: &str) -> Option<u32> {
+        if let Some(&s) = scope.map.get(name) {
+            return Some(s);
+        }
+        if let Some(fi) = scope.param_func {
+            let params = &self.bytecode.funcs[fi].params;
+            for (i, p) in params.iter().enumerate() {
+                if p == name {
+                    return scope.slots.get(i).copied();
+                }
+            }
+        }
+        None
     }
 
     /// Llamada completa (para el helper lj_call del JIT): pop de args,
     /// builtins, funciones compiladas (recursión nativa) o interpretación
     /// anidada hasta el retorno.
-    pub(crate) fn perform_call(&mut self, name: &str, argc: usize) -> Result<(), VmError> {
-        let mut args: Vec<Value> = Vec::with_capacity(argc);
-        for _ in 0..argc {
-            args.push(self.pop()?);
+    /// v3.5.31: llamada desde el cuerpo JIT (lj_call pasa el ÍNDICE de
+    /// nombre — sin parseo de string ni hash por llamada).
+    pub(crate) fn perform_call_idx(&mut self, nidx: usize, argc: usize) -> Result<(), VmError> {
+        // v3.5.31: args SIN heap para argc pequeño (el caso dominante).
+        let mut small: [Value; 4] = std::array::from_fn(|_| Value::Void);
+        let mut big: Vec<Value>;
+        let args: &[Value] = if argc <= 4 {
+            for k in 0..argc {
+                small[argc - 1 - k] = self.pop()?;
+            }
+            &small[..argc]
+        } else {
+            big = Vec::with_capacity(argc);
+            for _ in 0..argc {
+                big.push(self.pop()?);
+            }
+            big.reverse();
+            &big
+        };
+        // v3.5.31: pre-filtro O(1) de builtins — los nombres que no son
+        // builtins van directo a la tabla de funciones SIN clonar el String.
+        let name_is_builtin = builtin_name_set().contains(
+            self.bytecode
+                .names
+                .get(nidx)
+                .map(|s| s.as_str())
+                .unwrap_or(""),
+        );
+        if name_is_builtin {
+            let name = self.bytecode.names.get(nidx).cloned().unwrap_or_default();
+            if let Some(result) = self.call_core_builtin(&name, args) {
+                return result;
+            }
+            #[cfg(any(feature = "extra", feature = "full"))]
+            if let Some(result) = self.call_extra_builtin(&name, args) {
+                return result;
+            }
         }
-        args.reverse();
-        if let Some(result) = self.call_core_builtin(name, &args) {
-            return result;
-        }
-        #[cfg(any(feature = "extra", feature = "full"))]
-        if let Some(result) = self.call_extra_builtin(name, &args) {
-            return result;
-        }
-        let func_idx = match self.func_index_cache.get(name) {
-            Some(&fi) => fi,
-            None => return Err(VmError::UndefinedFunction(name.to_string())),
+        self.perform_user_call(nidx, args)
+    }
+
+    /// v3.5.32 (Tier-2): llamada SIN el pre-filtro de builtins — el JIT solo
+    /// la emite cuando el nombre NO es builtin (decisión ESTÁTICA en
+    /// compilación con el mismo set). Ahorra el check O(1) por llamada
+    /// recursiva nativa (p.ej. fib). Paridad exacta con perform_call_idx.
+    pub(crate) fn perform_call_fast(&mut self, nidx: usize, argc: usize) -> Result<(), VmError> {
+        // args SIN heap para argc pequeño (igual que perform_call_idx).
+        let mut small: [Value; 4] = std::array::from_fn(|_| Value::Void);
+        let mut big: Vec<Value>;
+        let args: &[Value] = if argc <= 4 {
+            for k in 0..argc {
+                small[argc - 1 - k] = self.pop()?;
+            }
+            &small[..argc]
+        } else {
+            big = Vec::with_capacity(argc);
+            for _ in 0..argc {
+                big.push(self.pop()?);
+            }
+            big.reverse();
+            &big
+        };
+        self.perform_user_call(nidx, args)
+    }
+
+    /// Parte común de la llamada (builtin ya descartado): tabla de
+    /// funciones, contador de hotness, frame y ejecución nativa/interp.
+    fn perform_user_call(&mut self, nidx: usize, args: &[Value]) -> Result<(), VmError> {
+        let func_idx = match self.func_index_by_name_idx.get(nidx).copied().flatten() {
+            Some(fi) => fi,
+            None => {
+                return Err(VmError::UndefinedFunction(
+                    self.bytecode.names.get(nidx).cloned().unwrap_or_default(),
+                ))
+            }
         };
         if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
             return Err(VmError::Runtime(format!(
@@ -3670,25 +4291,47 @@ impl VM {
             )));
         }
         let count_now = {
-            let count = self.call_counts.entry(name.to_string()).or_insert(0);
+            let count = if nidx < self.call_counts.len() {
+                &mut self.call_counts[nidx]
+            } else {
+                return Err(VmError::UndefinedFunction(
+                    self.bytecode.names.get(nidx).cloned().unwrap_or_default(),
+                ));
+            };
             *count += 1;
             *count
         };
         self.jit_maybe_compile(func_idx, count_now);
-        self.setup_call_frame(name.to_string(), func_idx, &args);
+        self.setup_call_frame(nidx, func_idx, args);
         #[cfg(feature = "aot")]
         if let Some(f) = self.jit_get_fn(func_idx) {
             // SAFETY: el código nativo re-entra a la VM vía puntero crudo;
             // ningún otro &mut a la VM se usa mientras `f` ejecuta.
+            // v3.5.31: native_exec desactiva los peepholes de ip.
+            let prev_native = self.native_exec;
+            self.native_exec = true;
             let vm_ptr = self as *mut VM as *mut std::ffi::c_void;
             let r = unsafe { f(vm_ptr) };
-            if r != 0 {
-                return Err(self
-                    .jit_error
-                    .take()
-                    .unwrap_or_else(|| VmError::Runtime("JIT: error en código nativo".into())));
+            self.native_exec = prev_native;
+            match r {
+                0 => return Ok(()),
+                // v3.5.31 (Tier-2): guarda de tipos falló → ejecutar el
+                // MISMO frame en el intérprete (ip al inicio del cuerpo).
+                2 => {
+                    if let Some(rt) = self.jit_rt.as_mut() {
+                        rt.invalidate(func_idx);
+                    }
+                    let func_start = self.bytecode.funcs[func_idx].start;
+                    self.ip = func_start;
+                    let depth = self.call_stack.len();
+                    return self.run_until_return(depth);
+                }
+                _ => {
+                    return Err(self.jit_error.take().unwrap_or_else(|| {
+                        VmError::Runtime("JIT: error en código nativo".into())
+                    }));
+                }
             }
-            return Ok(());
         }
         let func_start = self.bytecode.funcs[func_idx].start;
         self.ip = func_start;
@@ -3699,7 +4342,16 @@ impl VM {
     /// Intenta compilar `func_idx` cuando la cuenta alcanza el umbral.
     #[cfg(feature = "aot")]
     fn jit_maybe_compile(&mut self, func_idx: usize, count: usize) {
-        if !self.jit_enabled || count != self.jit_threshold {
+        if !self.jit_enabled {
+            return;
+        }
+        // v3.5.31: además del umbral clásico (50 llamadas), compila en la
+        // PRIMERA llamada cuando el cuerpo contiene un bucle hacia atrás:
+        // un bucle domina el tiempo de ejecución aunque la función se llame
+        // una sola vez (patrón de los benchmarks de bucles).
+        let hot = count == self.jit_threshold
+            || (count == 1 && crate::jit::body_has_loop(&self.bytecode, func_idx));
+        if !hot {
             return;
         }
         if self.jit_rt.is_none() {
@@ -3732,6 +4384,39 @@ impl VM {
     pub(crate) fn set_jit_error(&mut self, e: VmError) {
         self.jit_error = Some(e);
     }
+
+    /// v3.5.31 (Tier-2): pop Int del tope de la pila de valores; i64::MIN si
+    /// el tope no es Int o la pila está vacía (el JIT hace bail-out).
+    #[cfg(feature = "aot")]
+    #[inline(always)]
+    pub(crate) fn pop_int_pub(&mut self) -> i64 {
+        match self.stack.last() {
+            Some(Value::Int(v)) => {
+                let v = *v;
+                self.stack.pop();
+                v
+            }
+            _ => i64::MIN,
+        }
+    }
+    /// v3.5.37: concat rápido para el Tier-2 en modo texto — si alguno de
+    /// los dos operandos es Str, reproduce EXACTAMENTE el arm Add del
+    /// intérprete (format "{}{}"); si no, delega en el handler genérico.
+    #[cfg(feature = "aot")]
+    pub(crate) fn concat_pub(&mut self) -> Result<(), VmError> {
+        let b = self.pop()?;
+        let a = self.pop()?;
+        if matches!(&a, Value::Str(_)) || matches!(&b, Value::Str(_)) {
+            self.push(Value::str(format!("{}{}", a, b)));
+            Ok(())
+        } else {
+            // no es concat: restaurar operandos y ejecutar Add normal.
+            self.push(a);
+            self.push(b);
+            self.execute_simple_pub(Opcode::Add)
+        }
+    }
+
     pub(crate) fn execute_simple_pub(&mut self, op: Opcode) -> Result<(), VmError> {
         self.execute_simple(op)
     }
@@ -3750,6 +4435,33 @@ impl VM {
     pub(crate) fn pop_pub(&mut self) -> Result<Value, VmError> {
         self.pop()
     }
+
+    /// v3.5.31 (Tier-2): push directo (epílogo Load→push→Ret del bucle nativo).
+    #[cfg(feature = "aot")]
+    pub(crate) fn push_pub(&mut self, val: Value) {
+        self.push(val);
+    }
+
+    /// v3.5.31: el cuerpo nativo mantiene el ip correcto por instrucción
+    /// (los handlers StructNew/EnumCtor y los peepholes leen self.ip y
+    /// deben ver la MISMA posición que vería el intérprete).
+    #[cfg(feature = "aot")]
+    pub(crate) fn set_ip_pub(&mut self, ip: usize) {
+        self.ip = ip;
+    }
+
+    /// v3.5.31 (Tier-2): puntero base al `flat` (estable durante el bucle).
+    #[cfg(feature = "aot")]
+    pub(crate) fn flat_ptr_pub(&self) -> *const Value {
+        self.flat.as_ptr()
+    }
+
+    /// v3.5.31 (Tier-2): ¿el slot contiene Value::Int?
+    #[cfg(feature = "aot")]
+    pub(crate) fn flat_slot_is_int_pub(&self, slot: usize) -> bool {
+        matches!(self.flat.get(slot), Some(Value::Int(_)))
+    }
+
     pub fn step(&mut self) -> Result<(), VmError> {
         self.step_mode = true;
         self.debug = true;
@@ -3762,6 +4474,8 @@ impl VM {
             instr_count: self.instr_count,
             stack: self.stack.clone(),
             locals: self.locals.clone(),
+            flat: self.flat.clone(),
+            free_slots: self.free_slots.clone(),
             call_stack: self.call_stack.clone(),
             output_len: self.output.len(),
         });
@@ -3780,8 +4494,10 @@ impl VM {
             self.ip = snap.ip;
             self.instr_count = snap.instr_count;
             self.stack = snap.stack;
-            self.locals = snap.locals;
-            self.bump_var_cache(); // v3.5.19
+            let snap_locals = snap.locals;
+            let snap_flat = snap.flat;
+            let snap_free = snap.free_slots;
+            self.replace_locals_full(snap_locals, snap_flat, snap_free);
             self.call_stack = snap.call_stack;
             self.output.truncate(snap.output_len);
             Ok(true)
@@ -3792,8 +4508,28 @@ impl VM {
     pub fn stack_top(&self) -> Option<&Value> {
         self.stack.last()
     }
-    pub fn current_locals(&self) -> Option<&HashMap<String, Value, FixHasher>> {
-        self.locals.last()
+    /// Vista de los locales del scope ACTIVO (para debug/REPL): construye el
+    /// mapa nombre → valor bajo demanda (los valores viven en `flat`).
+    pub fn current_locals(&self) -> Option<HashMap<String, Value, FixHasher>> {
+        let frame = self.locals.last()?;
+        let mut out = HashMap::with_hasher(FixHasher::default());
+        for (name, &slot) in &frame.map {
+            if let Some(v) = self.flat.get(slot as usize) {
+                out.insert(name.clone(), v.clone());
+            }
+        }
+        // v3.5.31: scopes de parámetros sin mapa → reconstruir posicionalmente.
+        if let Some(fi) = frame.param_func {
+            let params = &self.bytecode.funcs[fi].params;
+            for (i, name) in params.iter().enumerate() {
+                if let Some(&slot) = frame.slots.get(i) {
+                    if let Some(v) = self.flat.get(slot as usize) {
+                        out.insert(name.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        Some(out)
     }
 
     pub fn output(&self) -> &[String] {
@@ -3818,6 +4554,20 @@ impl VM {
         &self.call_stack
     }
 
+    /// v3.5.31: resuelve el nombre de un marco bajo demanda (CallFrame solo
+    /// guarda el índice en `bytecode.names` — sin alloc por llamada).
+    #[inline]
+    pub fn frame_func_name(&self, frame: &CallFrame) -> String {
+        if let Some(l) = &frame.func_label {
+            return l.clone();
+        }
+        self.bytecode
+            .names
+            .get(frame.func_name)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     /// Run a specific function by name with given args, returning its result.
     /// Used by spawned task threads to execute a function in isolation.
     pub fn run_function(&mut self, name: &str, args: Vec<Value>) -> Result<Value, VmError> {
@@ -3825,8 +4575,14 @@ impl VM {
             let func_start = func.start;
             let func_params = func.params.clone();
             let func_defaults = func.defaults.clone();
-            let mut scope =
-                HashMap::with_capacity_and_hasher(func_params.len(), FixHasher::default());
+            if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
+                return Err(VmError::Runtime(format!(
+                    "Desbordamiento de pila (Stack overflow): límite de recursión excedido (>{} llamadas)",
+                    MAX_CALL_STACK_DEPTH
+                )));
+            }
+            self.scope_push_cap(func_params.len());
+            let top = self.locals.len() - 1;
             for (i, param_name) in func_params.iter().enumerate() {
                 let arg = if i < args.len() {
                     args[i].clone()
@@ -3846,21 +4602,23 @@ impl VM {
                     Value::Ref { .. } => arg.deep_deref(),
                     other => other,
                 };
-                scope.insert(param_name.clone(), arg);
+                let slot = self.alloc_slot(arg);
+                self.locals[top].map.insert(param_name.clone(), slot);
+                self.locals[top].slots.push(slot);
             }
-            if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
-                return Err(VmError::Runtime(format!(
-                    "Desbordamiento de pila (Stack overflow): límite de recursión excedido (>{} llamadas)",
-                    MAX_CALL_STACK_DEPTH
-                )));
-            }
-            self.locals.push(scope);
             self.call_stack.push(CallFrame {
-                func_name: name.to_string(),
+                func_name: self
+                    .bytecode
+                    .names
+                    .iter()
+                    .position(|n| n == name)
+                    .unwrap_or(usize::MAX),
+                func_label: None,
                 return_ip: self.bytecode.instructions.len(), // Past end → run() loop breaks
                 locals_base: self.locals.len() - 1,
                 stack_base: self.stack.len(),
                 is_closure: false,
+                has_refs: false,
             });
             self.ip = func_start;
             self.run()?;
@@ -3872,104 +4630,445 @@ impl VM {
 
     /// v3.5.20: ejecución de los super-opcodes fusionados (compartida por
     /// step_instr y execute).
-    fn exec_fused(&mut self, instr: &Instruction) -> Result<(), VmError> {
-        match instr {
-            // v3.5.20 super-opcodes: bucles sin push/pop ni dispatch extra.
-            Instruction::FusedBinK { op, a, k, d } => {
-                let (op, a, k, d) = (*op, *a, *k, *d);
-                let av = self.do_load_by_idx(a)?;
-                let res = match (&av, op) {
-                    (Value::Int(x), 1) => Value::Int(x.wrapping_add(k)),
-                    (Value::Int(x), 3) => Value::Int(x.wrapping_sub(k)),
-                    (Value::Int(x), 4) => Value::Int(x.wrapping_mul(k)),
-                    (Value::Float(x), 1) => Value::Float(x + k as f64),
-                    (Value::Float(x), 3) => Value::Float(x - k as f64),
-                    (Value::Float(x), 4) => Value::Float(x * k as f64),
-                    _ => self.bin_vals_slow(av, Value::Int(k), op)?,
-                };
-                self.do_store_by_idx(d, res);
-                Ok(())
-            }
-            Instruction::FusedBin { op, a, b, d } => {
-                let (op, a, b, d) = (*op, *a, *b, *d);
-                let av = self.do_load_by_idx(a)?;
-                let bv = self.do_load_by_idx(b)?;
-                let res = match (&av, &bv, op) {
-                    (Value::Int(x), Value::Int(y), 1) => Value::Int(x.wrapping_add(*y)),
-                    (Value::Int(x), Value::Int(y), 3) => Value::Int(x.wrapping_sub(*y)),
-                    (Value::Int(x), Value::Int(y), 4) => Value::Int(x.wrapping_mul(*y)),
-                    (Value::Float(x), Value::Float(y), 1) => Value::Float(x + y),
-                    (Value::Float(x), Value::Float(y), 3) => Value::Float(x - y),
-                    (Value::Float(x), Value::Float(y), 4) => Value::Float(x * y),
-                    (Value::Int(x), Value::Float(y), 1) => Value::Float(*x as f64 + y),
-                    (Value::Int(x), Value::Float(y), 3) => Value::Float(*x as f64 - y),
-                    (Value::Int(x), Value::Float(y), 4) => Value::Float(*x as f64 * y),
-                    (Value::Float(x), Value::Int(y), 1) => Value::Float(x + *y as f64),
-                    (Value::Float(x), Value::Int(y), 3) => Value::Float(x - *y as f64),
-                    (Value::Float(x), Value::Int(y), 4) => Value::Float(x * *y as f64),
-                    _ => self.bin_vals_slow(av, bv, op)?,
-                };
-                self.do_store_by_idx(d, res);
-                Ok(())
-            }
-            Instruction::FusedCmpKJmp { op, a, k, target } => {
-                let (op, a, k, target) = (*op, *a, *k, *target);
-                let av = self.do_load_by_idx(a)?;
-                let cond = match (&av, op) {
-                    (Value::Int(x), 7) => *x == k,
-                    (Value::Int(x), 8) => *x != k,
-                    (Value::Int(x), 9) => *x < k,
-                    (Value::Int(x), 10) => *x <= k,
-                    (Value::Int(x), 11) => *x > k,
-                    (Value::Int(x), 12) => *x >= k,
-                    (Value::Float(x), 7) => *x == k as f64,
-                    (Value::Float(x), 8) => *x != k as f64,
-                    (Value::Float(x), 9) => *x < k as f64,
-                    (Value::Float(x), 10) => *x <= k as f64,
-                    (Value::Float(x), 11) => *x > k as f64,
-                    (Value::Float(x), 12) => *x >= k as f64,
-                    _ => self.cmp_vals_slow(av, Value::Int(k), op)?,
-                };
-                if !cond {
-                    self.ip = self.bytecode.nums.get(target).copied().unwrap_or(0.0) as usize;
+    /// v3.5.31: resuelve el destino de un salto (idx en `bytecode.nums`) con
+    /// caché per-programa — evita el lookup + cast f64→usize por iteración.
+    #[inline(always)]
+    fn resolve_target(&mut self, idx: usize) -> usize {
+        match self.jump_targets.get(idx).copied().flatten() {
+            Some(t) => t,
+            None => {
+                let t = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
+                if idx >= self.jump_targets.len() {
+                    self.jump_targets.resize(idx + 1, None);
                 }
-                Ok(())
+                self.jump_targets[idx] = Some(t);
+                t
             }
-            Instruction::FusedCmpJmp { op, a, b, target } => {
-                let (op, a, b, target) = (*op, *a, *b, *target);
-                let av = self.do_load_by_idx(a)?;
-                let bv = self.do_load_by_idx(b)?;
-                let cond = match (&av, &bv, op) {
-                    (Value::Int(x), Value::Int(y), 7) => x == y,
-                    (Value::Int(x), Value::Int(y), 8) => x != y,
-                    (Value::Int(x), Value::Int(y), 9) => x < y,
-                    (Value::Int(x), Value::Int(y), 10) => x <= y,
-                    (Value::Int(x), Value::Int(y), 11) => x > y,
-                    (Value::Int(x), Value::Int(y), 12) => x >= y,
-                    (Value::Float(x), Value::Float(y), 7) => x == y,
-                    (Value::Float(x), Value::Float(y), 8) => x != y,
-                    (Value::Float(x), Value::Float(y), 9) => x < y,
-                    (Value::Float(x), Value::Float(y), 10) => x <= y,
-                    (Value::Float(x), Value::Float(y), 11) => x > y,
-                    (Value::Float(x), Value::Float(y), 12) => x >= y,
-                    (Value::Int(x), Value::Float(y), 9) => (*x as f64) < *y,
-                    (Value::Int(x), Value::Float(y), 10) => (*x as f64) <= *y,
-                    (Value::Int(x), Value::Float(y), 11) => (*x as f64) > *y,
-                    (Value::Int(x), Value::Float(y), 12) => (*x as f64) >= *y,
-                    (Value::Float(x), Value::Int(y), 9) => *x < *y as f64,
-                    (Value::Float(x), Value::Int(y), 10) => *x <= *y as f64,
-                    (Value::Float(x), Value::Int(y), 11) => *x > *y as f64,
-                    (Value::Float(x), Value::Int(y), 12) => *x >= *y as f64,
-                    _ => self.cmp_vals_slow(av, bv, op)?,
-                };
-                if !cond {
-                    self.ip = self.bytecode.nums.get(target).copied().unwrap_or(0.0) as usize;
-                }
-                Ok(())
-            }
-
-            _ => Ok(()),
         }
+    }
+
+    // v3.5.20 super-opcodes: bucles sin push/pop ni dispatch extra.
+    #[inline(always)]
+    fn exec_fused_bink(&mut self, op: u8, a: usize, k: i64, d: usize) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let res = match (&av, op) {
+            (Value::Int(x), 1) => Value::Int(x.wrapping_add(k)),
+            (Value::Int(x), 3) => Value::Int(x.wrapping_sub(k)),
+            (Value::Int(x), 4) => Value::Int(x.wrapping_mul(k)),
+            (Value::Float(x), 1) => Value::Float(x + k as f64),
+            (Value::Float(x), 3) => Value::Float(x - k as f64),
+            (Value::Float(x), 4) => Value::Float(x * k as f64),
+            _ => self.bin_vals_slow(av, Value::Int(k), op)?,
+        };
+        self.do_store_by_idx(d, res);
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn exec_fused_bin(&mut self, op: u8, a: usize, b: usize, d: usize) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let bv = self.do_load_by_idx(b)?;
+        let res = match (&av, &bv, op) {
+            (Value::Int(x), Value::Int(y), 1) => Value::Int(x.wrapping_add(*y)),
+            (Value::Int(x), Value::Int(y), 3) => Value::Int(x.wrapping_sub(*y)),
+            (Value::Int(x), Value::Int(y), 4) => Value::Int(x.wrapping_mul(*y)),
+            (Value::Float(x), Value::Float(y), 1) => Value::Float(x + y),
+            (Value::Float(x), Value::Float(y), 3) => Value::Float(x - y),
+            (Value::Float(x), Value::Float(y), 4) => Value::Float(x * y),
+            (Value::Int(x), Value::Float(y), 1) => Value::Float(*x as f64 + y),
+            (Value::Int(x), Value::Float(y), 3) => Value::Float(*x as f64 - y),
+            (Value::Int(x), Value::Float(y), 4) => Value::Float(*x as f64 * y),
+            (Value::Float(x), Value::Int(y), 1) => Value::Float(x + *y as f64),
+            (Value::Float(x), Value::Int(y), 3) => Value::Float(x - *y as f64),
+            (Value::Float(x), Value::Int(y), 4) => Value::Float(x * *y as f64),
+            _ => self.bin_vals_slow(av, bv, op)?,
+        };
+        self.do_store_by_idx(d, res);
+        Ok(())
+    }
+
+    /// v3.5.31: comparación (av vs constante) compartida por el super-opcode
+    /// `FusedCmpKJmp` y por el helper JIT `lj_fused_cmpk` (paridad exacta).
+    fn cmp_vals_k(&self, av: Value, k: i64, op: u8) -> Result<bool, VmError> {
+        match (&av, op) {
+            (Value::Int(x), 7) => Ok(*x == k),
+            (Value::Int(x), 8) => Ok(*x != k),
+            (Value::Int(x), 9) => Ok(*x < k),
+            (Value::Int(x), 10) => Ok(*x <= k),
+            (Value::Int(x), 11) => Ok(*x > k),
+            (Value::Int(x), 12) => Ok(*x >= k),
+            // v3.5.31: paridad EXACTA con Eq/Neq clásicos (EPSILON para
+            // flotantes — el == exacto divergía en casos límite).
+            (Value::Float(x), 7) => Ok((*x - k as f64).abs() < f64::EPSILON),
+            (Value::Float(x), 8) => Ok((*x - k as f64).abs() >= f64::EPSILON),
+            (Value::Float(x), 9) => Ok(*x < k as f64),
+            (Value::Float(x), 10) => Ok(*x <= k as f64),
+            (Value::Float(x), 11) => Ok(*x > k as f64),
+            (Value::Float(x), 12) => Ok(*x >= k as f64),
+            _ => self.cmp_vals_slow(av, Value::Int(k), op),
+        }
+    }
+
+    /// v3.5.31: comparación (av vs bv) compartida por el super-opcode
+    /// `FusedCmpJmp` y por el helper JIT `lj_fused_cmp` (paridad exacta).
+    fn cmp_vals_ab(&self, av: Value, bv: Value, op: u8) -> Result<bool, VmError> {
+        match (&av, &bv, op) {
+            (Value::Int(x), Value::Int(y), 7) => Ok(x == y),
+            (Value::Int(x), Value::Int(y), 8) => Ok(x != y),
+            (Value::Int(x), Value::Int(y), 9) => Ok(x < y),
+            (Value::Int(x), Value::Int(y), 10) => Ok(x <= y),
+            (Value::Int(x), Value::Int(y), 11) => Ok(x > y),
+            (Value::Int(x), Value::Int(y), 12) => Ok(x >= y),
+            // v3.5.31: paridad EXACTA con Eq/Neq clásicos (EPSILON).
+            (Value::Float(x), Value::Float(y), 7) => Ok((x - y).abs() < f64::EPSILON),
+            (Value::Float(x), Value::Float(y), 8) => Ok((x - y).abs() >= f64::EPSILON),
+            (Value::Float(x), Value::Float(y), 9) => Ok(x < y),
+            (Value::Float(x), Value::Float(y), 10) => Ok(x <= y),
+            (Value::Float(x), Value::Float(y), 11) => Ok(x > y),
+            (Value::Float(x), Value::Float(y), 12) => Ok(x >= y),
+            (Value::Int(x), Value::Float(y), 9) => Ok((*x as f64) < *y),
+            (Value::Int(x), Value::Float(y), 10) => Ok((*x as f64) <= *y),
+            (Value::Int(x), Value::Float(y), 11) => Ok((*x as f64) > *y),
+            (Value::Int(x), Value::Float(y), 12) => Ok((*x as f64) >= *y),
+            (Value::Float(x), Value::Int(y), 9) => Ok(*x < *y as f64),
+            (Value::Float(x), Value::Int(y), 10) => Ok(*x <= *y as f64),
+            (Value::Float(x), Value::Int(y), 11) => Ok(*x > *y as f64),
+            (Value::Float(x), Value::Int(y), 12) => Ok(*x >= *y as f64),
+            _ => self.cmp_vals_slow(av, bv, op),
+        }
+    }
+
+    #[inline(always)]
+    fn exec_fused_cmpkjmp(
+        &mut self,
+        op: u8,
+        a: usize,
+        k: i64,
+        target: usize,
+    ) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let cond = self.cmp_vals_k(av, k, op)?;
+        if !cond {
+            self.ip = self.resolve_target(target);
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn exec_fused_cmpjmp(
+        &mut self,
+        op: u8,
+        a: usize,
+        b: usize,
+        target: usize,
+    ) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let bv = self.do_load_by_idx(b)?;
+        let cond = self.cmp_vals_ab(av, bv, op)?;
+        if !cond {
+            self.ip = self.resolve_target(target);
+        }
+        Ok(())
+    }
+
+    /// v3.5.31: aritmética binaria de los super-opcodes de 6 instrucciones —
+    /// reproduce la semántica EXACTA de los opcodes clásicos Add/Sub/Mul/
+    /// Div/Mod (Div: i64::MIN/-1 → wrapping_neg; Mod: rem_euclid con
+    /// b == -1 → 0; ambos: DivisionByZero).
+    fn bin_pair(&self, op: u8, a: Value, b: Value) -> Result<Value, VmError> {
+        match (op, &a, &b) {
+            (1, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x.wrapping_add(*y))),
+            (3, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x.wrapping_sub(*y))),
+            (4, Value::Int(x), Value::Int(y)) => Ok(Value::Int(x.wrapping_mul(*y))),
+            (5, Value::Int(_), Value::Int(0)) => Err(VmError::DivisionByZero),
+            (5, Value::Int(x), Value::Int(y)) => {
+                Ok(Value::Int(if *y == -1 { x.wrapping_neg() } else { x / y }))
+            }
+            (6, Value::Int(_), Value::Int(0)) => Err(VmError::DivisionByZero),
+            (6, Value::Int(x), Value::Int(y)) => {
+                Ok(Value::Int(if *y == -1 { 0 } else { x.rem_euclid(*y) }))
+            }
+            (5, Value::Int(x), Value::Float(y)) => {
+                if *y == 0.0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(*x as f64 / y))
+                }
+            }
+            (5, Value::Float(x), Value::Int(y)) => {
+                if *y == 0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(x / *y as f64))
+                }
+            }
+            (5, Value::Float(x), Value::Float(y)) => {
+                if *y == 0.0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(x / y))
+                }
+            }
+            (6, Value::Int(x), Value::Float(y)) => {
+                if *y == 0.0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(*x as f64 % y))
+                }
+            }
+            (6, Value::Float(x), Value::Int(y)) => {
+                if *y == 0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(x % *y as f64))
+                }
+            }
+            (6, Value::Float(x), Value::Float(y)) => {
+                if *y == 0.0 {
+                    Err(VmError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(x % y))
+                }
+            }
+            (5, _, _) => Err(VmError::TypeError("Div requires numbers".to_string())),
+            (6, _, _) => Err(VmError::TypeError("Mod requires numbers".to_string())),
+            _ => self.bin_vals_slow(a, b, op),
+        }
+    }
+
+    /// v3.5.31: super-opcode de 6 instrucciones — t = a op1 b; si
+    /// (t op2 c) es FALSO salta a target (paridad exacta con
+    /// Load,Load,Binary,Load,Cmp,JmpIf del intérprete).
+    #[inline(always)]
+    fn exec_fused_bincmpjmp(
+        &mut self,
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: usize,
+        c: usize,
+        target: usize,
+    ) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let bv = self.do_load_by_idx(b)?;
+        let t = self.bin_pair(op1, av, bv)?;
+        let cv = self.do_load_by_idx(c)?;
+        let cond = self.cmp_vals_ab(t, cv, op2)?;
+        if !cond {
+            self.ip = self.resolve_target(target);
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn exec_fused_binkcmpjmp(
+        &mut self,
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: usize,
+        k: i64,
+        target: usize,
+    ) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let bv = self.do_load_by_idx(b)?;
+        let t = self.bin_pair(op1, av, bv)?;
+        let cond = self.cmp_vals_k(t, k, op2)?;
+        if !cond {
+            self.ip = self.resolve_target(target);
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn exec_fused_binkkcmpjmp(
+        &mut self,
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: i64,
+        k: i64,
+        target: usize,
+    ) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let t = self.bin_pair(op1, av, Value::Int(b))?;
+        let cond = self.cmp_vals_k(t, k, op2)?;
+        if !cond {
+            self.ip = self.resolve_target(target);
+        }
+        Ok(())
+    }
+
+    // ── Superficie pub(crate) para los helpers extern "C" del JIT (v3.5.31) ──
+    #[cfg(feature = "aot")]
+    pub(crate) fn exec_fused_bink_pub(
+        &mut self,
+        op: u8,
+        a: usize,
+        k: i64,
+        d: usize,
+    ) -> Result<(), VmError> {
+        self.exec_fused_bink(op, a, k, d)
+    }
+    #[cfg(feature = "aot")]
+    pub(crate) fn exec_fused_bin_pub(
+        &mut self,
+        op: u8,
+        a: usize,
+        b: usize,
+        d: usize,
+    ) -> Result<(), VmError> {
+        self.exec_fused_bin(op, a, b, d)
+    }
+    /// Solo evalúa la condición (el JIT decide el salto nativamente).
+    #[cfg(feature = "aot")]
+    pub(crate) fn fused_cmpk_pub(&mut self, op: u8, a: usize, k: i64) -> Result<bool, VmError> {
+        let av = self.do_load_by_idx(a)?;
+        self.cmp_vals_k(av, k, op)
+    }
+    /// Solo evalúa la condición (el JIT decide el salto nativamente).
+    #[cfg(feature = "aot")]
+    pub(crate) fn fused_cmp_pub(&mut self, op: u8, a: usize, b: usize) -> Result<bool, VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let bv = self.do_load_by_idx(b)?;
+        self.cmp_vals_ab(av, bv, op)
+    }
+    /// v3.5.31: condición del super-opcode de 6 (a op1 b) op2 c — el JIT
+    /// resuelve el salto nativamente con el resultado.
+    #[cfg(feature = "aot")]
+    pub(crate) fn fused_bincmp_pub(
+        &mut self,
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: usize,
+        c: usize,
+    ) -> Result<bool, VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let bv = self.do_load_by_idx(b)?;
+        let t = self.bin_pair(op1, av, bv)?;
+        let cv = self.do_load_by_idx(c)?;
+        self.cmp_vals_ab(t, cv, op2)
+    }
+    /// v3.5.31: condición del super-opcode de 6 (a op1 b) op2 k — el JIT
+    /// resuelve el salto nativamente con el resultado.
+    /// v3.5.32 (Tier-1): variante KK — `b` es CONSTANTE.
+    #[cfg(feature = "aot")]
+    pub(crate) fn fused_binkkcmp_pub(
+        &mut self,
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: i64,
+        k: i64,
+    ) -> Result<bool, VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let t = self.bin_pair(op1, av, Value::Int(b))?;
+        self.cmp_vals_k(t, k, op2)
+    }
+
+    /// v3.5.31: condición del super-opcode de 6 (a op1 b) op2 k — el JIT
+    /// resuelve el salto nativamente con el resultado.
+    #[cfg(feature = "aot")]
+    pub(crate) fn fused_binkcmp_pub(
+        &mut self,
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: usize,
+        k: i64,
+    ) -> Result<bool, VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let bv = self.do_load_by_idx(b)?;
+        let t = self.bin_pair(op1, av, bv)?;
+        self.cmp_vals_k(t, k, op2)
+    }
+
+    /// v3.5.31 (Tier-2): resuelve el slot de `name_idx` en el scope actual,
+    /// asignándolo si no existe — MIRROR EXACTO del path de asignación de
+    /// `StoreLocal` (lookup → slot existente, o alloc+insert+bump).
+    #[cfg(feature = "aot")]
+    pub(crate) fn resolve_slot_pub(&mut self, name_idx: usize) -> Result<u32, VmError> {
+        let name = self
+            .bytecode
+            .names
+            .get(name_idx)
+            .cloned()
+            .unwrap_or_default();
+        let n = self.locals.len();
+        if n > 0 {
+            let top = n - 1;
+            if let Some(s) = self.scope_get(&self.locals[top], &name) {
+                return Ok(s);
+            }
+            let s = self.alloc_slot(Value::Void);
+            self.locals[top].map.insert(name, s);
+            self.locals[top].slots.push(s);
+            self.var_cache_invalidate(name_idx);
+            Ok(s)
+        } else {
+            Err(VmError::Runtime("resolve_slot: scope vacío".into()))
+        }
+    }
+
+    /// v3.5.31 (Tier-2): lookup SIN asignar — devuelve el slot si el nombre
+    /// ya existe en ALGÚN scope (búsqueda top-down, mirror de do_load_by_idx),
+    /// o -1 (el JIT hace bail-out al intérprete, que levantará
+    /// UndefinedVariable con la semántica original).
+    #[cfg(feature = "aot")]
+    /// v3.5.32 (Tier-2): lookup + guarda de tipo fusionadas — devuelve el
+    /// slot si el nombre existe Y contiene Value::Int; -1 en otro caso
+    /// (un solo call de prólogo por nombre en vez de lookup + is_int).
+    pub(crate) fn probe_int_pub(&mut self, name_idx: usize) -> i64 {
+        let slot = self.lookup_slot_pub(name_idx);
+        if slot >= 0 && self.flat_slot_is_int_pub(slot as usize) {
+            slot
+        } else {
+            -1
+        }
+    }
+
+    pub(crate) fn lookup_slot_pub(&mut self, name_idx: usize) -> i64 {
+        let name = self
+            .bytecode
+            .names
+            .get(name_idx)
+            .cloned()
+            .unwrap_or_default();
+        for scope in self.locals.iter().rev() {
+            if let Some(s) = self.scope_get(scope, &name) {
+                return s as i64;
+            }
+        }
+        -1
+    }
+
+    /// v3.5.31 (Tier-2): resolución de destino de ESCRITURA de super-opcode
+    /// (mirror de do_store_by_idx): busca en TODOS los scopes (top-down); si
+    /// no existe, asigna slot NUEVO en el scope superior (alloc+insert+bump).
+    #[cfg(feature = "aot")]
+    pub(crate) fn resolve_store_slot_pub(&mut self, name_idx: usize) -> Result<u32, VmError> {
+        let name = self
+            .bytecode
+            .names
+            .get(name_idx)
+            .cloned()
+            .unwrap_or_default();
+        for scope in self.locals.iter().rev() {
+            if let Some(s) = self.scope_get(scope, &name) {
+                return Ok(s);
+            }
+        }
+        let n = self.locals.len();
+        if n == 0 {
+            return Err(VmError::Runtime("resolve_store: scope vacío".into()));
+        }
+        let top = n - 1;
+        let s = self.alloc_slot(Value::Void);
+        self.locals[top].map.insert(name, s);
+        self.locals[top].slots.push(s);
+        self.var_cache_invalidate(name_idx);
+        Ok(s)
     }
 
     fn execute(&mut self, instr: &Instruction) -> Result<(), VmError> {
@@ -3979,11 +5078,40 @@ impl VM {
             Instruction::WithStr(op, s) => self.execute_with_str(*op, s),
             Instruction::WithBool(op, b) => self.execute_with_bool(*op, *b),
             Instruction::WithIdx(op, idx) => self.execute_with_idx(*op, *idx),
-            // v3.5.20 super-opcodes
-            Instruction::FusedBinK { .. }
-            | Instruction::FusedBin { .. }
-            | Instruction::FusedCmpKJmp { .. }
-            | Instruction::FusedCmpJmp { .. } => self.exec_fused(instr),
+            // v3.5.20 super-opcodes (v3.5.31: escalares, sin clonar)
+            Instruction::FusedBinK { op, a, k, d } => self.exec_fused_bink(*op, *a, *k, *d),
+            Instruction::FusedBin { op, a, b, d } => self.exec_fused_bin(*op, *a, *b, *d),
+            Instruction::FusedCmpKJmp { op, a, k, target } => {
+                self.exec_fused_cmpkjmp(*op, *a, *k, *target)
+            }
+            Instruction::FusedCmpJmp { op, a, b, target } => {
+                self.exec_fused_cmpjmp(*op, *a, *b, *target)
+            }
+            // v3.5.31: aritmética + comparación + salto (6 IR → 1).
+            Instruction::FusedBinCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                c,
+                target,
+            } => self.exec_fused_bincmpjmp(*op1, *op2, *a, *b, *c, *target),
+            Instruction::FusedBinKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                target,
+            } => self.exec_fused_binkcmpjmp(*op1, *op2, *a, *b, *k, *target),
+            Instruction::FusedBinKKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                target,
+            } => self.exec_fused_binkkcmpjmp(*op1, *op2, *a, *b, *k, *target),
         }
     }
 
@@ -4413,12 +5541,10 @@ impl VM {
                 self.handlers.pop();
             }
             Opcode::ScopePush => {
-                self.locals.push(HashMap::with_hasher(FixHasher::default()));
+                self.scope_push();
             }
             Opcode::ScopePop => {
-                if self.locals.len() > 1 {
-                    self.locals.pop();
-                }
+                self.scope_pop();
             }
             Opcode::Ret => {
                 let ret_val = self.pop().unwrap_or(Value::Void);
@@ -4429,11 +5555,11 @@ impl VM {
                             coro.is_done = true;
                         }
                         self.current_coro = None;
-                        if let Some((saved_stack, saved_locals, saved_ip)) = self.main_saved.take()
+                        if let Some((saved_stack, saved_locals, saved_flat, saved_free, saved_ip)) =
+                            self.main_saved.take()
                         {
                             self.stack = saved_stack;
-                            self.locals = saved_locals;
-                            self.bump_var_cache(); // v3.5.19
+                            self.replace_locals_full(saved_locals, saved_flat, saved_free);
                             self.ip = saved_ip;
                         } else {
                             self.ip = usize::MAX;
@@ -4446,31 +5572,35 @@ impl VM {
                     // Write-back de referencias prestado mut (bug #6): cada Ref
                     // creada en este frame apunta a un slot del llamador; copiar
                     // el valor final de vuelta antes de descartar los scopes.
+                    // v3.5.34: si ningún slot del frame recibió un Ref con
+                    // owner (el caso dominante), saltamos el escaneo entero.
                     let base = frame.locals_base.max(1).min(self.locals.len());
                     let mut writebacks: Vec<(usize, String, Value)> = Vec::new();
-                    for scope in self.locals.iter().skip(base) {
-                        for v in scope.values() {
-                            if let Value::Ref {
-                                cell,
-                                owner: Some((target_si, target_name)),
-                            } = v
-                            {
-                                let final_val = cell.lock().unwrap().clone();
-                                writebacks.push((*target_si, target_name.clone(), final_val));
+                    if frame.has_refs {
+                        for scope in self.locals.iter().skip(base) {
+                            for &slot in &scope.slots {
+                                if let Value::Ref {
+                                    cell,
+                                    owner: Some((target_si, target_name)),
+                                } = &self.flat[slot as usize]
+                                {
+                                    let final_val = cell.lock().unwrap().clone();
+                                    writebacks.push((*target_si, target_name.clone(), final_val));
+                                }
                             }
                         }
                     }
-                    self.locals.truncate(base);
+                    self.scope_truncate(base);
                     // v3.5.18: la llamada por closure inyectó un scope
                     // sintético de entorno justo debajo de locals_base; ya se
                     // usó (write-through vía celdas) → desapilarlo.
                     if frame.is_closure && self.locals.len() > 1 {
-                        self.locals.pop();
+                        self.scope_pop();
                     }
                     for (si, nm, val) in writebacks {
                         if si < self.locals.len() {
-                            if let Some(slot) = self.locals[si].get_mut(&nm) {
-                                *slot = val;
+                            if let Some(slot) = self.scope_get(&self.locals[si], &nm) {
+                                self.flat[slot as usize] = val;
                             }
                         }
                     }
@@ -4774,7 +5904,7 @@ impl VM {
                     Value::Error(inner) => {
                         let err_wrapper = Value::Error(inner);
                         if let Some(frame) = self.call_stack.pop() {
-                            self.locals.pop();
+                            self.scope_pop();
                             self.ip = frame.return_ip;
                         }
                         self.push(err_wrapper);
@@ -4904,10 +6034,16 @@ impl VM {
                 if n > 0 {
                     // v3.5.19: bump solo si el nombre es NUEVO en el scope
                     // (sobrescribir no cambia la resolución de nombres).
-                    let is_new = !self.locals[n - 1].contains_key(&name);
-                    self.locals[n - 1].insert(name, val);
-                    if is_new {
-                        self.bump_var_cache();
+                    let top = n - 1;
+                    if let Some(s) = self.scope_get(&self.locals[top], &name) {
+                        self.note_val_write(&val);
+                        self.flat[s as usize] = val;
+                    } else {
+                        let s = self.alloc_slot(val);
+                        self.locals[top].map.insert(name, s);
+                        self.locals[top].slots.push(s);
+                        // v3.5.36: solo el nombre insertado se invalida.
+                        self.var_cache_invalidate(idx);
                     }
                 }
             }
@@ -4915,48 +6051,51 @@ impl VM {
                 // a.agregar(x) con `a` variable: muta el slot del scope in-place.
                 // El builder emitió `Load a; args; ArrayPushVar a` — hacemos pop del
                 // receptor obsoleto ANTES de mutar para que refcount vuelva a 1 y
-                // Arc::make_mut NO clone el Vec entero (O(n²) → O(n)).
+                // Arc::make_mut NO clone el Vec entero (O(n²) → O(n)). v3.5.31:
+                // `flat` es el ÚNICO dueño del Arc → make_mut sigue O(1).
                 let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
                 let value = self.pop()?;
                 // Descartar el receptor cargado INMEDIATAMENTE (drop explícito libera
                 // la referencia Arc antes de make_mut → refcount 1 → sin clone).
                 drop(self.pop().ok());
-                let mut found = false;
-                for scope in self.locals.iter_mut().rev() {
-                    if let Some(slot) = scope.get_mut(&name) {
-                        found = true;
-                        match slot {
-                            Value::Array(arr) => {
-                                Arc::make_mut(arr).push(value);
-                            }
-                            // Slot con referencia prestado mut: mutar el array
-                            // dentro de la celda preservando el owner del Ref
-                            Value::Ref { cell, .. } => {
-                                let mut g = cell.lock().unwrap();
-                                match &mut *g {
-                                    Value::Array(arr) => {
-                                        Arc::make_mut(arr).push(value);
-                                    }
-                                    _ => {
-                                        return Err(VmError::TypeError(format!(
-                                            "agregar requiere lista, pero '{}' no es una lista",
-                                            name
-                                        )))
-                                    }
-                                }
-                            }
-                            _ => {
-                                return Err(VmError::TypeError(format!(
-                                    "agregar requiere lista, pero '{}' no es una lista",
-                                    name
-                                )));
-                            }
-                        }
+                let mut found_slot: Option<u32> = None;
+                for scope in self.locals.iter().rev() {
+                    if let Some(s) = self.scope_get(scope, &name) {
+                        found_slot = Some(s);
                         break;
                     }
                 }
-                if !found {
-                    return Err(VmError::UndefinedVariable(name));
+                match found_slot {
+                    Some(slot) => match &mut self.flat[slot as usize] {
+                        Value::Array(arr) => {
+                            Arc::make_mut(arr).push(value);
+                        }
+                        // Slot con referencia prestado mut: mutar el array
+                        // dentro de la celda preservando el owner del Ref
+                        Value::Ref { cell, .. } => {
+                            let mut g = cell.lock().unwrap();
+                            match &mut *g {
+                                Value::Array(arr) => {
+                                    Arc::make_mut(arr).push(value);
+                                }
+                                _ => {
+                                    return Err(VmError::TypeError(format!(
+                                        "agregar requiere lista, pero '{}' no es una lista",
+                                        name
+                                    )))
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(VmError::TypeError(format!(
+                                "agregar requiere lista, pero '{}' no es una lista",
+                                name
+                            )));
+                        }
+                    },
+                    None => {
+                        return Err(VmError::UndefinedVariable(name));
+                    }
                 }
             }
             Opcode::PushHandler => {
@@ -4973,15 +6112,16 @@ impl VM {
                 // Se busca el slot (scope, nombre) y se apila Value::Ref con el
                 // owner para que Ret haga write-back al llamador.
                 let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
-                let mut target: Option<(usize, Value)> = None;
+                let mut target: Option<(usize, u32)> = None;
                 for (si, scope) in self.locals.iter().enumerate().rev() {
-                    if let Some(v) = scope.get(&name) {
-                        target = Some((si, v.clone()));
+                    if let Some(s) = self.scope_get(scope, &name) {
+                        target = Some((si, s));
                         break;
                     }
                 }
                 match target {
-                    Some((si, existing)) => {
+                    Some((si, slot)) => {
+                        let existing = self.flat.get(slot as usize).cloned().unwrap_or(Value::Void);
                         let ref_val = match existing {
                             // Reenvío: g(p) donde p ya es Ref — compartir la
                             // MISMA celda para que los alias no diverjan
@@ -4994,16 +6134,31 @@ impl VM {
                 }
             }
             Opcode::Call => {
-                let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
+                // v3.5.31: sin hash ni alloc por llamada en el camino de
+                // FUNCIÓN DE USUARIO (el dominante): pre-filtro O(1) de
+                // builtins, args inline para argc ≤ 4 y Vec indexada por
+                // índice de nombre. El String del nombre SOLO se clona para
+                // builtins reales o errores.
                 let count_now = {
-                    let count = self.call_counts.entry(name.clone()).or_insert(0);
+                    let count = if idx < self.call_counts.len() {
+                        &mut self.call_counts[idx]
+                    } else {
+                        return Err(VmError::UndefinedFunction(
+                            self.bytecode.names.get(idx).cloned().unwrap_or_default(),
+                        ));
+                    };
                     *count += 1;
                     *count
                 };
                 if count_now == self.jit_threshold && std::env::var_os("LUMEN_JIT_LOG").is_some() {
                     eprintln!(
                         "[jit] 🔥 Hot function detected: '{}' ({} llamadas) -> JIT Tier-1 activado",
-                        name, count_now
+                        self.bytecode
+                            .names
+                            .get(idx)
+                            .map(|s| s.as_str())
+                            .unwrap_or(""),
+                        count_now
                     );
                 }
                 let argc_idx = self.ip;
@@ -5017,19 +6172,49 @@ impl VM {
                 } else {
                     0
                 };
-                let mut args: Vec<Value> = Vec::new();
-                for _ in 0..argc {
-                    args.push(self.pop()?);
+                // v3.5.31: args SIN heap para argc pequeño.
+                let mut small: [Value; 4] = std::array::from_fn(|_| Value::Void);
+                let mut big: Vec<Value>;
+                let args: &[Value] = if argc <= 4 {
+                    for k in 0..argc {
+                        small[argc - 1 - k] = self.pop()?;
+                    }
+                    &small[..argc]
+                } else {
+                    big = Vec::with_capacity(argc);
+                    for _ in 0..argc {
+                        big.push(self.pop()?);
+                    }
+                    big.reverse();
+                    &big
+                };
+                let name_is_builtin = builtin_name_set().contains(
+                    self.bytecode
+                        .names
+                        .get(idx)
+                        .map(|s| s.as_str())
+                        .unwrap_or(""),
+                );
+                if name_is_builtin {
+                    let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
+                    if let Some(result) = self.call_core_builtin(&name, args) {
+                        return result;
+                    }
+                    #[cfg(any(feature = "extra", feature = "full"))]
+                    if let Some(result) = self.call_extra_builtin(&name, args) {
+                        return result;
+                    }
                 }
-                args.reverse();
-                if let Some(result) = self.call_core_builtin(&name, &args) {
-                    return result;
-                }
-                #[cfg(any(feature = "extra", feature = "full"))]
-                if let Some(result) = self.call_extra_builtin(&name, &args) {
-                    return result;
-                }
-                if let Some(&func_idx) = self.func_index_cache.get(&name) {
+                // v3.5.31: Vec directa por índice de nombre (sin hash).
+                let func_idx = match self.func_index_by_name_idx.get(idx).copied().flatten() {
+                    Some(fi) => fi,
+                    None => {
+                        return Err(VmError::UndefinedFunction(
+                            self.bytecode.names.get(idx).cloned().unwrap_or_default(),
+                        ))
+                    }
+                };
+                if func_idx < usize::MAX {
                     if self.call_stack.len() >= MAX_CALL_STACK_DEPTH {
                         return Err(VmError::Runtime(format!(
                             "Desbordamiento de pila (Stack overflow): límite de recursión excedido (>{} llamadas)",
@@ -5041,23 +6226,39 @@ impl VM {
                     self.jit_maybe_compile(func_idx, count_now);
                     #[cfg(feature = "aot")]
                     if let Some(f) = self.jit_get_fn(func_idx) {
-                        self.setup_call_frame(name, func_idx, &args);
+                        self.setup_call_frame(idx, func_idx, args);
                         // SAFETY: el código nativo re-entra a la VM vía puntero
                         // crudo; ningún otro &mut a la VM se usa durante `f`.
+                        // v3.5.31: native_exec desactiva los peepholes de ip
+                        // (el ip está obsoleto dentro del cuerpo nativo).
+                        let prev_native = self.native_exec;
+                        self.native_exec = true;
                         let vm_ptr = self as *mut VM as *mut std::ffi::c_void;
                         let r = unsafe { f(vm_ptr) };
-                        if r != 0 {
-                            return Err(self.jit_error.take().unwrap_or_else(|| {
-                                VmError::Runtime("JIT: error en código nativo".into())
-                            }));
+                        self.native_exec = prev_native;
+                        match r {
+                            0 => return Ok(()),
+                            // v3.5.31 (Tier-2): guarda de tipos falló →
+                            // ejecutar el MISMO frame en el intérprete.
+                            2 => {
+                                if let Some(rt) = self.jit_rt.as_mut() {
+                                    rt.invalidate(func_idx);
+                                }
+                                let func_start = self.bytecode.funcs[func_idx].start;
+                                self.ip = func_start;
+                                let depth = self.call_stack.len();
+                                return self.run_until_return(depth);
+                            }
+                            _ => {
+                                return Err(self.jit_error.take().unwrap_or_else(|| {
+                                    VmError::Runtime("JIT: error en código nativo".into())
+                                }));
+                            }
                         }
-                        return Ok(());
                     }
                     let func_start = self.bytecode.funcs[func_idx].start;
-                    self.setup_call_frame(name, func_idx, &args);
+                    self.setup_call_frame(idx, func_idx, args);
                     self.ip = func_start;
-                } else {
-                    return Err(VmError::UndefinedFunction(name));
                 }
             }
             Opcode::FuncRef => {
@@ -5071,12 +6272,14 @@ impl VM {
                     std::sync::Arc<std::sync::Mutex<Value>>,
                 > = std::collections::HashMap::new();
                 for scope in self.locals.iter() {
-                    for (k, v) in scope {
-                        let val = match v {
-                            Value::Ref { cell, .. } => cell.lock().unwrap().clone(),
-                            other => other.clone(),
-                        };
-                        env.insert(k.clone(), std::sync::Arc::new(std::sync::Mutex::new(val)));
+                    for (k, &slot) in &scope.map {
+                        if let Some(v) = self.flat.get(slot as usize) {
+                            let val = match v {
+                                Value::Ref { cell, .. } => cell.lock().unwrap().clone(),
+                                other => other.clone(),
+                            };
+                            env.insert(k.clone(), std::sync::Arc::new(std::sync::Mutex::new(val)));
+                        }
                     }
                 }
                 self.push(Value::Closure { name, env });
@@ -5103,17 +6306,16 @@ impl VM {
                 // Queda JUSTO debajo del locals_base del frame; Ret lo desapila.
                 let is_closure_call = closure_env.is_some();
                 if let Some(env) = closure_env {
-                    let mut scope = HashMap::with_hasher(FixHasher::default());
+                    self.scope_push();
+                    let top = self.locals.len() - 1;
                     for (k, cell) in env {
-                        scope.insert(
-                            k.clone(),
-                            Value::Ref {
-                                cell: std::sync::Arc::clone(&cell),
-                                owner: None,
-                            },
-                        );
+                        let slot = self.alloc_slot(Value::Ref {
+                            cell: std::sync::Arc::clone(&cell),
+                            owner: None,
+                        });
+                        self.locals[top].map.insert(k.clone(), slot);
+                        self.locals[top].slots.push(slot);
                     }
-                    self.locals.push(scope);
                 }
                 if name == "imprimir" || name == "print" {
                     let mut combined = String::new();
@@ -5743,34 +6945,21 @@ impl VM {
                         )));
                     }
                     let func_start = self.bytecode.funcs[func_idx].start;
-                    let param_count = self.bytecode.funcs[func_idx].params.len();
+                    let (fn_nidx, fn_label) =
+                        match self.bytecode.names.iter().position(|x| *x == name) {
+                            Some(pos) => (pos, None),
+                            None => (usize::MAX, Some(name.clone())),
+                        };
                     self.call_stack.push(CallFrame {
-                        func_name: name,
+                        func_name: fn_nidx,
+                        func_label: fn_label,
                         return_ip: self.ip,
                         locals_base: self.locals.len(),
                         stack_base: self.stack.len(),
                         is_closure: is_closure_call,
+                        has_refs: false,
                     });
-                    let mut scope =
-                        HashMap::with_capacity_and_hasher(param_count, FixHasher::default());
-                    for i in 0..param_count {
-                        let param_name = self.bytecode.funcs[func_idx].params[i].clone();
-                        let arg = if i < args.len() {
-                            args[i].clone()
-                        } else if let Some(Some(dv)) = self.bytecode.funcs[func_idx].defaults.get(i)
-                        {
-                            match dv {
-                                DefaultValue::Int(v) => Value::Int(*v),
-                                DefaultValue::Float(v) => Value::Float(*v),
-                                DefaultValue::Str(s) => Value::str(s.clone()),
-                                DefaultValue::Bool(b) => Value::Bool(*b),
-                            }
-                        } else {
-                            Value::Void
-                        };
-                        scope.insert(param_name, arg);
-                    }
-                    self.locals.push(scope);
+                    self.push_params_scope(func_idx, &args);
                     self.ip = func_start;
                 } else {
                     return Err(VmError::UndefinedFunction(name));
@@ -5825,14 +7014,12 @@ impl VM {
                 });
             }
             Opcode::Jmp => {
-                let target = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
-                self.ip = target;
+                self.ip = self.resolve_target(idx);
             }
             Opcode::JmpIf => {
                 let val = self.pop()?;
                 if !val.is_truthy() {
-                    let target = self.bytecode.nums.get(idx).copied().unwrap_or(0.0) as usize;
-                    self.ip = target;
+                    self.ip = self.resolve_target(idx);
                 }
             }
             Opcode::TupleNew => {
@@ -5939,47 +7126,211 @@ impl VM {
         }
     }
 
+    // ── v3.5.31: scopes con arena de valores (flat) ──────────────────
+
     #[inline(always)]
-    fn var_cache_get(&self, idx: usize, name: &str) -> Option<Value> {
-        let &(si, len, gen) = self.var_cache.get(idx)?;
-        if gen != self.var_cache_gen || self.locals.len() != len as usize {
+    fn next_scope_id(&mut self) -> u64 {
+        let id = self.scope_id_next;
+        self.scope_id_next += 1;
+        id
+    }
+
+    /// Empuja un scope vacío nuevo (identidad fresca). Invalida la caché de
+    /// variables: un scope nuevo PUEDE sombrear nombres ya cacheados (los
+    /// scopes vacíos nunca llegan a la VM — se eliminan en el IR — así que
+    /// todo push implica bindings reales o params de llamada).
+    #[inline(always)]
+    fn scope_push(&mut self) {
+        let id = self.next_scope_id();
+        let mut map: HashMap<String, u32, FixHasher> = self
+            .map_pool
+            .pop()
+            .unwrap_or_else(|| HashMap::with_hasher(FixHasher::default()));
+        map.clear();
+        let mut slots: Vec<u32> = self.slot_pool.pop().unwrap_or_default();
+        slots.clear();
+        self.locals
+            .push(ScopeFrame::with_parts(map, slots, id, None));
+        // v3.5.36: scope VACÍO — no sombrea nada; los inserts posteriores
+        // invalidan selectivamente sus nombres.
+    }
+
+    /// Empuja un scope con capacidad pre-reservada (parámetros de llamada).
+    #[inline(always)]
+    fn scope_push_cap(&mut self, cap: usize) {
+        let id = self.next_scope_id();
+        let mut map: HashMap<String, u32, FixHasher> = self
+            .map_pool
+            .pop()
+            .unwrap_or_else(|| HashMap::with_hasher(FixHasher::default()));
+        map.clear();
+        let mut slots: Vec<u32> = self.slot_pool.pop().unwrap_or_default();
+        slots.clear();
+        if slots.capacity() < cap {
+            slots.reserve(cap - slots.len());
+        }
+        self.locals
+            .push(ScopeFrame::with_parts(map, slots, id, None));
+        // v3.5.36: scope VACÍO — la invalidación la hacen los inserts.
+    }
+
+    /// Libera los slots del scope `si` (flat → freelist) y devuelve los
+    /// buffers (slots y mapa) al pool para reutilizarlos (v3.5.36: sin
+    /// alloc/free por llamada ni por bloque de bucle).
+    fn free_scope_slots(&mut self, si: usize) {
+        let mut slots = std::mem::take(&mut self.locals[si].slots);
+        for s in slots.drain(..) {
+            self.free_slots.push(s);
+        }
+        if self.slot_pool.len() < 64 {
+            self.slot_pool.push(slots);
+        }
+        let map = std::mem::take(&mut self.locals[si].map);
+        if self.map_pool.len() < 64 {
+            self.map_pool.push(map);
+        }
+    }
+
+    /// Pop del scope superior liberando sus slots (nunca popea el global).
+    #[inline(always)]
+    fn scope_pop(&mut self) {
+        if self.locals.len() > 1 {
+            let si = self.locals.len() - 1;
+            self.free_scope_slots(si);
+            self.locals.pop();
+        }
+    }
+
+    /// Trunca la pila de scopes en `n`, liberando slots de los eliminados.
+    fn scope_truncate(&mut self, n: usize) {
+        for si in n..self.locals.len() {
+            self.free_scope_slots(si);
+        }
+        self.locals.truncate(n);
+    }
+
+    /// v3.5.34: si `val` es un Ref con owner, marca el frame actual — Ret
+    /// usa el flag para saltar el escaneo de write-backs si no hay.
+    #[inline(always)]
+    fn note_val_write(&mut self, val: &Value) {
+        if matches!(val, Value::Ref { owner: Some(_), .. }) {
+            if let Some(f) = self.call_stack.last_mut() {
+                f.has_refs = true;
+            }
+        }
+    }
+
+    /// Asigna un slot en `flat` para `v` (reuso del freelist o append).
+    #[inline(always)]
+    fn alloc_slot(&mut self, v: Value) -> u32 {
+        self.note_val_write(&v);
+        match self.free_slots.pop() {
+            Some(s) => {
+                self.flat[s as usize] = v;
+                s
+            }
+            None => {
+                self.flat.push(v);
+                (self.flat.len() - 1) as u32
+            }
+        }
+    }
+
+    /// Invalida la caché de variables: se usa cuando `locals` se reemplaza
+    /// completo (corutinas, snapshots) o se inserta un nombre nuevo.
+    fn replace_locals_full(
+        &mut self,
+        new_locals: Vec<ScopeFrame>,
+        new_flat: Vec<Value>,
+        new_free: Vec<u32>,
+    ) {
+        self.locals = new_locals;
+        self.flat = new_flat;
+        self.free_slots = new_free;
+        self.scope_id_next = self
+            .locals
+            .iter()
+            .map(|f| f.id)
+            .max()
+            .map(|m| m + 1)
+            .unwrap_or(1);
+        self.bump_var_cache();
+    }
+
+    /// Entrada de caché válida → Some(slot) para acceso directo a `flat`.
+    /// INVARIANTES (v3.5.31): `var_cache` está pre-dimensionado a
+    /// `bytecode.names.len()` en VM::new, así que `idx < len` para bytecode
+    /// bien formado — el guard `idx >= len` (1 comparación) mantiene la
+    /// seguridad ante .nvc externos corruptos; un slot válido es siempre
+    /// < `flat.len()` (alloc_slot lo garantiza y los swaps de
+    /// corutinas/snapshots traen frames+flat consistentes).
+    #[inline(always)]
+    fn var_cache_slot(&self, idx: usize) -> Option<u32> {
+        if idx >= self.var_cache.len() {
             return None;
         }
-        let v = self.locals.get(si as usize)?.get(name)?.clone();
-        Some(v)
-    }
-
-    #[inline(always)]
-    fn var_cache_put(&mut self, idx: usize, scope_idx: usize) {
-        let entry = (
-            scope_idx as u32,
-            self.locals.len() as u32,
-            self.var_cache_gen,
-        );
-        if idx < self.var_cache.len() {
-            self.var_cache[idx] = entry;
-        } else {
-            self.var_cache.resize(idx + 1, (0, 0, 0));
-            self.var_cache[idx] = entry;
+        let &(slot, si, sid, gen) = unsafe { self.var_cache.get_unchecked(idx) };
+        let si = si as usize;
+        if gen != self.var_cache_gen || si >= self.locals.len() {
+            return None;
         }
+        if unsafe { self.locals.get_unchecked(si) }.id != sid {
+            return None;
+        }
+        Some(slot)
     }
 
-    /// v3.5.19: inspecciona la SIGUIENTE instrucción (self.ip ya apunta a
-    /// ella) sin clonar — para el peephole Add→Store / Cmp→JmpIf.
+    /// v3.5.31: flag de ejecución NATIVA (JIT). Cuando está activo, los
+    /// peepholes que leen `self.ip` (Add/Sub/Mul→Store, cmp→JmpIf) se
+    /// desactivan: el ip está obsoleto durante el cuerpo nativo y el peephole
+    /// corrompería la pila (bug del lumen_mini2: `Add` con ip rancio se
+    /// tragó el push y `__map_set` recibió args corridos).
     #[inline(always)]
     fn peek_with_idx(&self) -> Option<(Opcode, usize)> {
+        if self.native_exec {
+            return None;
+        }
         match self.bytecode.instructions.get(self.ip)? {
             Instruction::WithIdx(op, x) => Some((*op, *x)),
             _ => None,
         }
     }
 
+    /// v3.5.36: invalida SOLO la entrada de caché del nombre `idx` — se
+    /// usa al INSERTAR un nombre nuevo en el scope superior: únicamente ese
+    /// nombre puede quedar sombreado; el resto de la caché sigue válida a
+    /// través de llamadas y bloques.
+    #[inline(always)]
+    fn var_cache_invalidate(&mut self, idx: usize) {
+        if idx < self.var_cache.len() && self.var_cache_slot(idx).is_some() {
+            self.var_cache[idx] = (0, 0, 0, 0);
+        }
+    }
+
+    #[inline(always)]
+    fn var_cache_put(&mut self, idx: usize, slot: u32, scope_idx: usize) {
+        let entry = (
+            slot,
+            scope_idx as u32,
+            self.locals[scope_idx].id,
+            self.var_cache_gen,
+        );
+        if idx < self.var_cache.len() {
+            self.var_cache[idx] = entry;
+        } else {
+            self.var_cache.resize(idx + 1, (0, 0, 0, 0));
+            self.var_cache[idx] = entry;
+        }
+    }
+
     /// v3.5.19: peephole comparación→JmpIf: salta directamente sin pasar
     /// por push/pop ni por el dispatch de JmpIf.
+    /// v3.5.31: desactivado durante ejecución nativa (peek_with_idx →
+    /// None si native_exec; el ip está obsoleto en el cuerpo JIT).
     #[inline(always)]
     fn cmp_jmpif_fused(&mut self, cond: bool) -> bool {
         if let Some((Opcode::JmpIf, jidx)) = self.peek_with_idx() {
-            let target = self.bytecode.nums.get(jidx).copied().unwrap_or(0.0) as usize;
+            let target = self.resolve_target(jidx);
             if !cond {
                 self.ip = target;
             } else {
@@ -5992,36 +7343,41 @@ impl VM {
     }
 
     /// v3.5.19: Load compartido con los super-opcodes (usa la caché inline).
+    #[inline(always)]
     fn do_load_by_idx(&mut self, idx: usize) -> Result<Value, VmError> {
+        // v3.5.31: fast-path por caché — slot directo en `flat`, SIN hash.
+        if let Some(slot) = self.var_cache_slot(idx) {
+            // slot validado por la caché (alcance de un scope vivo) → < len.
+            let v = unsafe { self.flat.get_unchecked(slot as usize) }.clone();
+            return Ok(match v {
+                Value::Ref { .. } => v.deep_deref(),
+                other => other,
+            });
+        }
         let name = self
             .bytecode
             .names
             .get(idx)
             .map(|s| s.as_str())
             .unwrap_or("");
-        let val = match self.var_cache_get(idx, name) {
-            Some(v) => v,
-            None => {
-                let mut found: Option<(usize, Value)> = None;
-                for (si, scope) in self.locals.iter().enumerate().rev() {
-                    if let Some(v) = scope.get(name) {
-                        found = Some((si, v.clone()));
-                        break;
-                    }
-                }
-                match found {
-                    Some((si, v)) => {
-                        self.var_cache_put(idx, si);
-                        v
-                    }
-                    None => return Err(VmError::UndefinedVariable(name.to_string())),
-                }
+        let mut found: Option<(usize, u32)> = None;
+        for (si, scope) in self.locals.iter().enumerate().rev() {
+            if let Some(s) = self.scope_get(scope, name) {
+                found = Some((si, s));
+                break;
             }
-        };
-        Ok(match val {
-            Value::Ref { .. } => val.deep_deref(),
-            other => other,
-        })
+        }
+        match found {
+            Some((si, slot)) => {
+                self.var_cache_put(idx, slot, si);
+                let v = self.flat.get(slot as usize).cloned().unwrap_or(Value::Void);
+                Ok(match v {
+                    Value::Ref { .. } => v.deep_deref(),
+                    other => other,
+                })
+            }
+            None => Err(VmError::UndefinedVariable(name.to_string())),
+        }
     }
 
     /// v3.5.20: semántica completa de Add/Sub/Mul para el fallback de los
@@ -6047,34 +7403,99 @@ impl VM {
         }
     }
 
-    /// v3.5.20: comparaciones para el fallback de super-opcodes (strings y
-    /// mezcla float; Eq usa la misma tolerancia que Opcode::Eq).
+    /// v3.5.20: comparaciones para el fallback de super-opcodes.
+    /// v3.5.30: paridad EXACTA con los opcodes clásicos Eq/Neq/Lt/Le/Gt/Ge —
+    /// la ruta lenta de los super-opcodes debe ser semánticamente
+    /// transparente: Eq cae a `false` (y Neq a `true`) para tipos
+    /// incompatibles (p. ej. `None == 1`, clave de mapa ausente) en lugar de
+    /// lanzar error, igual que el opcode no fusionado. Los ordenamientos
+    /// (Lt/Le/Gt/Ge) sí exigen números o strings.
     fn cmp_vals_slow(&self, a: Value, b: Value, op: u8) -> Result<bool, VmError> {
         let r = match (op, &a, &b) {
+            (7, Value::Int(x), Value::Int(y)) => x == y,
             (7, Value::Int(x), Value::Float(y)) => (*x as f64 - y).abs() < f64::EPSILON,
             (7, Value::Float(x), Value::Int(y)) => (x - *y as f64).abs() < f64::EPSILON,
+            (7, Value::Float(x), Value::Float(y)) => (x - y).abs() < f64::EPSILON,
+            (7, Value::Str(x), Value::Str(y)) => x == y,
+            (7, Value::Bool(x), Value::Bool(y)) => x == y,
+            (
+                7,
+                Value::Struct {
+                    name: an,
+                    fields: af,
+                },
+                Value::Struct {
+                    name: bn,
+                    fields: bf,
+                },
+            ) => an == bn && af == bf,
+            (7, Value::Opcion(x), Value::Opcion(y)) => x == y,
+            (
+                7,
+                Value::Enum {
+                    name: an,
+                    variant: av,
+                    fields: af,
+                },
+                Value::Enum {
+                    name: bn,
+                    variant: bv,
+                    fields: bf,
+                },
+            ) => an == bn && av == bv && af == bf,
+            (7, _, _) => false,
+            (8, Value::Int(x), Value::Int(y)) => x != y,
             (8, Value::Int(x), Value::Float(y)) => (*x as f64 - y).abs() >= f64::EPSILON,
             (8, Value::Float(x), Value::Int(y)) => (x - *y as f64).abs() >= f64::EPSILON,
+            (8, Value::Float(x), Value::Float(y)) => (x - y).abs() >= f64::EPSILON,
+            (8, Value::Str(x), Value::Str(y)) => x != y,
+            (8, Value::Bool(x), Value::Bool(y)) => x != y,
+            (
+                8,
+                Value::Struct {
+                    name: an,
+                    fields: af,
+                },
+                Value::Struct {
+                    name: bn,
+                    fields: bf,
+                },
+            ) => an != bn || af != bf,
+            (8, Value::Opcion(x), Value::Opcion(y)) => x != y,
+            (
+                8,
+                Value::Enum {
+                    name: an,
+                    variant: av,
+                    fields: af,
+                },
+                Value::Enum {
+                    name: bn,
+                    variant: bv,
+                    fields: bf,
+                },
+            ) => an != bn || av != bv || af != bf,
+            (8, _, _) => true,
+            (9, Value::Int(x), Value::Int(y)) => x < y,
             (9, Value::Int(x), Value::Float(y)) => (*x as f64) < *y,
             (9, Value::Float(x), Value::Int(y)) => *x < *y as f64,
+            (9, Value::Float(x), Value::Float(y)) => x < y,
+            (9, Value::Str(x), Value::Str(y)) => x < y,
+            (10, Value::Int(x), Value::Int(y)) => x <= y,
             (10, Value::Int(x), Value::Float(y)) => (*x as f64) <= *y,
             (10, Value::Float(x), Value::Int(y)) => *x <= *y as f64,
+            (10, Value::Float(x), Value::Float(y)) => x <= y,
+            (10, Value::Str(x), Value::Str(y)) => x <= y,
+            (11, Value::Int(x), Value::Int(y)) => x > y,
             (11, Value::Int(x), Value::Float(y)) => (*x as f64) > *y,
             (11, Value::Float(x), Value::Int(y)) => *x > *y as f64,
+            (11, Value::Float(x), Value::Float(y)) => x > y,
+            (11, Value::Str(x), Value::Str(y)) => x > y,
+            (12, Value::Int(x), Value::Int(y)) => x >= y,
             (12, Value::Int(x), Value::Float(y)) => (*x as f64) >= *y,
             (12, Value::Float(x), Value::Int(y)) => *x >= *y as f64,
-            (7, Value::Float(x), Value::Float(y)) => (x - y).abs() < f64::EPSILON,
-            (8, Value::Float(x), Value::Float(y)) => (x - y).abs() >= f64::EPSILON,
-            (9, Value::Float(x), Value::Float(y)) => x < y,
-            (10, Value::Float(x), Value::Float(y)) => x <= y,
-            (11, Value::Float(x), Value::Float(y)) => x > y,
             (12, Value::Float(x), Value::Float(y)) => x >= y,
-            (9, Value::Str(x), Value::Str(y)) => x < y,
-            (10, Value::Str(x), Value::Str(y)) => x <= y,
-            (11, Value::Str(x), Value::Str(y)) => x > y,
             (12, Value::Str(x), Value::Str(y)) => x >= y,
-            (7, Value::Str(x), Value::Str(y)) => x == y,
-            (8, Value::Str(x), Value::Str(y)) => x != y,
             _ => {
                 return Err(VmError::TypeError(
                     "Comparison requires numbers or strings".to_string(),
@@ -6085,54 +7506,55 @@ impl VM {
     }
 
     /// v3.5.19: cuerpo de `Store` compartido con el peephole (Add→Store).
+    #[inline(always)]
     fn do_store_by_idx(&mut self, idx: usize, val: Value) {
-        let name = self
-            .bytecode
-            .names
-            .get(idx)
-            .map(|s| s.as_str())
-            .unwrap_or("");
-        // fast-path por caché inline
-        let mut done = false;
-        if let Some(&(si, len, gen)) = self.var_cache.get(idx) {
-            if gen == self.var_cache_gen && self.locals.len() == len as usize {
-                if let Some(scope) = self.locals.get_mut(si as usize) {
-                    if let Some(entry) = scope.get_mut(name) {
-                        if entry.is_ref() {
-                            entry.ref_set(val.clone());
-                        } else {
-                            *entry = val.clone();
-                        }
-                        done = true;
+        // v3.5.31: fast-path por caché — escribe directo en el slot de `flat`.
+        if let Some(slot) = self.var_cache_slot(idx) {
+            // slot validado por la caché (alcance de un scope vivo) → < len.
+            let cell = unsafe { self.flat.get_unchecked_mut(slot as usize) };
+            if cell.is_ref() {
+                cell.ref_set(val);
+            } else {
+                // v3.5.34: marcar has_refs en campos disjuntos (el borrow de
+                // flat ya está tomado).
+                if matches!(val, Value::Ref { owner: Some(_), .. }) {
+                    if let Some(f) = self.call_stack.last_mut() {
+                        f.has_refs = true;
                     }
+                }
+                *cell = val;
+            }
+            return;
+        }
+        let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
+        let n = self.locals.len();
+        if n > 0 {
+            let cur = n - 1;
+            let mut found_at: Option<(usize, u32)> = None;
+            for (si, scope) in self.locals.iter().enumerate().rev() {
+                if let Some(s) = self.scope_get(scope, &name) {
+                    found_at = Some((si, s));
+                    break;
                 }
             }
-        }
-        if !done {
-            let n = self.locals.len();
-            if n > 0 {
-                let cur = n - 1;
-                let mut found_at: Option<usize> = None;
-                for (si, scope) in self.locals.iter_mut().enumerate().rev() {
-                    if let Some(entry) = scope.get_mut(name) {
-                        // Si el slot contiene una referencia, escribir A
-                        // TRAVÉS de la celda compartida conservando el owner
-                        if entry.is_ref() {
-                            entry.ref_set(val.clone());
-                        } else {
-                            *entry = val.clone();
-                        }
-                        found_at = Some(si);
-                        break;
+            if let Some((si, slot)) = found_at {
+                // Si el slot contiene una referencia, escribir A TRAVÉS de la
+                // celda compartida conservando el owner
+                if let Some(cell) = self.flat.get_mut(slot as usize) {
+                    if cell.is_ref() {
+                        cell.ref_set(val);
+                    } else {
+                        *cell = val;
                     }
                 }
-                if let Some(si) = found_at {
-                    self.var_cache_put(idx, si);
-                } else {
-                    self.locals[cur].insert(name.to_string(), val);
-                    // nombre NUEVO en el scope → invalidar caché
-                    self.bump_var_cache();
-                }
+                self.var_cache_put(idx, slot, si);
+            } else {
+                // nombre NUEVO en el scope → asignar slot; v3.5.36: solo
+                // el nombre insertado se invalida.
+                let slot = self.alloc_slot(val);
+                self.locals[cur].map.insert(name, slot);
+                self.locals[cur].slots.push(slot);
+                self.var_cache_invalidate(idx);
             }
         }
     }

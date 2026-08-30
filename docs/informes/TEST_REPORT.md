@@ -38,3 +38,22 @@
 - **Cross-Platform Parity**: Windows PowerShell (x64/x86), Linux (glibc/musl/ARM64), macOS (Apple Silicon/Intel), Android Termux (AArch64).
 - **Type Safety**: Visual diagnostic engine (`E001` - `E099`) with source code carets and actionable suggestions.
 - **Stdlib Completeness**: 70+ native modules verified without external dependencies.
+
+---
+
+## Sección actualizada — 30 Ago 2026 (rondas JIT v3.5.31→v3.5.37)
+
+| Suite / Check | Resultado |
+|---|---|
+| `cargo test --workspace` (JIT ON) | **956 passed / 0 failed** |
+| `cargo test --workspace` (`LUMEN_JIT=0`) | **956 passed / 0 failed** |
+| `cargo clippy --all -- -D warnings` | 0 warnings |
+| `cargo fmt -- --check` | limpio |
+| `lumen check examples` | 396/396, 0 errores |
+| `ci_gate.py` ×2 (JIT ON/OFF) | 392 PASS / 0 crashes — Gate PASSED |
+| Fixpoint self-hosting | byte-idéntico (170985 B, sha256 `02b0460d…`) |
+| Paridad ON/OFF | edge tests + repros (folder, flat, JmpIf, VTag, prof(15000)) byte-idénticos |
+
+Los 956 tests incluyen la cobertura de los bugs arreglados en las rondas:
+constant folder IR (MIN/-1 y `rem_euclid`), folder de optimización (delta de
+pila), flat obsoleto en Tier-2 y guardas de `slots` en el análisis VTag.

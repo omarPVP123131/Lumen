@@ -54,8 +54,10 @@ fn main() {
     );
     fs::write(&out_path, generated).expect("no se pudo escribir embedded_stdlib.rs");
     println!("cargo:rerun-if-changed=build.rs");
+    // v3.5.7: informativo — sin cargo:warning (el pre-commit corre
+    // `clippy --all -- -D warnings` y cualquier warning rompe el commit).
     println!(
-        "cargo:warning=embedded_stdlib.rs: {} entradas de stdlib embebidas",
+        "embedded_stdlib.rs: {} entradas de stdlib embebidas",
         entries.len()
     );
 }

@@ -71,3 +71,22 @@ Mediciones Sprint 8 (12 Ago, `stdlib/compiler/bench_fib.nv`, 8 runs calientes):
 ---
 
 *LÚMEN v3.0.0 — benchmarks reproducibles con `cargo build --release -p lumen-cli && lumen run examples/demo_completo.nv`.*
+
+---
+
+## Sección actualizada — rondas JIT v3.5.31→v3.5.37 (30 Ago 2026, Linux e2b, min-of-15, release)
+
+| Tarea | JIT ON | Intérprete | C (gcc -O3) | Cranelift AOT |
+|---|---|---|---|---|
+| sum | 28.1 ms | 1138.4 ms | ~1 ms | ~7 ms |
+| fib | 4.4 ms | 100.4 ms | ~2 ms | ~2.2 ms |
+| primes | 11.8 ms | 34.5 ms | ~5 ms | ~5 ms |
+| strings | 162.3 ms | 177.2 ms | ~10 ms | ~4 ms |
+| arrays | 60.5 ms | 91.5 ms | ~2.7 ms | ~4.2 ms |
+| **TOTAL** | **267.1 ms** | **1541.9 ms** | — | — |
+
+Evolución del total JIT ON: 590 → 383 → 343.5 → 275.7 → **267.1 ms**.
+fib JIT (4.4 ms) queda a ~2× del C; strings/arrays dominados por el formateo
+de texto y la semántica de arrays (los AOT cranelift ya vencen al C en strings).
+Detalle por ronda en `benchmarks/results/informe.md` y
+[docs/arquitectura/jit.md](../arquitectura/jit.md).

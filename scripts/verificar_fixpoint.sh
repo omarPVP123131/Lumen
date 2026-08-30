@@ -15,15 +15,15 @@
 #   5. STAGE 2: v4_self.nvc recompila compiler_v4.nv -> v4_self2.nvc
 #   6. Compara v4_self.nvc == v4_self2.nvc (byte-identical = FIXPOINT).
 #
-# Resultado: escribe reports/fixpoint_status.md e imprime un resumen.
+# Resultado: escribe docs/informes/fixpoint_status.md e imprime un resumen.
 # Duración aprox: 1-2 h (dos autocompilaciones de ~150KB cada una).
 # ============================================================================
 set -u
 cd "$(dirname "$0")/.."   # raíz del repo
 ROOT="$(pwd)"
 LUMEN="$ROOT/target/release/lumen"
-P=reports/fixpoint_status.md
-mkdir -p reports
+P=docs/informes/fixpoint_status.md
+mkdir -p docs/informes
 : > "$P"
 log(){ echo "$1" | tee -a "$P"; }
 

@@ -129,7 +129,14 @@ const LW_H2I: usize = 82;
 const LW_THROW_DIV: usize = 83;
 const LW_IARR_PUSH: usize = 84;
 const LW_IARR_GET: usize = 85;
-const LW_COUNT: usize = 86;
+// v3.5.30: fast-paths de strings (Cranelift): largo crudo, a_texto de
+// entero crudo y concatenación triple literal+valor+literal.
+const LW_ARR_LEN_I: usize = 86;
+const LW_TO_TEXT_I: usize = 87;
+const LW_CONCAT3: usize = 88;
+const LW_CONCAT3_I: usize = 89;
+const LW_CONCAT3_LEN_I: usize = 90;
+const LW_COUNT: usize = 91;
 
 /// sizeof(Val) en lumen_rt.h — tamaño de las celdas para variables
 /// referenciadas (prestado mut) y params en los backends nativos.
@@ -385,6 +392,38 @@ fn simulate_label_depths(
     label_depth
 }
 
+/// v3.5.30: valor i64 actual de una variable entera — SSA si el cache lo
+/// tiene (promoción de bucles), si no, carga del slot y lo memoriza.
+fn cr_int_val(
+    builder: &mut FunctionBuilder,
+    cache: &mut HashMap<String, cranelift::codegen::ir::Value>,
+    int_slots: &HashMap<String, cranelift::codegen::ir::StackSlot>,
+    n: &str,
+) -> cranelift::codegen::ir::Value {
+    if let Some(&v) = cache.get(n) {
+        return v;
+    }
+    let v = builder.ins().stack_load(types::I64, int_slots[n], 0);
+    cache.insert(n.to_string(), v);
+    v
+}
+
+/// v3.5.30: materializa los valores SSA cacheados en sus slots i64 (los
+/// bordes de control que no pasan block-params usan esto antes de saltar).
+/// No limpia el cache: la emisión es por-bloque y el otro camino del brif
+/// sigue necesitando los valores SSA.
+fn cr_flush_ints(
+    builder: &mut FunctionBuilder,
+    cache: &HashMap<String, cranelift::codegen::ir::Value>,
+    int_slots: &HashMap<String, cranelift::codegen::ir::StackSlot>,
+) {
+    for (n, &v) in cache.iter() {
+        if let Some(&ss) = int_slots.get(n) {
+            builder.ins().stack_store(v, ss, 0);
+        }
+    }
+}
+
 impl AotCompiler {
     pub fn new() -> Self {
         let mut fb = settings::builder();
@@ -393,7 +432,23 @@ impl AotCompiler {
         // Fase 88: LTO + optimización agresiva
         fb.set("opt_level", "speed_and_size").unwrap();
         let flags = settings::Flags::new(fb);
-        let builder = cranelift_native::builder().expect("Host not supported");
+        // v3.5.30: en macOS el triple de host es `*-apple-darwin`; con él,
+        // cranelift-object escribe LC_BUILD_VERSION con platform=0
+        // (PLATFORM_UNKNOWN) y el ld64 nuevo rechaza el objeto con
+        // "ld: unknown platform in 'x.o'". Cambiando el OS a MacOSX se
+        // escribe PLATFORM_MACOS y el enlace funciona. En el resto de
+        // plataformas el triple queda idéntico al de cranelift_native.
+        let mut triple = target_lexicon::Triple::host();
+        if matches!(
+            triple.operating_system,
+            target_lexicon::OperatingSystem::Darwin(_)
+        ) {
+            triple.operating_system = target_lexicon::OperatingSystem::MacOSX(None);
+        }
+        let mut builder = cranelift::codegen::isa::lookup(triple)
+            .map_err(|_| "Host not supported")
+            .expect("Host not supported");
+        cranelift_native::infer_native_flags(&mut builder).expect("Failed to infer native flags");
         let isa = builder.finish(flags).expect("Failed to create ISA");
         let obj_builder = ObjectBuilder::new(
             isa,
@@ -515,6 +570,11 @@ impl AotCompiler {
         lw.push(decl(&mut module, "_lw_throw_div", &[], None)); // LW_THROW_DIV
         lw.push(decl(&mut module, "_lw_iarr_push", &[i, i, i, i], None)); // LW_IARR_PUSH
         lw.push(decl(&mut module, "_lw_iarr_get", &[i, i, i], Some(i))); // LW_IARR_GET
+        lw.push(decl(&mut module, "_lw_arr_len_i", &[i], Some(i))); // LW_ARR_LEN_I
+        lw.push(decl(&mut module, "_lw_to_text_i", &[i], Some(i))); // LW_TO_TEXT_I
+        lw.push(decl(&mut module, "_lw_concat3", &[i, i, i], Some(i))); // LW_CONCAT3
+        lw.push(decl(&mut module, "_lw_concat3_i", &[i, i, i], Some(i))); // LW_CONCAT3_I
+        lw.push(decl(&mut module, "_lw_concat3_len_i", &[i, i, i], Some(i))); // LW_CONCAT3_LEN_I
         debug_assert_eq!(lw.len(), LW_COUNT);
 
         Self {
@@ -612,6 +672,68 @@ impl AotCompiler {
         stack
             .pop()
             .unwrap_or_else(|| (self.void_handle(builder), 0))
+    }
+
+    /// v3.5.30: cuerpo común de StoreLocal (declaración). La fusión
+    /// single-use lo evita; el resto de caminos caen aquí (paridad exacta
+    /// con el código inline previo).
+    #[allow(clippy::too_many_arguments)]
+    fn cr_store_local<F: Fn(&str) -> Option<String>>(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        n: &str,
+        v: Value,
+        k: u8,
+        scopes: &mut [HashMap<String, cranelift::codegen::ir::StackSlot>],
+        slots: &HashMap<String, cranelift::codegen::ir::StackSlot>,
+        global_names: &std::collections::HashSet<String>,
+        int_cache: &mut HashMap<String, cranelift::codegen::ir::Value>,
+        int_slots: &HashMap<String, cranelift::codegen::ir::StackSlot>,
+        promoted_vars: &std::collections::HashSet<String>,
+        is_entry: bool,
+        cap_cell_for: &F,
+    ) {
+        if let Some(_ss) = int_slots.get(n).copied() {
+            // v3.5.28: slot i64 — sin box si ya viene crudo
+            let iv = if k == 1 {
+                v
+            } else {
+                let h = self.cr_box(builder, v, k);
+                self.lw_call(builder, LW_H2I, &[h])
+            };
+            // v3.5.30: var promovida → solo cache SSA (el slot se
+            // materializa en los bordes).
+            int_cache.insert(n.to_string(), iv);
+            if !promoted_vars.contains(n) {
+                builder.ins().stack_store(iv, int_slots[n], 0);
+            }
+        } else {
+            let h = self.cr_box(builder, v, k);
+            if let Some(cell) = cap_cell_for(n) {
+                let addr = self.global_addr(builder, &cell);
+                self.lw_call_void(builder, LW_STORE_SLOT, &[addr, h]);
+            } else if let Some(&exist) = scopes.last().unwrap().get(n) {
+                let addr = builder.ins().stack_addr(types::I64, exist, 0);
+                self.lw_call_void(builder, LW_STORE_SLOT, &[addr, h]);
+            } else if scopes.len() == 1 && slots.contains_key(n) {
+                let addr = builder.ins().stack_addr(types::I64, slots[n], 0);
+                self.lw_call_void(builder, LW_STORE_SLOT, &[addr, h]);
+            } else if scopes.len() == 1 && is_entry && global_names.contains(n) {
+                // declaración top-level → celda global compartida
+                let addr = self.global_addr(builder, n);
+                self.lw_call_void(builder, LW_STORE_SLOT, &[addr, h]);
+            } else {
+                let ss = builder.create_sized_stack_slot(cranelift::codegen::ir::StackSlotData {
+                    kind: cranelift::codegen::ir::StackSlotKind::ExplicitSlot,
+                    size: LW_VAL_SIZE,
+                    align_shift: 3,
+                    key: None,
+                });
+                let addr = builder.ins().stack_addr(types::I64, ss, 0);
+                self.lw_call_void(builder, LW_STORE_SLOT, &[addr, h]);
+                scopes.last_mut().unwrap().insert(n.to_string(), ss);
+            }
+        }
     }
 
     /// v3.5.28: Div/Mod entero NATIVO con zero-check inline (paridad exacta
@@ -807,6 +929,9 @@ impl AotCompiler {
         instrs: &[Instr],
         ii: usize,
         int_slots: &HashMap<String, cranelift::codegen::ir::StackSlot>,
+        int_cache: &mut HashMap<String, cranelift::codegen::ir::Value>,
+        head_vars: &HashMap<usize, Vec<String>>,
+        promoted_vars: &std::collections::HashSet<String>,
         label_block: &HashMap<usize, cranelift::codegen::ir::Block>,
         label_depth: &HashMap<usize, usize>,
         stack: &mut Vec<(cranelift::codegen::ir::Value, u8)>,
@@ -863,10 +988,11 @@ impl AotCompiler {
         };
         match (i0, i1) {
             (Instr::Load(a), Instr::Load(b)) => {
-                let sa = *int_slots.get(a)?;
-                let sb = *int_slots.get(b)?;
-                let av = builder.ins().stack_load(types::I64, sa, 0);
-                let bv = builder.ins().stack_load(types::I64, sb, 0);
+                let _ = int_slots.get(a)?;
+                let _ = int_slots.get(b)?;
+                // v3.5.30: operandos vía cache SSA (promoción de bucles).
+                let av = cr_int_val(builder, int_cache, int_slots, a);
+                let bv = cr_int_val(builder, int_cache, int_slots, b);
                 self.cr_emit_fused_tail(
                     builder,
                     instrs,
@@ -877,6 +1003,9 @@ impl AotCompiler {
                     cc,
                     i3,
                     int_slots,
+                    int_cache,
+                    head_vars,
+                    promoted_vars,
                     label_block,
                     label_depth,
                     stack,
@@ -884,8 +1013,8 @@ impl AotCompiler {
                 )
             }
             (Instr::Load(a), Instr::ConstInt(k)) => {
-                let sa = *int_slots.get(a)?;
-                let av = builder.ins().stack_load(types::I64, sa, 0);
+                let _ = int_slots.get(a)?;
+                let av = cr_int_val(builder, int_cache, int_slots, a);
                 let bv = builder.ins().iconst(types::I64, *k);
                 self.cr_emit_fused_tail(
                     builder,
@@ -897,6 +1026,9 @@ impl AotCompiler {
                     cc,
                     i3,
                     int_slots,
+                    int_cache,
+                    head_vars,
+                    promoted_vars,
                     label_block,
                     label_depth,
                     stack,
@@ -904,8 +1036,8 @@ impl AotCompiler {
                 )
             }
             (Instr::ConstInt(k), Instr::Load(b)) => {
-                let sb = *int_slots.get(b)?;
-                let bv = builder.ins().stack_load(types::I64, sb, 0);
+                let _ = int_slots.get(b)?;
+                let bv = cr_int_val(builder, int_cache, int_slots, b);
                 let av = builder.ins().iconst(types::I64, *k);
                 self.cr_emit_fused_tail(
                     builder,
@@ -917,6 +1049,9 @@ impl AotCompiler {
                     cc,
                     i3,
                     int_slots,
+                    int_cache,
+                    head_vars,
+                    promoted_vars,
                     label_block,
                     label_depth,
                     stack,
@@ -939,6 +1074,9 @@ impl AotCompiler {
         cc: Option<cranelift::codegen::ir::condcodes::IntCC>,
         i3: &Instr,
         int_slots: &HashMap<String, cranelift::codegen::ir::StackSlot>,
+        int_cache: &mut HashMap<String, cranelift::codegen::ir::Value>,
+        head_vars: &HashMap<usize, Vec<String>>,
+        promoted_vars: &std::collections::HashSet<String>,
         label_block: &HashMap<usize, cranelift::codegen::ir::Block>,
         label_depth: &HashMap<usize, usize>,
         stack: &mut Vec<(cranelift::codegen::ir::Value, u8)>,
@@ -971,6 +1109,13 @@ impl AotCompiler {
             // Store a slot entero promovido → nativo completo (4 instrs).
             if let Instr::Store(d) | Instr::StoreLocal(d) = i3 {
                 if let Some(&sd) = int_slots.get(d) {
+                    if promoted_vars.contains(d) {
+                        // v3.5.30: variable promovida en bucles — solo cache
+                        // SSA; el slot se materializa en los bordes (flush).
+                        int_cache.insert(d.clone(), r);
+                        return Some(4);
+                    }
+                    int_cache.insert(d.clone(), r);
                     builder.ins().stack_store(r, sd, 0);
                     return Some(4);
                 }
@@ -1000,7 +1145,24 @@ impl AotCompiler {
         let tb = *label_block.get(&t)?;
         let cond = builder.ins().icmp(cc?, av, bv);
         let nb = builder.create_block();
-        builder.ins().brif(cond, nb, &[], tb, &[]);
+        // v3.5.30: el borde del salto — si el destino es un head promovido,
+        // los valores viajan por block-params; si no, se materializan los
+        // slots (flush) en un bloque intermedio ANTES del salto.
+        if let Some(vars) = head_vars.get(&t) {
+            let mut args: Vec<cranelift::codegen::ir::BlockArg> = Vec::new();
+            for v in vars {
+                let vv = cr_int_val(builder, int_cache, int_slots, v);
+                args.push(cranelift::codegen::ir::BlockArg::Value(vv));
+            }
+            builder.ins().brif(cond, nb, &[], tb, &args);
+        } else {
+            let pre = builder.create_block();
+            builder.ins().brif(cond, nb, &[], pre, &[]);
+            builder.switch_to_block(pre);
+            builder.ensure_inserted_block();
+            cr_flush_ints(builder, int_cache, int_slots);
+            builder.ins().jump(tb, &[]);
+        }
         builder.switch_to_block(nb);
         builder.ensure_inserted_block();
         *cur = nb;
@@ -1231,6 +1393,88 @@ impl AotCompiler {
             });
             int_slots.insert(iv.clone(), ss);
         }
+        // ── v3.5.30: PROMOCIÓN SSA DE ENTEROS EN BUCLES ──────────────────
+        // Heads = labels objetivo de un salto hacia atrás (backedge). Las
+        // variables enteras con algún uso posterior al head se promueven:
+        // el head recibe block-params extra y el cuerpo del bucle opera en
+        // SSA puro (registros) — el slot solo se toca al entrar/salir del
+        // bucle. Antes: load/store del slot i64 en cada iteración (frontera
+        // de `sum` vs C).
+        let mut label_pos: HashMap<usize, usize> = HashMap::new();
+        for (idx, ins) in instrs.iter().enumerate() {
+            if let Instr::Label(n) = ins {
+                label_pos.insert(*n, idx);
+            }
+        }
+        let mut head_labels: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        for (idx, ins) in instrs.iter().enumerate() {
+            let t = match ins {
+                Instr::Jmp(t) | Instr::JmpIf(t) => *t,
+                _ => continue,
+            };
+            if label_pos.get(&t).map(|&p| idx > p).unwrap_or(false) {
+                head_labels.insert(t);
+            }
+        }
+        // vars promovidas por head (orden estable para los block-params):
+        // heads "limpios" (depth 0, sin catch — los params extra van tras los
+        // del stack de valores) con vars enteras usadas después del head.
+        let mut head_vars: HashMap<usize, Vec<String>> = HashMap::new();
+        for &h in &head_labels {
+            if label_depth.get(&h).copied().unwrap_or(0) != 0 || catch_labels.contains(&h) {
+                continue;
+            }
+            let pos = label_pos[&h];
+            let mut vars: Vec<String> = int_vars
+                .iter()
+                .filter(|v| {
+                    instrs.iter().enumerate().any(|(idx, ins)| {
+                        idx > pos
+                            && matches!(
+                                ins,
+                                Instr::Load(n) | Instr::Store(n) | Instr::StoreLocal(n)
+                                    if n == *v
+                            )
+                    })
+                })
+                .cloned()
+                .collect();
+            vars.sort();
+            if !vars.is_empty() {
+                // params extra en el bloque del head (tras los de la pila).
+                for _ in &vars {
+                    builder.append_block_param(label_block[&h], i64);
+                }
+                head_vars.insert(h, vars);
+            }
+        }
+        // conjunto de vars promovidas en ALGÚN head: sus stores solo
+        // actualizan el cache SSA (el slot se materializa en los flush).
+        let mut promoted_vars: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for vars in head_vars.values() {
+            for v in vars {
+                promoted_vars.insert(v.clone());
+            }
+        }
+        // v3.5.30: variables con UNA sola lectura en toda la función —
+        // candidatas a quedarse en la pila (StoreLocal no toca el slot y el
+        // único Load re-emite el valor). Patrón: `sea s = ...; usar(s);`.
+        let mut load_count: HashMap<String, usize> = HashMap::new();
+        let mut load_pos: HashMap<String, usize> = HashMap::new();
+        for (idx, ins) in instrs.iter().enumerate() {
+            if let Instr::Load(n) = ins {
+                *load_count.entry(n.clone()).or_insert(0) += 1;
+                load_pos.insert(n.clone(), idx);
+            }
+        }
+        let mut single_use: HashMap<String, usize> = HashMap::new();
+        for (n, &c) in &load_count {
+            if c == 1 {
+                if let Some(&p) = load_pos.get(n) {
+                    single_use.insert(n.clone(), p);
+                }
+            }
+        }
         // v3.5.29: ARRAYS DE ENTEROS SIN BOXEAR — cada array promovido vive
         // en tres slots i64 (ptr, len, cap) inicializados vacíos en el entry.
         // El análisis (arr_vars_by_name) garantiza que no escapan (ni calls,
@@ -1264,6 +1508,19 @@ impl AotCompiler {
         } else {
             None
         };
+        // v3.5.30: cache SSA de variables enteras (nombre → valor i64
+        // actual). Almacenado en el entry para los params int y actualizado
+        // por Load/Store; los bordes de control lo materializan o lo pasan
+        // por block-params (ver head_vars).
+        let mut int_cache: HashMap<String, cranelift::codegen::ir::Value> = HashMap::new();
+        // v3.5.30: literales PEREZOSOS (kind 4 en la pila): token → DataId.
+        // Si el literal forma parte del patrón `"lit" + X + "lit"`, no se
+        // emite _lw_str — el Add fusionado recibe el puntero .data directo.
+        let mut lit_lazy: HashMap<cranelift::codegen::ir::Value, DataId> = HashMap::new();
+        // v3.5.30: valores dejados en la pila por la fusión single-use de
+        // StoreLocal (nombre → (valor, posición del Load que lo re-emite)).
+        let mut dup_pending: HashMap<String, (cranelift::codegen::ir::Value, usize)> =
+            HashMap::new();
         let mut stored_names: std::collections::HashSet<String> = std::collections::HashSet::new();
         for ins in instrs {
             if let Instr::Store(sn) | Instr::StoreLocal(sn) = ins {
@@ -1302,6 +1559,8 @@ impl AotCompiler {
             // (params_int ya las excluye).
             if let Some(&hv) = entry_params.get(pi) {
                 builder.ins().stack_store(hv, ss, 0);
+                // v3.5.30: el cache SSA arranca con el param (sin re-carga).
+                int_cache.insert(pname.clone(), hv);
             }
         }
 
@@ -1428,15 +1687,36 @@ impl AotCompiler {
                                 args.push(cranelift::codegen::ir::BlockArg::Value(void0));
                             }
                         }
+                        // v3.5.30: borde de control — head promovido: las
+                        // vars viajan por block-params; cualquier otro
+                        // destino: flush de los slots i64.
+                        if let Some(vars) = head_vars.get(n) {
+                            for v in vars {
+                                let vv = cr_int_val(&mut builder, &mut int_cache, &int_slots, v);
+                                args.push(cranelift::codegen::ir::BlockArg::Value(vv));
+                            }
+                        } else {
+                            cr_flush_ints(&mut builder, &int_cache, &int_slots);
+                        }
                         builder.ins().jump(target, &args);
                     }
                     cur = target;
                     builder.switch_to_block(cur);
                     builder.ensure_inserted_block();
-                    // el stack del label llega por block-params (handles)
+                    // el stack del label llega por block-params (handles);
+                    // las vars promovidas llegan tras ellos y alimentan el
+                    // cache SSA. Los demás labels arrancan con cache vacío
+                    // (los slots quedaron materializados en los bordes).
+                    let params = builder.block_params(cur).to_vec();
                     stack.clear();
-                    for &pv in builder.block_params(cur) {
+                    for &pv in params.iter().take(params.len().min(d)) {
                         stack.push((pv, 0));
+                    }
+                    int_cache.clear();
+                    if let Some(vars) = head_vars.get(n) {
+                        for (k, v) in vars.iter().enumerate() {
+                            int_cache.insert(v.clone(), params[d + k]);
+                        }
                     }
                 }
                 terminated = false;
@@ -1454,6 +1734,9 @@ impl AotCompiler {
                     instrs,
                     ii,
                     &int_slots,
+                    &mut int_cache,
+                    &head_vars,
+                    &promoted_vars,
                     &label_block,
                     &label_depth,
                     &mut stack,
@@ -1481,11 +1764,97 @@ impl AotCompiler {
                 }
                 Instr::ConstStr(s) => {
                     let data_id = self.get_string_ptr(s);
+                    // v3.5.30: ¿patrón "lit" + X + "lit"? → token perezoso.
+                    // Walk desde ii+1: la pila mantiene profundidad ≥ 1
+                    // (el literal nunca se consume) hasta un Binary(Add) a
+                    // profundidad 1, seguido de ConstStr + Binary(Add).
+                    let mut a: Option<usize> = None;
+                    {
+                        // d = valores por encima del estado previo al
+                        // literal. El Add fusionado es el primero que
+                        // encuentra el token como operando izquierdo:
+                        // d == 2 (el token + el valor intermedio X).
+                        let mut d = 1i32;
+                        let mut k = ii + 1;
+                        while k < instrs.len() {
+                            let ins_k = &instrs[k];
+                            if matches!(ins_k, Instr::Binary(Op::Add)) {
+                                if d == 2 {
+                                    a = Some(k);
+                                }
+                                break;
+                            }
+                            let dd = instr_depth_delta(ins_k);
+                            if matches!(
+                                ins_k,
+                                Instr::Jmp(_)
+                                    | Instr::JmpIf(_)
+                                    | Instr::Label(_)
+                                    | Instr::Store(_)
+                                    | Instr::StoreLocal(_)
+                                    | Instr::MakeRef(_)
+                                    | Instr::ConstStr(_)
+                                    | Instr::Return
+                                    | Instr::Halt
+                            ) {
+                                break;
+                            }
+                            if d + dd < 1 {
+                                break;
+                            }
+                            d += dd;
+                            k += 1;
+                        }
+                    }
+                    if let Some(a) = a {
+                        if a + 2 < instrs.len()
+                            && matches!(&instrs[a + 1], Instr::ConstStr(_))
+                            && matches!(&instrs[a + 2], Instr::Binary(Op::Add))
+                        {
+                            let ph = builder.ins().iconst(i64, 0);
+                            lit_lazy.insert(ph, data_id);
+                            stack.push((ph, 4));
+                            // sin _lw_str: el puntero se pasa directo a
+                            // _lw_concat3 en el Add fusionado.
+                            if risky && !terminated {
+                                self.emit_err_check(
+                                    &mut builder,
+                                    &handlers,
+                                    &label_block,
+                                    &int_cache,
+                                    &int_slots,
+                                );
+                            }
+                            ii += 1;
+                            continue;
+                        }
+                    }
                     let gv = self.module.declare_data_in_func(data_id, builder.func);
                     let ptr = builder.ins().global_value(i64, gv);
                     stack.push((self.lw_call(&mut builder, LW_STR, &[ptr]), 0));
                 }
                 Instr::Load(n) => {
+                    // v3.5.30: re-emisión del valor dejado en la pila por
+                    // la fusión single-use de StoreLocal (sin tocar el slot).
+                    if let Some(&(v, j)) = dup_pending.get(n) {
+                        if j == ii {
+                            dup_pending.remove(n);
+                            stack.push((v, 0));
+                            // el err_check de la cola NO se ejecuta al
+                            // saltar → replicarlo aquí.
+                            if risky && !terminated {
+                                self.emit_err_check(
+                                    &mut builder,
+                                    &handlers,
+                                    &label_block,
+                                    &int_cache,
+                                    &int_slots,
+                                );
+                            }
+                            ii += 1;
+                            continue;
+                        }
+                    }
                     // v3.5.29: ventanas de fusión de arrays de enteros
                     // promovidos: Load xs; Load j|ConstInt; ArrayGet → get
                     // nativo con bounds; Load xs; ArrayLen → len nativo.
@@ -1495,8 +1864,9 @@ impl AotCompiler {
                             if let (Instr::Load(j), Instr::ArrayGet) =
                                 (&instrs[ii + 1], &instrs[ii + 2])
                             {
-                                let ix = if let Some(ssj) = int_slots.get(j).copied() {
-                                    builder.ins().stack_load(types::I64, ssj, 0)
+                                let ix = if int_slots.contains_key(j) {
+                                    // v3.5.30: vía cache SSA (bucle promovido).
+                                    cr_int_val(&mut builder, &mut int_cache, &int_slots, j)
                                 } else if let Some(ssj) =
                                     find_slot_cl(&scopes, j).or_else(|| slots.get(j).copied())
                                 {
@@ -1537,7 +1907,13 @@ impl AotCompiler {
                         }
                         if fused {
                             if risky && !terminated {
-                                self.emit_err_check(&mut builder, &handlers, &label_block);
+                                self.emit_err_check(
+                                    &mut builder,
+                                    &handlers,
+                                    &label_block,
+                                    &int_cache,
+                                    &int_slots,
+                                );
                             }
                             continue;
                         }
@@ -1545,9 +1921,10 @@ impl AotCompiler {
                         // kind=3 para conservar el modelo de profundidades y
                         // que los consumidores genéricos lo detecten.
                         stack.push((arr_dummy.unwrap(), 3));
-                    } else if let Some(ss) = int_slots.get(n).copied() {
+                    } else if let Some(_ss) = int_slots.get(n).copied() {
                         // v3.5.28: local/param entero → slot i64, valor CRUDO.
-                        let v = builder.ins().stack_load(types::I64, ss, 0);
+                        // v3.5.30: vía cache SSA (promoción de bucles).
+                        let v = cr_int_val(&mut builder, &mut int_cache, &int_slots, n);
                         stack.push((v, 1));
                     } else if let Some(cell) = cap_cell_for(n) {
                         let addr = self.global_addr(&mut builder, &cell);
@@ -1571,45 +1948,69 @@ impl AotCompiler {
                         // v3.5.29: array promovido — slots nativos ya
                         // inicializados en el entry; se descarta el dummy.
                         let _ = self.cr_pop(&mut builder, &mut stack);
-                    } else if let Some((v, k)) = stack.pop() {
-                        if let Some(ss) = int_slots.get(n).copied() {
-                            // v3.5.28: slot i64 — sin box si ya viene crudo
-                            let iv = if k == 1 {
-                                v
-                            } else {
-                                let h = self.cr_box(&mut builder, v, k);
-                                self.lw_call(&mut builder, LW_H2I, &[h])
-                            };
-                            builder.ins().stack_store(iv, ss, 0);
-                        } else {
-                            let h = self.cr_box(&mut builder, v, k);
-                            if let Some(cell) = cap_cell_for(n) {
-                                let addr = self.global_addr(&mut builder, &cell);
-                                self.lw_call_void(&mut builder, LW_STORE_SLOT, &[addr, h]);
-                            } else if let Some(&exist) = scopes.last().unwrap().get(n) {
-                                let addr = builder.ins().stack_addr(i64, exist, 0);
-                                self.lw_call_void(&mut builder, LW_STORE_SLOT, &[addr, h]);
-                            } else if scopes.len() == 1 && slots.contains_key(n) {
-                                let addr = builder.ins().stack_addr(i64, slots[n], 0);
-                                self.lw_call_void(&mut builder, LW_STORE_SLOT, &[addr, h]);
-                            } else if scopes.len() == 1 && is_entry && global_names.contains(n) {
-                                // declaración top-level → celda global compartida
-                                let addr = self.global_addr(&mut builder, n);
-                                self.lw_call_void(&mut builder, LW_STORE_SLOT, &[addr, h]);
-                            } else {
-                                let ss = builder.create_sized_stack_slot(
-                                    cranelift::codegen::ir::StackSlotData {
-                                        kind: cranelift::codegen::ir::StackSlotKind::ExplicitSlot,
-                                        size: LW_VAL_SIZE,
-                                        align_shift: 3,
-                                        key: None,
-                                    },
-                                );
-                                let addr = builder.ins().stack_addr(i64, ss, 0);
-                                self.lw_call_void(&mut builder, LW_STORE_SLOT, &[addr, h]);
-                                scopes.last_mut().unwrap().insert(n.clone(), ss);
-                            }
+                    } else if let Some(&j) = single_use.get(n) {
+                        // v3.5.30: fusión single-use — si entre este
+                        // StoreLocal y su ÚNICO Load(n) solo hay Loads de
+                        // otras vars / constantes, el handle se queda en la
+                        // pila (sin slot ni _lw_store_slot) y el Load lo
+                        // re-emite. El err_check de la cola sigue activo.
+                        let between_ok = j > ii
+                            && j - ii <= 4
+                            && (ii + 1..j).all(|k| {
+                                if let Instr::Load(x) = &instrs[k] {
+                                    x != n
+                                } else {
+                                    matches!(
+                                        &instrs[k],
+                                        Instr::ConstInt(_)
+                                            | Instr::ConstFloat(_)
+                                            | Instr::ConstStr(_)
+                                            | Instr::ConstBool(_)
+                                    )
+                                }
+                            });
+                        if between_ok
+                            && !global_names.contains(n)
+                            && !ref_targets.iter().any(|x| x == n)
+                            && cap_cell_for(n).is_none()
+                            && stack.last().map(|(_, k)| *k == 0).unwrap_or(false)
+                        {
+                            // se SACA de la pila (modelo de profundidades
+                            // intacto) pero el valor SSA se guarda para que
+                            // el Load lo re-emita sin tocar el slot.
+                            let (v, _) = stack.pop().unwrap();
+                            dup_pending.insert(n.clone(), (v, j));
+                        } else if let Some((v, k)) = stack.pop() {
+                            self.cr_store_local(
+                                &mut builder,
+                                n,
+                                v,
+                                k,
+                                &mut scopes,
+                                &slots,
+                                global_names,
+                                &mut int_cache,
+                                &int_slots,
+                                &promoted_vars,
+                                is_entry,
+                                &cap_cell_for,
+                            );
                         }
+                    } else if let Some((v, k)) = stack.pop() {
+                        self.cr_store_local(
+                            &mut builder,
+                            n,
+                            v,
+                            k,
+                            &mut scopes,
+                            &slots,
+                            global_names,
+                            &mut int_cache,
+                            &int_slots,
+                            &promoted_vars,
+                            is_entry,
+                            &cap_cell_for,
+                        );
                     }
                 }
                 Instr::Store(n) => {
@@ -1617,7 +2018,7 @@ impl AotCompiler {
                     if cr_arr_vars.contains(n) {
                         let _ = self.cr_pop(&mut builder, &mut stack);
                     } else if let Some((v, k)) = stack.pop() {
-                        if let Some(ss) = int_slots.get(n).copied() {
+                        if let Some(_ss) = int_slots.get(n).copied() {
                             // v3.5.28: slot i64 — sin box si ya viene crudo
                             let iv = if k == 1 {
                                 v
@@ -1625,7 +2026,12 @@ impl AotCompiler {
                                 let h = self.cr_box(&mut builder, v, k);
                                 self.lw_call(&mut builder, LW_H2I, &[h])
                             };
-                            builder.ins().stack_store(iv, ss, 0);
+                            // v3.5.30: var promovida → solo cache SSA (el
+                            // slot se materializa en los bordes).
+                            int_cache.insert(n.clone(), iv);
+                            if !promoted_vars.contains(n) {
+                                builder.ins().stack_store(iv, int_slots[n], 0);
+                            }
                         } else {
                             let h = self.cr_box(&mut builder, v, k);
                             if let Some(cell) = cap_cell_for(n) {
@@ -1658,9 +2064,174 @@ impl AotCompiler {
                     }
                 }
                 Instr::Binary(op) => {
+                    // v3.5.30: fusión de interpolación `"lit" + X + "lit"`
+                    // → una sola llamada _lw_concat3 (antes: 2 _lw_bin con
+                    // strlen+arena+box cada uno). El literal izquierdo llega
+                    // como token perezoso (kind 4, sin _lw_str).
+                    if *op == Op::Add
+                        && ii + 2 < instrs.len()
+                        && matches!(&instrs[ii + 1], Instr::ConstStr(_))
+                        && matches!(&instrs[ii + 2], Instr::Binary(Op::Add))
+                    {
+                        if let (Some(&(rhs, krhs)), Some(&(lhs, klhs))) =
+                            (stack.last(), stack.get(stack.len().saturating_sub(2)))
+                        {
+                            // v3.5.30: medio = a_texto(entero) → itoa
+                            // directo al buffer final (sin box intermedio).
+                            // En ese caso el Call deja el CRUDO en la pila
+                            // (kind 1) y aquí se consume directamente.
+                            let mid_is_to_text = ii >= 2
+                                && matches!(
+                                    &instrs[ii - 1],
+                                    Instr::Call(c, 1)
+                                        if matches!(
+                                            c.as_str(),
+                                            "a_texto" | "to_texto" | "__str_from"
+                                        )
+                                )
+                                && matches!(
+                                    &instrs[ii - 2],
+                                    Instr::Load(n2) if int_slots.contains_key(n2)
+                                );
+                            if (krhs == 0 || (krhs == 1 && mid_is_to_text))
+                                && klhs == 4
+                                && lit_lazy.contains_key(&lhs)
+                            {
+                                let d1 = lit_lazy[&lhs];
+                                let s2 = match &instrs[ii + 1] {
+                                    Instr::ConstStr(s) => s.clone(),
+                                    _ => unreachable!(),
+                                };
+                                let d2 = self.get_string_ptr(&s2);
+                                let gv1 = self.module.declare_data_in_func(d1, builder.func);
+                                let p1 = builder.ins().global_value(i64, gv1);
+                                let gv2 = self.module.declare_data_in_func(d2, builder.func);
+                                let p2 = builder.ins().global_value(i64, gv2);
+                                let raw = if mid_is_to_text {
+                                    let n2 = match &instrs[ii - 2] {
+                                        Instr::Load(n2) => n2.clone(),
+                                        _ => unreachable!(),
+                                    };
+                                    Some(cr_int_val(&mut builder, &mut int_cache, &int_slots, &n2))
+                                } else {
+                                    None
+                                };
+                                // v3.5.30: patrón `sea s = "lit" + a_texto(i)
+                                // + "lit"; largo(s)` con s de uso ÚNICO → la
+                                // longitud se calcula SIN construir el string
+                                // (bucle strings: 1 llamada por iteración).
+                                // Entre StoreLocal(s) y Load(s) puede haber
+                                // Loads de OTRAS vars enteras (p. ej.
+                                // `total = total + largo(s)`): sus efectos se
+                                // replican al omitir instrucciones.
+                                let mut len_fused: Option<usize> = None;
+                                if mid_is_to_text && ii + 3 < instrs.len() {
+                                    if let Instr::StoreLocal(s) = &instrs[ii + 3] {
+                                        if let Some(&j) = single_use.get(s) {
+                                            let between = j > ii + 3
+                                                && j - (ii + 3) <= 4
+                                                && (ii + 4..j).all(|k| {
+                                                    matches!(
+                                                        &instrs[k],
+                                                        Instr::Load(x)
+                                                            if x != s
+                                                                && int_slots.contains_key(x)
+                                                    )
+                                                })
+                                                && j + 1 < instrs.len()
+                                                && matches!(
+                                                    &instrs[j + 1],
+                                                    Instr::Call(c, 1)
+                                                        if matches!(
+                                                            c.as_str(),
+                                                            "largo"
+                                                                | "len"
+                                                                | "length"
+                                                                | "__str_len"
+                                                                | "__str_longitud"
+                                                        )
+                                                );
+                                            if between {
+                                                len_fused = Some(j);
+                                            }
+                                        }
+                                    }
+                                }
+                                stack.pop();
+                                stack.pop();
+                                if let Some(j) = len_fused {
+                                    // efectos de los Loads omitidos
+                                    for ins_k in instrs.iter().take(j).skip(ii + 3) {
+                                        if let Instr::Load(x) = ins_k {
+                                            let vx = cr_int_val(
+                                                &mut builder,
+                                                &mut int_cache,
+                                                &int_slots,
+                                                x,
+                                            );
+                                            stack.push((vx, 1));
+                                        }
+                                    }
+                                    let r = self.lw_call(
+                                        &mut builder,
+                                        LW_CONCAT3_LEN_I,
+                                        &[p1, raw.unwrap(), p2],
+                                    );
+                                    stack.push((r, 1));
+                                    if risky && !terminated {
+                                        self.emit_err_check(
+                                            &mut builder,
+                                            &handlers,
+                                            &label_block,
+                                            &int_cache,
+                                            &int_slots,
+                                        );
+                                    }
+                                    ii = j + 2;
+                                    continue;
+                                }
+                                let r = if mid_is_to_text {
+                                    self.lw_call(
+                                        &mut builder,
+                                        LW_CONCAT3_I,
+                                        &[p1, raw.unwrap(), p2],
+                                    )
+                                } else {
+                                    self.lw_call(&mut builder, LW_CONCAT3, &[p1, rhs, p2])
+                                };
+                                stack.push((r, 0));
+                                // el err_check de la cola NO se ejecuta al
+                                // saltar instrucciones → replicarlo aquí.
+                                if risky && !terminated {
+                                    self.emit_err_check(
+                                        &mut builder,
+                                        &handlers,
+                                        &label_block,
+                                        &int_cache,
+                                        &int_slots,
+                                    );
+                                }
+                                ii += 3;
+                                continue;
+                            }
+                        }
+                    }
                     use cranelift::codegen::ir::condcodes::IntCC;
                     let (b, kb) = self.cr_pop(&mut builder, &mut stack);
                     let (a, ka) = self.cr_pop(&mut builder, &mut stack);
+                    // v3.5.30: defensivo — un token perezoso que llegó aquí
+                    // (el análisis lo impide) se materializa al momento.
+                    let (a, ka) = if ka == 4 {
+                        let d1 = lit_lazy
+                            .get(&a)
+                            .copied()
+                            .unwrap_or_else(|| self.get_string_ptr(""));
+                        let gv = self.module.declare_data_in_func(d1, builder.func);
+                        let ptr = builder.ins().global_value(i64, gv);
+                        (self.lw_call(&mut builder, LW_STR, &[ptr]), 0u8)
+                    } else {
+                        (a, ka)
+                    };
                     if ka == 1 && kb == 1 {
                         // v3.5.28: aritmética/comparación entera NATIVA (sin
                         // boxing ni llamada al runtime). Div/Mod pueden lanzar
@@ -1847,228 +2418,302 @@ impl AotCompiler {
                         }
                     }
                     if !cr_done {
-                        let mut args: Vec<Value> = Vec::with_capacity(args_raw.len());
-                        for (av, ak) in &args_raw {
-                            args.push(self.cr_box(&mut builder, *av, *ak));
-                        }
-                        match cn.as_str() {
-                            "imprimir" | "print" => {
-                                if args.is_empty() {
-                                    self.lw_call_void(&mut builder, LW_PRINT_BLANK, &[]);
+                        // v3.5.30: fast-paths crudos ANTES del boxing
+                        // genérico — a_texto(entero) y largo() no boxean
+                        // argumentos que no lo necesitan.
+                        let mut fast = false;
+                        if let Some((idx, arity)) = lw_builtin(cn) {
+                            if idx == LW_TO_TEXT
+                                && arity == 1
+                                && args_raw.first().map(|(_, ak)| *ak == 1).unwrap_or(false)
+                            {
+                                let (av, _) = args_raw[0];
+                                // v3.5.30: si sigue el patrón de
+                                // interpolación fusionada (Binary(Add);
+                                // ConstStr; Binary(Add)), NO se emite la
+                                // conversión: el Add fusionado toma el
+                                // CRUDO directo (evita la llamada muerta).
+                                let fused_next = ii + 3 < instrs.len()
+                                    && matches!(&instrs[ii + 1], Instr::Binary(Op::Add))
+                                    && matches!(&instrs[ii + 2], Instr::ConstStr(_))
+                                    && matches!(&instrs[ii + 3], Instr::Binary(Op::Add));
+                                if fused_next {
+                                    stack.push((av, 1));
                                 } else {
-                                    let mut acc = args[0];
-                                    for av in args.iter().skip(1) {
-                                        acc = self.lw_call(&mut builder, LW_JOIN, &[acc, *av]);
-                                    }
-                                    self.lw_call_void(&mut builder, LW_PRINT, &[acc]);
+                                    let r = self.lw_call(&mut builder, LW_TO_TEXT_I, &[av]);
+                                    stack.push((r, 0));
                                 }
-                                stack.push((self.void_handle(&mut builder), 0));
-                            }
-                            // v3.5.17: hilos REALES en Cranelift. args[0] = nombre
-                            // de la función (texto), args[1..] = argumentos. Se
-                            // estagan los handles en un slot (int64[8]) y el shim
-                            // C (_lw_thr_spawn_h) los desboxea a Val[] y crea el
-                            // hilo pthread/Win32. El hilo entra por el trampolín
-                            // __lumen_ft_<fn> (ver thread_trampolines).
-                            "__tarea_lanzar" | "__task_spawn" | "__hilo_lanzar"
-                            | "__thread_spawn" => {
-                                let na = args.len().saturating_sub(1).min(8);
-                                let ss = builder.create_sized_stack_slot(
-                                    cranelift::codegen::ir::StackSlotData {
-                                        kind: cranelift::codegen::ir::StackSlotKind::ExplicitSlot,
-                                        size: 64, // 8 handles × 8 bytes
-                                        align_shift: 3,
-                                        key: None,
-                                    },
-                                );
-                                for k in 0..na {
-                                    builder.ins().stack_store(args[1 + k], ss, (k * 8) as i32);
-                                }
-                                let ptr = builder.ins().stack_addr(i64, ss, 0);
-                                let name_h = args
+                                fast = true;
+                            } else if idx == LW_ARR_LEN && arity == 1 {
+                                let (av, ak) = args_raw
                                     .first()
                                     .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let cstr = self.lw_call(&mut builder, LW_CSTR, &[name_h]);
-                                let na_v = builder.ins().iconst(i64, na as i64);
-                                let id =
-                                    self.lw_call(&mut builder, LW_THR_SPAWN, &[cstr, ptr, na_v]);
-                                stack.push((self.lw_call(&mut builder, LW_INT, &[id]), 0));
-                            }
-                            "__tarea_esperar" | "__task_await" | "__hilo_esperar"
-                            | "__thread_join" => {
-                                let id_h = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_THR_JOIN, &[id_h]), 0));
-                            }
-                            // v3.5.17: canales y mutexes nativos (paridad VM).
-                            "__canal_nuevo" | "__channel_new" => {
-                                stack.push((self.lw_call(&mut builder, LW_CHAN_NEW, &[]), 0));
-                            }
-                            "__canal_enviar" | "__channel_send" => {
-                                let cid = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let v = args
-                                    .get(1)
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack
-                                    .push((self.lw_call(&mut builder, LW_CHAN_SEND, &[cid, v]), 0));
-                            }
-                            "__canal_recibir" | "__channel_recv" => {
-                                let cid = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_CHAN_RECV, &[cid]), 0));
-                            }
-                            "__mutex_nuevo" | "__mutex_new" => {
-                                stack.push((self.lw_call(&mut builder, LW_MUTEX_NEW, &[]), 0));
-                            }
-                            "__mutex_bloquear" | "__mutex_lock" => {
-                                let mid = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let fhn = args
-                                    .get(1)
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let arg = args
-                                    .get(2)
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((
-                                    self.lw_call(
-                                        &mut builder,
-                                        LW_MUTEX_LOCK_CALL,
-                                        &[mid, fhn, arg],
-                                    ),
-                                    0,
-                                ));
-                            }
-                            "__calendario_hijri" | "__calendar_hijri" => {
-                                let t = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_CAL_HIJRI, &[t]), 0));
-                            }
-                            "__calendario_persa" | "__calendar_persian" => {
-                                let t = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_CAL_PERSA, &[t]), 0));
-                            }
-                            "__tiempo_ahora" | "__time_now" => {
-                                stack.push((self.lw_call(&mut builder, LW_TIME_NOW, &[]), 0));
-                            }
-                            "__tiempo_formatear" | "__time_format" => {
-                                let t = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let f = args
-                                    .get(1)
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_TIME_FMT, &[t, f]), 0));
-                            }
-                            "__tiempo_diferencia" | "__time_diff" => {
-                                let t1 = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let t2 = args
-                                    .get(1)
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack
-                                    .push((self.lw_call(&mut builder, LW_TIME_DIFF, &[t1, t2]), 0));
-                            }
-                            "__tiempo_parsear" | "__tiempo_parse" | "__time_parse" => {
-                                let s = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_TIME_PARSE, &[s]), 0));
-                            }
-                            // v3.5.18: strings unicode (stress_03 en Cranelift).
-                            "__str_a_caracteres" | "__str_to_chars" => {
-                                let s = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_STR_CHARS, &[s]), 0));
-                            }
-                            "__str_mayusculas" | "__str_upper" => {
-                                let s = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_STR_UPPER, &[s]), 0));
-                            }
-                            "__str_minusculas" | "__str_lower" => {
-                                let s = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                stack.push((self.lw_call(&mut builder, LW_STR_LOWER, &[s]), 0));
-                            }
-                            "__str_padding_inicio" | "__str_padding_fin" => {
-                                let es_inicio = cn == "__str_padding_inicio";
-                                let pad_idx = if es_inicio {
-                                    LW_STR_PAD_START
+                                    .unwrap_or_else(|| (self.void_handle(&mut builder), 0));
+                                let h = if ak == 0 {
+                                    av
                                 } else {
-                                    LW_STR_PAD_END
+                                    self.cr_box(&mut builder, av, ak)
                                 };
-                                let s = args
-                                    .first()
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let w = args
-                                    .get(1)
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let f = args
-                                    .get(2)
-                                    .copied()
-                                    .unwrap_or_else(|| self.void_handle(&mut builder));
-                                let start =
-                                    builder.ins().iconst(i64, if es_inicio { 1 } else { 0 });
-                                stack.push((
-                                    self.lw_call(&mut builder, pad_idx, &[s, w, f, start]),
-                                    0,
-                                ));
+                                let r = self.lw_call(&mut builder, LW_ARR_LEN_I, &[h]);
+                                stack.push((r, 1));
+                                fast = true;
                             }
-                            _ => {
-                                if let Some((idx, arity)) = lw_builtin(cn) {
-                                    let mut cargs: Vec<Value> = Vec::with_capacity(arity);
-                                    for k in 0..arity {
-                                        cargs.push(
-                                            args.get(k)
-                                                .copied()
-                                                .unwrap_or_else(|| self.void_handle(&mut builder)),
-                                        );
+                        }
+                        if fast {
+                            // nada más: el err_check de la cola corre igual
+                        } else {
+                            let mut args: Vec<Value> = Vec::with_capacity(args_raw.len());
+                            for (av, ak) in &args_raw {
+                                args.push(self.cr_box(&mut builder, *av, *ak));
+                            }
+                            match cn.as_str() {
+                                "imprimir" | "print" => {
+                                    if args.is_empty() {
+                                        self.lw_call_void(&mut builder, LW_PRINT_BLANK, &[]);
+                                    } else {
+                                        let mut acc = args[0];
+                                        for av in args.iter().skip(1) {
+                                            acc = self.lw_call(&mut builder, LW_JOIN, &[acc, *av]);
+                                        }
+                                        self.lw_call_void(&mut builder, LW_PRINT, &[acc]);
                                     }
-                                    stack.push((self.lw_call(&mut builder, idx, &cargs), 0));
-                                    risky = matches!(
-                                        idx,
-                                        LW_ARR_GET | LW_ARR_SET | LW_TUP_GET | LW_SUB
-                                    );
-                                } else {
-                                    // imposible: user-calls y no-soportados se
-                                    // resolvieron antes del match.
-                                    record_unsupported_builtin(cn);
                                     stack.push((self.void_handle(&mut builder), 0));
                                 }
+                                // v3.5.17: hilos REALES en Cranelift. args[0] = nombre
+                                // de la función (texto), args[1..] = argumentos. Se
+                                // estagan los handles en un slot (int64[8]) y el shim
+                                // C (_lw_thr_spawn_h) los desboxea a Val[] y crea el
+                                // hilo pthread/Win32. El hilo entra por el trampolín
+                                // __lumen_ft_<fn> (ver thread_trampolines).
+                                "__tarea_lanzar" | "__task_spawn" | "__hilo_lanzar"
+                                | "__thread_spawn" => {
+                                    let na = args.len().saturating_sub(1).min(8);
+                                    let ss = builder.create_sized_stack_slot(
+                                        cranelift::codegen::ir::StackSlotData {
+                                            kind:
+                                                cranelift::codegen::ir::StackSlotKind::ExplicitSlot,
+                                            size: 64, // 8 handles × 8 bytes
+                                            align_shift: 3,
+                                            key: None,
+                                        },
+                                    );
+                                    for k in 0..na {
+                                        builder.ins().stack_store(args[1 + k], ss, (k * 8) as i32);
+                                    }
+                                    let ptr = builder.ins().stack_addr(i64, ss, 0);
+                                    let name_h = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let cstr = self.lw_call(&mut builder, LW_CSTR, &[name_h]);
+                                    let na_v = builder.ins().iconst(i64, na as i64);
+                                    let id = self.lw_call(
+                                        &mut builder,
+                                        LW_THR_SPAWN,
+                                        &[cstr, ptr, na_v],
+                                    );
+                                    stack.push((self.lw_call(&mut builder, LW_INT, &[id]), 0));
+                                }
+                                "__tarea_esperar" | "__task_await" | "__hilo_esperar"
+                                | "__thread_join" => {
+                                    let id_h = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((
+                                        self.lw_call(&mut builder, LW_THR_JOIN, &[id_h]),
+                                        0,
+                                    ));
+                                }
+                                // v3.5.17: canales y mutexes nativos (paridad VM).
+                                "__canal_nuevo" | "__channel_new" => {
+                                    stack.push((self.lw_call(&mut builder, LW_CHAN_NEW, &[]), 0));
+                                }
+                                "__canal_enviar" | "__channel_send" => {
+                                    let cid = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let v = args
+                                        .get(1)
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((
+                                        self.lw_call(&mut builder, LW_CHAN_SEND, &[cid, v]),
+                                        0,
+                                    ));
+                                }
+                                "__canal_recibir" | "__channel_recv" => {
+                                    let cid = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((
+                                        self.lw_call(&mut builder, LW_CHAN_RECV, &[cid]),
+                                        0,
+                                    ));
+                                }
+                                "__mutex_nuevo" | "__mutex_new" => {
+                                    stack.push((self.lw_call(&mut builder, LW_MUTEX_NEW, &[]), 0));
+                                }
+                                "__mutex_bloquear" | "__mutex_lock" => {
+                                    let mid = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let fhn = args
+                                        .get(1)
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let arg = args
+                                        .get(2)
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((
+                                        self.lw_call(
+                                            &mut builder,
+                                            LW_MUTEX_LOCK_CALL,
+                                            &[mid, fhn, arg],
+                                        ),
+                                        0,
+                                    ));
+                                }
+                                "__calendario_hijri" | "__calendar_hijri" => {
+                                    let t = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((self.lw_call(&mut builder, LW_CAL_HIJRI, &[t]), 0));
+                                }
+                                "__calendario_persa" | "__calendar_persian" => {
+                                    let t = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((self.lw_call(&mut builder, LW_CAL_PERSA, &[t]), 0));
+                                }
+                                "__tiempo_ahora" | "__time_now" => {
+                                    stack.push((self.lw_call(&mut builder, LW_TIME_NOW, &[]), 0));
+                                }
+                                "__tiempo_formatear" | "__time_format" => {
+                                    let t = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let f = args
+                                        .get(1)
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((
+                                        self.lw_call(&mut builder, LW_TIME_FMT, &[t, f]),
+                                        0,
+                                    ));
+                                }
+                                "__tiempo_diferencia" | "__time_diff" => {
+                                    let t1 = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let t2 = args
+                                        .get(1)
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((
+                                        self.lw_call(&mut builder, LW_TIME_DIFF, &[t1, t2]),
+                                        0,
+                                    ));
+                                }
+                                "__tiempo_parsear" | "__tiempo_parse" | "__time_parse" => {
+                                    let s = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack
+                                        .push((self.lw_call(&mut builder, LW_TIME_PARSE, &[s]), 0));
+                                }
+                                // v3.5.18: strings unicode (stress_03 en Cranelift).
+                                "__str_a_caracteres" | "__str_to_chars" => {
+                                    let s = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((self.lw_call(&mut builder, LW_STR_CHARS, &[s]), 0));
+                                }
+                                "__str_mayusculas" | "__str_upper" => {
+                                    let s = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((self.lw_call(&mut builder, LW_STR_UPPER, &[s]), 0));
+                                }
+                                "__str_minusculas" | "__str_lower" => {
+                                    let s = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    stack.push((self.lw_call(&mut builder, LW_STR_LOWER, &[s]), 0));
+                                }
+                                "__str_padding_inicio" | "__str_padding_fin" => {
+                                    let es_inicio = cn == "__str_padding_inicio";
+                                    let pad_idx = if es_inicio {
+                                        LW_STR_PAD_START
+                                    } else {
+                                        LW_STR_PAD_END
+                                    };
+                                    let s = args
+                                        .first()
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let w = args
+                                        .get(1)
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let f = args
+                                        .get(2)
+                                        .copied()
+                                        .unwrap_or_else(|| self.void_handle(&mut builder));
+                                    let start =
+                                        builder.ins().iconst(i64, if es_inicio { 1 } else { 0 });
+                                    stack.push((
+                                        self.lw_call(&mut builder, pad_idx, &[s, w, f, start]),
+                                        0,
+                                    ));
+                                }
+                                _ => {
+                                    if let Some((idx, arity)) = lw_builtin(cn) {
+                                        // v3.5.30: fast-path de strings — largo
+                                        // devuelve i64 CRUDO (sin box del
+                                        // resultado).
+                                        if idx == LW_ARR_LEN && arity == 1 {
+                                            let h = args
+                                                .first()
+                                                .copied()
+                                                .unwrap_or_else(|| self.void_handle(&mut builder));
+                                            let r = self.lw_call(&mut builder, LW_ARR_LEN_I, &[h]);
+                                            stack.push((r, 1));
+                                        } else {
+                                            let mut cargs: Vec<Value> = Vec::with_capacity(arity);
+                                            for k in 0..arity {
+                                                cargs.push(args.get(k).copied().unwrap_or_else(
+                                                    || self.void_handle(&mut builder),
+                                                ));
+                                            }
+                                            stack
+                                                .push((self.lw_call(&mut builder, idx, &cargs), 0));
+                                            risky = matches!(
+                                                idx,
+                                                LW_ARR_GET | LW_ARR_SET | LW_TUP_GET | LW_SUB
+                                            );
+                                        }
+                                    } else {
+                                        // imposible: user-calls y no-soportados se
+                                        // resolvieron antes del match.
+                                        record_unsupported_builtin(cn);
+                                        stack.push((self.void_handle(&mut builder), 0));
+                                    }
+                                }
                             }
-                        }
+                        } // else del fast-path
                     } // if !cr_done
                 }
                 Instr::MakeRef(n) => {
@@ -2444,6 +3089,16 @@ impl AotCompiler {
                                 args.push(cranelift::codegen::ir::BlockArg::Value(void0));
                             }
                         }
+                        // v3.5.30: backedge a head promovido → params;
+                        // cualquier otro salto → flush de slots i64.
+                        if let Some(vars) = head_vars.get(target) {
+                            for v in vars {
+                                let vv = cr_int_val(&mut builder, &mut int_cache, &int_slots, v);
+                                args.push(cranelift::codegen::ir::BlockArg::Value(vv));
+                            }
+                        } else {
+                            cr_flush_ints(&mut builder, &int_cache, &int_slots);
+                        }
                         builder.ins().jump(b, &args);
                     }
                     terminated = true;
@@ -2466,6 +3121,28 @@ impl AotCompiler {
                                 args.push(cranelift::codegen::ir::BlockArg::Value(void0));
                             }
                         }
+                        // v3.5.30: borde del salto — head promovido → las
+                        // vars viajan por params; si no, bloque intermedio
+                        // (pre) con flush de slots antes del destino. El pre
+                        // se rellena TRAS el brif (que termina el bloque
+                        // actual).
+                        let is_head = head_vars.contains_key(target);
+                        if is_head {
+                            if let Some(vars) = head_vars.get(target) {
+                                for v in vars {
+                                    let vv =
+                                        cr_int_val(&mut builder, &mut int_cache, &int_slots, v);
+                                    args.push(cranelift::codegen::ir::BlockArg::Value(vv));
+                                }
+                            }
+                        }
+                        let pre = if is_head {
+                            None
+                        } else {
+                            Some(builder.create_block())
+                        };
+                        let dest_block = pre.unwrap_or(b);
+                        let dest_args = if is_head { args.clone() } else { Vec::new() };
                         // v3.5.28: condición cruda → brif nativo (sin
                         // _lw_truthy_i). JmpIf salta cuando es FALSO.
                         match k {
@@ -2474,8 +3151,8 @@ impl AotCompiler {
                                     v,
                                     next_block,
                                     &[] as &[cranelift::codegen::ir::BlockArg],
-                                    b,
-                                    &args,
+                                    dest_block,
+                                    &dest_args,
                                 );
                             }
                             1 => {
@@ -2485,8 +3162,8 @@ impl AotCompiler {
                                     nz,
                                     next_block,
                                     &[] as &[cranelift::codegen::ir::BlockArg],
-                                    b,
-                                    &args,
+                                    dest_block,
+                                    &dest_args,
                                 );
                             }
                             _ => {
@@ -2495,12 +3172,19 @@ impl AotCompiler {
                                 let is_zero = builder.ins().icmp(IntCC::Equal, t, z);
                                 builder.ins().brif(
                                     is_zero,
-                                    b,
-                                    &args,
+                                    dest_block,
+                                    &dest_args,
                                     next_block,
                                     &[] as &[cranelift::codegen::ir::BlockArg],
                                 );
                             }
+                        }
+                        if let Some(pre) = pre {
+                            // rellenar el bloque intermedio: flush + salto real
+                            builder.switch_to_block(pre);
+                            builder.ensure_inserted_block();
+                            cr_flush_ints(&mut builder, &int_cache, &int_slots);
+                            builder.ins().jump(b, &args);
                         }
                         builder.switch_to_block(next_block);
                         builder.ensure_inserted_block();
@@ -2516,7 +3200,13 @@ impl AotCompiler {
             // del backend C): con handler abierto salta al catch con el mensaje;
             // sin handler retorna void y el llamador hace su propio chequeo.
             if risky && !terminated {
-                self.emit_err_check(&mut builder, &handlers, &label_block);
+                self.emit_err_check(
+                    &mut builder,
+                    &handlers,
+                    &label_block,
+                    &int_cache,
+                    &int_slots,
+                );
             }
             ii += 1;
         }
@@ -2525,6 +3215,25 @@ impl AotCompiler {
         // join de un `elegir` cuando todos los casos terminan en Return) son
         // inalcanzables pero el verificador de Cranelift exige terminador:
         // se rellenan con trap (nunca se ejecuta). Bug latente preexistente.
+        // v3.5.31: si el bloque actual quedó con instrucciones pero SIN
+        // terminador (p. ej. un Label final con block-params), terminarlo
+        // con return void ANTES de cambiar a otro bloque.
+        if let Some(cur_block) = builder.current_block() {
+            let needs_term = {
+                let mut insts = builder.func.layout.block_insts(cur_block);
+                match insts.next() {
+                    Some(_) => match insts.next_back() {
+                        Some(last) => !builder.func.dfg.insts[last].opcode().is_terminator(),
+                        None => false,
+                    },
+                    None => false,
+                }
+            };
+            if needs_term {
+                let v = self.lw_call(&mut builder, LW_VOID, &[]);
+                builder.ins().return_(&[v]);
+            }
+        }
         for &b in label_block.values() {
             if builder.func.layout.block_insts(b).next().is_none() {
                 builder.switch_to_block(b);
@@ -2552,11 +3261,14 @@ impl AotCompiler {
     /// Chequeo de error tras operación riesgosa: si `_err` está activo, salta
     /// al catch abierto más cercano con el mensaje (block-param) o retorna
     /// void para propagar al llamador (paridad backend C).
+    #[allow(clippy::too_many_arguments)]
     fn emit_err_check(
         &mut self,
         builder: &mut FunctionBuilder,
         handlers: &[usize],
         label_block: &HashMap<usize, Block>,
+        int_cache: &HashMap<String, cranelift::codegen::ir::Value>,
+        int_slots: &HashMap<String, cranelift::codegen::ir::StackSlot>,
     ) {
         let flag = self.lw_call(builder, LW_ERR_ACTIVE, &[]);
         let z = builder.ins().iconst(types::I64, 0);
@@ -2572,6 +3284,9 @@ impl AotCompiler {
         );
         builder.switch_to_block(dispatch);
         builder.ensure_inserted_block();
+        // v3.5.30: el catch lee variables por slot → materializar el cache
+        // SSA antes del salto (solo en la rama de error; el ok sigue vivo).
+        cr_flush_ints(builder, int_cache, int_slots);
         if let Some(&catch_l) = handlers.last() {
             let msg = self.lw_call(builder, LW_ERR_TAKE, &[]);
             if let Some(&cb) = label_block.get(&catch_l) {
@@ -2956,6 +3671,14 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
         ("_lw_floor", "declare i64 @_lw_floor(i64)"),
         ("_lw_ceil", "declare i64 @_lw_ceil(i64)"),
         ("_lw_round", "declare i64 @_lw_round(i64)"),
+        ("_lw_arr_len_i", "declare i64 @_lw_arr_len_i(i64)"),
+        ("_lw_to_text_i", "declare i64 @_lw_to_text_i(i64)"),
+        ("_lw_concat3", "declare i64 @_lw_concat3(i64, i64, i64)"),
+        ("_lw_concat3_i", "declare i64 @_lw_concat3_i(i64, i64, i64)"),
+        (
+            "_lw_concat3_len_i",
+            "declare i64 @_lw_concat3_len_i(i64, i64, i64)",
+        ),
     ];
     for (_, d) in decls {
         out.push_str(d);
@@ -4098,7 +4821,12 @@ static LW_TLS char* _lw_arena_cur;
 static LW_TLS size_t _lw_arena_left;
 static LW_TLS Val* lw_tls_free;
 static LW_TLS size_t lw_tls_since_gc;
-static void* lw_gc_stack_top;
+static LW_TLS void* lw_gc_stack_top;
+/* v3.5.30: margen sobre el tope capturado en _lw_gc_init — cubre el frame
+   del wrapper de entrada (cuyos slots quedan por encima del marcador) y
+   holgura de seguridad. Antes el GC escaneaba hasta el fin del mapping del
+   stack (8MB) aunque el programa estuviera en un frame somero. */
+#define LW_GC_TOP_MARGIN (1 << 20)
 
 void _lw_gc_init(void) { volatile int marker; lw_gc_stack_top = (void*)&marker; }
 
@@ -4165,10 +4893,20 @@ static void lw_gc_collect(void) {
   {
     /* Rango: desde el frame actual hasta el tope capturado en _lw_gc_init
        (frame de arranque ≈ tope real del stack) + margen. Los falsos
-       positivos solo retienen cajas (fuga menor), nunca liberan nada vivo. */
+       positivos solo retienen cajas (fuga menor), nunca liberan nada vivo.
+       v3.5.30: con tope capturado, escanear hasta él (+margen) en vez de
+       hasta el fin del mapping del stack (8MB) — el espacio por encima del
+       frame de arranque son frames de libc muertos. */
     int here;
     char* lo = (char*)((((uintptr_t)&here) + 7) & ~(uintptr_t)7);
+    /* v3.5.30: el tope capturado (+margen) acota el escaneo a los frames
+       vivos; el fin del mapping sigue como límite superior para no pisar
+       la frontera usuario/kernel (el stack vive pegado al tope). */
     char* hi = lw_gc_stack_hi();
+    if (lw_gc_stack_top) {
+      char* h2 = (char*)lw_gc_stack_top + LW_GC_TOP_MARGIN;
+      if (h2 > (char*)lw_gc_stack_top && (!hi || h2 < hi)) hi = h2;
+    }
     if (!hi || hi <= lo) hi = lo + (16 << 10);
     if (getenv("LUMEN_GC_LOG")) fprintf(stderr, "[gc]   scan %p..%p\n", (void*)lo, (void*)hi);
     lw_gc_scan_range(lo, hi);
@@ -4234,7 +4972,9 @@ static int64_t _lw_str_take(char* s) { Val v = _v_int(0); v.t = T_STR; v.s = s; 
 int64_t _lw_int(int64_t x) { return _lw_h(_v_int(x)); }
 int64_t _lw_flt(double x) { return _lw_h(_v_flt(x)); }
 int64_t _lw_bool(int64_t x) { return _lw_h(_v_bool((int)x)); }
-int64_t _lw_str(const char* s) { return _lw_h(_v_str(s ? s : "")); }
+/* v3.5.30: los literales llegan del .data del objeto (inmortales) — adoptar
+   el puntero sin copiar (antes: strlen+arena por literal en cada iteración). */
+int64_t _lw_str(const char* s) { return _lw_h(_v_str_lit(s ? s : "")); }
 int64_t _lw_void(void) { return _lw_h(_v_void()); }
 int64_t _lw_none(void) { return _lw_h(_none()); }
 
@@ -4278,6 +5018,14 @@ int64_t _lw_arr_push(int64_t a, int64_t x) { return _lw_h(_arr_push(_lw_u(a), _l
 int64_t _lw_arr_get(int64_t a, int64_t i) { return _lw_h(_arr_get(_lw_u(a), (int64_t)_asf(_lw_u(i)))); }
 int64_t _lw_arr_set(int64_t a, int64_t i, int64_t x) { return _lw_h(_arr_set(_lw_u(a), (int64_t)_asf(_lw_u(i)), _lw_unbox(x))); }
 int64_t _lw_arr_len(int64_t h) { return _lw_h(_arr_len(_lw_u(h))); }
+/* v3.5.30: largo CRUDO (sin box del resultado) para el backend Cranelift —
+   `total = total + largo(s)` pasa a ser un iadd nativo. Semántica idéntica
+   a _lw_arr_len (misma _arr_len / strlen). */
+int64_t _lw_arr_len_i(int64_t h) {
+  Val v = _lw_u(h);
+  if (v.t == T_STR) return (int64_t)strlen(v.s ? v.s : "");
+  return _arr_len(v).i;
+}
 int64_t _lw_arr_rev(int64_t h) { return _lw_h(_arr_rev(_lw_u(h))); }
 int64_t _lw_arr_sort(int64_t h) { return _lw_h(_arr_sort(_lw_u(h))); }
 
@@ -4322,6 +5070,63 @@ int64_t _lw_tup_get(int64_t h, int64_t i) {
 int64_t _lw_read(void) { return _lw_h(_read_ln()); }
 int64_t _lw_typeof(int64_t h) { return _lw_h(_v_str(_tipo_de_b(_lw_u(h)))); }
 int64_t _lw_to_text(int64_t h) { return _lw_h(_to_text(_lw_u(h))); }
+/* v3.5.30: a_texto(entero crudo) — itoa directo al arena (sin box del arg,
+   sin malloc, sin unbox del handle). Paridad de dígitos con _fmt(T_INT). */
+int64_t _lw_to_text_i(int64_t x) {
+  char* b = _sa_alloc(32);
+  if (!b) { b = (char*)malloc(32); if (!b) return _lw_h(_v_str("")); }
+  _itoa_ll(x, b);
+  Val v = _v_int(0);
+  v.t = T_STR;
+  v.s = b;
+  return _lw_h(v);
+}
+/* v3.5.30: fusión `"lit" + X + "lit"` (el patrón de interpolación): una
+   arena-alloc + dos memcpy + un box por concatenación triple. */
+/* v3.5.30: longitud de "lit" + a_texto(x) + "lit" SIN construir el string
+   (patrón `total = total + largo("item-" + a_texto(i) + "-fin")`): solo se
+   cuentan dígitos. El Add fusionado de Cranelift lo usa y omite el
+   StoreLocal/Load/Call(largo) enteros. */
+int64_t _lw_concat3_len_i(const char* p1, int64_t x, const char* p2) {
+  int n = 1;
+  unsigned long long u = (unsigned long long)x;
+  if (x < 0) {
+    n = 2;
+    u = 0ULL - (unsigned long long)x;
+  }
+  while (u >= 10) { u /= 10; n++; }
+  return (int64_t)(strlen(p1) + (size_t)n + strlen(p2));
+}
+
+int64_t _lw_concat3(const char* p1, int64_t mid_h, const char* p2) {
+  Val m = _lw_u(mid_h);
+  char* ms;
+  if (m.t == T_STR) {
+    ms = (char*)(m.s ? m.s : "");
+  } else {
+    ms = _fmt(m);
+  }
+  size_t l1 = strlen(p1), lm = strlen(ms), l2 = strlen(p2);
+  char* out = _sa_alloc(l1 + lm + l2 + 1);
+  if (!out) out = (char*)malloc(l1 + lm + l2 + 1);
+  memcpy(out, p1, l1);
+  memcpy(out + l1, ms, lm);
+  memcpy(out + l1 + lm, p2, l2 + 1);
+  return _lw_h(_v_str_take(out));
+}
+/* v3.5.30: "lit" + a_texto(entero crudo) + "lit" — itoa directo al buffer
+   final (sin box intermedio ni strlen del medio). */
+int64_t _lw_concat3_i(const char* p1, int64_t x, const char* p2) {
+  char tmp[24];
+  int n = _itoa_ll(x, tmp);
+  size_t l1 = strlen(p1), l2 = strlen(p2);
+  char* out = _sa_alloc(l1 + (size_t)n + l2 + 1);
+  if (!out) out = (char*)malloc(l1 + (size_t)n + l2 + 1);
+  memcpy(out, p1, l1);
+  memcpy(out + l1, tmp, (size_t)n);
+  memcpy(out + l1 + (size_t)n, p2, l2 + 1);
+  return _lw_h(_v_str_take(out));
+}
 int64_t _lw_sub(int64_t h, int64_t a, int64_t b) {
   Val s = _lw_u(h);
   /* a/b llegan como handles → desreferenciar a enteros */
@@ -4559,6 +5364,10 @@ pub fn lw_shim_source() -> String {
     let mut s = lw_shim_base();
     s.push_str("\nstatic void _init(void) {}\n");
     s.push_str("static Val _call_by_name_thread(const char* nm) { (void)nm; return _v_void(); }\n");
+    // v3.5.30: default de _call_by_name — los shims LLVM/Cranelift no tienen
+    // tablas _lfn (el backend C define su propia versión fuerte). Sin esto,
+    // el uso en las corutinas deja "declared but not defined" en clang/gcc.
+    s.push_str("static Val _call_by_name(const char* nm) { (void)nm; return _v_void(); }\n");
     s
 }
 
@@ -4570,6 +5379,8 @@ pub fn lw_shim_source_for(program: &Program) -> String {
     let mut s = lw_shim_base();
     s.push_str("\n/* v3.5.17: hilos reales (Cranelift) — tabla _lft */\n");
     s.push_str("static void _init(void) {}\n");
+    // v3.5.30: default de _call_by_name (sin tablas _lfn en este shim).
+    s.push_str("static Val _call_by_name(const char* nm) { (void)nm; return _v_void(); }\n");
     let mut fnames: Vec<&String> = program.funcs.keys().collect();
     fnames.sort();
     for n in &fnames {
@@ -9210,10 +10021,21 @@ mod tests {
         let exe_path = dir.join("test.exe");
         std::fs::write(&ll_path, llvm).unwrap();
         std::fs::write(&shim_path, lw_shim_source()).unwrap();
+        // v3.5.30: en Windows (clang con toolchain MSVC) `-lm` se traduce a
+        // `m.lib` y el linker falla con LNK1181 ("cannot open input file
+        // 'm.lib'"); libm es parte de la CRT allí.
+        let mut args = vec![
+            ll_path.to_str().unwrap().to_string(),
+            shim_path.to_str().unwrap().to_string(),
+            "-O2".to_string(),
+            "-o".to_string(),
+            exe_path.to_str().unwrap().to_string(),
+        ];
+        if cfg!(not(windows)) {
+            args.push("-lm".to_string());
+        }
         let status = std::process::Command::new("clang")
-            .arg(ll_path.to_str().unwrap())
-            .arg(shim_path.to_str().unwrap())
-            .args(["-O2", "-o", exe_path.to_str().unwrap(), "-lm"])
+            .args(&args)
             .output()
             .expect("clang fallo al invocar");
         assert!(

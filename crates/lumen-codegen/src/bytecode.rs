@@ -188,6 +188,33 @@ pub enum Instruction {
         b: usize,
         target: usize,
     },
+    /// v3.5.31: aritmética + comparación + salto (6 IR → 1). op1 ∈
+    /// {1 Add, 3 Sub, 4 Mul, 5 Div, 6 Mod}; op2 ∈ {7 Eq..12 Ge}.
+    /// Semántica: t = a op1 b; si (t op2 c) es FALSO → salta a target.
+    FusedBinCmpJmp {
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: usize,
+        c: usize,
+        target: usize,
+    },
+    FusedBinKCmpJmp {
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: usize,
+        k: i64,
+        target: usize,
+    },
+    FusedBinKKCmpJmp {
+        op1: u8,
+        op2: u8,
+        a: usize,
+        b: i64,
+        k: i64,
+        target: usize,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -341,6 +368,54 @@ impl Bytecode {
                     buf.push(*op);
                     buf.extend_from_slice(&(*a as u32).to_le_bytes());
                     buf.extend_from_slice(&(*b as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*target as u32).to_le_bytes());
+                }
+                Instruction::FusedBinCmpJmp {
+                    op1,
+                    op2,
+                    a,
+                    b,
+                    c,
+                    target,
+                } => {
+                    buf.push(9);
+                    buf.push(*op1);
+                    buf.push(*op2);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*b as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*c as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*target as u32).to_le_bytes());
+                }
+                Instruction::FusedBinKCmpJmp {
+                    op1,
+                    op2,
+                    a,
+                    b,
+                    k,
+                    target,
+                } => {
+                    buf.push(10);
+                    buf.push(*op1);
+                    buf.push(*op2);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*b as u32).to_le_bytes());
+                    buf.extend_from_slice(&k.to_le_bytes());
+                    buf.extend_from_slice(&(*target as u32).to_le_bytes());
+                }
+                Instruction::FusedBinKKCmpJmp {
+                    op1,
+                    op2,
+                    a,
+                    b,
+                    k,
+                    target,
+                } => {
+                    buf.push(11);
+                    buf.push(*op1);
+                    buf.push(*op2);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&b.to_le_bytes());
+                    buf.extend_from_slice(&k.to_le_bytes());
                     buf.extend_from_slice(&(*target as u32).to_le_bytes());
                 }
             }
@@ -789,6 +864,141 @@ impl Bytecode {
                         op: op_byte,
                         a,
                         b,
+                        target,
+                    });
+                }
+                9 => {
+                    // FusedBinCmpJmp: tag op1 op2 a b c target
+                    // (pos ya apunta tras op1: op2 en data[pos]).
+                    if pos + 17 > data.len() {
+                        break;
+                    }
+                    let op2 = data[pos];
+                    let a = u32::from_le_bytes([
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                        data[pos + 4],
+                    ]) as usize;
+                    let b = u32::from_le_bytes([
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                        data[pos + 8],
+                    ]) as usize;
+                    let c = u32::from_le_bytes([
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                        data[pos + 12],
+                    ]) as usize;
+                    let target = u32::from_le_bytes([
+                        data[pos + 13],
+                        data[pos + 14],
+                        data[pos + 15],
+                        data[pos + 16],
+                    ]) as usize;
+                    pos += 17;
+                    instructions.push(Instruction::FusedBinCmpJmp {
+                        op1: op_byte,
+                        op2,
+                        a,
+                        b,
+                        c,
+                        target,
+                    });
+                }
+                10 => {
+                    // FusedBinKCmpJmp: tag op1 op2 a b k target
+                    // (pos ya apunta tras op1: op2 en data[pos]).
+                    if pos + 21 > data.len() {
+                        break;
+                    }
+                    let op2 = data[pos];
+                    let a = u32::from_le_bytes([
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                        data[pos + 4],
+                    ]) as usize;
+                    let b = u32::from_le_bytes([
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                        data[pos + 8],
+                    ]) as usize;
+                    let k = i64::from_le_bytes([
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                        data[pos + 12],
+                        data[pos + 13],
+                        data[pos + 14],
+                        data[pos + 15],
+                        data[pos + 16],
+                    ]);
+                    let target = u32::from_le_bytes([
+                        data[pos + 17],
+                        data[pos + 18],
+                        data[pos + 19],
+                        data[pos + 20],
+                    ]) as usize;
+                    pos += 21;
+                    instructions.push(Instruction::FusedBinKCmpJmp {
+                        op1: op_byte,
+                        op2,
+                        a,
+                        b,
+                        k,
+                        target,
+                    });
+                }
+                11 => {
+                    // FusedBinKKCmpJmp: tag op1 op2 a b k target
+                    // (pos ya apunta tras op1: op2 en data[pos]).
+                    if pos + 25 > data.len() {
+                        break;
+                    }
+                    let op2 = data[pos];
+                    let a = u32::from_le_bytes([
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                        data[pos + 4],
+                    ]) as usize;
+                    let b = i64::from_le_bytes([
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                        data[pos + 8],
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                        data[pos + 12],
+                    ]);
+                    let k = i64::from_le_bytes([
+                        data[pos + 13],
+                        data[pos + 14],
+                        data[pos + 15],
+                        data[pos + 16],
+                        data[pos + 17],
+                        data[pos + 18],
+                        data[pos + 19],
+                        data[pos + 20],
+                    ]);
+                    let target = u32::from_le_bytes([
+                        data[pos + 21],
+                        data[pos + 22],
+                        data[pos + 23],
+                        data[pos + 24],
+                    ]) as usize;
+                    pos += 25;
+                    instructions.push(Instruction::FusedBinKKCmpJmp {
+                        op1: op_byte,
+                        op2,
+                        a,
+                        b,
+                        k,
                         target,
                     });
                 }

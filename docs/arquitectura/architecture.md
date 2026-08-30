@@ -147,3 +147,17 @@ La VM maneja valores a través del enum `Value`:
 - `Value::Struct { name, fields }` — Estructura
 - `Value::Void` — Vacío
 
+
+---
+
+## Estado actual (v3.5.7 + rondas JIT v3.5.31→v3.5.37)
+
+- El VM incorpora un JIT Cranelift de tres niveles (Tier-R recursión en
+  registros, Tier-2 bucles nativos sobre la arena de slots, Tier-1 delegación
+  por shims), activo por defecto — ver [jit.md](jit.md) para la arquitectura
+  completa y los números (TOTAL 267 ms, 5.8× vs intérprete).
+- El IR y el codegen emiten super-opcodes Fused que ambos motores ejecutan
+  con semántica idéntica (ver [../spec/bytecode-format.md](../spec/bytecode-format.md)).
+- Las rondas cazaron y arreglaron 4 bugs reales (constant folder, folder de
+  optimización, flat obsoleto en Tier-2, indexado sin guard); la batería de
+  paridad ON/OFF (956 tests ×2, ci_gate ×2, fixpoint) los cubre.

@@ -64,6 +64,11 @@ declare i64 @_lw_pow(i64, i64)
 declare i64 @_lw_floor(i64)
 declare i64 @_lw_ceil(i64)
 declare i64 @_lw_round(i64)
+declare i64 @_lw_arr_len_i(i64)
+declare i64 @_lw_to_text_i(i64)
+declare i64 @_lw_concat3(i64, i64, i64)
+declare i64 @_lw_concat3_i(i64, i64, i64)
+declare i64 @_lw_concat3_len_i(i64, i64, i64)
 
 @lw_str_0 = private unnamed_addr constant [5 x i8] c"fib:\00"
 

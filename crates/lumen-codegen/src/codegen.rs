@@ -90,9 +90,9 @@ impl Codegen {
                 if let Instr::Label(l) = &func.instrs[i] {
                     self.label_map.insert(*l, running_offset);
                 }
-                if try_fuse(&func.instrs, i, &live).is_some() {
+                if let Some((_, consumed)) = try_fuse(&func.instrs, i, &live) {
                     running_offset += 1;
-                    i += 4;
+                    i += consumed;
                 } else {
                     running_offset += instr_count(&func.instrs[i]);
                     i += 1;
@@ -207,6 +207,75 @@ impl Codegen {
                     b: b_idx,
                     target: t_idx,
                 });
+            }
+            Fused::BinCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                c,
+                label,
+            } => {
+                let a_idx = self.intern_name(&a);
+                let b_idx = self.intern_name(&b);
+                let c_idx = self.intern_name(&c);
+                let offset = self.label_map.get(&label).copied().unwrap_or(0);
+                let t_idx = self.intern_num(offset as f64);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::FusedBinCmpJmp {
+                        op1,
+                        op2,
+                        a: a_idx,
+                        b: b_idx,
+                        c: c_idx,
+                        target: t_idx,
+                    });
+            }
+            Fused::BinKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                label,
+            } => {
+                let a_idx = self.intern_name(&a);
+                let b_idx = self.intern_name(&b);
+                let offset = self.label_map.get(&label).copied().unwrap_or(0);
+                let t_idx = self.intern_num(offset as f64);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::FusedBinKCmpJmp {
+                        op1,
+                        op2,
+                        a: a_idx,
+                        b: b_idx,
+                        k,
+                        target: t_idx,
+                    });
+            }
+            Fused::BinKKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                label,
+            } => {
+                let a_idx = self.intern_name(&a);
+                let offset = self.label_map.get(&label).copied().unwrap_or(0);
+                let t_idx = self.intern_num(offset as f64);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::FusedBinKKCmpJmp {
+                        op1,
+                        op2,
+                        a: a_idx,
+                        b,
+                        k,
+                        target: t_idx,
+                    });
             }
         }
     }
@@ -377,9 +446,8 @@ impl Codegen {
             Instr::Phi(_, _) => {}
             Instr::Read => {}
             Instr::Nop => {
-                self.bytecode
-                    .instructions
-                    .push(Instruction::Simple(Opcode::Nop));
+                // v3.5.31: los Nop (scopes vacíos eliminados) NO se emiten —
+                // instr_count ya los cuenta como 0 en la primera pasada.
             }
             Instr::ArrayNew(n) => {
                 let idx = self.intern_num(*n as f64);
@@ -523,6 +591,8 @@ fn fused_op_code(op: &lumen_ir::ir::Op) -> Option<u8> {
         Op::Add => 1,
         Op::Sub => 3,
         Op::Mul => 4,
+        Op::Div => 5,
+        Op::Mod => 6,
         Op::Equal => 7,
         Op::NotEqual => 8,
         Op::Less => 9,
@@ -546,6 +616,14 @@ fn is_fusable_cmp(op: &lumen_ir::ir::Op) -> bool {
         op,
         Op::Equal | Op::NotEqual | Op::Less | Op::LessEqual | Op::Greater | Op::GreaterEqual
     )
+}
+
+/// v3.5.31: aritmética fusable en los patrones de 6 instrucciones
+/// (aritmética + comparación + salto). Div/Mod incluidos: los handlers
+/// reproducen la semántica EXACTA de los opcodes clásicos.
+fn is_fusable_arith6(op: &lumen_ir::ir::Op) -> bool {
+    use lumen_ir::ir::Op;
+    matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod)
 }
 
 /// Resultado del peephole: qué super-opcode emitir (con nombres/constes;
@@ -575,6 +653,33 @@ enum Fused {
         b: String,
         label: usize,
     },
+    // v3.5.31: aritmética + comparación + salto (6 IR → 1 super-opcode).
+    // Patrones de bucle: `si (i*i <= n) ...`, `si (n%i == 0) ...`.
+    // op1 ∈ {1 Add, 3 Sub, 4 Mul, 5 Div, 6 Mod}; op2 ∈ {7..12 cmp}.
+    BinCmpJmp {
+        op1: u8,
+        op2: u8,
+        a: String,
+        b: String,
+        c: String,
+        label: usize,
+    },
+    BinKCmpJmp {
+        op1: u8,
+        op2: u8,
+        a: String,
+        b: String,
+        k: i64,
+        label: usize,
+    },
+    BinKKCmpJmp {
+        op1: u8,
+        op2: u8,
+        a: String,
+        b: i64,
+        k: i64,
+        label: usize,
+    },
 }
 
 /// v3.5.20: PEEPHOLE de super-opcodes. Detecta los patrones canónicos de
@@ -587,6 +692,77 @@ fn try_fuse(
     live_label_idx: &std::collections::HashSet<usize>,
 ) -> Option<(Fused, usize)> {
     use lumen_ir::ir::Instr;
+    // v3.5.31: primero los patrones de 6 (aritmética+cmp+salto), luego los
+    // clásicos de 4. Ninguna posición interior puede ser destino de salto.
+    if i + 6 <= instrs.len() && (1..6).all(|off| !live_label_idx.contains(&(i + off))) {
+        let f6 = match (
+            &instrs[i],
+            &instrs[i + 1],
+            &instrs[i + 2],
+            &instrs[i + 3],
+            &instrs[i + 4],
+            &instrs[i + 5],
+        ) {
+            (
+                Instr::Load(a),
+                Instr::Load(b),
+                Instr::Binary(op1),
+                Instr::Load(c),
+                Instr::Binary(op2),
+                Instr::JmpIf(label),
+            ) if is_fusable_arith6(op1) && is_fusable_cmp(op2) => Some((
+                Fused::BinCmpJmp {
+                    op1: fused_op_code(op1)?,
+                    op2: fused_op_code(op2)?,
+                    a: a.clone(),
+                    b: b.clone(),
+                    c: c.clone(),
+                    label: *label,
+                },
+                6,
+            )),
+            (
+                Instr::Load(a),
+                Instr::Load(b),
+                Instr::Binary(op1),
+                Instr::ConstInt(k),
+                Instr::Binary(op2),
+                Instr::JmpIf(label),
+            ) if is_fusable_arith6(op1) && is_fusable_cmp(op2) => Some((
+                Fused::BinKCmpJmp {
+                    op1: fused_op_code(op1)?,
+                    op2: fused_op_code(op2)?,
+                    a: a.clone(),
+                    b: b.clone(),
+                    k: *k,
+                    label: *label,
+                },
+                6,
+            )),
+            (
+                Instr::Load(a),
+                Instr::ConstInt(b),
+                Instr::Binary(op1),
+                Instr::ConstInt(k),
+                Instr::Binary(op2),
+                Instr::JmpIf(label),
+            ) if is_fusable_arith6(op1) && is_fusable_cmp(op2) => Some((
+                Fused::BinKKCmpJmp {
+                    op1: fused_op_code(op1)?,
+                    op2: fused_op_code(op2)?,
+                    a: a.clone(),
+                    b: *b,
+                    k: *k,
+                    label: *label,
+                },
+                6,
+            )),
+            _ => None,
+        };
+        if f6.is_some() {
+            return f6;
+        }
+    }
     if i + 4 > instrs.len() {
         return None;
     }

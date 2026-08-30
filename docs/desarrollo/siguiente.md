@@ -1,3 +1,11 @@
+> **Estado 30 Ago 2026 — v3.5.7 + rondas JIT v3.5.31→v3.5.37 ✅:**
+> JIT Tier-1/Tier-2/Tier-R activo por defecto (TOTAL 267.1 ms, 5.8×), VM con
+> pools de scope e invalidación selectiva de caché, pre-commit verde
+> (fmt/clippy -D warnings/tests/check 396-396), fixpoint byte-idéntico.
+> Siguientes candidatos medibles: aritmética de pila nativa para Sum+1 (loops
+> con llamadas a builtins), mejoras de `a_texto`/`imprimir` en strings, y
+> ampliar el Tier-R (Sum, profundidad).
+>
 # Siguientes Pasos — Roadmap LÚMEN v3.5.7 Producción Real → v3.1
 
 **Estado actual (21 Ago 2026) — v3.5.7 Producción Real ✅:** Fases 0-185 completas + Self-hosting puro (Sprint 5-6 fixpoint) + **Sprint 7: VM en LÚMEN COMPLETADO** + **Sprint 8: dogfooding 112 CORRECTOS** + **Bootstrapping doble SHA-256 `3DA624D6...`** + **v2.4.6 (14 Ago)** + **v3.5.7 (20 Ago)** 167 bugs + **v3.5.7 Producción Real (21 Ago 2026):** fixes escalables `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` + `bind_args` unificado, `stdlib/graficos.nv:es_headless()` centralizado, **bench 8** (`cargo bench -p lumen-bench` — 4 prod: fallthrough, defaults, matematicas, headless), **636 e2e + 9 production = 695 vm tests (956 workspace)**, CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`, `lumen check` 396/396. Ver [docs/produccion.md](produccion.md). Pendientes: **AI/ML (Fases 186-200)** + **Playground L2/L3** + **v3.1** (ver `docs/plan-v3.1.md` y `docs/produccion.md` §6).

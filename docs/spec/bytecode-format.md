@@ -55,3 +55,21 @@ Each instruction starts with a tag byte:
 | 27-46 | Extended | See VM source | Arrays, Closures, Structs, Result, Option, Enum, Tuple, Mod |
 
 Full opcode list (0-46) in `crates/lumen-vm/src/vm.rs`.
+
+---
+
+## v3.5.31+: super-opcodes fusionados (peepholes)
+
+El codegen fusiona secuencias calientes en instrucciones únicas (etiquetas de
+instrucción nuevas; ver `crates/lumen-codegen/src/bytecode.rs`):
+
+| Tag | Variante | Forma |
+|---|---|---|
+| 9 | `FusedBinCmpJmp` | (op1, op2, a, b, c, target) — (a op1 b) op2 c → salto |
+| 10 | `FusedBinKCmpJmp` | (op1, op2, a, b, k, target) — b es índice de NOMBRE |
+| 11 | `FusedBinKKCmpJmp` | (op1, op2, a, b, k, target) — b es CONSTANTE (shim propio, no reutilizar el de KC) |
+
+Y los de 3 operandos previos: `FusedBin`/`FusedBinK` (a op b → d, k constante),
+`FusedCmpKJmp`/`FusedCmpJmp` (comparación + salto). El JIT los compila a código
+nativo compacto (ver [../arquitectura/jit.md](../arquitectura/jit.md)); el
+intérprete tiene handlers con la MISMA semántica (paridad byte-a-byte).

@@ -1,6 +1,6 @@
 # AGENTS.md — Diario de construcción de LÚMEN
 
-**v3.5.7 Producción Real — Released: 21 Agosto 2026 — 956 tests, CHUNK_VERSION 7, bench 8, headless `es_headless()`**
+**v3.5.7 Producción Real — Released: 21 Agosto 2026 — 956 tests, CHUNK_VERSION 7, bench 8, headless `es_headless()` — + rondas JIT v3.5.31→v3.5.37 (30 Ago 2026, ver [CHANGELOG](../../CHANGELOG.md) y [arquitectura/jit.md](../arquitectura/jit.md))**
 
 > Checklist único de producción: [docs/produccion.md](produccion.md) — `LUMEN_HEADLESS=1` + `cargo bench -p lumen-bench` + `CHUNK_VERSION 7`
 
@@ -484,7 +484,9 @@ crates/
   lumen-bench/    → benches/benchmarks.rs
   lumen-api/      → lib.rs
   lumen-plugin/   → lib.rs
+docs/            → README.md (índice) + guias/ referencia/ arquitectura/ desarrollo/ spec/ informes/
 docs/spec/        → grammar.ebnf, bytecode-format.md, error-codes.md, vm-spec.md
+reports/          → MOVIDA a docs/informes/ (v3.5.7 rondas JIT)
 examples/         → *.nv (45 ejemplos funcionales)
 stdlib/           → *.nv + stdlib/compiler/ (self-hosting)
 scripts/          → PowerShell CI/CD, installers, git-hooks

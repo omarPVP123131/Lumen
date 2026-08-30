@@ -2308,8 +2308,16 @@ static int64_t _lw_thr_spawn(const char* fn, Val* args, int argc) {
   t->argc = argc > 8 ? 8 : argc;
   for (int k = 0; k < t->argc; k++) t->args[k] = args[k];
   t->done = 0;
+  /* v3.5.30: inicializar el resultado ANTES de lanzar — si CreateThread
+     falla (o el hilo muere sin escribir), el join devuelve void en vez de
+     memoria sin inicializar (carrera observada en Windows). */
+  t->result = _v_void();
 #ifdef _WIN32
   t->th = CreateThread(NULL, 0, lw_thr_main_w, t, 0, NULL);
+  if (!t->th) {
+    LeaveCriticalSection(&lw_thr_cs);
+    return -1;
+  }
   LeaveCriticalSection(&lw_thr_cs);
 #else
   pthread_create(&t->th, NULL, lw_thr_main, t);

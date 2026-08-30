@@ -24,6 +24,11 @@ pub struct IRBuilder {
     fn_names: HashSet<String>,
     impl_method_map: HashMap<String, String>,
     is_in_lambda: bool,
+    /// v3.5.31: pila de scopes abiertos — (posición del ScopePush emitido,
+    /// si algún StoreLocal creó un binding dentro). Los scopes VACÍOS se
+    /// sustituyen por Nop (el lowering los omite): elimina push/pop de mapas
+    /// por iteración en bucles sin declaraciones.
+    scope_stack: Vec<(usize, bool)>,
 }
 
 impl Default for IRBuilder {
@@ -47,6 +52,7 @@ impl IRBuilder {
             fn_names: HashSet::new(),
             impl_method_map: HashMap::new(),
             is_in_lambda: false,
+            scope_stack: Vec::new(),
         }
     }
 
@@ -251,14 +257,14 @@ impl IRBuilder {
             Decl::Variable { name, init, .. } => {
                 if let Some(init_expr) = init {
                     self.gen_expr(init_expr);
-                    self.emit(Instr::StoreLocal(name.clone()));
+                    self.emit_store_local(name.clone())
                 } else {
                     // v3.4.8: declaraciones sin inicializador (`numero r;`) deben
                     // reservar slot en el scope donde aparecen (antes no emitían
                     // nada y `r = ...` dentro de un bloque con ScopePush fugaba
                     // al scope interior, rompiendo el self-hosting)
                     self.emit(Instr::ConstInt(0));
-                    self.emit(Instr::StoreLocal(name.clone()));
+                    self.emit_store_local(name.clone())
                 }
             }
             Decl::Destructure { targets, init, .. } => {
@@ -272,7 +278,7 @@ impl IRBuilder {
                     }
                     self.emit(Instr::Load(temp.clone()));
                     self.emit(Instr::TupleAccess(i));
-                    self.emit(Instr::StoreLocal(target.name.clone()));
+                    self.emit_store_local(target.name.clone())
                 }
             }
             Decl::Function { name, body, .. } => {
@@ -391,7 +397,7 @@ impl IRBuilder {
             }
             Decl::Const { name, value, .. } => {
                 self.gen_expr(value);
-                self.emit(Instr::StoreLocal(name.clone()));
+                self.emit_store_local(name.clone())
             }
         }
     }
@@ -412,19 +418,19 @@ impl IRBuilder {
                 let end_label = self.new_label();
                 self.gen_expr(condition);
                 self.emit(Instr::JmpIf(else_label));
-                self.emit(Instr::ScopePush);
+                self.push_scope();
                 for node in then_body {
                     self.gen_decl_or_stmt(node);
                 }
-                self.emit(Instr::ScopePop);
+                self.pop_scope();
                 self.emit(Instr::Jmp(end_label));
                 self.emit(Instr::Label(else_label));
                 if let Some(else_body) = else_body {
-                    self.emit(Instr::ScopePush);
+                    self.push_scope();
                     for node in else_body {
                         self.gen_decl_or_stmt(node);
                     }
-                    self.emit(Instr::ScopePop);
+                    self.pop_scope();
                 }
                 self.emit(Instr::Label(end_label));
             }
@@ -441,11 +447,11 @@ impl IRBuilder {
                     continue_label: start_label,
                     loop_name: None,
                 });
-                self.emit(Instr::ScopePush);
+                self.push_scope();
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
-                self.emit(Instr::ScopePop);
+                self.pop_scope();
                 self.loop_labels.pop();
                 self.emit(Instr::Jmp(start_label));
                 self.emit(Instr::Label(end_label));
@@ -469,11 +475,11 @@ impl IRBuilder {
                     continue_label,
                     loop_name: None,
                 });
-                self.emit(Instr::ScopePush);
+                self.push_scope();
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
-                self.emit(Instr::ScopePop);
+                self.pop_scope();
                 self.loop_labels.pop();
                 self.emit(Instr::Label(continue_label));
                 self.gen_stmt(update);
@@ -505,7 +511,7 @@ impl IRBuilder {
                     // Guardar en temporal para reordenar el stack correctamente
                     let temp = format!("__fa_{}", self.temp_counter);
                     self.temp_counter += 1;
-                    self.emit(Instr::StoreLocal(temp.clone()));
+                    self.emit_store_local(temp.clone());
 
                     // Paso 2: escribir de vuelta al arreglo
                     // Stack para ArraySet debe ser: [array, index, nuevo_valor]
@@ -529,7 +535,7 @@ impl IRBuilder {
                             // Stack: [nueva_lista]
                             let temp2 = format!("__fa2_{}", self.temp_counter);
                             self.temp_counter += 1;
-                            self.emit(Instr::StoreLocal(temp2.clone()));
+                            self.emit_store_local(temp2.clone());
                             self.gen_expr(struct_base);
                             self.emit(Instr::ConstStr(list_field.clone()));
                             self.emit(Instr::Load(temp2.clone()));
@@ -714,9 +720,9 @@ impl IRBuilder {
                         self.emit(Instr::JmpIf(fail_label));
                     }
                     for node in &arm.body {
-                        self.emit(Instr::ScopePush);
+                        self.push_scope();
                         self.gen_decl_or_stmt(node);
-                        self.emit(Instr::ScopePop);
+                        self.pop_scope();
                     }
                     self.emit(Instr::Jmp(end_label));
                 }
@@ -729,11 +735,11 @@ impl IRBuilder {
                 self.emit(Instr::Label(end_label));
             }
             Stmt::Block { stmts, .. } => {
-                self.emit(Instr::ScopePush);
+                self.push_scope();
                 for node in stmts {
                     self.gen_decl_or_stmt(node);
                 }
-                self.emit(Instr::ScopePop);
+                self.pop_scope();
             }
             Stmt::ForEach {
                 var_name,
@@ -765,12 +771,12 @@ impl IRBuilder {
                 self.emit(Instr::Load(arr_temp.clone()));
                 self.emit(Instr::Load(idx_temp.clone()));
                 self.emit(Instr::ArrayGet);
-                self.emit(Instr::ScopePush);
-                self.emit(Instr::StoreLocal(var_name.clone()));
+                self.push_scope();
+                self.emit_store_local(var_name.clone());
                 for node in body {
                     self.gen_decl_or_stmt(node);
                 }
-                self.emit(Instr::ScopePop);
+                self.pop_scope();
                 self.emit(Instr::Load(idx_temp.clone()));
                 self.emit(Instr::ConstInt(1));
                 self.emit(Instr::Binary(Op::Add));
@@ -793,19 +799,19 @@ impl IRBuilder {
                 let el = self.new_label();
                 let end_l = self.new_label();
                 self.emit_if_let_pattern(&temp, pattern, el);
-                self.emit(Instr::ScopePush);
+                self.push_scope();
                 for n in then_body {
                     self.gen_decl_or_stmt(n);
                 }
-                self.emit(Instr::ScopePop);
+                self.pop_scope();
                 self.emit(Instr::Jmp(end_l));
                 self.emit(Instr::Label(el));
                 if let Some(eb) = else_body {
-                    self.emit(Instr::ScopePush);
+                    self.push_scope();
                     for n in eb {
                         self.gen_decl_or_stmt(n);
                     }
-                    self.emit(Instr::ScopePop);
+                    self.pop_scope();
                 }
                 self.emit(Instr::Label(end_l));
             }
@@ -840,7 +846,7 @@ impl IRBuilder {
                     }
                     self.emit(Instr::Load(temp.clone()));
                     self.emit(Instr::TupleAccess(i));
-                    self.emit(Instr::StoreLocal(target.name.clone()));
+                    self.emit_store_local(target.name.clone())
                 }
             }
             Stmt::InlineAsm { code, .. } => {
@@ -1741,6 +1747,36 @@ impl IRBuilder {
         self.current_instrs.push(instr);
     }
 
+    /// Emite StoreLocal marcando el scope abierto más interno como "con
+    /// bindings" (un StoreLocal SIEMPRE crea/sobrescribe un binding en el
+    /// scope actual — si el scope quedara vacío, se elimina).
+    fn emit_store_local(&mut self, name: String) {
+        if let Some(rec) = self.scope_stack.last_mut() {
+            rec.1 = true;
+        }
+        self.emit(Instr::StoreLocal(name));
+    }
+
+    /// Abre un scope de bloque; registra su posición para poder eliminarlo
+    /// si no contiene bindings.
+    fn push_scope(&mut self) {
+        let pos = self.current_instrs.len();
+        self.emit(Instr::ScopePush);
+        self.scope_stack.push((pos, false));
+    }
+
+    /// Cierra el scope más interno. Si no tuvo bindings, el ScopePush se
+    /// convierte en Nop y NO se emite ScopePop (par vacío eliminado).
+    fn pop_scope(&mut self) {
+        if let Some((pos, has_bindings)) = self.scope_stack.pop() {
+            if !has_bindings {
+                self.current_instrs[pos] = Instr::Nop;
+                return;
+            }
+        }
+        self.emit(Instr::ScopePop);
+    }
+
     fn last_significant(instrs: &[Instr]) -> Option<&Instr> {
         instrs
             .iter()
@@ -1749,10 +1785,27 @@ impl IRBuilder {
     }
 
     fn needs_return(&self) -> bool {
-        !matches!(
-            Self::last_significant(&self.current_instrs),
-            Some(Instr::Return)
-        )
+        // v3.5.31: si la última instrucción significativa es Return PERO hay
+        // labels después de ella (p. ej. el join de un `elegir` con brazos que
+        // retornan: un `Jmp(end)` alcanzable cae al Label(end) y de ahí al fin
+        // de la función), aún hace falta el Return implícito. Antes los
+        // ScopePop finales forzaban este camino; con la eliminación de scopes
+        // vacíos el último significativo puede ser Return y el fallthrough
+        // quedaba huérfano.
+        let last = Self::last_significant(&self.current_instrs);
+        if matches!(last, Some(Instr::Return)) {
+            let last_pos = self
+                .current_instrs
+                .iter()
+                .rposition(|i| !matches!(i, Instr::Label(_) | Instr::Nop | Instr::Phi(_, _)));
+            if let Some(p) = last_pos {
+                return self.current_instrs[p + 1..]
+                    .iter()
+                    .any(|i| matches!(i, Instr::Label(_)));
+            }
+            return false;
+        }
+        true
     }
 
     fn needs_halt(&self) -> bool {
@@ -2058,6 +2111,7 @@ impl IRBuilder {
     }
 
     fn finalize_func(&mut self) {
+        self.scope_stack.clear(); // defensivo: los scopes nunca cruzan funciones
         if let Some(ref name) = self.current_func {
             if let Some(func) = self.program.funcs.get_mut(name) {
                 func.instrs = std::mem::take(&mut self.current_instrs);
@@ -2107,15 +2161,23 @@ impl IRBuilder {
                 Some(Instr::ConstInt(a.overflowing_mul(*b).0))
             }
             (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Div)) => {
+                // v3.5.32: paridad EXACTA con bin_pair del runtime —
+                // MIN / -1 → wrapping_neg (Rust paniquea con `a / b`).
                 if *b != 0 {
-                    Some(Instr::ConstInt(a / b))
+                    Some(Instr::ConstInt(if *b == -1 {
+                        a.wrapping_neg()
+                    } else {
+                        a / b
+                    }))
                 } else {
                     None
                 }
             }
             (Instr::ConstInt(a), Instr::ConstInt(b), Instr::Binary(Op::Mod)) => {
+                // v3.5.32: paridad con bin_pair — b == -1 → 0 y el resto usa
+                // rem_euclid (NO el % truncante de Rust: (-7) % 3 → 2).
                 if *b != 0 {
-                    Some(Instr::ConstInt(a % b))
+                    Some(Instr::ConstInt(if *b == -1 { 0 } else { a.rem_euclid(*b) }))
                 } else {
                     None
                 }

@@ -64,6 +64,11 @@ declare i64 @_lw_pow(i64, i64)
 declare i64 @_lw_floor(i64)
 declare i64 @_lw_ceil(i64)
 declare i64 @_lw_round(i64)
+declare i64 @_lw_arr_len_i(i64)
+declare i64 @_lw_to_text_i(i64)
+declare i64 @_lw_concat3(i64, i64, i64)
+declare i64 @_lw_concat3_i(i64, i64, i64)
+declare i64 @_lw_concat3_len_i(i64, i64, i64)
 
 @lw_str_0 = private unnamed_addr constant [8 x i8] c"primes:\00"
 
@@ -259,80 +264,79 @@ L_4:
   br label %L_5
 L_5:
   %r52 = call i64 @_lw_int(i64 3)
-  %var_i_53 = alloca i64
-  %r54 = call i64 @_lw_dcp(i64 %r52)
-  store i64 %r54, i64* %var_i_53
+  %r53 = call i64 @_lw_dcp(i64 %r52)
+  store i64 %r53, i64* %var_i
   br label %L_6
 L_6:
-  %r56 = load i64, i64* %var_i_53
-  %r58 = load i64, i64* %var_i_53
-  %r59 = call i64 @_lw_bin(i64 4, i64 %r56, i64 %r58)
-  %r60 = call i64 @_lw_err_active()
-  %r61 = icmp ne i64 %r60, 0
-  br i1 %r61, label %ec_d_62, label %ec_o_63
-ec_d_62:
-  %r64 = call i64 @_lw_void()
-  ret i64 %r64
-ec_o_63:
-  %r66 = ptrtoint [80 x i8]* %cell_n to i64
-  %r67 = call i64 @_lw_load_slot(i64 %r66)
-  %r68 = call i64 @_lw_bin(i64 10, i64 %r59, i64 %r67)
-  %r69 = call i64 @_lw_err_active()
-  %r70 = icmp ne i64 %r69, 0
-  br i1 %r70, label %ec_d_71, label %ec_o_72
-ec_d_71:
-  %r73 = call i64 @_lw_void()
-  ret i64 %r73
-ec_o_72:
-  %r74 = call i64 @_lw_truthy_i(i64 %r68)
-  %r75 = icmp eq i64 %r74, 0
-  br i1 %r75, label %L_7, label %jf_76
-jf_76:
-  %r78 = ptrtoint [80 x i8]* %cell_n to i64
-  %r79 = call i64 @_lw_load_slot(i64 %r78)
-  %r81 = load i64, i64* %var_i_53
-  %r82 = call i64 @_lw_bin(i64 6, i64 %r79, i64 %r81)
-  %r83 = call i64 @_lw_err_active()
-  %r84 = icmp ne i64 %r83, 0
-  br i1 %r84, label %ec_d_85, label %ec_o_86
-ec_d_85:
-  %r87 = call i64 @_lw_void()
-  ret i64 %r87
-ec_o_86:
-  %r88 = call i64 @_lw_int(i64 0)
-  %r89 = call i64 @_lw_bin(i64 7, i64 %r82, i64 %r88)
-  %r90 = call i64 @_lw_err_active()
-  %r91 = icmp ne i64 %r90, 0
-  br i1 %r91, label %ec_d_92, label %ec_o_93
-ec_d_92:
-  %r94 = call i64 @_lw_void()
-  ret i64 %r94
-ec_o_93:
-  %r95 = call i64 @_lw_truthy_i(i64 %r89)
-  %r96 = icmp eq i64 %r95, 0
-  br i1 %r96, label %L_8, label %jf_97
-jf_97:
-  %r98 = call i64 @_lw_bool(i64 0)
-  ret i64 %r98
+  %r55 = load i64, i64* %var_i
+  %r57 = load i64, i64* %var_i
+  %r58 = call i64 @_lw_bin(i64 4, i64 %r55, i64 %r57)
+  %r59 = call i64 @_lw_err_active()
+  %r60 = icmp ne i64 %r59, 0
+  br i1 %r60, label %ec_d_61, label %ec_o_62
+ec_d_61:
+  %r63 = call i64 @_lw_void()
+  ret i64 %r63
+ec_o_62:
+  %r65 = ptrtoint [80 x i8]* %cell_n to i64
+  %r66 = call i64 @_lw_load_slot(i64 %r65)
+  %r67 = call i64 @_lw_bin(i64 10, i64 %r58, i64 %r66)
+  %r68 = call i64 @_lw_err_active()
+  %r69 = icmp ne i64 %r68, 0
+  br i1 %r69, label %ec_d_70, label %ec_o_71
+ec_d_70:
+  %r72 = call i64 @_lw_void()
+  ret i64 %r72
+ec_o_71:
+  %r73 = call i64 @_lw_truthy_i(i64 %r67)
+  %r74 = icmp eq i64 %r73, 0
+  br i1 %r74, label %L_7, label %jf_75
+jf_75:
+  %r77 = ptrtoint [80 x i8]* %cell_n to i64
+  %r78 = call i64 @_lw_load_slot(i64 %r77)
+  %r80 = load i64, i64* %var_i
+  %r81 = call i64 @_lw_bin(i64 6, i64 %r78, i64 %r80)
+  %r82 = call i64 @_lw_err_active()
+  %r83 = icmp ne i64 %r82, 0
+  br i1 %r83, label %ec_d_84, label %ec_o_85
+ec_d_84:
+  %r86 = call i64 @_lw_void()
+  ret i64 %r86
+ec_o_85:
+  %r87 = call i64 @_lw_int(i64 0)
+  %r88 = call i64 @_lw_bin(i64 7, i64 %r81, i64 %r87)
+  %r89 = call i64 @_lw_err_active()
+  %r90 = icmp ne i64 %r89, 0
+  br i1 %r90, label %ec_d_91, label %ec_o_92
+ec_d_91:
+  %r93 = call i64 @_lw_void()
+  ret i64 %r93
+ec_o_92:
+  %r94 = call i64 @_lw_truthy_i(i64 %r88)
+  %r95 = icmp eq i64 %r94, 0
+  br i1 %r95, label %L_8, label %jf_96
+jf_96:
+  %r97 = call i64 @_lw_bool(i64 0)
+  ret i64 %r97
 L_8:
   br label %L_9
 L_9:
-  %r100 = load i64, i64* %var_i_53
-  %r101 = call i64 @_lw_int(i64 2)
-  %r102 = call i64 @_lw_bin(i64 1, i64 %r100, i64 %r101)
-  %r103 = call i64 @_lw_err_active()
-  %r104 = icmp ne i64 %r103, 0
-  br i1 %r104, label %ec_d_105, label %ec_o_106
-ec_d_105:
-  %r107 = call i64 @_lw_void()
-  ret i64 %r107
-ec_o_106:
-  %r108 = call i64 @_lw_dcp(i64 %r102)
-  store i64 %r108, i64* %var_i_53
+  %r99 = load i64, i64* %var_i
+  %r100 = call i64 @_lw_int(i64 2)
+  %r101 = call i64 @_lw_bin(i64 1, i64 %r99, i64 %r100)
+  %r102 = call i64 @_lw_err_active()
+  %r103 = icmp ne i64 %r102, 0
+  br i1 %r103, label %ec_d_104, label %ec_o_105
+ec_d_104:
+  %r106 = call i64 @_lw_void()
+  ret i64 %r106
+ec_o_105:
+  %r107 = call i64 @_lw_dcp(i64 %r101)
+  store i64 %r107, i64* %var_i
   br label %L_6
 L_7:
-  %r109 = call i64 @_lw_bool(i64 1)
-  ret i64 %r109
+  %r108 = call i64 @_lw_bool(i64 1)
+  ret i64 %r108
 }
 
 define i32 @main() {

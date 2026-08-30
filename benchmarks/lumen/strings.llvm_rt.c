@@ -2308,8 +2308,16 @@ static int64_t _lw_thr_spawn(const char* fn, Val* args, int argc) {
   t->argc = argc > 8 ? 8 : argc;
   for (int k = 0; k < t->argc; k++) t->args[k] = args[k];
   t->done = 0;
+  /* v3.5.30: inicializar el resultado ANTES de lanzar — si CreateThread
+     falla (o el hilo muere sin escribir), el join devuelve void en vez de
+     memoria sin inicializar (carrera observada en Windows). */
+  t->result = _v_void();
 #ifdef _WIN32
   t->th = CreateThread(NULL, 0, lw_thr_main_w, t, 0, NULL);
+  if (!t->th) {
+    LeaveCriticalSection(&lw_thr_cs);
+    return -1;
+  }
   LeaveCriticalSection(&lw_thr_cs);
 #else
   pthread_create(&t->th, NULL, lw_thr_main, t);
@@ -2563,7 +2571,12 @@ static LW_TLS char* _lw_arena_cur;
 static LW_TLS size_t _lw_arena_left;
 static LW_TLS Val* lw_tls_free;
 static LW_TLS size_t lw_tls_since_gc;
-static void* lw_gc_stack_top;
+static LW_TLS void* lw_gc_stack_top;
+/* v3.5.30: margen sobre el tope capturado en _lw_gc_init — cubre el frame
+   del wrapper de entrada (cuyos slots quedan por encima del marcador) y
+   holgura de seguridad. Antes el GC escaneaba hasta el fin del mapping del
+   stack (8MB) aunque el programa estuviera en un frame somero. */
+#define LW_GC_TOP_MARGIN (1 << 20)
 
 void _lw_gc_init(void) { volatile int marker; lw_gc_stack_top = (void*)&marker; }
 
@@ -2630,10 +2643,20 @@ static void lw_gc_collect(void) {
   {
     /* Rango: desde el frame actual hasta el tope capturado en _lw_gc_init
        (frame de arranque ≈ tope real del stack) + margen. Los falsos
-       positivos solo retienen cajas (fuga menor), nunca liberan nada vivo. */
+       positivos solo retienen cajas (fuga menor), nunca liberan nada vivo.
+       v3.5.30: con tope capturado, escanear hasta él (+margen) en vez de
+       hasta el fin del mapping del stack (8MB) — el espacio por encima del
+       frame de arranque son frames de libc muertos. */
     int here;
     char* lo = (char*)((((uintptr_t)&here) + 7) & ~(uintptr_t)7);
+    /* v3.5.30: el tope capturado (+margen) acota el escaneo a los frames
+       vivos; el fin del mapping sigue como límite superior para no pisar
+       la frontera usuario/kernel (el stack vive pegado al tope). */
     char* hi = lw_gc_stack_hi();
+    if (lw_gc_stack_top) {
+      char* h2 = (char*)lw_gc_stack_top + LW_GC_TOP_MARGIN;
+      if (h2 > (char*)lw_gc_stack_top && (!hi || h2 < hi)) hi = h2;
+    }
     if (!hi || hi <= lo) hi = lo + (16 << 10);
     if (getenv("LUMEN_GC_LOG")) fprintf(stderr, "[gc]   scan %p..%p\n", (void*)lo, (void*)hi);
     lw_gc_scan_range(lo, hi);
@@ -2699,7 +2722,9 @@ static int64_t _lw_str_take(char* s) { Val v = _v_int(0); v.t = T_STR; v.s = s; 
 int64_t _lw_int(int64_t x) { return _lw_h(_v_int(x)); }
 int64_t _lw_flt(double x) { return _lw_h(_v_flt(x)); }
 int64_t _lw_bool(int64_t x) { return _lw_h(_v_bool((int)x)); }
-int64_t _lw_str(const char* s) { return _lw_h(_v_str(s ? s : "")); }
+/* v3.5.30: los literales llegan del .data del objeto (inmortales) — adoptar
+   el puntero sin copiar (antes: strlen+arena por literal en cada iteración). */
+int64_t _lw_str(const char* s) { return _lw_h(_v_str_lit(s ? s : "")); }
 int64_t _lw_void(void) { return _lw_h(_v_void()); }
 int64_t _lw_none(void) { return _lw_h(_none()); }
 
@@ -2743,6 +2768,14 @@ int64_t _lw_arr_push(int64_t a, int64_t x) { return _lw_h(_arr_push(_lw_u(a), _l
 int64_t _lw_arr_get(int64_t a, int64_t i) { return _lw_h(_arr_get(_lw_u(a), (int64_t)_asf(_lw_u(i)))); }
 int64_t _lw_arr_set(int64_t a, int64_t i, int64_t x) { return _lw_h(_arr_set(_lw_u(a), (int64_t)_asf(_lw_u(i)), _lw_unbox(x))); }
 int64_t _lw_arr_len(int64_t h) { return _lw_h(_arr_len(_lw_u(h))); }
+/* v3.5.30: largo CRUDO (sin box del resultado) para el backend Cranelift —
+   `total = total + largo(s)` pasa a ser un iadd nativo. Semántica idéntica
+   a _lw_arr_len (misma _arr_len / strlen). */
+int64_t _lw_arr_len_i(int64_t h) {
+  Val v = _lw_u(h);
+  if (v.t == T_STR) return (int64_t)strlen(v.s ? v.s : "");
+  return _arr_len(v).i;
+}
 int64_t _lw_arr_rev(int64_t h) { return _lw_h(_arr_rev(_lw_u(h))); }
 int64_t _lw_arr_sort(int64_t h) { return _lw_h(_arr_sort(_lw_u(h))); }
 
@@ -2787,6 +2820,63 @@ int64_t _lw_tup_get(int64_t h, int64_t i) {
 int64_t _lw_read(void) { return _lw_h(_read_ln()); }
 int64_t _lw_typeof(int64_t h) { return _lw_h(_v_str(_tipo_de_b(_lw_u(h)))); }
 int64_t _lw_to_text(int64_t h) { return _lw_h(_to_text(_lw_u(h))); }
+/* v3.5.30: a_texto(entero crudo) — itoa directo al arena (sin box del arg,
+   sin malloc, sin unbox del handle). Paridad de dígitos con _fmt(T_INT). */
+int64_t _lw_to_text_i(int64_t x) {
+  char* b = _sa_alloc(32);
+  if (!b) { b = (char*)malloc(32); if (!b) return _lw_h(_v_str("")); }
+  _itoa_ll(x, b);
+  Val v = _v_int(0);
+  v.t = T_STR;
+  v.s = b;
+  return _lw_h(v);
+}
+/* v3.5.30: fusión `"lit" + X + "lit"` (el patrón de interpolación): una
+   arena-alloc + dos memcpy + un box por concatenación triple. */
+/* v3.5.30: longitud de "lit" + a_texto(x) + "lit" SIN construir el string
+   (patrón `total = total + largo("item-" + a_texto(i) + "-fin")`): solo se
+   cuentan dígitos. El Add fusionado de Cranelift lo usa y omite el
+   StoreLocal/Load/Call(largo) enteros. */
+int64_t _lw_concat3_len_i(const char* p1, int64_t x, const char* p2) {
+  int n = 1;
+  unsigned long long u = (unsigned long long)x;
+  if (x < 0) {
+    n = 2;
+    u = 0ULL - (unsigned long long)x;
+  }
+  while (u >= 10) { u /= 10; n++; }
+  return (int64_t)(strlen(p1) + (size_t)n + strlen(p2));
+}
+
+int64_t _lw_concat3(const char* p1, int64_t mid_h, const char* p2) {
+  Val m = _lw_u(mid_h);
+  char* ms;
+  if (m.t == T_STR) {
+    ms = (char*)(m.s ? m.s : "");
+  } else {
+    ms = _fmt(m);
+  }
+  size_t l1 = strlen(p1), lm = strlen(ms), l2 = strlen(p2);
+  char* out = _sa_alloc(l1 + lm + l2 + 1);
+  if (!out) out = (char*)malloc(l1 + lm + l2 + 1);
+  memcpy(out, p1, l1);
+  memcpy(out + l1, ms, lm);
+  memcpy(out + l1 + lm, p2, l2 + 1);
+  return _lw_h(_v_str_take(out));
+}
+/* v3.5.30: "lit" + a_texto(entero crudo) + "lit" — itoa directo al buffer
+   final (sin box intermedio ni strlen del medio). */
+int64_t _lw_concat3_i(const char* p1, int64_t x, const char* p2) {
+  char tmp[24];
+  int n = _itoa_ll(x, tmp);
+  size_t l1 = strlen(p1), l2 = strlen(p2);
+  char* out = _sa_alloc(l1 + (size_t)n + l2 + 1);
+  if (!out) out = (char*)malloc(l1 + (size_t)n + l2 + 1);
+  memcpy(out, p1, l1);
+  memcpy(out + l1, tmp, (size_t)n);
+  memcpy(out + l1 + (size_t)n, p2, l2 + 1);
+  return _lw_h(_v_str_take(out));
+}
 int64_t _lw_sub(int64_t h, int64_t a, int64_t b) {
   Val s = _lw_u(h);
   /* a/b llegan como handles → desreferenciar a enteros */
@@ -3008,3 +3098,4 @@ int64_t _lw_str_pad_h(int64_t s, int64_t w, int64_t f, int64_t start) {
 
 static void _init(void) {}
 static Val _call_by_name_thread(const char* nm) { (void)nm; return _v_void(); }
+static Val _call_by_name(const char* nm) { (void)nm; return _v_void(); }

@@ -4,12 +4,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-3.5.7-orange)
 ![Tests](https://img.shields.io/badge/tests-956%20passing-brightgreen)
-![Bench](https://img.shields.io/badge/bench-8%20criterion-blue)
+![JIT](https://img.shields.io/badge/JIT-Tier--2%20%2B%20Tier--R%20activo-blueviolet)
+![Bench](https://img.shields.io/badge/bench-JIT%20267ms%20(5.8x)-blue)
 ![Headless](https://img.shields.io/badge/headless-LUMEN__HEADLESS-lightgrey)
 ![Fases](https://img.shields.io/badge/fases-0--220%20+%20self--hosting-blueviolet)
 
 > **El primer lenguaje de programación moderno de sistemas y aplicaciones con el español y el inglés como ciudadanos de primera clase.**
-> Pipeline completo: Lexer → Parser → Sema (Borrow Checker & Comptime) → IR (Neuro-Optimizador) → Bytecode JIT (Cranelift Tier-3 OSR) → AOT (C99 / LLVM / Stage-3 Autónomo).
+> Pipeline completo: Lexer → Parser → Sema (Borrow Checker & Comptime) → IR (Neuro-Optimizador) → Bytecode → **VM + JIT Cranelift (Tier-1 / Tier-2 / Tier-R)** → AOT (C99 / Cranelift / LLVM / Stage-3 Autónomo).
 
 ---
 
@@ -105,7 +106,29 @@ function integer calculate_fibonacci(integer n) {
 | **Self-Hosting (Compilador + VM en LÚMEN)** | ✅ Bootstrapping doble certificado — fixpoint byte-idéntico |
 | **AI/ML (Fases 186-200)** | 🔜 Próximo hito |
 
-**Verificación v3.5.7 — Producción Real:** **956 pruebas en verde** (636 e2e + 11 production + resto workspace), **695 vm tests** (636 e2e + 11 production + 48 unit), 396/396 en `lumen check`, 396 ejemplos `run` OK con `CI=1`, clippy sin avisos (`cargo clippy --all -- -D warnings`), **8 benches criterion** (`cargo bench -p lumen-bench`) y cuatro fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con defaults persistidos (`FuncMeta.defaults`) y modo headless centralizado (`stdlib/graficos.nv:es_headless()` via `LUMEN_HEADLESS`/`CI`). AOT Industrial: C/Cranelift/LLVM completos con memoria nativa (`long long` sin tags, `_lw_*` handles). Ver checklist completo en [docs/produccion.md](docs/produccion.md).
+**Verificación v3.5.7 — Producción Real:** **956 pruebas en verde** (636 e2e + 11 production + resto workspace), **695 vm tests** (636 e2e + 11 production + 48 unit), 396/396 en `lumen check`, 396 ejemplos `run` OK con `CI=1`, clippy sin avisos (`cargo clippy --all -- -D warnings`), **8 benches criterion** (`cargo bench -p lumen-bench`) y cuatro fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con defaults persistidos (`FuncMeta.defaults`) y modo headless centralizado (`stdlib/graficos.nv:es_headless()` via `LUMEN_HEADLESS`/`CI`). AOT Industrial: C/Cranelift/LLVM completos con memoria nativa (`long long` sin tags, `_lw_*` handles). Ver checklist completo en [docs/desarrollo/produccion.md](docs/desarrollo/produccion.md).
+
+### ⚡ Rendimiento JIT — rondas v3.5.31 → v3.5.37 (ago 2026)
+
+El VM incorpora un **JIT Cranelift de tres niveles** activo por defecto
+(ver [docs/arquitectura/jit.md](docs/arquitectura/jit.md)): Tier-R (recursión
+auto-nativa en registros), Tier-2 (bucles con aritmética/arrays/textos nativos
+sobre la arena de slots) y Tier-1 (delegación por shims). Medición
+min-of-15, release:
+
+| Tarea | JIT ON | Intérprete (`LUMEN_JIT=0`) | Ganancia |
+|---|---|---|---|
+| sum | 28.1 ms | 1138.4 ms | 41× |
+| fib | 4.4 ms | 100.4 ms | 23× (~2× el C) |
+| primes | 11.8 ms | 34.5 ms | 2.9× |
+| strings | 162.3 ms | 177.2 ms | 1.09× |
+| arrays | 60.5 ms | 91.5 ms | 1.51× |
+| **TOTAL** | **267.1 ms** | **1541.9 ms** | **5.8×** |
+
+Evolución del total: 590 → 383 → 343.5 → 275.7 → **267.1 ms**. Las rondas
+también cazaron **4 bugs reales** (constant folder IR, folder de optimización,
+puntero `flat` obsoleto en Tier-2, indexado sin guard en Load/Store nativos) —
+todos arreglados y cubiertos por la batería de paridad ON/OFF.
 
 ### Producción Real (v3.5.7) — Checklist y Comandos
 
@@ -141,14 +164,17 @@ $env:LUMEN_HEADLESS="1"; $env:CI="1"; cargo test --workspace; cargo bench -p lum
 
 ## 📚 Documentación Oficial
 
-* **[Libro Oficial LÚMEN](docs/LIBRO_OFICIAL_LUMEN.md)** — De 0 a Ingeniero de Software.
-* **[Guía Rápida & Cheat Sheet](docs/GUIA_RAPIDA_UX.md)** — Referencia rápida de comandos y sintaxis.
-* **[Manual del Lenguaje](docs/LENGUAJE.md)** — Especificación técnica completa de la gramática.
-* **[Guía de Herramientas](docs/HERRAMIENTAS.md)** — CLI, REPL, Debugger, LSP y AOT.
-* **[Roadmap y Arquitectura](docs/roadmap.md)** — Plan de evolución del ecosistema (fases 0-220).
-* **[Producción Real v3.5.7](docs/produccion.md)** — Checklist de producción, bench 8, headless `es_headless()`, `CHUNK_VERSION 7`, AOT Industrial.
+La documentación está organizada por carpetas — índice completo en [docs/README.md](docs/README.md):
+
+* **Guías** ([docs/guias/](docs/guias/)) — [Libro Oficial](docs/guias/LIBRO_OFICIAL_LUMEN.md), [Guía Rápida UX](docs/guias/GUIA_RAPIDA_UX.md), [Currículum 7 días](docs/guias/CURRICULUM_7_DIAS.md).
+* **Referencia** ([docs/referencia/](docs/referencia/)) — [Manual del Lenguaje](docs/referencia/LENGUAJE.md), [Especificación Formal](docs/referencia/ESPECIFICACION_FORMAL_LUMEN.md), [Herramientas](docs/referencia/HERRAMIENTAS.md), [CLI](docs/referencia/cli.md).
+* **Arquitectura** ([docs/arquitectura/](docs/arquitectura/)) — [Pipeline del compilador](docs/arquitectura/architecture.md), [JIT (Tier-1/2/R)](docs/arquitectura/jit.md).
+* **Desarrollo** ([docs/desarrollo/](docs/desarrollo/)) — [Roadmap](docs/desarrollo/roadmap.md), [Producción](docs/desarrollo/produccion.md), [Contribución](docs/desarrollo/contributing.md), [Self-hosting](docs/desarrollo/self-hosting.md).
+* **Especificaciones** ([docs/spec/](docs/spec/)) — [bytecode .nvc](docs/spec/bytecode-format.md), [VM](docs/spec/vm-spec.md), [errores](docs/spec/error-codes.md).
+* **Informes** ([docs/informes/](docs/informes/)) — benchmarks, tests, auditoría y fixpoint.
+* **[CHANGELOG.md](CHANGELOG.md)** e **[info.md](info.md)** — historial completo y compendio técnico integral.
 
 ---
 
-*LÚMEN v3.5.7 — © 2026 LÚMEN Core Team & Comunidad. 956 tests, 396 ejemplos, AOT C/Cranelift/LLVM completos.*
+*LÚMEN v3.5.7 — © 2026 LÚMEN Core Team & Comunidad. 956 tests, 396 ejemplos, AOT C/Cranelift/LLVM completos, JIT Tier-1/Tier-2/Tier-R activo.*
 

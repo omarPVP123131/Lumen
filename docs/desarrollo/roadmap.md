@@ -1,3 +1,8 @@
+> **Estado 30 Ago 2026 — v3.5.7 + rondas JIT v3.5.31→v3.5.37 completadas:**
+> TOTAL de benchmarks 590 → **267.1 ms** (5.8× vs intérprete; fib 4.4 ms ≈ 2× el C);
+> 4 bugs reales cazados y arreglados; pre-commit completo en verde.
+> Ver [docs/arquitectura/jit.md](../arquitectura/jit.md) y [CHANGELOG](../../CHANGELOG.md).
+>
 # 🛣️ Roadmap Oficial de LÚMEN (v1.0.0 → v3.5.7 Producción Real)
 
 > **Visión:** El mejor lenguaje de programación educativo bilingüe — rápido, seguro, expresivo, con la mejor DX del mercado.

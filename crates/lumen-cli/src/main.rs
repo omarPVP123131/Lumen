@@ -754,8 +754,8 @@ fn print_learn() {
     println!("  📚 DOCUMENTACIÓN:");
     println!("    LENGUAJE.md     — Manual completo del lenguaje");
     println!("    HERRAMIENTAS.md — Guía de herramientas");
-    println!("    docs/roadmap.md — Roadmap v2.0.0 → v3.0.0");
-    println!("    docs/cli.md     — Referencia CLI");
+    println!("    docs/desarrollo/roadmap.md — Roadmap oficial");
+    println!("    docs/referencia/cli.md — Referencia CLI");
     println!();
     println!("  💡 TIP: Usa 'lumen tutor <tema>' para cada lección.");
     println!("  🎯 META: Escribir programas funcionales en LÚMEN.");
@@ -1779,7 +1779,7 @@ fn run_source(path: &str, lib_dirs: &[PathBuf]) {
     let mut vm = VM::new(bytecode);
     vm.set_echo_stdout(true); // salida EN VIVO (3.5.9)
     if let Err(e) = vm.run() {
-        eprintln!("{}", e.with_stack(vm.call_stack()));
+        eprintln!("{}", e.with_stack(&vm));
         process::exit(1);
     }
     prof_time("vm.run", &t);
@@ -1806,7 +1806,7 @@ fn run_bytecode(path: &str) {
             let mut vm = VM::new(bc);
             vm.set_echo_stdout(true); // salida EN VIVO (3.5.9)
             if let Err(e) = vm.run() {
-                eprintln!("{}", e.with_stack(vm.call_stack()));
+                eprintln!("{}", e.with_stack(&vm));
                 process::exit(1);
             }
             prof_time("vm.run", &t);
@@ -2047,11 +2047,7 @@ fn run_tests(path: &str, lib_dirs: &[PathBuf]) {
                 }
                 Err(e) => {
                     failed += 1;
-                    eprintln!(
-                        "  ✗ {} ... FALLÓ: {}",
-                        fm.name,
-                        e.with_stack(vm.call_stack())
-                    );
+                    eprintln!("  ✗ {} ... FALLÓ: {}", fm.name, e.with_stack(&vm));
                 }
             }
         }
@@ -2663,7 +2659,9 @@ fn render_tui_debugger_panel(
         for (i, frame) in stack.iter().rev().take(3).enumerate() {
             println!(
                 "  │   [#{}] \x1b[1;33m{}()\x1b[0m (retorno: IP {})",
-                i, frame.func_name, frame.return_ip
+                i,
+                vm.frame_func_name(frame),
+                frame.return_ip
             );
         }
         println!("  \x1b[1;34m└──────────────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
@@ -2714,7 +2712,7 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
                 Err(e) => {
                     eprintln!(
                         "\n  \x1b[1;31m[DEBUG FINISHED / ERROR]:\x1b[0m {}",
-                        e.with_stack(vm.call_stack())
+                        e.with_stack(&vm)
                     );
                     break;
                 }
@@ -2755,7 +2753,9 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
                 for (i, frame) in vm.call_stack().iter().enumerate() {
                     println!(
                         "    [#{}] {}() -> retorno en IP {}",
-                        i, frame.func_name, frame.return_ip
+                        i,
+                        vm.frame_func_name(frame),
+                        frame.return_ip
                     );
                 }
             }
@@ -2766,7 +2766,7 @@ fn run_debug(path: &str, lib_dirs: &[PathBuf]) {
                         println!("  ✓ Ejecución finalizada con éxito.");
                     }
                     Err(e) => {
-                        eprintln!("  ✗ Error en ejecución: {}", e.with_stack(vm.call_stack()));
+                        eprintln!("  ✗ Error en ejecución: {}", e.with_stack(&vm));
                     }
                 }
                 println!("  Salida acumulada (STDOUT):");
@@ -3198,7 +3198,7 @@ fn run_source_capture(source: &str, lib_dirs: &[PathBuf], base_path: &Path) -> (
     let mut vm = VM::new(bytecode);
     match vm.run() {
         Ok(()) => (vm.output().join("\n"), String::new()),
-        Err(e) => (vm.output().join("\n"), e.with_stack(vm.call_stack())),
+        Err(e) => (vm.output().join("\n"), e.with_stack(&vm)),
     }
 }
 
@@ -3784,7 +3784,7 @@ fn run_ai(subcommand: &str, target: &str, lib_dirs: &[PathBuf]) {
                 println!("       Cuantiza matrices con 'ia_cuantizar_int8()' y realiza W8A16 matmul con 'ia_matmul_cuantizado()'.");
             } else {
                 println!("     • LÚMEN es un lenguaje bilingüe con VM NaN-Boxing de 64 bits, Cranelift JIT y AOT nativo.");
-                println!("     • Consulta la documentación completa en 'docs/LIBRO_OFICIAL_LUMEN.md' o corre 'lumen tutor'.");
+                println!("     • Consulta la documentación completa en 'docs/guias/LIBRO_OFICIAL_LUMEN.md' o corre 'lumen tutor'.");
             }
             println!();
         }

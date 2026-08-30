@@ -1,4 +1,4 @@
-# Fixpoint self-hosting — Sat Aug 29 09:04:43 UTC 2026
+# Fixpoint self-hosting — Sun Aug 30 05:36:16 UTC 2026
 host: Linux e2b.local 6.1.158+ #1 SMP PREEMPT_DYNAMIC Fri Jul 17 14:31:34 UTC 2026 x86_64 GNU/Linux
 binario: LÚMEN v3.5.7
 ## Paso 1: compiler_v4.nvc (compilado por Rust)...
@@ -46,4 +46,4 @@ Instrs: 18541
 OK: /tmp/v4_self2.nvc (170985 bytes)
 ## ✅ FIXPOINT: v4_self.nvc y v4_self2.nvc BYTE-IDENTICAL (170985 B)
 sha256: 02b0460db823c143ad272054eb2ea4e4e16554b63ac37bad3c6cac762f2d4d5b
-fin: Sat Aug 29 09:04:51 UTC 2026
+fin: Sun Aug 30 05:36:23 UTC 2026

@@ -1,11 +1,9 @@
 # ============================================================================
-# LÚMEN — MASTER .gitignore (Ecosistema de Distribución Multiplataforma v2.4.6)
-# Configuración Completa para Desarrollo, CI/CD, Empaquetado y Distribución
-# Plataformas: Windows (MSVC/MinGW), Linux (glibc/musl), Android (Termux/NDK),
-#              macOS (Apple Silicon/Intel), iOS, WebAssembly, Docker y Nube
+# LÚMEN — MASTER .gitignore (v3.5.7) — Multiplataforma
+# Producción, CI/CD, benchmarks, WASM, Android/Termux, macOS, Windows, Linux
 # ============================================================================
 
-# ── 1. RUST & CARGO BUILD SYSTEM ─────────────────────────────────────────
+# ── 1. RUST & CARGO ───────────────────────────────────────────────────────
 /target/
 target/
 **/target/
@@ -15,13 +13,18 @@ Cargo.lock.bak
 *.profdata
 *.gcda
 *.gcno
+# coverage
+coverage/
+coverage.json
+lcov.info
+*.lcov
+target/coverage/
+target/pre-vuelo-report.json
+target/pre-commit-report.json
 
-# ── 2. LÚMEN COMPILATION & BYTECODE ARTIFACTS ────────────────────────────
-# Bytecode LÚMEN portátil
+# ── 2. LÚMEN BYTECODE & PAQUETES ──────────────────────────────────────────
 *.nvc
 *.nva
-
-# Paquetes y distribuciones comprimidas
 *.lmp
 *.tar.gz
 *.tar.xz
@@ -31,8 +34,6 @@ Cargo.lock.bak
 *.rar
 *.pkg
 *.dmg
-
-# Artefactos de paquetes Debian / RedHat / Arch / Termux
 *.deb
 *.rpm
 *.pkg.tar.zst
@@ -40,8 +41,7 @@ Cargo.lock.bak
 *.aab
 *.dex
 
-# ── 3. BINARIOS Y BIBLIOTECAS NATIVAS (C / C++ / Assembler) ──────────────
-# Windows Executables & Debug Symbols
+# ── 3. BINARIOS NATIVOS ───────────────────────────────────────────────────
 *.exe
 *.dll
 *.pdb
@@ -51,8 +51,6 @@ Cargo.lock.bak
 *.msi
 *.msix
 *.appx
-
-# Linux & Unix Binaries / Shared Libraries
 *.elf
 *.bin
 *.out
@@ -64,24 +62,40 @@ Cargo.lock.bak
 *.appimage
 *.snap
 *.flatpak
-
-# macOS / iOS Dynamic Libraries & Frameworks
 *.dylib
 *.framework/
 *.dSYM/
 *.ipa
 
-# ── 4. RUNTIME LOCAL, CACHÉ Y REGISTRO DE PAQUETES ───────────────────────
+# ── 4. RUNTIME LÚMEN, CACHÉ Y REGISTRO ────────────────────────────────────
 .lumen/
 lumen_cache/
 .lumen_cache/
+.lumen_registry/
+.registry_cache/
 lumen_serve.log.json
 target/lumen_serve.log.json
 credentials.json
 .credentials.json
-.registry_cache/
 
-# ── 5. WEBASSEMBLY, NODE.JS & WEB PLAYGROUND ─────────────────────────────
+# ── 5. BENCHMARKS — BINARIOS Y ARTEFACTOS GENERADOS ───────────────────────
+# Binarios compilados (AOT-C / Cranelift / LLVM) — nunca versionar
+benchmarks/results/exe_*
+benchmarks/results/exe_*.exe
+benchmarks/results/bench_*
+benchmarks/results/bench_*.exe
+# IR / runtime C generado por --llvm (se puede regenerar)
+# Nota: actualmente trackeados en git; si se quieren des-trackear, hacer git rm --cached
+# benchmarks/lumen/*.ll
+# benchmarks/lumen/*.llvm_rt.c
+# Binarios temporales de stdlib/compiler y ejemplos
+benchmarks/lumen/*.nvc
+stdlib/compiler/bench_fib
+stdlib/compiler/bench_out.nvc
+benchmarks_output/
+bench_fib
+
+# ── 6. WASM / NODE / WEB ──────────────────────────────────────────────────
 crates/lumen-wasm/pkg/
 crates/lumen-wasm/target/
 node_modules/
@@ -96,8 +110,11 @@ yarn-error.log*
 dist/
 build/
 out/
+__pycache__/
+*.pyc
+*.pyo
 
-# ── 6. ANDROID / TERMUX / MOBILE NDK ────────────────────────────────────
+# ── 7. ANDROID / TERMUX / NDK ─────────────────────────────────────────────
 .gradle/
 local.properties
 .idea/caches/
@@ -107,10 +124,9 @@ local.properties
 captures/
 .cxx/
 android_build/
-bin/
 gen/
 
-# ── 7. APPLE (macOS / iOS / Xcode) ───────────────────────────────────────
+# ── 8. APPLE (macOS / iOS / Xcode) ────────────────────────────────────────
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -123,7 +139,7 @@ xcuserdata/
 DerivedData/
 Pods/
 
-# ── 8. MICROSOFT WINDOWS OS ARTIFACTS ────────────────────────────────────
+# ── 9. WINDOWS OS ─────────────────────────────────────────────────────────
 Thumbs.db
 ehthumbs.db
 Desktop.ini
@@ -132,7 +148,7 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 
-# ── 9. LINUX & UNIX SYSTEM ARTIFACTS ─────────────────────────────────────
+# ── 10. LINUX / UNIX ──────────────────────────────────────────────────────
 *~
 .directory
 .fuse_hidden*
@@ -141,27 +157,24 @@ core
 core.*
 vgcore.*
 
-# ── 10. IDES, EDITORES DE CÓDIGO Y HERRAMIENTAS ──────────────────────────
-# VS Code (Conserva extensiones y configuraciones compartidas del proyecto)
+# ── 11. IDEs Y EDITORES ───────────────────────────────────────────────────
+# VS Code — conservar configs compartidas del proyecto
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-
-# JetBrains (IntelliJ, CLion, RustRover)
+# JetBrains
 .idea/
 *.iml
-
-# Visual Studio / C++ MSVC
+# Visual Studio
 .vs/
 *.sln.docstates
 *.suo
 *.user
 *.userosscache
 *.sln
-
-# Editores Modernos & Clásicos
+# Otros editores
 .zed/
 .fleet/
 .opencode/
@@ -171,31 +184,51 @@ vgcore.*
 *.sublime-project
 *.sublime-workspace
 
-# ── 11. TESTING, COBERTURA, SCRATCH Y PERFILADO ──────────────────────────
-coverage/
-coverage.json
-lcov.info
-*.lcov
+# ── 12. TESTING, LOGS Y TEMPORALES ────────────────────────────────────────
 *.log
 *.tmp
 tmp/
 temp/
-benchmarks_output/
-bench_fib
-stdlib/compiler/bench_fib
+# artefactos de tests stdlib / examples (dedup)
+3,0,0.txt
+__test_*.txt
+__test_*.cfg
+__test_*.csv
+__test_*.log
+app_real.log
+destino_real.txt
+lexcmp_edge.txt
+nul
+part_a.txt
+part_b.txt
+source_real.txt
+stream_data_real.txt
+temp_log_real.txt
+temp_rot_real.txt*
+test.db
 test_async.txt
-test_salida.txt
+test_big_sr.txt
+test_buffer_sr.csv
 test_ffi_io.txt
-fuego_tmp_err.txt
-fuego_tmp_out.txt
+test_jr_*.txt
+test_salida.txt
 test_salida_servidor.txt
 entrada_vm.txt
 target.txt
+fuego_tmp_err.txt
+fuego_tmp_out.txt
 *.tmp.nv
 *.temp.c
-3,0,0.txt
+# reportes legacy (ahora en docs/informes/)
+reports/
 
-# ── 12. VARIABLES DE ENTORNO Y SECRETOS ──────────────────────────────────
+# ── 13. FUZZING ───────────────────────────────────────────────────────────
+fuzz/corpus/
+fuzz/artifacts/
+crates/lumen-vm/fuzz/corpus/
+crates/lumen-vm/fuzz/artifacts/
+
+# ── 14. SECRETOS Y ENV ────────────────────────────────────────────────────
 .env
 .env.*
 !.env.example

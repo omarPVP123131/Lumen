@@ -1,3 +1,9 @@
+> **Validación 30 Ago 2026 — rondas JIT v3.5.31→v3.5.37 (sobre la v3.5.7 de producción):**
+> `cargo fmt --check` 0 · `cargo clippy --all -- -D warnings` 0 · `cargo build --release` 0 warnings ·
+> 956/956 tests ×2 (JIT ON y `LUMEN_JIT=0`) · `lumen check examples` 396/396 ·
+> ci_gate 392 PASS / 0 crashes ×2 · fixpoint self-hosting byte-idéntico (sha256 `02b0460d…`) ·
+> TOTAL de benchmarks 267.1 ms (5.8× vs intérprete). Repo limpio y docs sincronizadas.
+>
 # ⚡ LÚMEN v3.5.7 — Listo para Producción Real — CERTIFICADO APTO
 
 > Última validación: `2026-08-21` · **Artefacto empaquetado verificado** (`lumen-v3.5.7-windows-x64.zip` SHA-256 OK, gate sobre el paquete: 393 PASS / 0 FAIL / 1 TIMEOUT @interactive / 0 CRASH) · `cargo test --release` 680 verde (621 e2e + 11 production + 48 vm) · `CHUNK_VERSION 7` · `LUMEN_HEADLESS` + `es_headless()` centralizado · bench 8

@@ -109,7 +109,7 @@ impl Repl {
                     Ok(output.join("\n"))
                 }
             }
-            Err(e) => Err(e.with_stack(vm.call_stack())),
+            Err(e) => Err(e.with_stack(&vm)),
         }
     }
 }

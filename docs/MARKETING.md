@@ -50,7 +50,7 @@ Código Fuente (.nv)
   → VM Stack-Based (bind_args unificado, 956 tests, bench 8)
 ```
 
-- **956 tests** automatizados (636 e2e + 9 production + resto workspace, 0 fallos) — ver `docs/produccion.md`
+- **956 tests** automatizados (636 e2e + 9 production + resto workspace, 0 fallos) — ver `docs/desarrollo/produccion.md`
 - **8 benches** criterion (`cargo bench -p lumen-bench`: lexer, parser, pipeline, vm_fib_20 + 4 prod) — bench formal producción
 - **Modo headless centralizado** (`stdlib/graficos.nv:es_headless()` con `LUMEN_HEADLESS`/`CI`, CI `headless-check`)
 - **Prop-testing** con miles de casos aleatorios
@@ -101,7 +101,7 @@ nombre = "Ana"; // El compilador deduce: texto
 | Bench | `cargo bench -p lumen-bench` | 8 benches (4 prod nuevos) |
 | Headless | `LUMEN_HEADLESS=1 lumen run` | `stdlib/graficos.nv:es_headless()` centralizado |
 | Stdlib | `texto`, `matematicas`, `coleccion`, `fecha`, `archivos`, `matrices` | `graficos.nv es_headless()` + `matematicas.nv` fix `Variable 'n'` |
-| Producción | `docs/produccion.md` | Checklist `CHUNK_VERSION 7` + CI `headless-check` |
+| Producción | `docs/desarrollo/produccion.md` | Checklist `CHUNK_VERSION 7` + CI `headless-check` |
 
 ### 6. Lenguaje Avanzado
 
@@ -147,7 +147,7 @@ imprimir("Hola {nombre}, tienes {edad} años y mides {altura}m");
 
 ## ✅ Producción Real v3.5.7 (21 Ago 2026) — NUEVO
 
-**LÚMEN v3.5.7 ya es deployable** con checklist de producción en [docs/produccion.md](produccion.md):
+**LÚMEN v3.5.7 ya es deployable** con checklist de producción en [docs/desarrollo/produccion.md](desarrollo/produccion.md):
 
 - Fixes escalables: `last_significant()` + `label_counter` global, `CHUNK_VERSION 7` con `FuncMeta.defaults` + `bind_args` unificado, `es_headless()` centralizado
 - 956 tests (636 e2e + 9 production), 8 benches (`cargo bench -p lumen-bench`), 396/396 `lumen check`, CI `headless-check` con `LUMEN_HEADLESS=1 CI=1`
@@ -205,8 +205,8 @@ LENGUAJE.md y HERRAMIENTAS.md son completos, pero faltan:
 | **Estudiante hispanohablante** aprendiendo a programar | ✅ Perfecto. Sin barrera de idioma. |
 | **Profesor de programación** en secundaria/universidad | ✅ Ideal. Diseñado para enseñar conceptos. |
 | **Autodidacta** que quiere crear scripts y herramientas | ✅ Bueno. Sintaxis clara, errores útiles, REPL. |
-| **Desarrollador profesional** buscando producción | ✅ Ya — v3.5.7 Producción Real (956 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`, ver `docs/produccion.md`) |
-| **Startup** que necesita backend en producción | ✅ Ya — `lumen bundle`/`lumen build --release` + `cargo test --workspace` + headless CI, ver `docs/produccion.md` |
+| **Desarrollador profesional** buscando producción | ✅ Ya — v3.5.7 Producción Real (956 tests, bench 8, `LUMEN_HEADLESS`, `CHUNK_VERSION 7`, ver `docs/desarrollo/produccion.md`) |
+| **Startup** que necesita backend en producción | ✅ Ya — `lumen bundle`/`lumen build --release` + `cargo test --workspace` + headless CI, ver `docs/desarrollo/produccion.md` |
 
 ### ¿Contra quién compite LÚMEN?
 
@@ -248,7 +248,7 @@ estáticos, genéricos, traits, pattern matching y mensajes de error pedagógico
 - **Repositorio**: [github.com/omarPVP123131/Lumen](https://github.com/omarPVP123131/Lumen)
 - **Manual**: `LENGUAJE.md`
 - **Herramientas**: `HERRAMIENTAS.md`
-- **Roadmap**: `docs/roadmap.md`
+- **Roadmap**: `docs/desarrollo/roadmap.md`
 - **Reportar bugs**: GitHub Issues
 - **Contribuir**: `docs/contributing.md`
 
