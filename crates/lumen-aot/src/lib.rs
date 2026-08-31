@@ -454,7 +454,8 @@ impl AotCompiler {
     pub fn new() -> Self {
         let mut fb = settings::builder();
         fb.set("use_colocated_libcalls", "false").unwrap();
-        fb.set("is_pic", "false").unwrap();
+        // is_pic true para macOS (alineación) y portabilidad; false da ~1% más pero rompe ld64 en Darwin
+        fb.set("is_pic", "true").unwrap();
         // Fase 88+: máximo rendimiento — speed (no speed_and_size) + LTO fat
         fb.set("opt_level", "speed").unwrap();
         let flags = settings::Flags::new(fb);

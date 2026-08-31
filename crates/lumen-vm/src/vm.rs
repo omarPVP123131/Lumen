@@ -2715,27 +2715,19 @@ impl VM {
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let len = args.get(2).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 && len > 0 {
-                let layout = match self.ffi_allocations.get(&ptr_val) {
-                    Some(l) => l,
-                    None => {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset
+                        .checked_add(len)
+                        .is_none_or(|end| end > layout.size())
+                    {
                         self.push(Value::Error(Box::new(Value::str(format!(
-                            "Lectura FFI inválida: puntero {} no registrado",
-                            ptr_val
+                            "Lectura FFI fuera de rango: offset {} + len {} > size {}",
+                            offset,
+                            len,
+                            layout.size()
                         )))));
                         return Some(Ok(()));
                     }
-                };
-                if offset
-                    .checked_add(len)
-                    .is_none_or(|end| end > layout.size())
-                {
-                    self.push(Value::Error(Box::new(Value::str(format!(
-                        "Lectura FFI fuera de rango: offset {} + len {} > size {}",
-                        offset,
-                        len,
-                        layout.size()
-                    )))));
-                    return Some(Ok(()));
                 }
                 let mut buf = vec![0u8; len];
                 unsafe {
@@ -2757,23 +2749,15 @@ impl VM {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
-                let layout = match self.ffi_allocations.get(&ptr_val) {
-                    Some(l) => l,
-                    None => {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset.checked_add(4).is_none_or(|end| end > layout.size()) {
                         self.push(Value::Error(Box::new(Value::str(format!(
-                            "Peek FFI inválida: puntero {} no registrado",
-                            ptr_val
+                            "Lectura FFI fuera de rango: offset {} + len 4 > size {}",
+                            offset,
+                            layout.size()
                         )))));
                         return Some(Ok(()));
                     }
-                };
-                if offset.checked_add(4).is_none_or(|end| end > layout.size()) {
-                    self.push(Value::Error(Box::new(Value::str(format!(
-                        "Lectura FFI fuera de rango: offset {} + len 4 > size {}",
-                        offset,
-                        layout.size()
-                    )))));
-                    return Some(Ok(()));
                 }
                 unsafe {
                     let b0 = *((ptr_val + offset) as *const u8) as u32;
@@ -2794,23 +2778,15 @@ impl VM {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
-                let layout = match self.ffi_allocations.get(&ptr_val) {
-                    Some(l) => l,
-                    None => {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset.checked_add(8).is_none_or(|end| end > layout.size()) {
                         self.push(Value::Error(Box::new(Value::str(format!(
-                            "Peek64 FFI inválida: puntero {} no registrado",
-                            ptr_val
+                            "Lectura FFI64 fuera de rango: offset {} + len 8 > size {}",
+                            offset,
+                            layout.size()
                         )))));
                         return Some(Ok(()));
                     }
-                };
-                if offset.checked_add(8).is_none_or(|end| end > layout.size()) {
-                    self.push(Value::Error(Box::new(Value::str(format!(
-                        "Lectura FFI64 fuera de rango: offset {} + len 8 > size {}",
-                        offset,
-                        layout.size()
-                    )))));
-                    return Some(Ok(()));
                 }
                 unsafe {
                     let mut b = [0u8; 8];
@@ -2833,23 +2809,15 @@ impl VM {
             let ptr_val = args.first().and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             let offset = args.get(1).and_then(|v| v.as_num()).unwrap_or(0.0) as usize;
             if ptr_val != 0 {
-                let layout = match self.ffi_allocations.get(&ptr_val) {
-                    Some(l) => l,
-                    None => {
+                if let Some(layout) = self.ffi_allocations.get(&ptr_val) {
+                    if offset.checked_add(1).is_none_or(|end| end > layout.size()) {
                         self.push(Value::Error(Box::new(Value::str(format!(
-                            "Peek byte FFI inválida: puntero {} no registrado",
-                            ptr_val
+                            "Peek byte fuera de rango: offset {} + len 1 > size {}",
+                            offset,
+                            layout.size()
                         )))));
                         return Some(Ok(()));
                     }
-                };
-                if offset.checked_add(1).is_none_or(|end| end > layout.size()) {
-                    self.push(Value::Error(Box::new(Value::str(format!(
-                        "Peek byte fuera de rango: offset {} + len 1 > size {}",
-                        offset,
-                        layout.size()
-                    )))));
-                    return Some(Ok(()));
                 }
                 unsafe {
                     let b = *((ptr_val + offset) as *const u8);
