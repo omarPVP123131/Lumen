@@ -264,6 +264,9 @@ fn optimize_func(func: &mut Func) {
                     Instr::ArraySet => -2,
                     Instr::ArrayLen => 0,
                     Instr::ArrayPushVar(_) => 0,
+                    // v3.5.40: consume 3 (receptor obsoleto + índice + valor)
+                    // y no empuja nada (muta el slot in-place).
+                    Instr::ArraySetVar(_) => -3,
                     Instr::StructGet => -1,
                     Instr::StructSet => -2,
                     Instr::MakeRef(_) => 1,

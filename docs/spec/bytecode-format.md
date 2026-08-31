@@ -54,7 +54,10 @@ Each instruction starts with a tag byte:
 | 26 | Halt | - | - |
 | 27-46 | Extended | See VM source | Arrays, Closures, Structs, Result, Option, Enum, Tuple, Mod |
 
-Full opcode list (0-46) in `crates/lumen-vm/src/vm.rs`.
+Full opcode list (0-64) in `crates/lumen-vm/src/vm.rs`; los opcodes 56+
+(`ArrayPushVar`, `StoreLocal`, `ScopePush/Pop`, `MatchVariant`, `MakeRef`,
+`ArraySetVar`) son extensiones posteriores a v3.5. El 64 (`ArraySetVar`,
+v3.5.40) es la escritura in-place `a[i] = v` — ver `docs/spec/vm-spec.md`.
 
 ---
 
@@ -68,8 +71,17 @@ instrucción nuevas; ver `crates/lumen-codegen/src/bytecode.rs`):
 | 9 | `FusedBinCmpJmp` | (op1, op2, a, b, c, target) — (a op1 b) op2 c → salto |
 | 10 | `FusedBinKCmpJmp` | (op1, op2, a, b, k, target) — b es índice de NOMBRE |
 | 11 | `FusedBinKKCmpJmp` | (op1, op2, a, b, k, target) — b es CONSTANTE (shim propio, no reutilizar el de KC) |
+| 12 | `FusedBinKLocal` | (op, a, k, d) — DECLARACIÓN: a op k → d, con d escrito SIEMPRE en el scope actual del frame (v3.5.41, bug #10) |
+| 13 | `FusedBinLocal` | (op, a, b, d) — DECLARACIÓN: a op b → d, con d escrito SIEMPRE en el scope actual del frame (v3.5.41, bug #10) |
 
-Y los de 3 operandos previos: `FusedBin`/`FusedBinK` (a op b → d, k constante),
+Y los de 3 operandos previos: `FusedBin`/`FusedBinK` (a op b → d, k constante;
+semántica de ASIGNACIÓN: el destino se resuelve en el binding más cercano),
 `FusedCmpKJmp`/`FusedCmpJmp` (comparación + salto). El JIT los compila a código
 nativo compacto (ver [../arquitectura/jit.md](../arquitectura/jit.md)); el
 intérprete tiene handlers con la MISMA semántica (paridad byte-a-byte).
+
+> **v3.5.41 (bug #10):** los tags 12/13 existen porque fusionar `Store`
+> (asignación) y `StoreLocal` (declaración) en la MISMA instrucción era
+> incorrecto: con hit de la caché de nombres, la semántica de asignación
+> escribe el slot del frame ANCESTRO en recursión. Solo el pipeline Rust los
+> emite; el compilador self-hosted nunca los genera (fixpoint intacto).

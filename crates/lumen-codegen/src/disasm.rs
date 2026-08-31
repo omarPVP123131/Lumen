@@ -46,6 +46,18 @@ pub fn disassemble(bc: &Bytecode) -> String {
             Instruction::FusedBin { op, a, b, d } => {
                 output.push_str(&format!("FUSED_BIN op={} @{} @{} -> @{}\n", op, a, b, d));
             }
+            Instruction::FusedBinKLocal { op, a, k, d } => {
+                output.push_str(&format!(
+                    "FUSED_BIN_K_LOCAL op={} @{} k={} -> @{}\n",
+                    op, a, k, d
+                ));
+            }
+            Instruction::FusedBinLocal { op, a, b, d } => {
+                output.push_str(&format!(
+                    "FUSED_BIN_LOCAL op={} @{} @{} -> @{}\n",
+                    op, a, b, d
+                ));
+            }
             Instruction::FusedCmpKJmp { op, a, k, target } => {
                 output.push_str(&format!(
                     "FUSED_CMP_K_JMP op={} @{} k={} -> @{}\n",

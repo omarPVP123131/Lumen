@@ -185,6 +185,29 @@ impl Codegen {
                     d: d_idx,
                 });
             }
+            Fused::BinKLocal { op, a, k, d } => {
+                let a_idx = self.intern_name(&a);
+                let d_idx = self.intern_name(&d);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::FusedBinKLocal {
+                        op,
+                        a: a_idx,
+                        k,
+                        d: d_idx,
+                    });
+            }
+            Fused::BinLocal { op, a, b, d } => {
+                let a_idx = self.intern_name(&a);
+                let b_idx = self.intern_name(&b);
+                let d_idx = self.intern_name(&d);
+                self.bytecode.instructions.push(Instruction::FusedBinLocal {
+                    op,
+                    a: a_idx,
+                    b: b_idx,
+                    d: d_idx,
+                });
+            }
             Fused::CmpKJmp { op, a, k, label } => {
                 let a_idx = self.intern_name(&a);
                 let offset = self.label_map.get(&label).copied().unwrap_or(0);
@@ -481,6 +504,12 @@ impl Codegen {
                     .instructions
                     .push(Instruction::WithIdx(Opcode::ArrayPushVar, idx));
             }
+            Instr::ArraySetVar(name) => {
+                let idx = self.intern_name(name);
+                self.bytecode
+                    .instructions
+                    .push(Instruction::WithIdx(Opcode::ArraySetVar, idx));
+            }
             Instr::StructNew(name, count) => {
                 let idx = self.intern_string(name);
                 self.bytecode
@@ -641,6 +670,22 @@ enum Fused {
         b: String,
         d: String,
     },
+    /// v3.5.41 (bug #10): fusión de una DECLARACIÓN (StoreLocal) — el
+    /// destino se resuelve en el scope actual del frame, no en scopes de
+    /// frames ancestros (la variante Bin/BinK conserva la semántica de
+    /// ASIGNACIÓN, que sí busca el binding más cercano).
+    BinKLocal {
+        op: u8,
+        a: String,
+        k: i64,
+        d: String,
+    },
+    BinLocal {
+        op: u8,
+        a: String,
+        b: String,
+        d: String,
+    },
     CmpKJmp {
         op: u8,
         a: String,
@@ -773,7 +818,6 @@ fn try_fuse(
     }
     match (&instrs[i], &instrs[i + 1], &instrs[i + 2], &instrs[i + 3]) {
         (Instr::Load(a), Instr::ConstInt(k), Instr::Binary(op), Instr::Store(d))
-        | (Instr::Load(a), Instr::ConstInt(k), Instr::Binary(op), Instr::StoreLocal(d))
             if is_fusable_arith(op) =>
         {
             Some((
@@ -786,12 +830,40 @@ fn try_fuse(
                 4,
             ))
         }
+        // v3.5.41 (bug #10): la DECLARACIÓN conserva la semántica de
+        // StoreLocal (scope actual) — antes se fusionaba igual que la
+        // ASIGNACIÓN y la recursión corrompía los locales del llamador.
+        (Instr::Load(a), Instr::ConstInt(k), Instr::Binary(op), Instr::StoreLocal(d))
+            if is_fusable_arith(op) =>
+        {
+            Some((
+                Fused::BinKLocal {
+                    op: fused_op_code(op)?,
+                    a: a.clone(),
+                    k: *k,
+                    d: d.clone(),
+                },
+                4,
+            ))
+        }
         (Instr::Load(a), Instr::Load(b), Instr::Binary(op), Instr::Store(d))
-        | (Instr::Load(a), Instr::Load(b), Instr::Binary(op), Instr::StoreLocal(d))
             if is_fusable_arith(op) =>
         {
             Some((
                 Fused::Bin {
+                    op: fused_op_code(op)?,
+                    a: a.clone(),
+                    b: b.clone(),
+                    d: d.clone(),
+                },
+                4,
+            ))
+        }
+        (Instr::Load(a), Instr::Load(b), Instr::Binary(op), Instr::StoreLocal(d))
+            if is_fusable_arith(op) =>
+        {
+            Some((
+                Fused::BinLocal {
                     op: fused_op_code(op)?,
                     a: a.clone(),
                     b: b.clone(),

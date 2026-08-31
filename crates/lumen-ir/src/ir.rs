@@ -59,6 +59,10 @@ pub enum Instr {
     ArrayLen,
     ArrayPush,
     ArrayPushVar(String),
+    /// v3.5.40: `a[i] = v` in-place sobre el slot de una variable simple
+    /// (espejo de ArrayPushVar; la VM hace pop del receptor obsoleto antes
+    /// de mutar para que Arc::make_mut no clone el Vec entero por escritura).
+    ArraySetVar(String),
     StructNew(String, usize),
     StructGet,
     StructSet,

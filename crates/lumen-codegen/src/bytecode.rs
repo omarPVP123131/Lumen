@@ -75,6 +75,10 @@ pub enum Opcode {
     ScopePop = 61,
     MatchVariant = 62,
     MakeRef = 63,
+    /// v3.5.40: `a[i] = v` con `a` variable simple — muta el slot in-place
+    /// (espejo de ArrayPushVar). Evita que Arc::make_mut clone el Vec entero
+    /// por escritura (O(n²) → O(n) en cribas/bucles de marcado).
+    ArraySetVar = 64,
 }
 
 impl Opcode {
@@ -144,6 +148,7 @@ impl Opcode {
             61 => Some(Opcode::ScopePop),
             62 => Some(Opcode::MatchVariant),
             63 => Some(Opcode::MakeRef),
+            64 => Some(Opcode::ArraySetVar),
             _ => None,
         }
     }
@@ -171,6 +176,23 @@ pub enum Instruction {
         d: usize,
     },
     FusedBin {
+        op: u8,
+        a: usize,
+        b: usize,
+        d: usize,
+    },
+    /// v3.5.41 (bug #10): igual que FusedBinK/FusedBin pero con semántica
+    /// de DECLARACIÓN (StoreLocal): el destino se escribe en el scope
+    /// ACTUAL del frame (se crea el binding si no existe) — NUNCA en scopes
+    /// de frames ancestros. Solo el pipeline Rust los emite (el compilador
+    /// self-hosted nunca los genera → fixpoint intacto).
+    FusedBinKLocal {
+        op: u8,
+        a: usize,
+        k: i64,
+        d: usize,
+    },
+    FusedBinLocal {
         op: u8,
         a: usize,
         b: usize,
@@ -351,6 +373,20 @@ impl Bytecode {
                 }
                 Instruction::FusedBin { op, a, b, d } => {
                     buf.push(6);
+                    buf.push(*op);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*b as u32).to_le_bytes());
+                    buf.extend_from_slice(&(*d as u32).to_le_bytes());
+                }
+                Instruction::FusedBinKLocal { op, a, k, d } => {
+                    buf.push(12);
+                    buf.push(*op);
+                    buf.extend_from_slice(&(*a as u32).to_le_bytes());
+                    buf.extend_from_slice(&k.to_le_bytes());
+                    buf.extend_from_slice(&(*d as u32).to_le_bytes());
+                }
+                Instruction::FusedBinLocal { op, a, b, d } => {
+                    buf.push(13);
                     buf.push(*op);
                     buf.extend_from_slice(&(*a as u32).to_le_bytes());
                     buf.extend_from_slice(&(*b as u32).to_le_bytes());
@@ -797,6 +833,70 @@ impl Bytecode {
                     ]) as usize;
                     pos += 12;
                     instructions.push(Instruction::FusedBin {
+                        op: op_byte,
+                        a,
+                        b,
+                        d,
+                    });
+                }
+                12 => {
+                    if pos + 16 > data.len() {
+                        break;
+                    }
+                    let a = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
+                    let k = i64::from_le_bytes([
+                        data[pos + 4],
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                        data[pos + 8],
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                    ]);
+                    let d = u32::from_le_bytes([
+                        data[pos + 12],
+                        data[pos + 13],
+                        data[pos + 14],
+                        data[pos + 15],
+                    ]) as usize;
+                    pos += 16;
+                    instructions.push(Instruction::FusedBinKLocal {
+                        op: op_byte,
+                        a,
+                        k,
+                        d,
+                    });
+                }
+                13 => {
+                    if pos + 12 > data.len() {
+                        break;
+                    }
+                    let a = u32::from_le_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
+                    let b = u32::from_le_bytes([
+                        data[pos + 4],
+                        data[pos + 5],
+                        data[pos + 6],
+                        data[pos + 7],
+                    ]) as usize;
+                    let d = u32::from_le_bytes([
+                        data[pos + 8],
+                        data[pos + 9],
+                        data[pos + 10],
+                        data[pos + 11],
+                    ]) as usize;
+                    pos += 12;
+                    instructions.push(Instruction::FusedBinLocal {
                         op: op_byte,
                         a,
                         b,

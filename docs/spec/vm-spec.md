@@ -147,6 +147,26 @@ variable nombrada para implementar `prestado mut` con write-back real.
   inmediata; los params se renombran por función (`{fn}::{param}`) y las
   declaraciones locales por sitio (`plan_var_keys`) para sombreado correcto.
 
+## Opcode 64 — ArraySetVar (v3.5.40)
+
+`ArraySetVar` (WithIdx, idx → tabla `names`) es el espejo de `ArrayPushVar`
+para `a[i] = v` con `a` **variable simple**: muta el slot del scope in-place.
+
+- Emisión: el builder lo genera solo cuando el lvalue es un `Ident` simple
+  (`a[i] = v`). Cualquier base más compleja (campo de struct, doble índice)
+  sigue usando `ArraySet` + `Store`.
+- Runtime: la pila llega como `[receptor_cargado, índice, valor]`; el handler
+  hace pop del valor y del índice, **descarta el receptor cargado** (drop
+  explícito) y muta el slot con `Arc::make_mut` — con el refcount de vuelta en
+  1 (sin alias) no hay clon del Vec; con alias, `make_mut` clona → COW
+  idéntico a `ArraySet + Store`. Corrige el O(n²) de las cribas (clon de n
+  elementos por escritura) descubierto por `bench_sieve` (lim=1M).
+- JIT: delegación por `r_with_idx` al handler de la VM (mismo patrón que
+  `ArrayPushVar`); elegible para Tier-2.
+- AOT (Cranelift/LLVM/C): el IR se canonicaliza a `ArraySet + Store(n)` a la
+  entrada (`lower_arraysetvar`); las celdas AOT son dueñas exclusivas de su
+  buffer → O(1) y paridad observable con la VM.
+
 ---
 
 ## Estado actual del VM (v3.5.7 + rondas v3.5.31→v3.5.37)

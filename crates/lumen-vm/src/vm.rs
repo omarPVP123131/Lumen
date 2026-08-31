@@ -4048,6 +4048,8 @@ impl VM {
             // (antes: memcpy de ~48 B por instrucción del bucle).
             Instruction::FusedBinK { op, a, k, d } => self.exec_fused_bink(op, a, k, d),
             Instruction::FusedBin { op, a, b, d } => self.exec_fused_bin(op, a, b, d),
+            Instruction::FusedBinKLocal { op, a, k, d } => self.exec_fused_bink_local(op, a, k, d),
+            Instruction::FusedBinLocal { op, a, b, d } => self.exec_fused_bin_local(op, a, b, d),
             Instruction::FusedCmpKJmp { op, a, k, target } => {
                 self.exec_fused_cmpkjmp(op, a, k, target)
             }
@@ -4687,6 +4689,56 @@ impl VM {
         Ok(())
     }
 
+    /// v3.5.41 (bug #10): FusedBinK con semántica de DECLARACIÓN — el
+    /// destino se escribe en el scope actual del frame (ver
+    /// `do_store_local_by_idx`), nunca en scopes de frames ancestros.
+    #[inline(always)]
+    fn exec_fused_bink_local(&mut self, op: u8, a: usize, k: i64, d: usize) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let res = match (&av, op) {
+            (Value::Int(x), 1) => Value::Int(x.wrapping_add(k)),
+            (Value::Int(x), 3) => Value::Int(x.wrapping_sub(k)),
+            (Value::Int(x), 4) => Value::Int(x.wrapping_mul(k)),
+            (Value::Float(x), 1) => Value::Float(x + k as f64),
+            (Value::Float(x), 3) => Value::Float(x - k as f64),
+            (Value::Float(x), 4) => Value::Float(x * k as f64),
+            _ => self.bin_vals_slow(av, Value::Int(k), op)?,
+        };
+        self.do_store_local_by_idx(d, res);
+        Ok(())
+    }
+
+    /// v3.5.41 (bug #10): FusedBin con semántica de DECLARACIÓN (scope
+    /// actual del frame).
+    #[inline(always)]
+    fn exec_fused_bin_local(
+        &mut self,
+        op: u8,
+        a: usize,
+        b: usize,
+        d: usize,
+    ) -> Result<(), VmError> {
+        let av = self.do_load_by_idx(a)?;
+        let bv = self.do_load_by_idx(b)?;
+        let res = match (&av, &bv, op) {
+            (Value::Int(x), Value::Int(y), 1) => Value::Int(x.wrapping_add(*y)),
+            (Value::Int(x), Value::Int(y), 3) => Value::Int(x.wrapping_sub(*y)),
+            (Value::Int(x), Value::Int(y), 4) => Value::Int(x.wrapping_mul(*y)),
+            (Value::Float(x), Value::Float(y), 1) => Value::Float(x + y),
+            (Value::Float(x), Value::Float(y), 3) => Value::Float(x - y),
+            (Value::Float(x), Value::Float(y), 4) => Value::Float(x * y),
+            (Value::Int(x), Value::Float(y), 1) => Value::Float(*x as f64 + y),
+            (Value::Int(x), Value::Float(y), 3) => Value::Float(*x as f64 - y),
+            (Value::Int(x), Value::Float(y), 4) => Value::Float(*x as f64 * y),
+            (Value::Float(x), Value::Int(y), 1) => Value::Float(x + *y as f64),
+            (Value::Float(x), Value::Int(y), 3) => Value::Float(x - *y as f64),
+            (Value::Float(x), Value::Int(y), 4) => Value::Float(x * *y as f64),
+            _ => self.bin_vals_slow(av, bv, op)?,
+        };
+        self.do_store_local_by_idx(d, res);
+        Ok(())
+    }
+
     /// v3.5.31: comparación (av vs constante) compartida por el super-opcode
     /// `FusedCmpKJmp` y por el helper JIT `lj_fused_cmpk` (paridad exacta).
     fn cmp_vals_k(&self, av: Value, k: i64, op: u8) -> Result<bool, VmError> {
@@ -4920,6 +4972,26 @@ impl VM {
     ) -> Result<(), VmError> {
         self.exec_fused_bin(op, a, b, d)
     }
+    #[cfg(feature = "aot")]
+    pub(crate) fn exec_fused_bink_local_pub(
+        &mut self,
+        op: u8,
+        a: usize,
+        k: i64,
+        d: usize,
+    ) -> Result<(), VmError> {
+        self.exec_fused_bink_local(op, a, k, d)
+    }
+    #[cfg(feature = "aot")]
+    pub(crate) fn exec_fused_bin_local_pub(
+        &mut self,
+        op: u8,
+        a: usize,
+        b: usize,
+        d: usize,
+    ) -> Result<(), VmError> {
+        self.exec_fused_bin_local(op, a, b, d)
+    }
     /// Solo evalúa la condición (el JIT decide el salto nativamente).
     #[cfg(feature = "aot")]
     pub(crate) fn fused_cmpk_pub(&mut self, op: u8, a: usize, k: i64) -> Result<bool, VmError> {
@@ -5081,6 +5153,12 @@ impl VM {
             // v3.5.20 super-opcodes (v3.5.31: escalares, sin clonar)
             Instruction::FusedBinK { op, a, k, d } => self.exec_fused_bink(*op, *a, *k, *d),
             Instruction::FusedBin { op, a, b, d } => self.exec_fused_bin(*op, *a, *b, *d),
+            Instruction::FusedBinKLocal { op, a, k, d } => {
+                self.exec_fused_bink_local(*op, *a, *k, *d)
+            }
+            Instruction::FusedBinLocal { op, a, b, d } => {
+                self.exec_fused_bin_local(*op, *a, *b, *d)
+            }
             Instruction::FusedCmpKJmp { op, a, k, target } => {
                 self.exec_fused_cmpkjmp(*op, *a, *k, *target)
             }
@@ -6091,6 +6169,101 @@ impl VM {
                                 "agregar requiere lista, pero '{}' no es una lista",
                                 name
                             )));
+                        }
+                    },
+                    None => {
+                        return Err(VmError::UndefinedVariable(name));
+                    }
+                }
+            }
+            Opcode::ArraySetVar => {
+                // `a[i] = v` con `a` variable simple: muta el slot in-place.
+                // El builder emitió `Load a; índice; valor; ArraySetVar a` —
+                // hacemos pop del receptor obsoleto ANTES de mutar para que
+                // el refcount del Arc vuelva a 1 (sin alias) y Arc::make_mut
+                // NO clone el Vec entero por escritura: O(n²) → O(n) en
+                // cribas/bucles de marcado. Con alias (otro slot comparte el
+                // Arc) make_mut clona → COW idéntico a `ArraySet + Store`.
+                // v3.5.40 (bug real de rendimiento destapado por bench_sieve).
+                let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
+                let value = self.pop()?;
+                let index = self.pop()?;
+                // Descartar el receptor cargado INMEDIATAMENTE (drop explícito
+                // libera la referencia Arc antes de make_mut → sin clone).
+                drop(self.pop().ok());
+                let mut found_slot: Option<u32> = None;
+                for scope in self.locals.iter().rev() {
+                    if let Some(s) = self.scope_get(scope, &name) {
+                        found_slot = Some(s);
+                        break;
+                    }
+                }
+                match found_slot {
+                    Some(slot) => match &mut self.flat[slot as usize] {
+                        Value::Array(arr) => {
+                            if let Value::Int(ix) = index {
+                                if ix < 0 || ix as usize >= arr.len() {
+                                    return Err(VmError::Runtime(format!(
+                                        "Índice {} fuera de rango (largo: {})",
+                                        ix,
+                                        arr.len()
+                                    )));
+                                }
+                                Arc::make_mut(arr)[ix as usize] = value;
+                            } else {
+                                return Err(VmError::TypeError(
+                                    "ArraySet requires array, map or struct".to_string(),
+                                ));
+                            }
+                        }
+                        // Slot con referencia prestado mut: mutar el array
+                        // dentro de la celda preservando el owner del Ref.
+                        Value::Ref { cell, .. } => {
+                            let mut g = cell.lock().unwrap();
+                            match &mut *g {
+                                Value::Array(arr) => {
+                                    if let Value::Int(ix) = index {
+                                        if ix < 0 || ix as usize >= arr.len() {
+                                            return Err(VmError::Runtime(format!(
+                                                "Índice {} fuera de rango (largo: {})",
+                                                ix,
+                                                arr.len()
+                                            )));
+                                        }
+                                        Arc::make_mut(arr)[ix as usize] = value;
+                                    } else {
+                                        return Err(VmError::TypeError(
+                                            "ArraySet requires array, map or struct".to_string(),
+                                        ));
+                                    }
+                                }
+                                _ => {
+                                    return Err(VmError::TypeError(
+                                        "ArraySet requires array, map or struct".to_string(),
+                                    ))
+                                }
+                            }
+                        }
+                        // Mapa/struct en el slot: mutar directo (el receptor
+                        // cargado era una copia; misma semántica observable).
+                        Value::Map(map) => {
+                            map.insert(index, value);
+                        }
+                        Value::Struct { fields, .. } => {
+                            let field_str = match &index {
+                                Value::Str(s) => s.to_string(),
+                                _ => "".to_string(),
+                            };
+                            if let Some(pos) = fields.iter().position(|(n, _)| n == &field_str) {
+                                fields[pos].1 = value;
+                            } else {
+                                fields.push((field_str, value));
+                            }
+                        }
+                        _ => {
+                            return Err(VmError::TypeError(
+                                "ArraySet requires array, map or struct".to_string(),
+                            ));
                         }
                     },
                     None => {
@@ -7554,6 +7727,35 @@ impl VM {
                 let slot = self.alloc_slot(val);
                 self.locals[cur].map.insert(name, slot);
                 self.locals[cur].slots.push(slot);
+                self.var_cache_invalidate(idx);
+            }
+        }
+    }
+
+    /// v3.5.41 (bug #10): espejo EXACTO de StoreLocal para los
+    /// super-opcodes de DECLARACIÓN (FusedBinKLocal/FusedBinLocal). La
+    /// escritura SIEMPRE va al scope SUPERIOR: si el nombre ya está, se
+    /// sobrescribe; si no, se crea un binding NUEVO. NUNCA se escribe a
+    /// través de la caché de nombres hacia scopes de frames ancestros —
+    /// antes (fusión indistinta con `Store`), cada frame recursivo
+    /// escribía el slot del frame PADRE y los locales del llamador
+    /// quedaban corruptos al volver del caso base (resultado 0 silencioso
+    /// en f(12,100,60) y divergencia del árbol fractal).
+    fn do_store_local_by_idx(&mut self, idx: usize, val: Value) {
+        self.note_val_write(&val);
+        let name = self.bytecode.names.get(idx).cloned().unwrap_or_default();
+        let n = self.locals.len();
+        if n > 0 {
+            let top = n - 1;
+            if let Some(s) = self.scope_get(&self.locals[top], &name) {
+                self.flat[s as usize] = val;
+            } else {
+                // nombre NUEVO en el scope actual → binding nuevo; solo el
+                // nombre insertado se invalida (puede sombrear al del frame
+                // llamante, que hasta ahora resolvía por el walk de scopes).
+                let slot = self.alloc_slot(val);
+                self.locals[top].map.insert(name, slot);
+                self.locals[top].slots.push(slot);
                 self.var_cache_invalidate(idx);
             }
         }

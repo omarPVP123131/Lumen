@@ -622,12 +622,24 @@ impl IRBuilder {
                         self.emit(Instr::Store(name.clone()));
                     }
                 } else {
-                    self.gen_expr(arr);
-                    self.gen_expr(index);
-                    self.gen_expr(value);
-                    self.emit(Instr::ArraySet);
-                    if let Expr::Ident { name, .. } = arr.as_ref() {
-                        self.emit(Instr::Store(name.clone()));
+                    // `a[i] = v` — si la base es una VARIABLE simple, mutar
+                    // el slot in-place con ArraySetVar (v3.5.40): el handler
+                    // hace pop del receptor obsoleto antes de mutar, así
+                    // Arc::make_mut no clona el Vec entero por escritura
+                    // (O(n²) → O(n) en cribas; COW idéntico si hay alias).
+                    match arr.as_ref() {
+                        Expr::Ident { name, .. } => {
+                            self.gen_expr(arr);
+                            self.gen_expr(index);
+                            self.gen_expr(value);
+                            self.emit(Instr::ArraySetVar(name.clone()));
+                        }
+                        _ => {
+                            self.gen_expr(arr);
+                            self.gen_expr(index);
+                            self.gen_expr(value);
+                            self.emit(Instr::ArraySet);
+                        }
                     }
                 }
             }

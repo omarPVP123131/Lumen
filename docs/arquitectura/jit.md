@@ -1,4 +1,4 @@
-# ⚡ Arquitectura del JIT de LÚMEN (estado real, v3.5.7 + rondas v3.5.31→v3.5.37)
+# ⚡ Arquitectura del JIT de LÚMEN (estado real, v3.5.7 + rondas v3.5.31→v3.5.39)
 
 > Documento técnico del motor JIT de `crates/lumen-vm/src/jit.rs` (+ helpers en `vm.rs`).
 > Compilado por defecto en builds con la feature `aot`; se desactiva con `LUMEN_JIT=0`
@@ -72,6 +72,45 @@ compila a código nativo compacto:
 - **Fused 6-instr** (v3.5.31): `FusedBinCmpJmp`, `FusedBinKCmpJmp`,
   `FusedBinKKCmpJmp` (tags 9/10/11 en el bytecode).
 
+## Registros en bucles (v3.5.38)
+
+Los slots calientes de un bucle se promueven a **valores SSA** que viajan por
+**block params**: cada bloque líder del cuerpo recibe un param por registro
+promovido (orden fijo), los `Fused` leen/escriben los registros y cada salto
+pasa los valores actuales por ambas aristas. El bucle `mientras` nativo deja de
+tocar la arena `flat` (antes: ~5 loads + 2 stores por iteración).
+
+- **Análisis**: un nombre es promovible si es parámetro o está sembrado con
+  `PushInt/PushBool + StoreLocal` antes del primer salto, y TODOS sus usos son
+  operandos/defs de ops Fused (nada dinámico: sin Store/ArrayPushVar/dyn).
+- **Correctitud sin write-back**: el bail (código 2 de `perform_user_call`)
+  invalida y **re-ejecuta el frame completo** desde `func_start` en el
+  intérprete, y el `Ret` trunca la pila a `stack_base`; cualquier slot obsoleto
+  del flat se descarta al re-sembrar desde el inicio.
+- Resultado: sum 28.1 → 12.3 ms (2.3×).
+
+## Inlining de callees simples (v3.5.39)
+
+Una `Call` a un callee elegible se sustituye por su cuerpo compilado **inline en
+registros** (sin slots propios): los argumentos se extraen de la pila
+(`pop×argc + reverse`, mismo orden que el intérprete; un pop no-Int hace bail),
+los parámetros se ligan a los valores SSA del caller y cada `Ret` salta a la
+continuación pasando los registros del caller (el valor de retorno ya quedó en
+la pila de la VM). Elegibilidad conservadora:
+
+- sin llamadas (no hay recursión), sin scopes, ≤ 64 instrs, ≤ 4 params;
+- pila **neutra** (fixpoint de profundidad: 0 en cada salto, 1 en cada Ret — el
+  `Ret` del intérprete trunca la pila, el inline no);
+- todas las lecturas/defs Fused promovibles con chequeo de **DOMINANCIA** (cada
+  uso dominado por un seed en el CFG del callee — los early-outs antes de la
+  semilla no la invalidan);
+- tras un terminador se saltan las instrucciones muertas del bloque (los `Jmp`
+  de continuación que emite el compilador tras un `Ret`).
+
+Resultado: `es_primo` inline en `contar_primos` → primes 11.8 → 4.5 ms (2.6×):
+desaparecen la llamada (probe+frame), el `JmpIf` shim del resultado y el prólogo
+del callee.
+
 ## Tier-R en detalle (recursión en registros)
 
 `try_compile_recursive`: wrapper JitFn (probe del parámetro → carga del slot →
@@ -85,14 +124,16 @@ al superarlo devuelve código 2 → el intérprete produce el MISMO error
 
 | Tarea | JIT ON | Intérprete | Ganancia |
 |---|---|---|---|
-| sum | 28.1 ms | 1138.4 ms | 41× |
-| fib | 4.4 ms | 100.4 ms | 23× |
-| primes | 11.8 ms | 34.5 ms | 2.9× |
-| strings | 162.3 ms | 177.2 ms | 1.09× |
-| arrays | 60.5 ms | 91.5 ms | 1.51× |
-| **TOTAL** | **267.1 ms** | **1541.9 ms** | **5.8×** |
+| sum | 12.3 ms | 1138.4 ms | 92× |
+| fib | 3.9 ms | 100.4 ms | 26× |
+| primes | 4.5 ms | 34.5 ms | 7.7× |
+| strings | 165.7 ms | 177.2 ms | 1.07× |
+| arrays | 58.5 ms | 91.5 ms | 1.56× |
+| **TOTAL** | **~245 ms** | **1541.9 ms** | **6.3×** |
 
-Evolución del total: 590 → 383 → 343.5 → 275.7 → 272.6 → **267.1 ms**.
+Evolución del total: 590 → 383 → 343.5 → 275.7 → 272.6 → 268.0 → 267.1 →
+**~245 ms** (v3.5.38 registros + v3.5.39 inlining; ver nota ambiental del host
+en `benchmarks/results/informe.md`).
 
 ## Bugs reales encontrados por el trabajo de las rondas (y arreglados)
 
