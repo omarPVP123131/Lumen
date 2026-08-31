@@ -27,3 +27,4 @@ lumen-doc = { path = "../lumen-doc" }
 lumen-lsp = { path = "../lumen-lsp" }
 lumen-pkg = { path = "../lumen-pkg" }
 chrono = "0.4"
+mimalloc = { version = "0.1", default-features = false }

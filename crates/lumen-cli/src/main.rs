@@ -1,3 +1,7 @@
+#[cfg(not(target_arch = "wasm32"))]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn record_server_log(
     method: &str,
     path: &str,
