@@ -1,6 +1,148 @@
 # Changelog de LÚMEN
 
-## [3.5.7 + Rondas JIT v3.5.31→v3.5.37] - 2026-08-30
+## [v3.5.42 — Paridad VM↔AOT 100%: cazadas las 5 divergencias fuzz] - 2026-08-31
+
+> Cierre de la deuda conocida documentada en la auditoría: los 5 programas de
+> `fuzz/` que divergían entre la VM y el backend nativo (pre-existentes, no
+> regresiones del fix v3.5.41) quedan arreglados y verificados byte a byte.
+
+### 1. `gen_ref.nv` — write-back de `ArrayPushVar`/`ArraySetVar` por `prestado mut`
+- **Causa**: el write-back de un método de lista sobre `prestado mut lista<T>`
+  resolvía el destino como celda local (`gv[0]`, sin inicializar → crash nativo
+  «Indice 1 fuera de rango») en vez del parámetro puntero. La carga usaba el
+  binding correcto, pero el store posterior no.
+- **Fix**: el write-back resuelve el MISMO binding que la carga — en C vía el
+  mapa de parámetros (`pvmap`); en Cranelift con `LW_STORE_SLOT` y en LLVM con
+  `@_lw_store_slot` (write-through: si el slot aloja una referencia prestada,
+  se escribe a través del puntero y la mutación persiste en el llamador).
+
+### 2. `closure_multi.nv` — snapshot de capturas por instancia de closure
+- **Causa**: en el AOT las capturas del definidor se promueven a celdas
+  globales POR NOMBRE — dos instancias del mismo definidor compartían celdas:
+  `a2` seguía la cuenta de `b1` (semántica de global, no de frame).
+- **Fix**: el `Val T_FRE` de un closure que captura lleva ahora un snapshot
+  profundo de las celdas (`.p` direcciones finales, `.en` copia, `.i` conteo).
+  `_fref_call` instala el snapshot antes de invocar, lo refresca al volver y
+  restaura el estado del llamador — paridad exacta con la VM (frame por
+  instanciación del definidor).
+
+### 3. `pid_caps.nv`, `regex_braces.nv`, `regex_dollar.nv` — regex en la VM
+- **Causa**: los índices de grupo del parser son 1-based; `captures()` los
+  copiaba corridos (grupo 1 vacío, último descartado) y `replace()` nunca
+  fijaba `caps[0]`, así que `$0`/`${0}` expandían vacío.
+- **Fix**: `captures()` respeta la numeración 1-based y `replace()` fija
+  `caps[0]` = coincidencia completa antes de sustituir.
+
+### Verificación
+- Los 5 fuzz: salida nativa byte-idéntica a la VM (binario release).
+- Barrido completo `fuzz/` (29 programas, VM vs `--native`): **25 PAR / 0 DIF /
+  4 FALLA-COMPILA** (`lexer_bench*`, `parser_bench`: `__map_*` sin soporte en
+  AOT-C, deuda pre-existente separada).
+- 4 tests de regresión nuevos (backend C: capturas + prestado; Cranelift:
+  write-through; LLVM: write-through; VM: regex 1-based + `$0`): **961/961**.
+- Barra end-to-end 6/6 verde: hook pre-commit, fixpoint self-hosting (mismo
+  sha256 `02b0460d…`), paridad 3 backends 28 OK / 0 divergen, bench-suite
+  20/20 checksums, ci_gate 392/389 ×2 (JIT on/off), Bench-5 ejecutado.
+
+## [v3.5.41 — Bug #10 de raíz: declaraciones fusionadas con semántica de asignación] - 2026-08-30
+
+> Fix definitivo del bug de recursión encontrado construyendo el playground
+> (v3.5.40). Causa raíz localizada con trace instrumentado en la VM nativa.
+
+### La fusión de super-opcodes borraba la distinción `Store` vs `StoreLocal`
+- **Causa**: el patrón de fusión `Load a; Load b; Binary; StoreLocal d` →
+  `FusedBin` (y el análogo con constante) aceptaba TANTO `Store` (asignación)
+  como `StoreLocal` (declaración), y el opcode ejecutaba siempre la semántica
+  de ASIGNACIÓN: `do_store_by_idx` con hit de la caché de nombres escribe
+  directo en el slot resuelto — aunque sea de un frame ANCESTRO. En
+  `entero x2 = x + dx;` recursivo, cada frame hijo clobberaba el `x2` del
+  padre; al volver del caso base el padre leía el valor del último
+  descendiente → el árbol fractal divergía en la primera línea tras el
+  retorno (fallo silencioso, con JIT y sin JIT).
+- **Fix**: opcodes nuevos **`FusedBinKLocal` / `FusedBinLocal` (tags 12/13)**
+  con semántica de DECLARACIÓN (StoreLocal): el destino se escribe SIEMPRE
+  en el scope actual del frame (binding nuevo si no existe + invalidación
+  selectiva de la caché de nombres). `FusedBinK`/`FusedBin` conservan la
+  semántica de asignación (`G = 9` dentro de una función sigue asignando el
+  global). Soportado en codegen, encode/decode de bytecode, intérprete
+  (ambos dispatch), JIT (`lj_fused_bink_local`/`lj_fused_bin_local`;
+  el destino local queda fuera de la promoción a registros del Tier-2) y
+  disasm.
+- **Nota sobre la repro anterior**: `f(12,100,60)` con `c1=(a+b)/2` daba 0
+  también en la simulación de referencia — la pareja (a,b) converge a (0,0)
+  y el "esperado 1308160" era un fantasma. La repro real del bug es una
+  declaración aritmética (`+ - *`, sin `Div`/`Mod` que impedían la fusión)
+  leída tras una llamada recursiva (árbol fractal de 5 parámetros).
+- **Verificación**: árbol de 4095 segmentos byte-exacto contra referencia
+  con JIT on/off y desde `.nvc`; 2 tests de regresión nuevos; 958/958
+  tests; fmt/clippy -D warnings limpios; paridad JIT↔intérprete 167/167
+  programas deterministas; suite de benchmarks 20/20 checksums sin
+  regresión de rendimiento.
+- **Fixpoint self-hosting**: re-verificado tras el fix — `v4_self.nvc` y
+  `v4_self2.nvc` byte-idénticos (170985 B) con el MISMO sha256 de la
+  certificación (`02b0460d…`): el compilador self-hosted no emite los
+  opcodes nuevos y su comportamiento no cambia en ningún byte.
+- **Playground**: el ejemplo del árbol vuelve a la formulación NATURAL
+  (locales `x2/y2` + dibujo por el puente JS DURANTE la recursión — las dos
+  variantes que antes divergían). El wasm del showcase se regeneró con el
+  fix y el playground se re-verificó en navegador real: **34/34 pruebas,
+  0 errores**, con el mismo trazado byte-exacto (19146 píxeles — idéntico
+  al de la formulación workaround).
+
+## [v3.5.40 — Bug de escritura por índice (ArraySetVar) + Eq en Tier-2] - 2026-08-30
+
+> Fase de posicionamiento (benchmarks variados + CI multiplataforma + showcase).
+> Los benchmarks nuevos (sort/matmul/sieve/dict) destaparon un **bug real de
+> rendimiento en la VM** y una laguna de elegibilidad del JIT; ambos corregidos.
+
+### Bug cazado por la suite nueva: `a[i] = v` era O(n) por escritura (O(n²) en cribas)
+- **Causa**: `ArraySet` recibía el receptor cargado en la pila; el slot del scope
+  seguía compartiendo el `Arc` → `Arc::make_mut` clonaba el Vec ENTERO en cada
+  escritura. `sieve(1M)` no terminaba (horas estimadas).
+- **Fix**: opcode nuevo **`ArraySetVar = 64`** (espejo de `ArrayPushVar`): el
+  builder lo emite cuando el lvalue es una variable simple; el handler descarta
+  el receptor cargado antes de mutar (refcount 1 → make_mut O(1)). Con alias
+  sigue clonando → **semántica COW observable intacta** (verificada).
+- **AOT**: `lower_arraysetvar` canonicaliza a `ArraySet + Store` en las 7
+  entradas públicas (las celdas AOT son dueñas exclusivas de su buffer).
+- **Resultado**: sieve(1M)=78498 ✓ en ~1.7 s (antes: no terminaba);
+  paridad 3 backends 28/28, fixpoint byte-idéntico, 956 tests ×2 OK.
+
+### JIT: `Eq` elegible para Tier-2 (v3.5.40)
+- El pre-scan rechazaba `Eq` suelto → cuerpos con `a[i] == 1` caían a Tier-1.
+  Ahora es elegible (shim genérico; altura -1; etiqueta Any). `bench_sieve`
+  pasa a **Tier-2 nativo (47 instrs)**.
+
+### CI multiplataforma + benchmark suite + showcase (fase de posicionamiento)
+- **CI reforzada**: `bench-suite` en matriz ubuntu/windows/macos (bloquea
+  release), `aot-smoke` (fib+hello: VM vs AOT-C -O3 vs Cranelift, misma
+  salida — prueba los stubs `lumen_rt.h` + enlace `-lm`), y los jobs de
+  Windows/macOS ahora corren la validación LÚMEN completa (`check examples`
+  + gate 0 crashes). `autotag` ahora requiere ambas suites.
+- **Showcase web**: `crates/lumen-wasm/web/showcase/index.html` (raíz del preview)
+  — la suite variada ejecutándose en el navegador vía WebAssembly (VM pura en
+  wasm32, 4/4 checksums verificados), tabla de referencia nativa al lado,
+  terminal con logs JIT reales y puente LÚMEN↔JS. Paquete wasm generado en
+  `web/showcase/pkg/` (gitignored; `wasm-bindgen --target web`).
+- **Playground rediseñado desde cero**: `web/showcase/playground.html` —
+  motor de bloques propio (arrastrar, anidar, huecos de valor, reordenar,
+  eliminar; sin dependencias externas), generador de código `.nv`, lienzo
+  dibujable vía `__js_llamar` (punto/línea/color), consola con tiempos,
+  modo código con `check` estático y 5 ejemplos de bloques + 8 de código
+  (todos verificados en navegador real: 34/34 pruebas, 0 errores de consola).
+  El playground viejo (v2.4.6, dependía de un `embedded_examples.js` inexistente
+  y nunca funcionó) queda como redirect.
+- **Bug cazado construyendo el playground (VM, recursión)**: las variables
+  locales de una función recursiva se corrompen al volver del caso base
+  (el callee lee valores del caller). Diagnóstico completo y fix de raíz en
+  **v3.5.41** (arriba). Workaround aplicado entretanto en el ejemplo del
+  árbol fractal (acumular segmentos en una lista, dibujar al final) —
+  ver AUDITORIA_CONSOLIDADA.md.
+- Detalle y tablas: [docs/informes/BENCHMARK_SUITE.md](docs/informes/BENCHMARK_SUITE.md).
+- Nuevo reporte: [docs/informes/AUDITORIA_CONSOLIDADA.md](docs/informes/AUDITORIA_CONSOLIDADA.md)
+  (auditoría v3.2.0 → re-verificación v3.5.7 → benchmarks → hoja de ruta).
+
+## [3.5.7 + Rondas JIT v3.5.31→v3.5.39] - 2026-08-30
 
 > Trabajo de rendimiento benchmark-driven posterior a la v3.5.7 de producción:
 > JIT VM + AOT, con paridad byte-a-byte ON/OFF en cada ronda. Detalle técnico en
@@ -8,9 +150,11 @@
 > [docs/informes/BENCHMARK.md](docs/informes/BENCHMARK.md) y
 > [benchmarks/results/informe.md](benchmarks/results/informe.md).
 
-### Rendimiento (TOTAL de benchmarks, min-of-15, release): 590 → 267.1 ms (5.8× vs intérprete)
-- **Tier-R (v3.5.34)**: recursión auto-nativa en registros — fib 74 → **4.4 ms** (23× vs intérprete, ~2× el C)
+### Rendimiento (TOTAL de benchmarks, min-of-15, release): 590 → ~245 ms (6.3× vs intérprete)
+- **Tier-R (v3.5.34)**: recursión auto-nativa en registros — fib 74 → **~3.9 ms** (26× vs intérprete, ~2× el C)
 - **Tier-2 (v3.5.31+)**: bucles con aritmética de pila nativa sobre la arena de slots; arrays y strings nativos; super-opcodes Fused de 3 y 6 instrucciones; JmpIf nativo (v3.5.35); análisis estático de tipos VTag con concat rápido `lj_concat` y Load/Store nativos por etiqueta (v3.5.37)
+- **REGISTROS en bucles (v3.5.38)**: promoción de slots calientes a SSA con block params — los bucles `mientras` no tocan la arena de slots por iteración. sum 28.1 → **12.3 ms** (2.3×). Correctitud garantizada por el contrato de bail: el código 2 re-ejecuta el frame desde su inicio y el Ret trunca la pila, así que el flat obsoleto nunca se lee mal
+- **INLINING (v3.5.39)**: callees simples (sin llamadas ni scopes, pila neutra, lecturas promovibles con chequeo de DOMINANCIA) se compilan inline en registros — es_primo desaparece como llamada: primes 11.8 → **4.5 ms** (2.6×)
 - **Tier-1**: delegación por shims con prólogo de 1 call por nombre (`lj_probe_int`) y `lj_call_fast` para nombres no-builtin (decisión estática)
 - **VM (intérprete, v3.5.36)**: pools de buffers de scope (sin alloc por llamada) + invalidación SELECTIVA de la caché de variables → fib OFF 107.7 → 100.4 ms
 

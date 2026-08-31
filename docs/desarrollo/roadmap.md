@@ -1,6 +1,10 @@
-> **Estado 30 Ago 2026 — v3.5.7 + rondas JIT v3.5.31→v3.5.37 completadas:**
-> TOTAL de benchmarks 590 → **267.1 ms** (5.8× vs intérprete; fib 4.4 ms ≈ 2× el C);
-> 4 bugs reales cazados y arreglados; pre-commit completo en verde.
+> **Estado 30 Ago 2026 — v3.5.7 + rondas JIT v3.5.31→v3.5.39 completadas:**
+> TOTAL de benchmarks 590 → **~245 ms** (6.3× vs intérprete): registros en bucles
+> (sum 28→12.3 ms) e inlining de callees (primes 11.8→4.5 ms); 4 bugs reales
+> cazados; pre-commit completo en verde.
+> **Siguiente fase: CI multiplataforma (Windows/macOS) + suite variada de
+> benchmarks + showcase.** El trabajo profundo (SSO de strings, arrays
+> especializados, ~90–110 ms) queda documentado como fase posterior.
 > Ver [docs/arquitectura/jit.md](../arquitectura/jit.md) y [CHANGELOG](../../CHANGELOG.md).
 >
 # 🛣️ Roadmap Oficial de LÚMEN (v1.0.0 → v3.5.7 Producción Real)

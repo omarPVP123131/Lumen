@@ -1,8 +1,17 @@
-> **Estado 30 Ago 2026 — v3.5.7 + rondas JIT v3.5.31→v3.5.37 ✅:**
-> JIT Tier-1/Tier-2/Tier-R activo por defecto (TOTAL 267.1 ms, 5.8×), VM con
-> pools de scope e invalidación selectiva de caché, pre-commit verde
-> (fmt/clippy -D warnings/tests/check 396-396), fixpoint byte-idéntico.
-> Siguientes candidatos medibles: aritmética de pila nativa para Sum+1 (loops
+> **Estado 30 Ago 2026 — v3.5.7 + rondas JIT v3.5.31→v3.5.40 ✅ (fase de posicionamiento completada):**
+> JIT Tier-1/Tier-2/Tier-R activo por defecto (TOTAL ~245 ms, 6.3×). **v3.5.40**:
+> bug de escritura por índice cazado por la suite variada (`ArraySetVar`,
+> opcode 64 — sieve(1M) pasó de no-terminar a ~1.2 s) + `Eq` elegible para
+> Tier-2. Suite variada aditiva (sort/matmul/sieve/dict, checksums exactos
+> en 5 lenguajes, `scripts/ci_bench_suite.py`), CI multiplataforma reforzada
+> (bench-suite ubuntu/windows/macos + aot-smoke + validación completa en
+> Windows/macOS) y showcase web (`crates/lumen-wasm/web/showcase.html`).
+> Certificación: 956 tests, 396 ejemplos, gate ×2 392/389, paridad 28/28,
+> fixpoint byte-idéntico, bench-5 TOTAL 244 ms.
+> Candidatos profundos diferidos (SSO de strings, arrays nativos en Tier-2)
+> documentados en [BENCHMARK_SUITE.md](../informes/BENCHMARK_SUITE.md) y
+> [BENCHMARK.md](../informes/BENCHMARK.md).
+> Candidatos menores pendientes: aritmética de pila nativa para Sum+1 (loops
 > con llamadas a builtins), mejoras de `a_texto`/`imprimir` en strings, y
 > ampliar el Tier-R (Sum, profundidad).
 >

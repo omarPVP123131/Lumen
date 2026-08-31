@@ -18,6 +18,30 @@ pub fn record_unsupported_builtin(name: &str) {
 }
 
 /// Extrae y limpia la lista de builtins no soportados detectados durante la compilación AOT
+/// v3.5.40: canonicaliza `ArraySetVar(n)` → `ArraySet + Store(n)` para los
+/// backends AOT (Cranelift/LLVM/C), que ya manejan ese par con semántica de
+/// valores: cada celda es dueña exclusiva de su buffer (los Stores
+/// deep-copian) → el set sobre la celda es O(1) y la paridad observable con
+/// la VM se mantiene (en la VM, ArraySetVar es el mismo par con
+/// Arc::make_mut sobre refcount 1). El IR canónico NO debe exponerse a la
+/// VM/JIT (ahí ArraySetVar es el fast-path real).
+pub fn lower_arraysetvar(program: &Program) -> Program {
+    let mut p = program.clone();
+    for func in p.funcs.values_mut() {
+        let mut out: Vec<Instr> = Vec::with_capacity(func.instrs.len() + 8);
+        for ins in func.instrs.drain(..) {
+            if let Instr::ArraySetVar(n) = ins {
+                out.push(Instr::ArraySet);
+                out.push(Instr::Store(n));
+            } else {
+                out.push(ins);
+            }
+        }
+        func.instrs = out;
+    }
+    p
+}
+
 pub fn take_unsupported_builtins() -> Vec<String> {
     if let Ok(mut list) = UNSUPPORTED_BUILTINS.lock() {
         std::mem::take(&mut *list)
@@ -208,6 +232,8 @@ fn instr_depth_delta(ins: &Instr) -> i32 {
         Instr::ArrayPushVar(_) => 0,
         Instr::ArrayGet => -1,
         Instr::ArraySet => -2,
+        // v3.5.40: ArraySetVar equivale al par canónico ArraySet + Store.
+        Instr::ArraySetVar(_) => -3,
         Instr::ArrayLen => 0,
         Instr::StructNew(_, n) => 1 - 2 * (*n as i32),
         Instr::StructGet => -1,
@@ -802,23 +828,24 @@ impl AotCompiler {
     }
 
     pub fn compile(mut self, program: &Program) -> ObjectProduct {
+        let program = lower_arraysetvar(program);
         for (name, func) in &program.funcs {
             self.declare(name, func);
         }
-        let mut global_names = program_global_names(program);
+        let mut global_names = program_global_names(&program);
         // v3.5.15: capturas — promover variables capturadas a celdas globales.
-        let (captures, cap_cells) = compute_captures(program);
+        let (captures, cap_cells) = compute_captures(&program);
         for c in &cap_cells {
             global_names.insert(c.clone());
         }
         // v3.5.28: análisis de params enteros y retornos enteros (Cranelift)
         // — interprocedurales, réplica del backend C. Habilitan el ABI de
         // enteros crudos en llamadas directas (sin boxing por operación).
-        let (_cr_direct, cr_dyn) = cr_call_graph(program);
+        let (_cr_direct, cr_dyn) = cr_call_graph(&program);
         let cr_params_int =
-            cr_params_int_analysis(program, &cr_dyn, &global_names, &captures, &cap_cells);
+            cr_params_int_analysis(&program, &cr_dyn, &global_names, &captures, &cap_cells);
         let cr_returns_int = cr_returns_int_analysis(
-            program,
+            &program,
             &cr_dyn,
             &cr_params_int,
             &global_names,
@@ -827,11 +854,11 @@ impl AotCompiler {
         );
         // v3.5.28: funciones que nunca lanzan → sin ERRCHK tras sus llamadas
         // (mismo análisis que el backend C; fib pasa a ser llamada limpia).
-        let cr_no_throw = no_throw_analysis(program);
+        let cr_no_throw = no_throw_analysis(&program);
         let names: Vec<String> = program.funcs.keys().cloned().collect();
         for n in &names {
             if let Some(f) = program.funcs.get(n) {
-                let is_entry = program_entry_name(program).as_deref() == Some(n.as_str());
+                let is_entry = program_entry_name(&program).as_deref() == Some(n.as_str());
                 self.compile_body(
                     n,
                     f,
@@ -849,7 +876,7 @@ impl AotCompiler {
         // v3.5.17: hilos reales — trampolines __lumen_ft_<fn> (Export) que
         // toma los args estagiados en lw_thr_args (TLS, vía helper C) y llama
         // a la función nativa. El shim C arma la tabla _lft de dispatch.
-        self.thread_trampolines(program);
+        self.thread_trampolines(&program);
         self.module.finish()
     }
 
@@ -2751,16 +2778,21 @@ impl AotCompiler {
                         let r = if let Some(ss) = ss {
                             // la celda es dueña exclusiva del buffer (stores y
                             // args se deep-copian) → push in-place amortizado O(1)
+                            // v3.5.42 (bug fuzz gen_ref): write-back con
+                            // LW_STORE_SLOT (write-through si el slot es T_PTR
+                            // por prestado mut); _lw_store_slot_direct
+                            // sobreescribía la referencia y la mutación del
+                            // llamador se perdía.
                             let addr = builder.ins().stack_addr(i64, ss, 0);
                             let a = self.lw_call(&mut builder, LW_LOAD_SLOT, &[addr]);
                             let r = self.lw_call(&mut builder, LW_ARR_PUSH_IP, &[a, x]);
-                            self.lw_call_void(&mut builder, LW_STORE_SLOT_DIRECT, &[addr, r]);
+                            self.lw_call_void(&mut builder, LW_STORE_SLOT, &[addr, r]);
                             r
                         } else if global_names.contains(n) {
                             let addr = self.global_addr(&mut builder, n);
                             let a = self.lw_call(&mut builder, LW_LOAD_SLOT, &[addr]);
                             let r = self.lw_call(&mut builder, LW_ARR_PUSH_IP, &[a, x]);
-                            self.lw_call_void(&mut builder, LW_STORE_SLOT_DIRECT, &[addr, r]);
+                            self.lw_call_void(&mut builder, LW_STORE_SLOT, &[addr, r]);
                             r
                         } else {
                             self.void_handle(&mut builder)
@@ -3541,7 +3573,8 @@ fn string_builtin(name: &str) -> bool {
 }
 
 pub fn llvm_supported(program: &Program) -> Vec<String> {
-    let mut bad = cranelift_supported(program);
+    let program = lower_arraysetvar(program);
+    let mut bad = cranelift_supported(&program);
     // v3.5.17: el emisor LLVM aún no mapea los builtins de hilos (solo
     // Cranelift los tiene); rechazo explícito para no compilar hilos mudos.
     let mut note = |f: &str| {
@@ -3568,6 +3601,7 @@ pub fn llvm_supported(program: &Program) -> Vec<String> {
 /// prestado mut, intentar/atrapar, sombreado por bloques). Solo se rechazan
 /// builtins sin helper asignado.
 pub fn cranelift_supported(program: &Program) -> Vec<String> {
+    let program = lower_arraysetvar(program);
     let mut bad: Vec<String> = Vec::new();
     let mut note = |f: &str| {
         if !bad.iter().any(|x| x == f) {
@@ -3593,6 +3627,7 @@ pub fn cranelift_supported(program: &Program) -> Vec<String> {
 }
 
 pub fn compile_to_llvm_ir(program: &Program) -> String {
+    let program = lower_arraysetvar(program);
     // v3.5.7: backend LLVM IR textual con el MISMO modelo de handles opacos
     // que el backend Cranelift (runtime _lw_*). Paridad de cobertura.
     let mut out = String::new();
@@ -3751,7 +3786,7 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
         };
 
     // ── Celdas globales (top-level usadas desde varias funciones) ──
-    let llvm_global_names = program_global_names(program);
+    let llvm_global_names = program_global_names(&program);
     for g in &llvm_global_names {
         out.push_str(&format!(
             "@lw_glob_{} = global [{} x i8] zeroinitializer, align 8\n",
@@ -3763,7 +3798,7 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
         out.push('\n');
     }
 
-    let llvm_entry_name = program_entry_name(program);
+    let llvm_entry_name = program_entry_name(&program);
     for (fname, func) in &program.funcs {
         let is_entry_fn = llvm_entry_name.as_deref() == Some(fname.as_str());
         let mangled = format!("lum_{}", mangle(fname));
@@ -4285,7 +4320,16 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
                             "  {} = call i64 @_lw_arr_push_ip(i64 {}, i64 {})\n",
                             r, t, x
                         ));
-                        out.push_str(&format!("  store i64 {}, i64* {}\n", r, slot));
+                        // v3.5.42 (bug fuzz gen_ref): write-through si el slot
+                        // es T_PTR (prestado mut) — antes: store directo que
+                        // sobreescribía la referencia y perdía la mutación.
+                        let a = format!("%r{}", reg);
+                        reg += 1;
+                        out.push_str(&format!("  {} = ptrtoint i64* {} to i64\n", a, slot));
+                        out.push_str(&format!(
+                            "  call void @_lw_store_slot(i64 {}, i64 {})\n",
+                            a, r
+                        ));
                     } else if let Some(cell) = cells.get(n) {
                         let a = format!("%r{}", reg);
                         reg += 1;
@@ -4301,7 +4345,7 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
                             r, t, x
                         ));
                         out.push_str(&format!(
-                            "  call void @_lw_store_slot_direct(i64 {}, i64 {})\n",
+                            "  call void @_lw_store_slot(i64 {}, i64 {})\n",
                             a, r
                         ));
                     } else if llvm_global_names.contains(n) {
@@ -4321,7 +4365,7 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
                             r, t, x
                         ));
                         out.push_str(&format!(
-                            "  call void @_lw_store_slot_direct(i64 {}, i64 {})\n",
+                            "  call void @_lw_store_slot(i64 {}, i64 {})\n",
                             a, r
                         ));
                     } else {
@@ -4778,8 +4822,9 @@ pub fn compile_to_llvm_ir(program: &Program) -> String {
 }
 
 pub fn compile_to_object(program: &Program, output: &str) -> Result<(), String> {
+    let program = lower_arraysetvar(program);
     let compiler = AotCompiler::new();
-    let product = compiler.compile(program);
+    let product = compiler.compile(&program);
     let obj = &product.object;
     let bytes = obj.write().map_err(|e| format!("Write error: {}", e))?;
     std::fs::write(output, &bytes).map_err(|e| format!("IO: {}", e))?;
@@ -5376,6 +5421,7 @@ pub fn lw_shim_source() -> String {
 /// handle); aquí solo se arma la tabla de dispatch `_lft` que consume
 /// `_call_by_name_thread` (lumen_rt.h) en cada hilo hijo.
 pub fn lw_shim_source_for(program: &Program) -> String {
+    let program = lower_arraysetvar(program);
     let mut s = lw_shim_base();
     s.push_str("\n/* v3.5.17: hilos reales (Cranelift) — tabla _lft */\n");
     s.push_str("static void _init(void) {}\n");
@@ -5410,6 +5456,7 @@ pub fn lw_shim_source_for(program: &Program) -> String {
 }
 
 pub fn compile_to_c(program: &Program) -> String {
+    let program = lower_arraysetvar(program);
     let mut out = String::new();
     out.push_str(C_RUNTIME);
     out.push('\n');
@@ -5505,8 +5552,8 @@ pub fn compile_to_c(program: &Program) -> String {
     // y las referencias de otras funciones ya caen en la misma key vía
     // fallback. Sin esto cada función veía su propio slot (mutaciones
     // perdidas, divergencia VM).
-    let global_names = program_global_names(program);
-    let entry_name: Option<String> = program_entry_name(program);
+    let global_names = program_global_names(&program);
+    let entry_name: Option<String> = program_entry_name(&program);
     let is_entry_fn = |fname: &str| entry_name.as_deref() == Some(fname);
 
     // Plan de slots por función (params renombrados + sombreado de bloques).
@@ -5572,6 +5619,38 @@ pub fn compile_to_c(program: &Program) -> String {
         }
     }
 
+    // v3.5.42 (bug fuzz closure_multi): por cada closure que captura,
+    // precalcula las celdas FINALES (keys gv con #N) que su snapshot debe
+    // guardar — paridad VM: estado por instanciación del definidor, no una
+    // celda global compartida entre closures.
+    let (captures, _cap_cells) = compute_captures(&program);
+    let mut fref_cells: HashMap<String, Vec<String>> = HashMap::new();
+    for (callee, cm) in &captures {
+        let mut cells: Vec<String> = cm.values().cloned().collect();
+        cells.sort();
+        cells.dedup();
+        let resolved: Vec<String> = cells
+            .iter()
+            .filter_map(|cell| {
+                let (d, vn) = cell.split_once("::")?;
+                let plan_d = var_plans.get(d)?;
+                let dfunc = program.funcs.get(d)?;
+                for (ii, ins) in dfunc.instrs.iter().enumerate() {
+                    if let Instr::StoreLocal(x) = ins {
+                        if x == vn {
+                            if let Some(k) = plan_d.get(&ii) {
+                                return Some(k.clone());
+                            }
+                        }
+                    }
+                }
+                // param/global del definidor: la key cruda ya es la final
+                Some(cell.clone())
+            })
+            .collect();
+        fref_cells.insert(callee.clone(), resolved);
+    }
+
     // v3.5.19: PROMOCIÓN DE REGISTROS (backend C). Los locales propios que
     // no escapan (sin MakeRef, sin captura por anidadas) dejan gv[] y se
     // convierten en variables locales C — GCC las mantiene en registros y
@@ -5613,7 +5692,7 @@ pub fn compile_to_c(program: &Program) -> String {
     // v3.5.21: PROMOCIÓN DE ENTEROS a `long long` nativos (análisis global).
     // key → (nombre C, expresión de inicialización: None = `0`, Some = copia
     // del gv del parámetro en la entrada).
-    let (int_locals_map, int_params_map) = int_promotion_analysis(program, &var_plans);
+    let (int_locals_map, int_params_map) = int_promotion_analysis(&program, &var_plans);
     // v3.5.21: solo se promocionan PARÁMETROS de funciones con llamadores
     // estáticos. Las llamadas dinámicas (hilos por nombre, CallValue,
     // FuncRef) pueden pasar cualquier cosa → params quedan en gv.
@@ -5775,14 +5854,14 @@ pub fn compile_to_c(program: &Program) -> String {
 
     // v3.5.24: funciones que NO lanzan → sin ERRCHK y sin NOINLINE (gcc
     // puede inlinearlas: fib y cía se acercan a velocidad C nativa).
-    let no_throw = no_throw_analysis(program);
+    let no_throw = no_throw_analysis(&program);
 
     // v3.5.24: funciones que NO mutan → sus args se comparten sin _dcp
     // (paridad con la VM, que comparte vía Arc).
-    let no_mutate = no_mutate_analysis(program);
+    let no_mutate = no_mutate_analysis(&program);
 
     // v3.5.24: funciones que siempre devuelven entero → retorno long long.
-    let returns_int = returns_int_analysis(program, &int_proms);
+    let returns_int = returns_int_analysis(&program, &int_proms);
 
     for (name, func) in &program.funcs {
         let plan = &var_plans[name];
@@ -5963,7 +6042,7 @@ pub fn compile_to_c(program: &Program) -> String {
         out.push_str(&emit_func(
             name,
             func,
-            program,
+            &program,
             &name_sets,
             &gv_of,
             &renames,
@@ -5978,6 +6057,7 @@ pub fn compile_to_c(program: &Program) -> String {
             &no_mutate,
             &returns_int,
             &arr_vars_by_name(func, &cap_refs),
+            &fref_cells,
         ));
     }
 
@@ -6318,6 +6398,16 @@ fn collect_ref_args(
                 }
                 st.push(None);
             }
+            // v3.5.40: par canónico ArraySet + Store.
+            Instr::ArraySetVar(_) => {
+                if !popn(&mut st, 3) {
+                    break;
+                }
+                st.push(None);
+                if !popn(&mut st, 1) {
+                    break;
+                }
+            }
             Instr::ArrayNew(n) | Instr::StructNew(_, n) | Instr::TupleNew(n) => {
                 if !popn(&mut st, *n) {
                     break;
@@ -6549,6 +6639,8 @@ fn instr_pops_pushes(ins: &Instr) -> (usize, usize) {
         Instr::ArrayPushVar(_) => (1, 1),
         Instr::ArrayGet => (2, 1),
         Instr::ArraySet => (3, 1),
+        // v3.5.40: par canónico ArraySet(3,1) + Store(1,0).
+        Instr::ArraySetVar(_) => (4, 1),
         Instr::ArrayLen => (1, 1),
         Instr::StructNew(_, n) => (2 * *n, 1),
         Instr::StructGet => (2, 1),
@@ -8026,6 +8118,8 @@ fn emit_func(
     returns_int: &std::collections::HashSet<String>,
     // v3.5.26: arrays de enteros promovidos a arrays nativos.
     arr_vars: &std::collections::HashSet<String>,
+    // v3.5.42: closure → celdas finales capturadas (snapshot por instancia).
+    fref_cells: &HashMap<String, Vec<String>>,
 ) -> String {
     // Slot de un param de una función llamada (callee)
     let callee_slot_of = |callee: &str, pn: &str| -> String {
@@ -8265,13 +8359,26 @@ fn emit_func(
                 estack.push((format!("_v_ptr(&{})", slot_of(i, n)), false, true, 0, true));
             }
             Instr::FuncRef(fn_name) => {
-                estack.push((
-                    format!("_vfref(\"{}\", &_f_{})", esc(fn_name), mangle(fn_name)),
-                    false,
-                    true,
-                    0,
-                    true,
-                ));
+                // v3.5.42 (bug fuzz closure_multi): si el closure captura,
+                // su FuncRef lleva snapshot de las celdas capturadas.
+                let expr = match fref_cells.get(fn_name) {
+                    Some(cells) if !cells.is_empty() => {
+                        let list = cells
+                            .iter()
+                            .map(|c| format!("\"{}\"", esc(c)))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        format!(
+                            "_vfref_snap(\"{}\", &_f_{}, (const char*[]){{ {} }}, {})",
+                            esc(fn_name),
+                            mangle(fn_name),
+                            list,
+                            cells.len()
+                        )
+                    }
+                    _ => format!("_vfref(\"{}\", &_f_{})", esc(fn_name), mangle(fn_name)),
+                };
+                estack.push((expr, false, true, 0, true));
             }
             Instr::Binary(op) if estack.len() >= 2 => {
                 let (b, rb, _fb, kb, _) = estack.pop().unwrap();
@@ -8461,7 +8568,10 @@ fn emit_func(
                 } else {
                     let e = if ke != 0 { format!("_v_int({})", e) } else { e };
                     xe_spill(&mut s, &mut estack, &handler_labels);
-                    s.push_str(&format!("  {{ Val _r = ({}); SP = _sb; return _r; }}\n", e));
+                    s.push_str(&format!(
+                        "  {{ Val _r = ({}); if (_r.t == T_FRE && _r.p && _r.i > 0) {{ for (int _k = 0; _k < (int)_r.i; _k++) ((Val*)_r.en)[_k] = _dcp(*((Val**)_r.p)[_k]); }} SP = _sb; return _r; }}\n",
+                        e
+                    ));
                 }
             }
             Instr::Print if !estack.is_empty() => {
@@ -9105,11 +9215,28 @@ fn emit_func(
                 }
             }
             Instr::FuncRef(n) => {
-                s.push_str(&format!(
-                    "  PUSH(_vfref(\"{}\", &_f_{}));\n",
-                    esc(n),
-                    mangle(n)
-                ));
+                // v3.5.42 (bug fuzz closure_multi): snapshot de celdas
+                // capturadas en el Val del closure.
+                if let Some(cells) = fref_cells.get(n).filter(|c| !c.is_empty()) {
+                    let list = cells
+                        .iter()
+                        .map(|c| format!("\"{}\"", esc(c)))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    s.push_str(&format!(
+                        "  PUSH(_vfref_snap(\"{}\", &_f_{}, (const char*[]){{ {} }}, {}));\n",
+                        esc(n),
+                        mangle(n),
+                        list,
+                        cells.len()
+                    ));
+                } else {
+                    s.push_str(&format!(
+                        "  PUSH(_vfref(\"{}\", &_f_{}));\n",
+                        esc(n),
+                        mangle(n)
+                    ));
+                }
             }
             Instr::CallValue(argc) => {
                 if *argc == 0 {
@@ -9145,7 +9272,11 @@ fn emit_func(
                 if fn_ret_int {
                     s.push_str("  { Val _r = POP(); SP = _sb; return (long long)_asf(_r); }\n")
                 } else {
-                    s.push_str("  { Val _r = POP(); SP = _sb; return _r; }\n")
+                    // v3.5.42: refrescar el snapshot de un closure retornado
+                    // con el estado final de sus celdas capturadas.
+                    s.push_str(
+                        "  { Val _r = POP(); if (_r.t == T_FRE && _r.p && _r.i > 0) { for (int _k = 0; _k < (int)_r.i; _k++) ((Val*)_r.en)[_k] = _dcp(*((Val**)_r.p)[_k]); } SP = _sb; return _r; }\n",
+                    )
                 }
             }
             Instr::Print => s.push_str("  printf(\"%s\\n\", _fmt(POP()));\n"),
@@ -9188,7 +9319,13 @@ fn emit_func(
                 // AOT: push in-place amortizado + store directo al slot.
                 // El slot es dueño exclusivo del buffer (los demás Stores y
                 // args de llamada se deep-copian) → O(n) en bucles de agregar.
-                let vn = slot_of(i, vname);
+                // v3.5.42 (bug fuzz gen_ref): el write-back debe resolver el
+                // MISMO binding que Load — si la variable es un param en
+                // registro C, puede ser T_PTR (prestado mut) y hay que
+                // escribir a través del puntero; el slot gv[] local nunca es
+                // T_PTR y la mutación del llamador se perdía.
+                let k = var_at(i, vname);
+                let vn = pvmap.get(&k).cloned().unwrap_or_else(|| slot_of(i, vname));
                 s.push_str(
                     "  { Val _x = POP(); Val _a = POP(); PUSH(_arr_push_ip(_a, _x)); }\n",
                 );
@@ -9200,6 +9337,18 @@ fn emit_func(
             Instr::ArrayGet => s.push_str("  { Val _i = POP(); Val _a = POP(); PUSH(_arr_get(_a, _i.i)); }\n"),
             Instr::ArraySet => {
                 s.push_str("  { Val _x = POP(); Val _i = POP(); Val _a = POP(); PUSH(_arr_set(_a, _i.i, _x)); }\n");
+            }
+            Instr::ArraySetVar(vname) => {
+                // v3.5.40: equivalente canónico (ArraySet + Store). El IR
+                // ya llega canonicalizado (lower_arraysetvar); esta rama es
+                // guard de robustez para llamadores internos.
+                let k = var_at(i, vname);
+                let vn = pvmap.get(&k).cloned().unwrap_or_else(|| slot_of(i, vname));
+                s.push_str("  { Val _x = POP(); Val _i = POP(); Val _a = POP(); PUSH(_arr_set(_a, _i.i, _x)); }\n");
+                s.push_str(&format!(
+                    "  {{ Val _sv_ = POP(); if ({vn}.t == T_PTR && {vn}.p) *{vn}.p = _sv_; else {vn} = _sv_; }}\n",
+                    vn = vn
+                ));
             }
             Instr::ArrayLen => s.push_str("  PUSH(_arr_len(POP()));\n"),
             Instr::StructNew(sn, n) => {
@@ -9504,6 +9653,103 @@ mod tests {
     }
 
     #[test]
+    fn test_c_fuzz_v3541_capturas_y_prestado() {
+        // v3.5.42 (bugs fuzz closure_multi + gen_ref): en el backend C,
+        // (1) cada instanciación de un definidor con capturas debe dar a su
+        // closure un estado propio (snapshot por closure), y (2) `agregar`
+        // sobre `prestado mut lista` debe escribir a través del puntero y
+        // persistir la mutación en el llamador.
+        if std::process::Command::new("gcc")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        let probe_dir = std::env::temp_dir().join("lumen_gcc_probe2");
+        std::fs::create_dir_all(&probe_dir).unwrap();
+        let probe_c = probe_dir.join("p.c");
+        let probe_exe = probe_dir.join("p.exe");
+        std::fs::write(&probe_c, "int main(void){return 0;}\n").unwrap();
+        let _ = std::fs::remove_file(&probe_exe);
+        match std::process::Command::new("gcc")
+            .args([probe_c.to_str().unwrap(), "-o", probe_exe.to_str().unwrap()])
+            .output()
+        {
+            Ok(o) if o.status.success() && probe_exe.exists() => {}
+            _ => return,
+        }
+        let source = r#"
+            funcion entero contador() {
+                sea n = 0;
+                funcion entero inc() {
+                    n = n + 1;
+                    retornar n;
+                }
+                retornar inc;
+            }
+            funcion vacio tocar(prestado mut lista<entero> xs) { xs.agregar(99); }
+            funcion vacio main() {
+                sea a = contador();
+                sea b = contador();
+                imprimir("a1:", a());
+                imprimir("b1:", b());
+                imprimir("a2:", a());
+                imprimir("b2:", b());
+                sea xs = [1];
+                tocar(xs);
+                imprimir(xs[1]);
+            }
+        "#;
+        let tokens = lumen_lexer::Lexer::new(source).tokenize();
+        let (mut program, _) = lumen_parser::Parser::new(tokens.0).parse();
+        let sem_errors = lumen_sema::SemanticAnalyzer::new().analyze(&mut program);
+        assert!(sem_errors.is_empty(), "sema fallo: {:?}", sem_errors);
+        lumen_ir::comptime::ComptimeEvaluator::new(&program).rewrite_program(&mut program);
+        let ir = lumen_ir::IRBuilder::new().build(&program);
+        let c = compile_to_c(&ir);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+        let dir =
+            std::env::temp_dir().join(format!("lumen_aot_caps_{}_{}", std::process::id(), nanos));
+        std::fs::create_dir_all(&dir).unwrap();
+        let c_path = dir.join("test_caps.c");
+        let exe_path = dir.join("test_caps.exe");
+        std::fs::write(&c_path, c).unwrap();
+        let status = std::process::Command::new("gcc")
+            .arg(c_path.to_str().unwrap())
+            .args(["-O2", "-o", exe_path.to_str().unwrap(), "-lm"])
+            .output()
+            .unwrap_or_else(|e| panic!("gcc fallo al invocar: {:?}", e));
+        if !status.status.success() {
+            panic!(
+                "gcc fallo al compilar:\n{}",
+                String::from_utf8_lossy(&status.stderr)
+            );
+        }
+        let out = loop {
+            match std::process::Command::new(&exe_path).output() {
+                Ok(o) => break o,
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(300)),
+            }
+        };
+        let test_out = String::from_utf8_lossy(&out.stdout)
+            .replace("\r\n", "\n")
+            .lines()
+            .map(|l| l.trim_end().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            test_out,
+            vec!["a1:1", "b1:1", "a2:2", "b2:2", "99"],
+            "salida completa: {:?}",
+            test_out
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn test_cranelift_runtime_lw() {
         // v3.5.6: backend Cranelift con runtime _lw_* (handles opacos).
         // Requiere gcc disponible (Linux CI o MSYS2 en Windows).
@@ -9641,6 +9887,99 @@ mod tests {
                 "1",
                 "2"
             ],
+            "salida completa: {:?}\nstderr: {}",
+            test_out,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_cranelift_runtime_prestado_agregar() {
+        // v3.5.42 (bug fuzz gen_ref): write-back de ArrayPushVar/ArraySetVar
+        // vía `prestado mut` debe escribir a través del puntero (LW_STORE_SLOT)
+        // y persistir la mutación en el llamador.
+        if std::process::Command::new("gcc")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        let probe_dir = std::env::temp_dir().join("lumen_cr_probe3");
+        std::fs::create_dir_all(&probe_dir).unwrap();
+        let probe_c = probe_dir.join("p.c");
+        let probe_exe = probe_dir.join("p.exe");
+        std::fs::write(&probe_c, "int main(void){return 0;}\n").unwrap();
+        let _ = std::fs::remove_file(&probe_exe);
+        match std::process::Command::new("gcc")
+            .args([probe_c.to_str().unwrap(), "-o", probe_exe.to_str().unwrap()])
+            .output()
+        {
+            Ok(o) if o.status.success() && probe_exe.exists() => {}
+            _ => return,
+        }
+        let source = r#"
+            funcion vacio tocar(prestado mut lista<entero> xs) { xs.agregar(99); }
+            funcion vacio main() {
+                sea xs = [1];
+                tocar(xs);
+                imprimir(xs[1]);
+                imprimir(xs.largo());
+            }
+        "#;
+        let tokens = lumen_lexer::Lexer::new(source).tokenize();
+        let (mut program, _) = lumen_parser::Parser::new(tokens.0).parse();
+        let sem_errors = lumen_sema::SemanticAnalyzer::new().analyze(&mut program);
+        assert!(sem_errors.is_empty(), "sema fallo: {:?}", sem_errors);
+        lumen_ir::comptime::ComptimeEvaluator::new(&program).rewrite_program(&mut program);
+        let ir = lumen_ir::IRBuilder::new().build(&program);
+        let unsupported = cranelift_supported(&ir);
+        assert!(
+            unsupported.is_empty(),
+            "cranelift rechazó prestado+agregar: {:?}",
+            unsupported
+        );
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "lumen_cr_prestado_{}_{}",
+            std::process::id(),
+            nanos
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let obj_path = dir.join("test_p.obj");
+        let shim_path = dir.join("test_p_rt.c");
+        let exe_path = dir.join("test_p.exe");
+        compile_to_object(&ir, obj_path.to_str().unwrap()).expect("compile_to_object fallo");
+        std::fs::write(&shim_path, lw_shim_source()).unwrap();
+        let status = std::process::Command::new("gcc")
+            .arg(obj_path.to_str().unwrap())
+            .arg(shim_path.to_str().unwrap())
+            .args(["-O2", "-o", exe_path.to_str().unwrap(), "-lm"])
+            .output()
+            .expect("gcc fallo al invocar");
+        assert!(
+            status.status.success(),
+            "gcc fallo al compilar/link:\n{}",
+            String::from_utf8_lossy(&status.stderr)
+        );
+        let out = loop {
+            match std::process::Command::new(&exe_path).output() {
+                Ok(o) => break o,
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(300)),
+            }
+        };
+        let test_out = String::from_utf8_lossy(&out.stdout)
+            .replace("\r\n", "\n")
+            .lines()
+            .map(|l| l.trim_end().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            test_out,
+            vec!["99", "2"],
             "salida completa: {:?}\nstderr: {}",
             test_out,
             String::from_utf8_lossy(&out.stderr)
@@ -9984,6 +10323,7 @@ mod tests {
                 si (n < 2) { retornar n; }
                 retornar fib(n - 1) + fib(n - 2);
             }
+            funcion vacio tocar(prestado mut lista<entero> xs) { xs.agregar(9); }
             funcion vacio main() {
                 imprimir(fib(10));
                 imprimir(7 / 2, " ", 7 % 3);
@@ -9993,6 +10333,10 @@ mod tests {
                 xs.agregar(3);
                 imprimir(xs.largo());
                 imprimir(2.5 * 2.0);
+                // v3.5.42 (bug fuzz gen_ref): write-through de `prestado mut`
+                sea ys = [1];
+                tocar(ys);
+                imprimir(ys[1]);
             }
         "#;
         let tokens = lumen_lexer::Lexer::new(source).tokenize();
@@ -10053,7 +10397,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             test_out,
-            vec!["55", "3 1", "5:l", "3", "5"],
+            vec!["55", "3 1", "5:l", "3", "5", "9"],
             "salida completa: {:?}\nstderr: {}",
             test_out,
             String::from_utf8_lossy(&out.stderr)

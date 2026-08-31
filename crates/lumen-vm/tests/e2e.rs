@@ -1536,6 +1536,28 @@ imprimir(caps);
     assert!(output[0].contains("123-abc") || output[0] == "[]");
 }
 
+#[test]
+fn test_regresion_bug11_regex_grupos_y_dolar() {
+    // v3.5.42 (bugs fuzz pid_caps / regex_braces / regex_dollar): los grupos
+    // del parser son 1-based — captures() los copiaba corridos (grupo 1
+    // vacío, último grupo descartado) y replace() nunca fijaba caps[0], así
+    // que $0 / ${0} expandían vacío. Paridad con el backend nativo.
+    let src = r#"sea caps = __regex_capturar("(\\d+)-(\\d+)", "rango 10-20 fin");
+imprimir(caps[0]);
+imprimir(caps[1]);
+imprimir(caps[2]);
+imprimir(__regex_reemplazar("a{2,3}b", "aab aab aaab ab", "X$0"));
+imprimir(__regex_reemplazar("a+", "baaad", "[${0}]"));
+"#;
+    let output = run_source(src).unwrap();
+    assert_eq!(
+        output,
+        vec!["10-20", "10", "20", "Xaab Xaab Xaaab ab", "b[aaa]d"],
+        "salida completa: {:?}",
+        output
+    );
+}
+
 // --- Encoding from utf8 ---
 
 #[test]
@@ -5283,4 +5305,92 @@ fn test_ref_mut_in_loop_accumulates() {
     "#;
     let output = run_source(src).unwrap();
     assert_eq!(output, vec!["10"]);
+}
+
+/// Bug #10 (v3.5.41): `entero x2 = x + dx;` (declaración) se fusionaba con
+/// la MISMA instrucción que la asignación (`FusedBin`), y la caché de
+/// nombres escribía el slot del frame PADRE en cada llamada recursiva.
+/// Resultado: el árbol fractal divergía desde la primera línea dibujada
+/// tras el retorno del caso base (fallo SILENCIOSO — sin error de runtime).
+/// El fix separa FusedBinKLocal/FusedBinLocal (semántica StoreLocal: el
+/// destino se escribe SIEMPRE en el scope del frame actual).
+#[test]
+fn test_regresion_bug10_declaraciones_en_recursion() {
+    let src = r#"
+sea G = [];
+funcion entero arbol(entero n, entero x, entero y, entero dx, entero dy) {
+    si (n <= 0) { retornar 0; }
+    entero x2 = x + dx;
+    entero y2 = y + dy;
+    G.agregar(x);
+    G.agregar(y);
+    G.agregar(x2);
+    G.agregar(y2);
+    entero r1 = arbol(n - 1, x2, y2, (dx - dy) / 2, (dx + dy) / 2);
+    entero r2 = arbol(n - 1, x2, y2, (dx + dy) / 2, (dy - dx) / 2);
+    retornar r1 + r2 + 1;
+}
+arbol(12, 240, 330, 0, -100);
+entero i = 0;
+mientras (i < largo(G)) {
+    imprimir(G[i], ",", G[i + 1], ",", G[i + 2], ",", G[i + 3]);
+    i = i + 4;
+}
+"#;
+    // Referencia: mismo algoritmo en Rust (división entera truncada, igual
+    // que el opcode Div de la VM). 4095 segmentos = 2^12 - 1 nodos.
+    fn arbol(n: i64, x: i64, y: i64, dx: i64, dy: i64, g: &mut Vec<i64>) -> i64 {
+        if n <= 0 {
+            return 0;
+        }
+        let x2 = x + dx;
+        let y2 = y + dy;
+        g.extend_from_slice(&[x, y, x2, y2]);
+        let r1 = arbol(n - 1, x2, y2, (dx - dy) / 2, (dx + dy) / 2, g);
+        let r2 = arbol(n - 1, x2, y2, (dx + dy) / 2, (dy - dx) / 2, g);
+        r1 + r2 + 1
+    }
+    let mut g = Vec::new();
+    let total = arbol(12, 240, 330, 0, -100, &mut g);
+    assert_eq!(total, 4095);
+    let expected: Vec<String> = g
+        .chunks(4)
+        .map(|c| format!("{},{},{},{}", c[0], c[1], c[2], c[3]))
+        .collect();
+    assert_eq!(expected.len(), 4095);
+
+    let output = run_source(src).unwrap();
+    assert_eq!(output, expected);
+}
+
+/// Bug #10 (variante mínima): dos locales declarados ANTES de las llamadas
+/// y leídos como argumentos de la SEGUNDA llamada recursiva (el patrón que
+/// la caché de nombres corrompía en cuanto una declaración se fusionaba).
+#[test]
+fn test_regresion_bug10_locales_como_argumentos_de_la_segunda_llamada() {
+    let src = r#"
+funcion entero f(entero n, entero a, entero b) {
+    si (n <= 0) { retornar a + b; }
+    entero c1 = a + b;
+    entero c2 = a - b;
+    entero r1 = f(n - 1, c1, c2);
+    entero r2 = f(n - 1, c1, c2);
+    retornar r1 + r2;
+}
+imprimir(f(8, 3, 1));
+"#;
+    // Referencia: f(n) = 2^n * (a+b) cuando c1/c2 no reducen (suma lineal).
+    fn f(n: i64, a: i64, b: i64) -> i64 {
+        if n <= 0 {
+            return a + b;
+        }
+        let c1 = a + b;
+        let c2 = a - b;
+        let r1 = f(n - 1, c1, c2);
+        let r2 = f(n - 1, c1, c2);
+        r1 + r2
+    }
+    let expected = vec![f(8, 3, 1).to_string()];
+    let output = run_source(src).unwrap();
+    assert_eq!(output, expected);
 }

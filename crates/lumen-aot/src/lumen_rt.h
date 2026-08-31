@@ -298,8 +298,42 @@ static Val _vfref(const char* n, Val (*fp)(void)) {
   v.fp = fp;
   return v;
 }
+/* v3.5.42 (bug fuzz closure_multi): un closure que CAPTURA lleva en .p/.en/.i
+   sus celdas capturadas (direcciones + snapshot profundo). Al llamarlo,
+   _fref_call guarda el estado global actual, instala el snapshot del closure,
+   llama, actualiza el snapshot con el estado resultante y restaura el estado
+   del llamador. Cada closure tiene así su propio estado (paridad VM: frame
+   por instanciación del definidor), sin celdas globales compartidas. */
+static inline Val _dcp(Val v);
+static Val _vfref_c(const char* n, Val (*fp)(void), Val** cells, Val* snaps, int count) {
+  Val v = _vfref(n, fp);
+  v.p = (Val*)cells;
+  v.en = (const char*)snaps;
+  v.i = count;
+  return v;
+}
+static Val _vfref_snap(const char* n, Val (*fp)(void), const char** names, int count) {
+  Val** cells = (Val**)malloc(sizeof(Val*) * (size_t)count);
+  Val* snaps = (Val*)malloc(sizeof(Val) * (size_t)count);
+  for (int k = 0; k < count; k++) {
+    cells[k] = &gv[_fv(names[k])];
+    snaps[k] = _dcp(*cells[k]);
+  }
+  return _vfref_c(n, fp, cells, snaps, count);
+}
 static Val _fref_call(Val v) {
   if (!v.fp) return _v_void();
+  if (v.p && v.i > 0) {
+    Val** cells = (Val**)v.p;
+    Val* snaps = (Val*)v.en;
+    int n = (int)v.i;
+    Val* saved = (Val*)malloc(sizeof(Val) * (size_t)n);
+    for (int k = 0; k < n; k++) { saved[k] = *cells[k]; *cells[k] = snaps[k]; }
+    Val r = v.fp();
+    for (int k = 0; k < n; k++) { snaps[k] = *cells[k]; *cells[k] = saved[k]; }
+    free(saved);
+    return r;
+  }
   return v.fp();
 }
 

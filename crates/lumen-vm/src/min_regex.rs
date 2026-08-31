@@ -68,31 +68,28 @@ impl Regex {
     pub fn captures(&self, text: &str) -> Vec<String> {
         let cs: Vec<char> = text.chars().collect();
         let mut caps = vec![String::new(); self.groups + 1];
-        let mut groups = vec![(0usize, 0usize); self.groups];
-        let mut group_idx = 0;
-        if !self.pieces.is_empty() {
-            if let Piece::Start = self.pieces[0] {
-                if let Some((end, _)) =
-                    try_match_cap(&self.pieces, &cs, 0, 0, &mut groups, &mut group_idx)
-                {
-                    caps[0] = cs[..end].iter().collect();
-                    for (i, (s, e)) in groups.iter().enumerate() {
-                        if i < self.groups && *s < *e {
-                            caps[i + 1] = cs[*s..*e].iter().collect();
-                        }
-                    }
-                    return caps;
-                }
-            }
-        }
-        for i in 0..=cs.len() {
+        // v3.5.42: los índices de grupo del parser son 1-based (el primer
+        // grupo es 1); el vector de spans debe tener largo groups+1 y el
+        // grupo g vive en groups[g]. Antes se asignaba largo groups y se
+        // copiaba corrido (groups[0]→caps[1]) — el grupo 1 quedaba vacío y
+        // el último grupo se descartaba con el guard del matcher.
+        let anchored = matches!(self.pieces.first(), Some(Piece::Start));
+        let intentos: Vec<usize> = if anchored {
+            vec![0]
+        } else {
+            (0..=cs.len()).collect()
+        };
+        for i in intentos {
+            let mut groups = vec![(0usize, 0usize); self.groups + 1];
+            let mut group_idx = 0;
             if let Some((end, _)) =
                 try_match_cap(&self.pieces, &cs, i, 0, &mut groups, &mut group_idx)
             {
                 caps[0] = cs[i..end].iter().collect();
-                for (i, (s, e)) in groups.iter().enumerate() {
-                    if i < self.groups && *s < *e {
-                        caps[i + 1] = cs[*s..*e].iter().collect();
+                for g in 1..=self.groups {
+                    let (s, e) = groups[g];
+                    if s < e {
+                        caps[g] = cs[s..e].iter().collect();
                     }
                 }
                 return caps;
@@ -106,9 +103,12 @@ impl Regex {
         let mut res = String::new();
         let mut pos = 0;
         while pos < cs.len() {
-            let mut caps = vec![(0usize, 0usize); 16];
+            let mut caps = vec![(0usize, 0usize); self.groups + 1];
             let mut gi = 0;
             if let Some((end, _)) = try_match_cap(&self.pieces, &cs, pos, 0, &mut caps, &mut gi) {
+                // v3.5.42: caps[0] = coincidencia completa — $0 / ${0}
+                // expanden al match entero (antes quedaba (0,0) → vacío).
+                caps[0] = (pos, end);
                 // v3.4.0: expansión de $1..$9 y ${n} sobre las capturas
                 let rc: Vec<char> = replacement.chars().collect();
                 let mut i = 0;

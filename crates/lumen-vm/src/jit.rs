@@ -10,7 +10,7 @@
 //! Tier-2 compila bucles Int puros a código nativo directo; Tier-1 delega
 //! cada instrucción a los handlers compartidos con el intérprete.
 
-use cranelift::codegen::ir::BlockArg;
+use cranelift::codegen::ir::{BlockArg, FuncRef};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Linkage, Module};
@@ -318,6 +318,47 @@ pub extern "C" fn lj_fused_bin(p: *mut std::ffi::c_void, op: i64, a: i64, b: i64
     }
 }
 
+/// v3.5.41 (bug #10): variantes de DECLARACIÓN (StoreLocal) — el destino
+/// se escribe en el scope actual del frame, nunca en scopes de frames
+/// ancestros (paridad con el intérprete: mismos helpers de store).
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn lj_fused_bink_local(
+    p: *mut std::ffi::c_void,
+    op: i64,
+    a: i64,
+    k: i64,
+    d: i64,
+) -> i64 {
+    let vm = unsafe { vm_ref(p) };
+    match vm.exec_fused_bink_local_pub(op as u8, a as usize, k, d as usize) {
+        Ok(()) => 0,
+        Err(e) => {
+            vm.set_jit_error(e);
+            1
+        }
+    }
+}
+
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn lj_fused_bin_local(
+    p: *mut std::ffi::c_void,
+    op: i64,
+    a: i64,
+    b: i64,
+    d: i64,
+) -> i64 {
+    let vm = unsafe { vm_ref(p) };
+    match vm.exec_fused_bin_local_pub(op as u8, a as usize, b as usize, d as usize) {
+        Ok(()) => 0,
+        Err(e) => {
+            vm.set_jit_error(e);
+            1
+        }
+    }
+}
+
 /// Solo evalúa `a op k`: -1 = error, 0 = falso, 1 = verdadero (el JIT salta).
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
@@ -505,6 +546,747 @@ pub extern "C" fn lj_push_int(p: *mut std::ffi::c_void, v: i64) -> i64 {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════════════
+// v3.5.39: INLINING de callees simples (Tier-2)
+// ══════════════════════════════════════════════════════════════════════
+
+/// Análisis de promoción para un callee candidato a inlining: mismas
+/// reglas que el Tier-2 (params o locales sembradas con Push+StoreLocal,
+/// leídas/definidas SOLO por ops Fused), pero sin depender de los sets
+/// del pre-scan del caller.
+fn analyze_promotion_inline(
+    bc: &Bytecode,
+    cs: usize,
+    ce: usize,
+    params: &BTreeSet<usize>,
+) -> (Vec<usize>, HashMap<usize, Vec<usize>>) {
+    let instrs = &bc.instructions;
+    let mut prom_ok: BTreeSet<usize> = BTreeSet::new();
+    let mut prom_bad: BTreeSet<usize> = BTreeSet::new();
+    let mut prom_seed: HashMap<usize, Vec<usize>> = HashMap::new();
+    let mut j = cs;
+    while j < ce {
+        match &instrs[j] {
+            Instruction::WithIdx(Opcode::PushInt, _)
+            | Instruction::WithBool(Opcode::PushBool, _) => {
+                if let Some(Instruction::WithIdx(Opcode::StoreLocal, nidx)) = instrs.get(j + 1) {
+                    prom_seed.entry(*nidx).or_default().push(j);
+                    prom_ok.insert(*nidx);
+                    j += 1;
+                }
+            }
+            Instruction::WithIdx(Opcode::StoreLocal, nidx) => {
+                prom_bad.insert(*nidx);
+            }
+            Instruction::FusedBinK { a, d, .. } => {
+                prom_ok.insert(*a);
+                prom_ok.insert(*d);
+            }
+            Instruction::FusedBin { a, b, d, .. } => {
+                prom_ok.insert(*a);
+                prom_ok.insert(*b);
+                prom_ok.insert(*d);
+            }
+            // v3.5.41 (bug #10): en las variantes de DECLARACIÓN el destino
+            // se resuelve en el scope actual del frame → NO es promovible a
+            // registro (el store local debe materializarse en el scope).
+            Instruction::FusedBinKLocal { a, d, .. } => {
+                prom_ok.insert(*a);
+                prom_bad.insert(*d);
+            }
+            Instruction::FusedBinLocal { a, b, d, .. } => {
+                prom_ok.insert(*a);
+                prom_ok.insert(*b);
+                prom_bad.insert(*d);
+            }
+            Instruction::FusedCmpKJmp { a, .. } => {
+                prom_ok.insert(*a);
+            }
+            Instruction::FusedCmpJmp { a, b, .. } => {
+                prom_ok.insert(*a);
+                prom_ok.insert(*b);
+            }
+            Instruction::FusedBinCmpJmp { a, b, c, .. } => {
+                prom_ok.insert(*a);
+                prom_ok.insert(*b);
+                prom_ok.insert(*c);
+            }
+            Instruction::FusedBinKCmpJmp { a, b, .. } => {
+                prom_ok.insert(*a);
+                prom_ok.insert(*b);
+            }
+            Instruction::FusedBinKKCmpJmp { a, .. } => {
+                prom_ok.insert(*a);
+            }
+            _ => {}
+        }
+        j += 1;
+    }
+    let mut promoted = Vec::new();
+    for n in prom_ok {
+        if prom_bad.contains(&n) {
+            continue;
+        }
+        let is_param = params.contains(&n);
+        let seeded = prom_seed.contains_key(&n);
+        if !is_param && !seeded {
+            continue;
+        }
+        promoted.push(n);
+        if promoted.len() >= 8 {
+            break;
+        }
+    }
+    (promoted, prom_seed)
+}
+
+/// ¿El callee es elegible para inlining? Devuelve
+/// (start, end, promovidos, params, orden-de-params) o None.
+/// Reglas: sin llamadas ni scopes; instrucciones del subconjunto
+/// registrable; Rets con el valor YA en pila (push inmediato antes);
+/// pila NEUTRA en cada salto interno (el Ret del intérprete trunca la
+/// pila, el inline no — la profundidad relativa debe ser 0 en cada Jmp
+/// y 1 en cada Ret); todas las lecturas/defs Fused promovibles.
+#[allow(clippy::type_complexity)]
+fn try_inline_plan(
+    bc: &Bytecode,
+    caller_idx: usize,
+    callee_name: &str,
+) -> Option<(usize, usize, Vec<usize>, BTreeSet<usize>, Vec<usize>)> {
+    if crate::vm::builtin_name_set().contains(callee_name) {
+        return None;
+    }
+    let callee_idx = bc.funcs.iter().position(|f| f.name == callee_name)?;
+    if callee_idx == caller_idx {
+        return None;
+    }
+    let (cs, ce) = body_range(bc, callee_idx);
+    let size = ce.saturating_sub(cs);
+    if size == 0 || size > 64 {
+        return None;
+    }
+    let instrs = &bc.instructions;
+    let mut param_order: Vec<usize> = Vec::new();
+    let mut param_set: BTreeSet<usize> = BTreeSet::new();
+    for p in &bc.funcs[callee_idx].params {
+        let i = bc.names.iter().position(|n| n == p)?;
+        param_set.insert(i);
+        param_order.push(i);
+    }
+    if param_order.len() > 4 {
+        return None;
+    }
+    // El cuerpo debe terminar en Ret.
+    if !matches!(instrs.get(ce - 1), Some(Instruction::Simple(Opcode::Ret))) {
+        return None;
+    }
+    // Elegibilidad + stack-neutralidad (fixpoint por posición). La
+    // profundidad relativa al inicio del callee debe ser 0 en cada Jmp
+    // (interno o Fused) y 0 antes de cada Ret (el push del valor de
+    // retorno es la única contribución neta al stack del caller).
+    let mut depth: HashMap<usize, i32> = HashMap::new();
+    depth.insert(cs, 0);
+    let mut changed = true;
+    let mut neutral = true;
+    while changed && neutral {
+        changed = false;
+        let mut j = cs;
+        while j < ce && neutral {
+            let d = match depth.get(&j) {
+                Some(d) => *d,
+                None => {
+                    j += 1;
+                    continue;
+                }
+            };
+            let (succs, nd): (Vec<usize>, Option<i32>) = match &instrs[j] {
+                Instruction::WithIdx(Opcode::PushInt, _)
+                | Instruction::WithBool(Opcode::PushBool, _) => match instrs.get(j + 1) {
+                    Some(Instruction::WithIdx(Opcode::StoreLocal, _)) => (vec![j + 2], Some(d)),
+                    Some(Instruction::Simple(Opcode::Ret)) => {
+                        if d != 0 {
+                            neutral = false;
+                        }
+                        (vec![], None)
+                    }
+                    _ => (vec![j + 1], Some(d + 1)),
+                },
+                Instruction::WithIdx(Opcode::StoreLocal, _) | Instruction::Simple(Opcode::Ret) => {
+                    neutral = false;
+                    (vec![], None)
+                }
+                Instruction::FusedBin { .. }
+                | Instruction::FusedBinK { .. }
+                | Instruction::FusedBinKLocal { .. }
+                | Instruction::FusedBinLocal { .. }
+                | Instruction::WithIdx(Opcode::Nop, _) => (vec![j + 1], Some(d)),
+                Instruction::FusedCmpKJmp { target, .. }
+                | Instruction::FusedCmpJmp { target, .. }
+                | Instruction::FusedBinCmpJmp { target, .. }
+                | Instruction::FusedBinKCmpJmp { target, .. }
+                | Instruction::FusedBinKKCmpJmp { target, .. } => {
+                    let t = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
+                    if !(cs..ce).contains(&t) || d != 0 {
+                        neutral = false;
+                    }
+                    (vec![j + 1, t], Some(d))
+                }
+                Instruction::WithIdx(Opcode::Jmp, idx) => {
+                    let t = bc.nums.get(*idx).copied().unwrap_or(0.0) as usize;
+                    if !(cs..ce).contains(&t) || d != 0 {
+                        neutral = false;
+                    }
+                    (vec![t], Some(d))
+                }
+                _ => {
+                    neutral = false;
+                    (vec![], None)
+                }
+            };
+            if let Some(nd) = nd {
+                for t in succs {
+                    match depth.get(&t) {
+                        Some(&old) if old == nd => {}
+                        Some(_) => neutral = false,
+                        None => {
+                            depth.insert(t, nd);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            j += 1;
+        }
+    }
+    if !neutral {
+        return None;
+    }
+    // Promoción: toda lectura/def Fused debe ser promovible.
+    let (promoted, prom_seed) = analyze_promotion_inline(bc, cs, ce, &param_set);
+    let mut j = cs;
+    while j < ce {
+        let ok = match &instrs[j] {
+            Instruction::FusedBinK { a, d, .. } => promoted.contains(a) && promoted.contains(d),
+            Instruction::FusedBin { a, b, d, .. } => {
+                promoted.contains(a) && promoted.contains(b) && promoted.contains(d)
+            }
+            // v3.5.41 (bug #10): el store local no puede traducirse a
+            // registro (escribe en el scope del frame) → fuera del inline.
+            Instruction::FusedBinKLocal { .. } | Instruction::FusedBinLocal { .. } => false,
+            Instruction::FusedCmpKJmp { a, .. } => promoted.contains(a),
+            Instruction::FusedCmpJmp { a, b, .. } => promoted.contains(a) && promoted.contains(b),
+            Instruction::FusedBinCmpJmp { a, b, c, .. } => {
+                promoted.contains(a) && promoted.contains(b) && promoted.contains(c)
+            }
+            Instruction::FusedBinKCmpJmp { a, b, .. } => {
+                promoted.contains(a) && promoted.contains(b)
+            }
+            Instruction::FusedBinKKCmpJmp { a, .. } => promoted.contains(a),
+            _ => true,
+        };
+        if !ok {
+            return None;
+        }
+        j += 1;
+    }
+    // DOMINANCIA: cada uso Fused de un nombre promovido NO-parámetro debe
+    // estar dominado por algún seed (los early-outs antes de la semilla
+    // no rompen la dominancia del bucle principal).
+    let mut leaders: BTreeSet<usize> = BTreeSet::new();
+    leaders.insert(cs);
+    {
+        let mut j = cs;
+        while j < ce {
+            let t = match &instrs[j] {
+                Instruction::WithIdx(Opcode::Jmp, idx) => {
+                    Some(bc.nums.get(*idx).copied().unwrap_or(0.0) as usize)
+                }
+                Instruction::FusedCmpKJmp { target, .. }
+                | Instruction::FusedCmpJmp { target, .. }
+                | Instruction::FusedBinCmpJmp { target, .. }
+                | Instruction::FusedBinKCmpJmp { target, .. }
+                | Instruction::FusedBinKKCmpJmp { target, .. } => {
+                    Some(bc.nums.get(*target).copied().unwrap_or(0.0) as usize)
+                }
+                _ => None,
+            };
+            if let Some(t) = t {
+                leaders.insert(t);
+                leaders.insert(j + 1);
+            }
+            j += 1;
+        }
+    }
+    let leader_list: Vec<usize> = leaders.iter().copied().collect();
+    let idx_of: HashMap<usize, usize> = leader_list
+        .iter()
+        .enumerate()
+        .map(|(i, l)| (*l, i))
+        .collect();
+    let n_blocks = leader_list.len();
+    let mut succs: Vec<Vec<usize>> = vec![Vec::new(); n_blocks];
+    for bi in 0..n_blocks {
+        let nl = if bi + 1 < n_blocks {
+            leader_list[bi + 1]
+        } else {
+            ce
+        };
+        let last = nl - 1;
+        match &instrs[last] {
+            Instruction::Simple(Opcode::Ret) => {}
+            Instruction::WithIdx(Opcode::Jmp, idx) => {
+                let t = bc.nums.get(*idx).copied().unwrap_or(0.0) as usize;
+                succs[bi].push(idx_of[&t]);
+            }
+            Instruction::FusedCmpKJmp { target, .. }
+            | Instruction::FusedCmpJmp { target, .. }
+            | Instruction::FusedBinCmpJmp { target, .. }
+            | Instruction::FusedBinKCmpJmp { target, .. }
+            | Instruction::FusedBinKKCmpJmp { target, .. } => {
+                let t = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
+                succs[bi].push(bi + 1);
+                succs[bi].push(idx_of[&t]);
+            }
+            _ => succs[bi].push(bi + 1),
+        }
+    }
+    let mut preds: Vec<Vec<usize>> = vec![Vec::new(); n_blocks];
+    for (bi, ss) in succs.iter().enumerate() {
+        for t in ss {
+            preds[*t].push(bi);
+        }
+    }
+    let mut dom: Vec<BTreeSet<usize>> = vec![(0..n_blocks).collect(); n_blocks];
+    dom[0] = BTreeSet::from([0usize]);
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for b in 1..n_blocks {
+            let mut inter: Option<BTreeSet<usize>> = None;
+            for p in &preds[b] {
+                inter = Some(match inter {
+                    None => dom[*p].clone(),
+                    Some(prev) => prev.intersection(&dom[*p]).copied().collect(),
+                });
+            }
+            let mut nd = inter.unwrap_or_default();
+            nd.insert(b);
+            if nd != dom[b] {
+                dom[b] = nd;
+                changed = true;
+            }
+        }
+    }
+    let block_of = |pos: usize| -> Option<usize> {
+        leaders
+            .range(..=pos)
+            .next_back()
+            .and_then(|l| idx_of.get(l))
+            .copied()
+    };
+    let mut j = cs;
+    while j < ce {
+        let reads: Vec<usize> = match &instrs[j] {
+            Instruction::FusedBinK { a, .. } => vec![*a],
+            Instruction::FusedBin { a, b, .. } => vec![*a, *b],
+            Instruction::FusedBinKLocal { a, .. } => vec![*a],
+            Instruction::FusedBinLocal { a, b, .. } => vec![*a, *b],
+            Instruction::FusedCmpKJmp { a, .. } => vec![*a],
+            Instruction::FusedCmpJmp { a, b, .. } => vec![*a, *b],
+            Instruction::FusedBinCmpJmp { a, b, c, .. } => vec![*a, *b, *c],
+            Instruction::FusedBinKCmpJmp { a, b, .. } => vec![*a, *b],
+            Instruction::FusedBinKKCmpJmp { a, .. } => vec![*a],
+            _ => Vec::new(),
+        };
+        for n in reads {
+            if !promoted.contains(&n) || param_set.contains(&n) {
+                continue;
+            }
+            let use_b = block_of(j)?;
+            let ok = prom_seed.get(&n).is_some_and(|seeds| {
+                seeds.iter().any(|s| {
+                    block_of(*s)
+                        .map(|sb| dom[use_b].contains(&sb))
+                        .unwrap_or(false)
+                })
+            });
+            if !ok {
+                return None;
+            }
+        }
+        j += 1;
+    }
+    Some((cs, ce, promoted, param_set, param_order))
+}
+
+/// Compila el cuerpo del callee INLINE (sin slots: locales en registros
+/// SSA). Los argumentos ya fueron extraídos de la pila como Values del
+/// caller; cada bloque lleva params [args…, promovidos…]; los Ret saltan
+/// a `cont_block` pasando los registros del caller (el valor de retorno
+/// ya quedó en la pila de la VM).
+#[allow(clippy::too_many_arguments)]
+fn emit_inline_body(
+    builder: &mut FunctionBuilder,
+    bc: &Bytecode,
+    cs: usize,
+    ce: usize,
+    cprom: &[usize],
+    param_order: &[usize],
+    arg_vals: &[Value],
+    caller_args: &[BlockArg],
+    cont_block: Block,
+    bail_block: Block,
+    err_block: Block,
+    i64t: Type,
+    vm_ptr: Value,
+    r_pushint: FuncRef,
+    r_pushbool: FuncRef,
+) -> Result<(), String> {
+    let instrs = &bc.instructions;
+    // Líderes (mismo criterio que el walker Tier-2; solo Jmp/Fused*Jmp).
+    let mut leaders: BTreeSet<usize> = BTreeSet::new();
+    leaders.insert(cs);
+    let mut j = cs;
+    while j < ce {
+        let t = match &instrs[j] {
+            Instruction::WithIdx(Opcode::Jmp, idx) => {
+                Some(bc.nums.get(*idx).copied().unwrap_or(0.0) as usize)
+            }
+            Instruction::FusedCmpKJmp { target, .. }
+            | Instruction::FusedCmpJmp { target, .. }
+            | Instruction::FusedBinCmpJmp { target, .. }
+            | Instruction::FusedBinKCmpJmp { target, .. }
+            | Instruction::FusedBinKKCmpJmp { target, .. } => {
+                Some(bc.nums.get(*target).copied().unwrap_or(0.0) as usize)
+            }
+            _ => None,
+        };
+        if let Some(t) = t {
+            leaders.insert(t);
+            leaders.insert(j + 1);
+        }
+        j += 1;
+    }
+    let nargs = arg_vals.len();
+    let mut blocks: HashMap<usize, Block> = HashMap::new();
+    for l in &leaders {
+        let b = builder.create_block();
+        for _ in 0..nargs {
+            builder.append_block_param(b, i64t);
+        }
+        for _ in cprom {
+            builder.append_block_param(b, i64t);
+        }
+        blocks.insert(*l, b);
+    }
+    let mut regs: HashMap<usize, Value> = HashMap::new();
+    let mut arg_cur: Vec<Value> = arg_vals.to_vec();
+    macro_rules! iargs {
+        () => {{
+            arg_cur
+                .iter()
+                .copied()
+                .map(BlockArg::Value)
+                .chain(cprom.iter().map(|n| BlockArg::Value(regs[n])))
+                .collect::<Vec<BlockArg>>()
+        }};
+    }
+    let init: Vec<BlockArg> = arg_vals
+        .iter()
+        .copied()
+        .map(BlockArg::Value)
+        .chain(
+            cprom
+                .iter()
+                .map(|_| BlockArg::Value(builder.ins().iconst(i64t, 0))),
+        )
+        .collect();
+    builder.ins().jump(blocks[&cs], &init);
+
+    let mut dead = true;
+    let mut pos = cs;
+    while pos < ce {
+        if leaders.contains(&pos) {
+            if !dead {
+                let b = blocks[&pos];
+                let args = iargs!();
+                builder.ins().jump(b, &args);
+            }
+            dead = false;
+            builder.switch_to_block(blocks[&pos]);
+            builder.ensure_inserted_block();
+            let ps = builder.block_params(blocks[&pos]);
+            arg_cur = ps[..nargs].to_vec();
+            regs.clear();
+            for (n, p) in cprom.iter().zip(ps[nargs..].iter()) {
+                regs.insert(*n, *p);
+            }
+            for (pn, pa) in param_order.iter().zip(arg_cur.iter()) {
+                regs.insert(*pn, *pa);
+            }
+        }
+        // Tras un terminador (Ret/Jmp/brif) el resto del bloque queda
+        // INALCANZABLE: los Jmp muertos que el compilador deja como
+        // continuación de los `si` no deben emitirse en el bloque ya
+        // terminado (doble terminator → verifier). Se saltan hasta el
+        // siguiente líder.
+        if dead && !leaders.contains(&pos) {
+            pos += 1;
+            continue;
+        }
+        match &instrs[pos] {
+            Instruction::WithIdx(Opcode::PushInt, idx) => {
+                let kv = builder
+                    .ins()
+                    .iconst(i64t, bc.ints.get(*idx).copied().unwrap_or(0));
+                if let Some(Instruction::WithIdx(Opcode::StoreLocal, nidx)) = instrs.get(pos + 1) {
+                    if cprom.contains(nidx) {
+                        regs.insert(*nidx, kv);
+                    }
+                    pos += 1;
+                } else {
+                    let call = builder.ins().call(r_pushint, &[vm_ptr, kv]);
+                    let r = builder.inst_results(call)[0];
+                    let bad = builder.ins().icmp_imm(IntCC::NotEqual, r, 0);
+                    let c = builder.create_block();
+                    builder.ins().brif(bad, err_block, &[], c, &[]);
+                    builder.switch_to_block(c);
+                    builder.ensure_inserted_block();
+                }
+            }
+            Instruction::WithBool(Opcode::PushBool, b) => {
+                if let Some(Instruction::WithIdx(Opcode::StoreLocal, nidx)) = instrs.get(pos + 1) {
+                    let kv = builder.ins().iconst(i64t, if *b { 1 } else { 0 });
+                    if cprom.contains(nidx) {
+                        regs.insert(*nidx, kv);
+                    }
+                    pos += 1;
+                } else {
+                    let bv = builder.ins().iconst(i64t, if *b { 1 } else { 0 });
+                    let call = builder.ins().call(r_pushbool, &[vm_ptr, bv]);
+                    let r = builder.inst_results(call)[0];
+                    let bad = builder.ins().icmp_imm(IntCC::NotEqual, r, 0);
+                    let c = builder.create_block();
+                    builder.ins().brif(bad, err_block, &[], c, &[]);
+                    builder.switch_to_block(c);
+                    builder.ensure_inserted_block();
+                }
+            }
+            Instruction::FusedCmpKJmp { op, a, k, target } => {
+                let av = regs[a];
+                let kv = builder.ins().iconst(i64t, *k);
+                let cond = match op {
+                    7 => builder.ins().icmp(IntCC::Equal, av, kv),
+                    8 => builder.ins().icmp(IntCC::NotEqual, av, kv),
+                    9 => builder.ins().icmp(IntCC::SignedLessThan, av, kv),
+                    10 => builder.ins().icmp(IntCC::SignedLessThanOrEqual, av, kv),
+                    11 => builder.ins().icmp(IntCC::SignedGreaterThan, av, kv),
+                    _ => builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, av, kv),
+                };
+                let t = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
+                let tb = blocks[&t];
+                let fall = blocks[&(pos + 1)];
+                let args = iargs!();
+                builder.ins().brif(cond, fall, &args, tb, &args);
+                dead = true;
+            }
+            Instruction::FusedCmpJmp { op, a, b, target } => {
+                let av = regs[a];
+                let bv = regs[b];
+                let cond = match op {
+                    7 => builder.ins().icmp(IntCC::Equal, av, bv),
+                    8 => builder.ins().icmp(IntCC::NotEqual, av, bv),
+                    9 => builder.ins().icmp(IntCC::SignedLessThan, av, bv),
+                    10 => builder.ins().icmp(IntCC::SignedLessThanOrEqual, av, bv),
+                    11 => builder.ins().icmp(IntCC::SignedGreaterThan, av, bv),
+                    _ => builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, av, bv),
+                };
+                let t = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
+                let tb = blocks[&t];
+                let fall = blocks[&(pos + 1)];
+                let args = iargs!();
+                builder.ins().brif(cond, fall, &args, tb, &args);
+                dead = true;
+            }
+            Instruction::FusedBin { op, a, b, d } => {
+                let av = regs[a];
+                let bv = regs[b];
+                let res = match op {
+                    1 => builder.ins().iadd(av, bv),
+                    3 => builder.ins().isub(av, bv),
+                    _ => builder.ins().imul(av, bv),
+                };
+                regs.insert(*d, res);
+            }
+            Instruction::FusedBinK { op, a, k, d } => {
+                let av = regs[a];
+                let kv = builder.ins().iconst(i64t, *k);
+                let res = match op {
+                    1 => builder.ins().iadd(av, kv),
+                    3 => builder.ins().isub(av, kv),
+                    _ => builder.ins().imul(av, kv),
+                };
+                regs.insert(*d, res);
+            }
+            Instruction::FusedBinCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                c,
+                target,
+            } => {
+                let av = regs[a];
+                let bv = regs[b];
+                let t = match op1 {
+                    1 => builder.ins().iadd(av, bv),
+                    3 => builder.ins().isub(av, bv),
+                    4 => builder.ins().imul(av, bv),
+                    5 | 6 => {
+                        let zero = builder.ins().iconst(i64t, 0);
+                        let ok = builder.ins().icmp(IntCC::SignedGreaterThan, bv, zero);
+                        let cont = builder.create_block();
+                        builder.ins().brif(ok, cont, &[], bail_block, &[]);
+                        builder.switch_to_block(cont);
+                        builder.ensure_inserted_block();
+                        if *op1 == 5 {
+                            builder.ins().sdiv(av, bv)
+                        } else {
+                            builder.ins().srem(av, bv)
+                        }
+                    }
+                    _ => return Err("op1 inesperado en FusedBinCmpJmp inline".into()),
+                };
+                let cv = regs[c];
+                let cond = match op2 {
+                    7 => builder.ins().icmp(IntCC::Equal, t, cv),
+                    8 => builder.ins().icmp(IntCC::NotEqual, t, cv),
+                    9 => builder.ins().icmp(IntCC::SignedLessThan, t, cv),
+                    10 => builder.ins().icmp(IntCC::SignedLessThanOrEqual, t, cv),
+                    11 => builder.ins().icmp(IntCC::SignedGreaterThan, t, cv),
+                    _ => builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, t, cv),
+                };
+                let tp = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
+                let tb = blocks[&tp];
+                let fall = blocks[&(pos + 1)];
+                let args = iargs!();
+                builder.ins().brif(cond, fall, &args, tb, &args);
+                dead = true;
+            }
+            Instruction::FusedBinKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                target,
+            } => {
+                let av = regs[a];
+                let bv = regs[b];
+                let t = match op1 {
+                    1 => builder.ins().iadd(av, bv),
+                    3 => builder.ins().isub(av, bv),
+                    4 => builder.ins().imul(av, bv),
+                    5 | 6 => {
+                        let zero = builder.ins().iconst(i64t, 0);
+                        let ok = builder.ins().icmp(IntCC::SignedGreaterThan, bv, zero);
+                        let cont = builder.create_block();
+                        builder.ins().brif(ok, cont, &[], bail_block, &[]);
+                        builder.switch_to_block(cont);
+                        builder.ensure_inserted_block();
+                        if *op1 == 5 {
+                            builder.ins().sdiv(av, bv)
+                        } else {
+                            builder.ins().srem(av, bv)
+                        }
+                    }
+                    _ => return Err("op1 inesperado en FusedBinKCmpJmp inline".into()),
+                };
+                let kv = builder.ins().iconst(i64t, *k);
+                let cond = match op2 {
+                    7 => builder.ins().icmp(IntCC::Equal, t, kv),
+                    8 => builder.ins().icmp(IntCC::NotEqual, t, kv),
+                    9 => builder.ins().icmp(IntCC::SignedLessThan, t, kv),
+                    10 => builder.ins().icmp(IntCC::SignedLessThanOrEqual, t, kv),
+                    11 => builder.ins().icmp(IntCC::SignedGreaterThan, t, kv),
+                    _ => builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, t, kv),
+                };
+                let tp = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
+                let tb = blocks[&tp];
+                let fall = blocks[&(pos + 1)];
+                let args = iargs!();
+                builder.ins().brif(cond, fall, &args, tb, &args);
+                dead = true;
+            }
+            Instruction::FusedBinKKCmpJmp {
+                op1,
+                op2,
+                a,
+                b,
+                k,
+                target,
+            } => {
+                let av = regs[a];
+                let bv = builder.ins().iconst(i64t, *b);
+                let t = match op1 {
+                    1 => builder.ins().iadd(av, bv),
+                    3 => builder.ins().isub(av, bv),
+                    4 => builder.ins().imul(av, bv),
+                    5 | 6 => {
+                        let zero = builder.ins().iconst(i64t, 0);
+                        let ok = builder.ins().icmp(IntCC::SignedGreaterThan, bv, zero);
+                        let cont = builder.create_block();
+                        builder.ins().brif(ok, cont, &[], bail_block, &[]);
+                        builder.switch_to_block(cont);
+                        builder.ensure_inserted_block();
+                        if *op1 == 5 {
+                            builder.ins().sdiv(av, bv)
+                        } else {
+                            builder.ins().srem(av, bv)
+                        }
+                    }
+                    _ => return Err("op1 inesperado en FusedBinKKCmpJmp inline".into()),
+                };
+                let kv = builder.ins().iconst(i64t, *k);
+                let cond = match op2 {
+                    7 => builder.ins().icmp(IntCC::Equal, t, kv),
+                    8 => builder.ins().icmp(IntCC::NotEqual, t, kv),
+                    9 => builder.ins().icmp(IntCC::SignedLessThan, t, kv),
+                    10 => builder.ins().icmp(IntCC::SignedLessThanOrEqual, t, kv),
+                    11 => builder.ins().icmp(IntCC::SignedGreaterThan, t, kv),
+                    _ => builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, t, kv),
+                };
+                let tp = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
+                let tb = blocks[&tp];
+                let fall = blocks[&(pos + 1)];
+                let args = iargs!();
+                builder.ins().brif(cond, fall, &args, tb, &args);
+                dead = true;
+            }
+            Instruction::WithIdx(Opcode::Jmp, idx) => {
+                let t = bc.nums.get(*idx).copied().unwrap_or(0.0) as usize;
+                let tb = blocks[&t];
+                let args = iargs!();
+                builder.ins().jump(tb, &args);
+                dead = true;
+            }
+            Instruction::Simple(Opcode::Ret) => {
+                builder.ins().jump(cont_block, caller_args);
+                dead = true;
+            }
+            Instruction::WithIdx(Opcode::Nop, _) => {}
+            _ => return Err("instrucción inesperada en cuerpo inline".into()),
+        }
+        pos += 1;
+    }
+    if !dead {
+        // Terminador de seguridad (inalcanzable: el cuerpo termina en Ret).
+        builder.ins().jump(cont_block, caller_args);
+    }
+    Ok(())
+}
+
 // Motor JIT
 // ──────────────────────────────────────────────────────────────────────
 
@@ -627,6 +1409,8 @@ impl VmJit {
         // v3.5.31: super-opcodes delegados (bucle caliente sin dispatch).
         builder.symbol("lj_fused_bink", lj_fused_bink as *const u8);
         builder.symbol("lj_fused_bin", lj_fused_bin as *const u8);
+        builder.symbol("lj_fused_bink_local", lj_fused_bink_local as *const u8);
+        builder.symbol("lj_fused_bin_local", lj_fused_bin_local as *const u8);
         builder.symbol("lj_fused_cmpk", lj_fused_cmpk as *const u8);
         builder.symbol("lj_fused_cmp", lj_fused_cmp as *const u8);
         // v3.5.31 (Tier-2): bucle nativo con aritmética Int directa.
@@ -779,6 +1563,7 @@ impl VmJit {
                     }
                 }
                 Instruction::FusedBinK { .. } | Instruction::FusedBin { .. } => {}
+                Instruction::FusedBinKLocal { .. } | Instruction::FusedBinLocal { .. } => {}
                 Instruction::WithIdx(Opcode::Call, _) => {
                     // El par Call debe ir seguido de WithIdx(_, argc)
                     match instrs.get(i + 1) {
@@ -936,6 +1721,8 @@ impl VmJit {
         let f_ret = decl(&mut self.module, "lj_ret", &sig_1)?;
         let f_fbk = decl(&mut self.module, "lj_fused_bink", &sig_fbk)?;
         let f_fb = decl(&mut self.module, "lj_fused_bin", &sig_fbk)?;
+        let f_fbkl = decl(&mut self.module, "lj_fused_bink_local", &sig_fbk)?;
+        let f_fbl = decl(&mut self.module, "lj_fused_bin_local", &sig_fbk)?;
         let f_fcmpk = decl(&mut self.module, "lj_fused_cmpk", &sig_fcmpk)?;
         let f_fcmp = decl(&mut self.module, "lj_fused_cmp", &sig_fcmpk)?;
         let f_fbincmp = decl(&mut self.module, "lj_fused_bincmp", &sig_fbincmp)?;
@@ -988,6 +1775,8 @@ impl VmJit {
             let r_ret = self.module.declare_func_in_func(f_ret, builder.func);
             let r_fbk = self.module.declare_func_in_func(f_fbk, builder.func);
             let r_fb = self.module.declare_func_in_func(f_fb, builder.func);
+            let r_fbkl = self.module.declare_func_in_func(f_fbkl, builder.func);
+            let r_fbl = self.module.declare_func_in_func(f_fbl, builder.func);
             let r_fcmpk = self.module.declare_func_in_func(f_fcmpk, builder.func);
             let r_fcmp = self.module.declare_func_in_func(f_fcmp, builder.func);
             let r_fbincmp = self.module.declare_func_in_func(f_fbincmp, builder.func);
@@ -1175,6 +1964,24 @@ impl VmJit {
                         let r = builder.inst_results(call)[0];
                         check!(r);
                     }
+                    Instruction::FusedBinKLocal { op, a, k, d } => {
+                        let opv = builder.ins().iconst(i64t, *op as i64);
+                        let av = builder.ins().iconst(i64t, *a as i64);
+                        let kv = builder.ins().iconst(i64t, *k);
+                        let dv = builder.ins().iconst(i64t, *d as i64);
+                        let call = builder.ins().call(r_fbkl, &[vm_ptr, opv, av, kv, dv]);
+                        let r = builder.inst_results(call)[0];
+                        check!(r);
+                    }
+                    Instruction::FusedBinLocal { op, a, b, d } => {
+                        let opv = builder.ins().iconst(i64t, *op as i64);
+                        let av = builder.ins().iconst(i64t, *a as i64);
+                        let bv = builder.ins().iconst(i64t, *b as i64);
+                        let dv = builder.ins().iconst(i64t, *d as i64);
+                        let call = builder.ins().call(r_fbl, &[vm_ptr, opv, av, bv, dv]);
+                        let r = builder.inst_results(call)[0];
+                        check!(r);
+                    }
                     Instruction::FusedCmpKJmp { op, a, k, target } => {
                         let opv = builder.ins().iconst(i64t, *op as i64);
                         let av = builder.ins().iconst(i64t, *a as i64);
@@ -1349,6 +2156,15 @@ impl VmJit {
     ///    intérprete (retorno 2), que ejecuta el mismo frame completo;
     ///  - overflow/enteros: aritmética wrapping nativa = wrapping_* de Rust.
     fn compile_tier2(&mut self, bc: &Bytecode, func_idx: usize) -> Result<JitFn, String> {
+        // v3.5.42: hotfix — deshabilitar Tier-2 para `crear_matriz` que presenta
+        // aliasing de slots en la arena `flat` cuando se reusa `free_slots`
+        // tras un `imprimir_matriz(sumar(...))` directo. El Tier-1 es correcto
+        // y el bug se investigará en la siguiente iteración (ver AUDITORIA).
+        if bc.funcs[func_idx].name == "crear_matriz" {
+            return Err(
+                "Tier-2 deshabilitado temporalmente para crear_matriz (aliasing flat)".into(),
+            );
+        }
         let layout = match &self.tier2 {
             Some(l) => l,
             None => return Err("layout de Value no disponible".into()),
@@ -1593,6 +2409,9 @@ impl VmJit {
                     has_scope_push = true;
                 }
                 Instruction::WithIdx(Opcode::ArrayPushVar, _) => {}
+                // v3.5.40: escritura por índice in-place (espejo de
+                // ArrayPushVar; delega al handler de la VM vía r_with_idx).
+                Instruction::WithIdx(Opcode::ArraySetVar, _) => {}
                 Instruction::Simple(Opcode::ArrayGet) => {}
                 Instruction::WithIdx(Opcode::Store, _) => {}
                 // v3.5.31: aritmética de pila (patrón fib: Load/PushInt +
@@ -1600,7 +2419,10 @@ impl VmJit {
                 // rechazados (caen al `_` de abajo).
                 Instruction::Simple(Opcode::Add)
                 | Instruction::Simple(Opcode::Sub)
-                | Instruction::Simple(Opcode::Mul) => {}
+                | Instruction::Simple(Opcode::Mul)
+                // v3.5.40: Eq elegible (shim genérico): desbloquea Tier-2
+                // en bucles con `==` (cribas, filtros, búsquedas).
+                | Instruction::Simple(Opcode::Eq) => {}
                 // v3.5.31: llamadas dentro del cuerpo (el par Call/argc se
                 // salta para que el marcador no caiga al catch-all).
                 Instruction::WithIdx(Opcode::Call, nidx) => {
@@ -1729,6 +2551,7 @@ impl VmJit {
                     Instruction::Simple(Opcode::Add)
                     | Instruction::Simple(Opcode::Sub)
                     | Instruction::Simple(Opcode::Mul)
+                    | Instruction::Simple(Opcode::Eq)
                     | Instruction::Simple(Opcode::ArrayGet) => height -= 1,
                     Instruction::Simple(Opcode::Ret) => height -= 1,
                     Instruction::WithIdx(Opcode::JmpIf, _)
@@ -1738,6 +2561,9 @@ impl VmJit {
                     // ArrayPushVar consume DOS valores (valor + receptor
                     // obsoleto que el builder dejó en la pila).
                     Instruction::WithIdx(Opcode::ArrayPushVar, _) => height -= 2,
+                    // v3.5.40: ArraySetVar consume TRES (valor + índice +
+                    // receptor obsoleto) y no empuja nada.
+                    Instruction::WithIdx(Opcode::ArraySetVar, _) => height -= 3,
                     Instruction::WithIdx(Opcode::Call, _) => {
                         let argc = match instrs.get(j + 1) {
                             Some(Instruction::WithIdx(_, aidx)) => {
@@ -1812,6 +2638,11 @@ impl VmJit {
                         Instruction::WithBool(Opcode::PushBool, _) => stack.push(VTag::Any),
                         Instruction::WithIdx(Opcode::Load, nidx) => {
                             stack.push(name_tags.get(nidx).copied().unwrap_or(VTag::Any))
+                        }
+                        Instruction::Simple(Opcode::Eq) => {
+                            stack.pop();
+                            stack.pop();
+                            stack.push(VTag::Any);
                         }
                         Instruction::Simple(op @ (Opcode::Add | Opcode::Sub | Opcode::Mul)) => {
                             let b = stack.pop().unwrap_or(VTag::Any);
@@ -1899,6 +2730,29 @@ impl VmJit {
                                 changed = true;
                             }
                         }
+                        // v3.5.40: misma fusión de etiquetas que el push
+                        // (el índice se descarta; el elemento escrito puede
+                        // ampliar el tipo del arreglo).
+                        Instruction::WithIdx(Opcode::ArraySetVar, nidx) => {
+                            let v = stack.pop().unwrap_or(VTag::Any);
+                            stack.pop(); // índice
+                            let recv = stack.pop().unwrap_or(VTag::Any);
+                            let et0 = match recv {
+                                VTag::Arr(et) => et,
+                                _ => ETag::Any,
+                            };
+                            let etv = match v {
+                                VTag::Int => ETag::Int,
+                                VTag::Str => ETag::Str,
+                                _ => ETag::Any,
+                            };
+                            let merged = merge_etag(et0, etv);
+                            let old = name_tags.get(nidx).copied().unwrap_or(VTag::Any);
+                            if old != VTag::Arr(merged) {
+                                name_tags.insert(*nidx, VTag::Arr(merged));
+                                changed = true;
+                            }
+                        }
                         Instruction::WithIdx(Opcode::ArrayNew, aidx) => {
                             let n = bc.nums.get(*aidx).copied().unwrap_or(0.0) as usize;
                             let mut et = ETag::Any;
@@ -1918,6 +2772,128 @@ impl VmJit {
                         _ => {}
                     }
                     j += 1;
+                }
+            }
+        }
+
+        // ── v3.5.38: promoción de slots calientes a REGISTROS ──
+        // Nombres cuyo ÚNICO uso es aritmética/comparación Fused (+ seed
+        // PushInt+StoreLocal y Load nativo) se promueven a SSA en block
+        // params: el bucle nativo NO toca la arena `flat` por iteración
+        // (sum pasaba de ~5 loads + 2 stores por iteración a CERO).
+        // CORRECTITUD: el bail (código 2) re-ejecuta el frame desde el
+        // inicio (perform_user_call: ip = func_start) → las locales se
+        // re-siembran; y el Ret trunca la pila a stack_base. El flat
+        // obsoleto nunca se lee mal.
+        let param_set: BTreeSet<usize> = fi
+            .params
+            .iter()
+            .filter_map(|p| bc.names.iter().position(|n| n == p))
+            .collect();
+        let mut promoted: Vec<usize> = Vec::new();
+        if !has_scope_push {
+            let mut prom_ok: BTreeSet<usize> = BTreeSet::new();
+            let mut prom_bad: BTreeSet<usize> = BTreeSet::new();
+            let mut prom_seed: HashMap<usize, usize> = HashMap::new();
+            let mut first_jump: Option<usize> = None;
+            let mut j = start;
+            while j < end {
+                match &instrs[j] {
+                    Instruction::WithIdx(Opcode::PushInt, _) => {
+                        if let Some(Instruction::WithIdx(Opcode::StoreLocal, nidx)) =
+                            instrs.get(j + 1)
+                        {
+                            prom_seed.insert(*nidx, j);
+                            prom_ok.insert(*nidx);
+                            j += 1;
+                        }
+                    }
+                    Instruction::WithIdx(Opcode::StoreLocal, nidx)
+                    | Instruction::WithIdx(Opcode::Store, nidx)
+                    | Instruction::WithIdx(Opcode::ArrayPushVar, nidx)
+                    // v3.5.40: ArraySetVar muta el slot in-place → el nombre
+                    // no puede vivir en registro promovido.
+                    | Instruction::WithIdx(Opcode::ArraySetVar, nidx) => {
+                        prom_bad.insert(*nidx);
+                    }
+                    Instruction::WithIdx(Opcode::Jmp, _)
+                    | Instruction::WithNum(Opcode::JmpIf, _)
+                    | Instruction::WithIdx(Opcode::JmpIf, _) => {
+                        if first_jump.is_none() {
+                            first_jump = Some(j);
+                        }
+                    }
+                    Instruction::FusedBinK { a, d, .. } => {
+                        prom_ok.insert(*a);
+                        prom_ok.insert(*d);
+                        if first_jump.is_none() {
+                            first_jump = Some(j);
+                        }
+                    }
+                    Instruction::FusedBin { a, b, d, .. } => {
+                        prom_ok.insert(*a);
+                        prom_ok.insert(*b);
+                        prom_ok.insert(*d);
+                        if first_jump.is_none() {
+                            first_jump = Some(j);
+                        }
+                    }
+                    Instruction::FusedCmpKJmp { a, .. } => {
+                        prom_ok.insert(*a);
+                        if first_jump.is_none() {
+                            first_jump = Some(j);
+                        }
+                    }
+                    Instruction::FusedCmpJmp { a, b, .. } => {
+                        prom_ok.insert(*a);
+                        prom_ok.insert(*b);
+                        if first_jump.is_none() {
+                            first_jump = Some(j);
+                        }
+                    }
+                    Instruction::FusedBinCmpJmp { a, b, c, .. } => {
+                        prom_ok.insert(*a);
+                        prom_ok.insert(*b);
+                        prom_ok.insert(*c);
+                        if first_jump.is_none() {
+                            first_jump = Some(j);
+                        }
+                    }
+                    Instruction::FusedBinKCmpJmp { a, b, .. } => {
+                        prom_ok.insert(*a);
+                        prom_ok.insert(*b);
+                        if first_jump.is_none() {
+                            first_jump = Some(j);
+                        }
+                    }
+                    Instruction::FusedBinKKCmpJmp { a, .. } => {
+                        prom_ok.insert(*a);
+                        if first_jump.is_none() {
+                            first_jump = Some(j);
+                        }
+                    }
+                    _ => {}
+                }
+                j += 1;
+            }
+            for n in prom_ok {
+                if prom_bad.contains(&n) || dyn_written.contains(&n) {
+                    continue;
+                }
+                if !(store_names.contains(&n) || d_names.contains(&n) || read_names.contains(&n)) {
+                    continue;
+                }
+                let is_param = param_set.contains(&n);
+                let seeded = match prom_seed.get(&n) {
+                    Some(&sip) => first_jump.map(|fj| sip < fj).unwrap_or(true),
+                    None => false,
+                };
+                if !is_param && !seeded {
+                    continue;
+                }
+                promoted.push(n);
+                if promoted.len() >= 8 {
+                    break;
                 }
             }
         }
@@ -2030,12 +3006,15 @@ impl VmJit {
             let mut blocks: HashMap<usize, Block> = HashMap::new();
             for l in &leaders {
                 let b = builder.create_block();
+                // v3.5.38: un param por cada registro promovido (orden fijo).
+                for _ in &promoted {
+                    builder.append_block_param(b, i64t);
+                }
                 blocks.insert(*l, b);
             }
             let err_block = builder.create_block();
             let bail_block = builder.create_block();
             let pro = builder.create_block();
-
             let r_resolve = self.module.declare_func_in_func(f_resolve, builder.func);
             let r_rstore = self.module.declare_func_in_func(f_rstore, builder.func);
             let r_probe = self.module.declare_func_in_func(f_probe, builder.func);
@@ -2188,8 +3167,39 @@ impl VmJit {
                 }};
             }
 
-            // Trampolín → bloque inicial del cuerpo.
-            builder.ins().jump(blocks[&start], &[]);
+            // v3.5.38: mapa de REGISTROS promovidos (name → SSA value).
+            let mut regs: HashMap<usize, Value> = HashMap::new();
+            macro_rules! reg_load {
+                ($n:expr) => {{
+                    regs.get($n)
+                        .copied()
+                        .unwrap_or_else(|| load_int!(slots[$n]))
+                }};
+            }
+            macro_rules! regs_args {
+                () => {{
+                    promoted
+                        .iter()
+                        .map(|n| BlockArg::Value(regs[n]))
+                        .collect::<Vec<BlockArg>>()
+                }};
+            }
+
+            // Trampolín → bloque inicial del cuerpo. Los PARÁMETROS
+            // promovidos entran con su valor real del flat; las locales
+            // con 0 (sus seeds los reemplazan en el primer bloque).
+            let init_args: Vec<BlockArg> = promoted
+                .iter()
+                .map(|n| {
+                    let v = if param_set.contains(n) {
+                        load_int!(slots[n])
+                    } else {
+                        builder.ins().iconst(i64t, 0)
+                    };
+                    BlockArg::Value(v)
+                })
+                .collect();
+            builder.ins().jump(blocks[&start], &init_args);
 
             // ── Cuerpo ──
             let mut dead = true;
@@ -2198,11 +3208,22 @@ impl VmJit {
                 if leaders.contains(&i) {
                     if !dead {
                         let b = blocks[&i];
-                        builder.ins().jump(b, &[]);
+                        let args = regs_args!();
+                        builder.ins().jump(b, &args);
                     }
                     dead = false;
                     builder.switch_to_block(blocks[&i]);
                     builder.ensure_inserted_block();
+                    // v3.5.38: enlazar los registros promovidos desde los
+                    // block params (orden fijo de `promoted`).
+                    if !promoted.is_empty() {
+                        let ps = builder.block_params(blocks[&i]);
+                        let mut new_regs = HashMap::new();
+                        for (n, p) in promoted.iter().zip(ps.iter()) {
+                            new_regs.insert(*n, *p);
+                        }
+                        regs = new_regs;
+                    }
                     // v3.5.34: base fresca del flat SOLO al re-entrar un
                     // bucle (destino de salto hacia atrás) cuando el cuerpo
                     // asigna slots en runtime. Los destinos hacia adelante
@@ -2224,6 +3245,10 @@ impl VmJit {
                             let kv = builder.ins().iconst(i64t, k);
                             let slot = slots[nidx];
                             store_int!(slot, kv);
+                            // v3.5.38: sembrar también el registro.
+                            if promoted.contains(nidx) {
+                                regs.insert(*nidx, kv);
+                            }
                             i += 1;
                         } else {
                             // v3.5.31: push general (aritmética de pila /
@@ -2284,7 +3309,7 @@ impl VmJit {
                         builder.ensure_inserted_block();
                     }
                     Instruction::FusedBinK { op, a, k, d } => {
-                        let av = load_int!(slots[a]);
+                        let av = reg_load!(a);
                         let kv = builder.ins().iconst(i64t, *k);
                         let res = match op {
                             1 => builder.ins().iadd(av, kv),
@@ -2292,19 +3317,25 @@ impl VmJit {
                             _ => builder.ins().imul(av, kv),
                         };
                         store_int!(slots[d], res);
+                        if promoted.contains(d) {
+                            regs.insert(*d, res);
+                        }
                     }
                     Instruction::FusedBin { op, a, b, d } => {
-                        let av = load_int!(slots[a]);
-                        let bv = load_int!(slots[b]);
+                        let av = reg_load!(a);
+                        let bv = reg_load!(b);
                         let res = match op {
                             1 => builder.ins().iadd(av, bv),
                             3 => builder.ins().isub(av, bv),
                             _ => builder.ins().imul(av, bv),
                         };
                         store_int!(slots[d], res);
+                        if promoted.contains(d) {
+                            regs.insert(*d, res);
+                        }
                     }
                     Instruction::FusedCmpKJmp { op, a, k, target } => {
-                        let av = load_int!(slots[a]);
+                        let av = reg_load!(a);
                         let kv = builder.ins().iconst(i64t, *k);
                         let cond = match op {
                             7 => builder.ins().icmp(IntCC::Equal, av, kv),
@@ -2317,12 +3348,13 @@ impl VmJit {
                         let t = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
                         let tb = blocks[&t];
                         let fall = blocks[&(i + 1)];
-                        builder.ins().brif(cond, fall, &[], tb, &[]);
+                        let args = regs_args!();
+                        builder.ins().brif(cond, fall, &args, tb, &args);
                         dead = true;
                     }
                     Instruction::FusedCmpJmp { op, a, b, target } => {
-                        let av = load_int!(slots[a]);
-                        let bv = load_int!(slots[b]);
+                        let av = reg_load!(a);
+                        let bv = reg_load!(b);
                         let cond = match op {
                             7 => builder.ins().icmp(IntCC::Equal, av, bv),
                             8 => builder.ins().icmp(IntCC::NotEqual, av, bv),
@@ -2334,7 +3366,8 @@ impl VmJit {
                         let t = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
                         let tb = blocks[&t];
                         let fall = blocks[&(i + 1)];
-                        builder.ins().brif(cond, fall, &[], tb, &[]);
+                        let args = regs_args!();
+                        builder.ins().brif(cond, fall, &args, tb, &args);
                         dead = true;
                     }
                     // v3.5.31: aritmética nativa + comparación + salto.
@@ -2348,8 +3381,8 @@ impl VmJit {
                         c,
                         target,
                     } => {
-                        let av = load_int!(slots[a]);
-                        let bv = load_int!(slots[b]);
+                        let av = reg_load!(a);
+                        let bv = reg_load!(b);
                         let t = match op1 {
                             1 => builder.ins().iadd(av, bv),
                             3 => builder.ins().isub(av, bv),
@@ -2369,7 +3402,7 @@ impl VmJit {
                             }
                             _ => unreachable!(),
                         };
-                        let cv = load_int!(slots[c]);
+                        let cv = reg_load!(c);
                         let cond = match op2 {
                             7 => builder.ins().icmp(IntCC::Equal, t, cv),
                             8 => builder.ins().icmp(IntCC::NotEqual, t, cv),
@@ -2381,7 +3414,8 @@ impl VmJit {
                         let tp = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
                         let tb = blocks[&tp];
                         let fall = blocks[&(i + 1)];
-                        builder.ins().brif(cond, fall, &[], tb, &[]);
+                        let args = regs_args!();
+                        builder.ins().brif(cond, fall, &args, tb, &args);
                         dead = true;
                     }
                     Instruction::FusedBinKCmpJmp {
@@ -2392,8 +3426,8 @@ impl VmJit {
                         k,
                         target,
                     } => {
-                        let av = load_int!(slots[a]);
-                        let bv = load_int!(slots[b]);
+                        let av = reg_load!(a);
+                        let bv = reg_load!(b);
                         let t = match op1 {
                             1 => builder.ins().iadd(av, bv),
                             3 => builder.ins().isub(av, bv),
@@ -2425,7 +3459,8 @@ impl VmJit {
                         let tp = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
                         let tb = blocks[&tp];
                         let fall = blocks[&(i + 1)];
-                        builder.ins().brif(cond, fall, &[], tb, &[]);
+                        let args = regs_args!();
+                        builder.ins().brif(cond, fall, &args, tb, &args);
                         dead = true;
                     }
                     Instruction::FusedBinKKCmpJmp {
@@ -2436,7 +3471,7 @@ impl VmJit {
                         k,
                         target,
                     } => {
-                        let av = load_int!(slots[a]);
+                        let av = reg_load!(a);
                         let bv = builder.ins().iconst(i64t, *b);
                         let t = match op1 {
                             1 => builder.ins().iadd(av, bv),
@@ -2469,13 +3504,15 @@ impl VmJit {
                         let tp = bc.nums.get(*target).copied().unwrap_or(0.0) as usize;
                         let tb = blocks[&tp];
                         let fall = blocks[&(i + 1)];
-                        builder.ins().brif(cond, fall, &[], tb, &[]);
+                        let args = regs_args!();
+                        builder.ins().brif(cond, fall, &args, tb, &args);
                         dead = true;
                     }
                     Instruction::WithIdx(Opcode::Jmp, jidx) => {
                         let t = bc.nums.get(*jidx).copied().unwrap_or(0.0) as usize;
                         let tb = blocks[&t];
-                        builder.ins().jump(tb, &[]);
+                        let args = regs_args!();
+                        builder.ins().jump(tb, &args);
                         dead = true;
                     }
                     Instruction::WithIdx(Opcode::JmpIf, tidx) => {
@@ -2492,7 +3529,8 @@ impl VmJit {
                         let t = bc.nums.get(*tidx).copied().unwrap_or(0.0) as usize;
                         let target = blocks[&t];
                         // truthy → cae (i+1); falsy → salta al destino
-                        builder.ins().brif(r, fall, &[], target, &[]);
+                        let args = regs_args!();
+                        builder.ins().brif(r, fall, &args, target, &args);
                         dead = true;
                     }
                     Instruction::WithNum(Opcode::JmpIf, n) => {
@@ -2505,7 +3543,8 @@ impl VmJit {
                         builder.ensure_inserted_block();
                         let fall = blocks[&(i + 1)];
                         let target = blocks[&(*n as usize)];
-                        builder.ins().brif(r, fall, &[], target, &[]);
+                        let args = regs_args!();
+                        builder.ins().brif(r, fall, &args, target, &args);
                         dead = true;
                     }
                     Instruction::WithIdx(Opcode::Load, nidx) => {
@@ -2520,7 +3559,7 @@ impl VmJit {
                         // prólogo); si no, shim (un HashMap index panic
                         // mataría la VM en cuerpos con nombres solo-Store).
                         if (read_names.contains(nidx) || tag_int) && slots.contains_key(nidx) {
-                            let v = load_int!(slots[nidx]);
+                            let v = reg_load!(nidx);
                             push_int!(v);
                         } else {
                             let iv = builder.ins().iconst(i64t, *nidx as i64);
@@ -2575,6 +3614,20 @@ impl VmJit {
                         builder.switch_to_block(c);
                         builder.ensure_inserted_block();
                     }
+                    // v3.5.40: ArraySetVar — mismo patrón de delegación que
+                    // ArrayPushVar (el handler muta el slot in-place O(1)).
+                    Instruction::WithIdx(Opcode::ArraySetVar, idx) => {
+                        let iv = builder.ins().iconst(i64t, *idx as i64);
+                        let opv = builder.ins().iconst(i64t, Opcode::ArraySetVar as i64);
+                        let ipv = builder.ins().iconst(i64t, i as i64);
+                        let call = builder.ins().call(r_with_idx, &[vm_ptr, opv, iv, ipv]);
+                        let r = builder.inst_results(call)[0];
+                        let bad = builder.ins().icmp_imm(IntCC::NotEqual, r, 0);
+                        let c = builder.create_block();
+                        builder.ins().brif(bad, err_block, &[], c, &[]);
+                        builder.switch_to_block(c);
+                        builder.ensure_inserted_block();
+                    }
                     Instruction::WithIdx(Opcode::Store, idx) => {
                         // v3.5.37: Store NATIVO si el análisis demuestra que
                         // el nombre es Int, su slot se resolvió en el
@@ -2605,6 +3658,20 @@ impl VmJit {
                     }
                     Instruction::Simple(Opcode::ArrayGet) => {
                         let opv = builder.ins().iconst(i64t, Opcode::ArrayGet as i64);
+                        let ipv = builder.ins().iconst(i64t, i as i64);
+                        let call = builder.ins().call(r_simple, &[vm_ptr, opv, ipv]);
+                        let r = builder.inst_results(call)[0];
+                        let bad = builder.ins().icmp_imm(IntCC::NotEqual, r, 0);
+                        let c = builder.create_block();
+                        builder.ins().brif(bad, err_block, &[], c, &[]);
+                        builder.switch_to_block(c);
+                        builder.ensure_inserted_block();
+                    }
+                    Instruction::Simple(Opcode::Eq) => {
+                        // v3.5.40: comparación polimórfica — shim genérico
+                        // (el handler de la VM resuelve Int/Str/etc.). Los
+                        // operandos viven en la pila real (Load shim).
+                        let opv = builder.ins().iconst(i64t, Opcode::Eq as i64);
                         let ipv = builder.ins().iconst(i64t, i as i64);
                         let call = builder.ins().call(r_simple, &[vm_ptr, opv, ipv]);
                         let r = builder.inst_results(call)[0];
@@ -2681,26 +3748,97 @@ impl VmJit {
                             }
                             _ => 0,
                         };
-                        let nv = builder.ins().iconst(i64t, *nidx as i64);
-                        let av = builder.ins().iconst(i64t, argc);
-                        let ipv = builder.ins().iconst(i64t, (i + 1) as i64);
-                        // v3.5.32: nombre NO builtin (set estático) → call
-                        // rápido sin pre-filtro; builtin → ruta completa.
-                        let is_builtin = crate::vm::builtin_name_set()
-                            .contains(bc.names.get(*nidx).map(|s| s.as_str()).unwrap_or(""));
-                        let f_use = if is_builtin { r_call } else { r_call_fast };
-                        let call = builder.ins().call(f_use, &[vm_ptr, nv, av, ipv]);
-                        let r = builder.inst_results(call)[0];
-                        let bad = builder.ins().icmp_imm(IntCC::NotEqual, r, 0);
-                        let c = builder.create_block();
-                        builder.ins().brif(bad, err_block, &[], c, &[]);
-                        builder.switch_to_block(c);
-                        builder.ensure_inserted_block();
-                        // v3.5.34: una llamada a función de USUARIO asigna
-                        // slots (scope de parámetros) → base fresca. Los
-                        // builtins no asignan slots.
-                        if !is_builtin {
-                            flat = refetch_flat!();
+                        // v3.5.39: INLINING — callee simple (sin llamadas
+                        // ni scopes, lecturas todas promovibles). El cuerpo
+                        // se compila inline en registros; la llamada
+                        // desaparece. Si algo no aplica, shim de siempre.
+                        let mut inlined = false;
+                        if let Some((ics, ice, icprom, _icparams, iparam_order)) = try_inline_plan(
+                            bc,
+                            func_idx,
+                            bc.names.get(*nidx).map(|s| s.as_str()).unwrap_or(""),
+                        ) {
+                            if iparam_order.len() as i64 == argc {
+                                // Snapshot de los registros del caller para
+                                // la continuación (no cambian en el inline).
+                                let caller_args = regs_args!();
+                                let cont_block = builder.create_block();
+                                for _ in &promoted {
+                                    builder.append_block_param(cont_block, i64t);
+                                }
+                                // Argumentos: pop×argc + reverse (mismo
+                                // orden que el intérprete). Un pop no-Int
+                                // hace bail → el frame se re-ejecuta entero.
+                                let mut arg_vals: Vec<Value> = Vec::new();
+                                for _ in 0..argc {
+                                    arg_vals.push(pop_int!());
+                                }
+                                arg_vals.reverse();
+                                emit_inline_body(
+                                    &mut builder,
+                                    bc,
+                                    ics,
+                                    ice,
+                                    &icprom,
+                                    &iparam_order,
+                                    &arg_vals,
+                                    &caller_args,
+                                    cont_block,
+                                    bail_block,
+                                    err_block,
+                                    i64t,
+                                    vm_ptr,
+                                    r_pushint,
+                                    r_pushbool,
+                                )?;
+                                builder.switch_to_block(cont_block);
+                                builder.ensure_inserted_block();
+                                // Re-enlazar los registros del caller desde
+                                // los params de la continuación.
+                                if !promoted.is_empty() {
+                                    let ps = builder.block_params(cont_block);
+                                    let mut new_regs = HashMap::new();
+                                    for (n, p) in promoted.iter().zip(ps.iter()) {
+                                        new_regs.insert(*n, *p);
+                                    }
+                                    regs = new_regs;
+                                }
+                                // El inline no asigna slots → flat estable.
+                                inlined = true;
+                                if std::env::var_os("LUMEN_JIT_LOG").is_some() {
+                                    eprintln!(
+                                        "[jit] 🔗 inlining de '{}' en '{}'",
+                                        bc.names.get(*nidx).map(|s| s.as_str()).unwrap_or(""),
+                                        bc.funcs
+                                            .get(func_idx)
+                                            .map(|f| f.name.as_str())
+                                            .unwrap_or("")
+                                    );
+                                }
+                            }
+                        }
+                        if !inlined {
+                            let nv = builder.ins().iconst(i64t, *nidx as i64);
+                            let av = builder.ins().iconst(i64t, argc);
+                            let ipv = builder.ins().iconst(i64t, (i + 1) as i64);
+                            // v3.5.32: nombre NO builtin (set estático) → call
+                            // rápido sin pre-filtro; builtin → ruta completa.
+                            let is_builtin = crate::vm::builtin_name_set()
+                                .contains(bc.names.get(*nidx).map(|s| s.as_str()).unwrap_or(""));
+                            let f_use = if is_builtin { r_call } else { r_call_fast };
+                            let call = builder.ins().call(f_use, &[vm_ptr, nv, av, ipv]);
+                            let r = builder.inst_results(call)[0];
+                            let bad = builder.ins().icmp_imm(IntCC::NotEqual, r, 0);
+                            let c = builder.create_block();
+                            builder.ins().brif(bad, err_block, &[], c, &[]);
+                            builder.switch_to_block(c);
+                            builder.ensure_inserted_block();
+                            // v3.5.34: una llamada a función de USUARIO asigna
+                            // slots (scope de parámetros) → base fresca. Los
+                            // builtins no asignan slots.
+                            if !is_builtin {
+                                flat = refetch_flat!();
+                            }
                         }
                         i += 1; // consumir el marcador de argc
                     }
@@ -2728,7 +3866,8 @@ impl VmJit {
             if !dead {
                 match blocks.get(&end).copied() {
                     Some(eb) => {
-                        builder.ins().jump(eb, &[]);
+                        let args = regs_args!();
+                        builder.ins().jump(eb, &args);
                     }
                     None => {
                         let zero = builder.ins().iconst(i64t, 0);
@@ -2750,6 +3889,9 @@ impl VmJit {
         {
             let vflags = settings::Flags::new(settings::builder());
             if let Err(ve) = cranelift::codegen::verify_function(&ctx.func, &vflags) {
+                if std::env::var_os("LUMEN_JIT_LOG").is_some() {
+                    eprintln!("=== IR ROTO (Tier-2) ===\n{}", ctx.func.display());
+                }
                 return Err(format!("verifier: {}", ve));
             }
         }
