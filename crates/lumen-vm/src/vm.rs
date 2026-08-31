@@ -1123,12 +1123,13 @@ impl VM {
         #[cfg(feature = "aot")]
         let jit_engine = lumen_aot::JitEngine::new().ok();
         Self {
-            stack: Vec::new(),
+            // v3.5.41: pre-reserva para máximo rendimiento (evita realloc en hot loops)
+            stack: Vec::with_capacity(4096),
             locals: vec![ScopeFrame::new(0)],
-            flat: Vec::new(),
-            free_slots: Vec::new(),
-            slot_pool: Vec::new(),
-            map_pool: Vec::new(),
+            flat: Vec::with_capacity(1024),
+            free_slots: Vec::with_capacity(256),
+            slot_pool: Vec::with_capacity(256),
+            map_pool: Vec::with_capacity(64),
             params_name_idx,
             scope_id_next: 1,
             // v3.5.31: pre-dimensionado a names.len() para indexar SIN
@@ -1152,7 +1153,9 @@ impl VM {
             instr_count: 0,
             snapshots: Vec::new(),
             call_counts: vec![0; n_names],
-            jit_threshold: 50,
+            // v3.5.41: umbral JIT reducido 50→15 para warmup más rápido (bench suite y AOT)
+            // + memoria segura: el JIT sigue delegando a handlers del intérprete (paridad garantizada)
+            jit_threshold: 15,
             #[cfg(feature = "aot")]
             jit_engine,
             // v3.5.31: JIT PREDETERMINADO — Tier-1 + Tier-2 validados en
@@ -7280,11 +7283,15 @@ impl VM {
         Ok(())
     }
 
+    #[inline(always)]
     fn push(&mut self, val: Value) {
         self.stack.push(val);
     }
 
+    #[inline(always)]
     fn pop(&mut self) -> Result<Value, VmError> {
+        // SAFETY: stack underflow es error lógico, pero en hot path es rarísimo;
+        // el check es necesario para memoria segura (evita UB).
         self.stack.pop().ok_or(VmError::StackUnderflow)
     }
 

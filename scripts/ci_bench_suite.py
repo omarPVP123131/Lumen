@@ -22,6 +22,13 @@ import sys
 import tempfile
 import time
 
+# Windows cp1252 no soporta ✓/✗ — forzar UTF-8 para CI multiplataforma
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 QUICK = "--quick" in sys.argv
 
@@ -147,10 +154,11 @@ def main():
             n_bad += (not ok)
 
     # ── Tabla ──
+    # Usar ASCII seguro para Windows cp1252 (evita UnicodeEncodeError)
     print(f"\n{'tarea':8s} {'lenguaje':8s} {'ms':>10s}  checksum")
     print("-" * 52)
     for tarea, lang, ms, ok, linea in results:
-        marca = "✓" if ok else "✗ FALLA"
+        marca = "[OK]" if ok else "[FALLA]"
         msv = f"{ms:8.1f}" if ms >= 0 else "timeout"
         print(f"{tarea:8s} {lang:8s} {msv:>10s}  {marca}  {linea}")
     print("-" * 52)

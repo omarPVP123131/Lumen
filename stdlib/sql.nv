@@ -106,3 +106,10 @@ funcion booleano cerrar(entero db) {
     retornar __ffi_llamar(lib, "sqlite3_close", "entero", [db], "entero") == 0;
 }
 funcion booleano close(entero db) { retornar cerrar(db); }
+
+// Aliases con prefijo sql_ para compatibilidad (test_sqlite_avanzado.nv y orm.nv)
+funcion entero sql_abrir(texto ruta) { retornar abrir(ruta); }
+funcion entero sql_open(texto ruta) { retornar abrir(ruta); }
+funcion entero sql_ejecutar(entero db, texto sql) { retornar ejecutar(db, sql); }
+funcion entero sql_exec(entero db, texto sql) { retornar ejecutar(db, sql); }
+funcion booleano sql_cerrar(entero db) { retornar cerrar(db); }

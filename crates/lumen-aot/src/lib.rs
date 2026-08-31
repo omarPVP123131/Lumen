@@ -454,9 +454,9 @@ impl AotCompiler {
     pub fn new() -> Self {
         let mut fb = settings::builder();
         fb.set("use_colocated_libcalls", "false").unwrap();
-        fb.set("is_pic", "true").unwrap();
-        // Fase 88: LTO + optimización agresiva
-        fb.set("opt_level", "speed_and_size").unwrap();
+        fb.set("is_pic", "false").unwrap();
+        // Fase 88+: máximo rendimiento — speed (no speed_and_size) + LTO fat
+        fb.set("opt_level", "speed").unwrap();
         let flags = settings::Flags::new(fb);
         // v3.5.30: en macOS el triple de host es `*-apple-darwin`; con él,
         // cranelift-object escribe LC_BUILD_VERSION con platform=0
