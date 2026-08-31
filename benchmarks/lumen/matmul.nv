@@ -1,0 +1,42 @@
+// Suite variada 2 — Multiplicación de matrices 48×48 de enteros.
+// A[i][j] = (i*j) % 5, B[i][j] = (i+j) % 7, C = A·B con acumuladores
+// `numero` (los arrays se infieren como Decimal). Checksum = suma de C.
+// Golden: 520167.
+
+funcion numero bench_matmul(entero n) {
+    sea A = [];
+    sea B = [];
+    entero i = 0;
+    mientras (i < n) {
+        sea fila_a = [];
+        sea fila_b = [];
+        entero j = 0;
+        mientras (j < n) {
+            fila_a.agregar((i * j) % 5);
+            fila_b.agregar((i + j) % 7);
+            j = j + 1;
+        }
+        A.agregar(fila_a);
+        B.agregar(fila_b);
+        i = i + 1;
+    }
+    numero total = 0;
+    i = 0;
+    mientras (i < n) {
+        entero j = 0;
+        mientras (j < n) {
+            numero s = 0;
+            entero k = 0;
+            mientras (k < n) {
+                s = s + A[i][k] * B[k][j];
+                k = k + 1;
+            }
+            total = total + s;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar total;
+}
+
+imprimir("matmul:" + bench_matmul(48));

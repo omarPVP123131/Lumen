@@ -57,3 +57,25 @@
 Los 956 tests incluyen la cobertura de los bugs arreglados en las rondas:
 constant folder IR (MIN/-1 y `rem_euclid`), folder de optimización (delta de
 pila), flat obsoleto en Tier-2 y guardas de `slots` en el análisis VTag.
+
+
+---
+
+## Ronda v3.5.38+v3.5.39 (2026-08-30) — validación de la ronda de registros + inlining
+
+| Comprobación | Resultado |
+|---|---|
+| `cargo fmt --check` | limpio |
+| `cargo clippy --all -- -D warnings` | 0 warnings |
+| `cargo test --workspace` (JIT ON) | **956 passed / 0 failed** |
+| `cargo test --workspace` (`LUMEN_JIT=0`) | **956 passed / 0 failed** |
+| `lumen check examples` | 396/396, 0 errores |
+| Paridad ON/OFF edge tests (11) | byte-idéntica (con salida completa) |
+| Fixpoint self-hosting | byte-idéntico (170985 B, sha256 `02b0460d…`) |
+| Benchmarks 5/5 | resultados correctos (fib/sum/primes/strings/arrays) |
+
+Bugs atrapados en la propia ronda (antes de dar el paso por bueno): doble
+terminador en bloques inline tras `Ret` (Jmp muertos del compilador — verifier
+de cranelift) y bloque-partitioning de los reemplazos de parches (patrón
+repetido Tier-1/Tier-2). La regla de verificación "anchor único + grep antes y
+después" sigue vigente.

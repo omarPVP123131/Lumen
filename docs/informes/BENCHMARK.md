@@ -90,3 +90,32 @@ fib JIT (4.4 ms) queda a ~2× del C; strings/arrays dominados por el formateo
 de texto y la semántica de arrays (los AOT cranelift ya vencen al C en strings).
 Detalle por ronda en `benchmarks/results/informe.md` y
 [docs/arquitectura/jit.md](../arquitectura/jit.md).
+
+
+---
+
+## Ronda v3.5.38+v3.5.39 (2026-08-30): registros en bucles + inlining
+
+Ventanas limpias (min-of-15/30; el host de esta sesión arranca procesos a
+~8–16 ms vs ~1 ms de la sesión v3.5.37, ver nota en `benchmarks/results/informe.md`):
+
+| Tarea | v3.5.37 ON | v3.5.39 ON | Intérprete | C (gcc -O3) | Δ ON |
+|---|---|---|---|---|---|
+| sum | 28.1 ms | **12.3 ms** | ~1140 ms | ~1 ms | **2.3×** |
+| fib | 4.4 ms | **3.9 ms** | 100.4 ms | ~2 ms | 1.13× |
+| primes | 11.8 ms | **4.5 ms** | 34.5 ms | ~1.7 ms | **2.6×** |
+| strings | 162.3 ms | 165.7 ms | 177.2 ms | ~10.7 ms | = |
+| arrays | 60.5 ms | 58.5 ms | 91.5 ms | ~2 ms | = |
+| **TOTAL** | **267.1 ms** | **~245 ms** | 1541.9 ms | — | **-8%** |
+
+Evolución: 590 → 383 → 343.5 → 275.7 → 272.6 → 268.0 → 267.1 → **~245 ms**
+(6.3× vs intérprete).
+
+Mecánica: v3.5.38 = promoción de slots calientes a SSA con block params
+(bucles sin tocar el flat; bail seguro porque re-ejecuta el frame desde cero);
+v3.5.39 = inlining de callees simples con pila neutra y dominancia de seeds.
+
+Meta de la ronda (200–210 ms) no alcanzada por decisión de alcance: requiere el
+trabajo profundo diferido (SSO de strings ~162→50, arrays especializados
+~60→12). El JIT AOT cranelift ya vence al C en strings (3.5 ms) y empata en
+arrays.

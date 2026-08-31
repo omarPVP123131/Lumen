@@ -5,46 +5,20 @@ Mismo algoritmo en cada lenguaje. `Tiempo` = segundos de pared (mejor medición 
 
 | Tarea | lumen-vm | lumen-aotc | lumen-cranelift | c | cpp | rust | python |
 |---|---|---|---|---|---|---|---|
-| **fib** | 0.005s / nanMB | 0.005s / nanMB | 0.002s / nanMB | 0.002s / nanMB | 0.011s / nanMB | 0.002s / nanMB | 0.030s / nanMB |
-| **sum** | 0.028s / nanMB | 0.002s / nanMB | 0.007s / nanMB | 0.001s / nanMB | 0.002s / nanMB | 0.001s / nanMB | 0.614s / nanMB |
-| **primes** | 0.012s / nanMB | 0.003s / nanMB | 0.003s / nanMB | 0.002s / nanMB | 0.002s / nanMB | 0.002s / nanMB | 0.025s / nanMB |
-| **strings** | 0.172s / nanMB | 0.022s / nanMB | 0.003s / nanMB | 0.011s / nanMB | 0.013s / nanMB | 0.017s / nanMB | 0.066s / nanMB |
-| **arrays** | 0.061s / nanMB | 0.003s / nanMB | 0.003s / nanMB | 0.002s / nanMB | 0.003s / nanMB | 0.002s / nanMB | 0.047s / nanMB |
+| **fib** | 0.007s / nanMB | 0.005s / nanMB | 0.002s / nanMB | 0.001s / nanMB | 0.009s / nanMB | 0.003s / nanMB | 0.046s / nanMB |
+| **sum** | 0.013s / nanMB | 0.002s / nanMB | 0.007s / nanMB | 0.001s / nanMB | 0.002s / nanMB | 0.001s / nanMB | 0.626s / nanMB |
+| **primes** | 0.006s / nanMB | 0.002s / nanMB | 0.003s / nanMB | 0.002s / nanMB | 0.002s / nanMB | 0.002s / nanMB | 0.025s / nanMB |
+| **strings** | 0.169s / nanMB | 0.015s / nanMB | 0.003s / nanMB | 0.012s / nanMB | 0.008s / nanMB | 0.014s / nanMB | 0.062s / nanMB |
+| **arrays** | 0.060s / nanMB | 0.003s / nanMB | 0.003s / nanMB | 0.002s / nanMB | 0.003s / nanMB | 0.002s / nanMB | 0.040s / nanMB |
 
----
+## Bench-5 oficial (regresión) — v3.5.41 post-fix
 
-## Ronda v3.5.37 — estado actual (min-of-15, release, JIT default-ON)
+Protocolo: mejor medición única por tarea de `lumen run` (5 tareas, JIT apagado = default del binario).
 
-| Tarea | JIT ON | JIT OFF (intérprete) | Ganancia | Salida |
-|---|---|---|---|---|
-| sum | 28.1 ms | 1138.4 ms | 41× | 49999995000000 ✓ |
-| fib | 4.4 ms | 100.4 ms | 23× | 121393 ✓ |
-| primes | 11.8 ms | 34.5 ms | 2.9× | 2262 ✓ |
-| strings | 162.3 ms | 177.2 ms | 1.09× | 2888890 ✓ |
-| arrays | 60.5 ms | 91.5 ms | 1.51× | 19999900000 ✓ |
-| **TOTAL** | **267.1 ms** | **1541.9 ms** | **5.8×** | — |
+| Estado | fib | sum | primes | strings | arrays | TOTAL |
+|---|---|---|---|---|---|---|
+| Certificado (v3.5.40) | — | — | — | — | — | **244 ms** (línea base ~245 ms) |
+| Post-fix (v3.5.41) | 4.2–5.4 | 12.4–14.2 | 4.8–6.0 | 161.5–172.9 | 58.9–61.9 | **241.9–244.2 ms** (3 tandas) ✅ sin regresión |
 
-Evolución: 590 → 383 → 343.5 → 275.7 → 272.6 → **267.1 ms**.
-Arquitectura del JIT: [docs/arquitectura/jit.md](../docs/arquitectura/jit.md).
-
----
-
-## Historial v3.5.31 → v3.5.37 (resumen; run_bench.py regenera este archivo — se re-anexa aquí)
-
-- **v3.5.31/32**: Tier-2 de bucles (aritmética de pila nativa, Call/argc
-  nativos, verifier estático, Jmp en cuerpo); arrays Tier-2; super-opcodes
-  de 6 (BinCmpJmp/BinKCmpJmp/BinKKCmpJmp); strings Tier-2 (dyn_arith);
-  probe fusionado lj_probe_int + lj_call_fast. 590 → 383 ms.
-- **v3.5.33**: BUG del constant folder IR (MIN/-1 panic + % truncante).
-  Gate dyn_written. 343.5 ms.
-- **v3.5.34**: BUG del folder optimize.rs (delta NETO: `f(3)+1` perdía el
-  argumento y el Add). Tier-R recursión nativa en registros (fib 74→4.4).
-  has_refs en Ret. 275.7 ms.
-- **v3.5.35**: BUG de soundness — flat obsoleto en Tier-2 (realocación por
-  calls a usuario); refetch del flat. JmpIf nativo (contar_primos Tier-2).
-  272.6 ms.
-- **v3.5.36**: pools de buffers de scope (slot_pool/map_pool) + invalidación
-  SELECTIVA de la caché de variables. fib OFF 107.7→100.4 ms. 268 ms.
-- **v3.5.37**: análisis estático de tipos VTag (concat rápido lj_concat,
-  Load/Store nativos por etiqueta, arrays con etiqueta de elementos) +
-  guardas de `slots`. 267.1 ms.
+JIT ON post-fix: TOTAL 251.1 ms (misma banda; las tareas no llegan a compilarse antes de terminar).
+Re-verificación tras reconstrucción (3ª ronda, mismo fix): tandas de 241.9 / 244.2 / 242.8 ms y A/B intercalado con C en el mismo host (vm 248.9 ms vs C 16.5 ms, ratio 15.1× — C también bajó 8% respecto a la certificación: deriva de host, no regresión).
