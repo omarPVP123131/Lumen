@@ -4,9 +4,8 @@
 # ============================================================================
 
 # ── 1. RUST & CARGO ───────────────────────────────────────────────────────
-/target/
+# target/ cubre cualquier nivel (raíz, crates/*, etc.) — dedup de /target/ + **/target/
 target/
-**/target/
 **/*.rs.bk
 Cargo.lock.bak
 *.profraw
@@ -238,3 +237,6 @@ crates/lumen-vm/fuzz/artifacts/
 *.keystore
 id_rsa
 id_ed25519
+
+# Showcase wasm: paquete GENERADO por wasm-bindgen (no versionar)
+crates/lumen-wasm/web/showcase/pkg/

@@ -1,7 +1,7 @@
 # LÚMEN — Lenguaje de Programación Nativo Bilingüe de Ultra-Alto Rendimiento
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-3.5.7-orange)
 ![Tests](https://img.shields.io/badge/tests-956%20passing-brightgreen)
 ![JIT](https://img.shields.io/badge/JIT-Tier--2%20%2B%20Tier--R%20activo-blueviolet)
@@ -118,14 +118,14 @@ min-of-15, release:
 
 | Tarea | JIT ON | Intérprete (`LUMEN_JIT=0`) | Ganancia |
 |---|---|---|---|
-| sum | 28.1 ms | 1138.4 ms | 41× |
-| fib | 4.4 ms | 100.4 ms | 23× (~2× el C) |
-| primes | 11.8 ms | 34.5 ms | 2.9× |
-| strings | 162.3 ms | 177.2 ms | 1.09× |
-| arrays | 60.5 ms | 91.5 ms | 1.51× |
-| **TOTAL** | **267.1 ms** | **1541.9 ms** | **5.8×** |
+| sum | 12.3 ms | 1138.4 ms | 92× |
+| fib | 3.9 ms | 100.4 ms | 26× (~2× el C) |
+| primes | 4.5 ms | 34.5 ms | 7.7× |
+| strings | 165.7 ms | 177.2 ms | 1.07× |
+| arrays | 58.5 ms | 91.5 ms | 1.56× |
+| **TOTAL** | **~245 ms** | **1541.9 ms** | **6.3×** |
 
-Evolución del total: 590 → 383 → 343.5 → 275.7 → **267.1 ms**. Las rondas
+Evolución del total: 590 → 383 → 343.5 → 275.7 → 267.1 → **~245 ms**. Las rondas
 también cazaron **4 bugs reales** (constant folder IR, folder de optimización,
 puntero `flat` obsoleto en Tier-2, indexado sin guard en Load/Store nativos) —
 todos arreglados y cubiertos por la batería de paridad ON/OFF.
