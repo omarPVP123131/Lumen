@@ -9,6 +9,8 @@
 ![Headless](https://img.shields.io/badge/headless-LUMEN__HEADLESS-lightgrey)
 ![Fases](https://img.shields.io/badge/fases-0--220%20+%20self--hosting-blueviolet)
 
+**Autor principal:** **Omar Palomares Velasco** — [@omarPVP123131](https://github.com/omarPVP123131)
+
 > **El primer lenguaje de programación moderno de sistemas y aplicaciones con el español y el inglés como ciudadanos de primera clase.**
 > Pipeline completo: Lexer → Parser → Sema (Borrow Checker & Comptime) → IR (Neuro-Optimizador) → Bytecode → **VM + JIT Cranelift (Tier-1 / Tier-2 / Tier-R)** → AOT (C99 / Cranelift / LLVM / Stage-3 Autónomo).
 
@@ -176,5 +178,5 @@ La documentación está organizada por carpetas — índice completo en [docs/RE
 
 ---
 
-*LÚMEN v3.5.7 — © 2026 LÚMEN Core Team & Comunidad. 956 tests, 396 ejemplos, AOT C/Cranelift/LLVM completos, JIT Tier-1/Tier-2/Tier-R activo.*
+*LÚMEN v3.5.7 — © 2026 LÚMEN Core Team & Comunidad. **Autor principal: Omar Palomares Velasco** — [@omarPVP123131](https://github.com/omarPVP123131). 956 tests, 396 ejemplos, AOT C/Cranelift/LLVM completos, JIT Tier-1/Tier-2/Tier-R activo.*
 
