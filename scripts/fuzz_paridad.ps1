@@ -16,9 +16,12 @@ function Normaliza($s) {
 $par = 0; $dif = 0; $falla = 0
 foreach ($f in $Files) {
     $vmOut   = & cargo run --quiet --bin lumen -- run $f 2>&1
-    $tmpExe = Join-Path ([IO.Path]::GetDirectoryName($f)) ([IO.Path]::GetFileNameWithoutExtension($f) + ".exe")
+    $dir  = [IO.Path]::GetDirectoryName($f)
+    $base = Join-Path $dir ([IO.Path]::GetFileNameWithoutExtension($f))
     cargo run --quiet --bin lumen -- build --native $f 2>&1
-    if (-not (Test-Path $tmpExe)) { Write-Host "FALLA-COMPILA $f"; $falla++; continue }
+    # v3.5.41: en Linux `build --native` produce el binario SIN extensión .exe
+    $tmpExe = if (Test-Path "$base.exe") { "$base.exe" } elseif (Test-Path $base) { $base } else { $null }
+    if (-not $tmpExe) { Write-Host "FALLA-COMPILA $f"; $falla++; continue }
     $cOut = & $tmpExe 2>&1
     $v = @(Normaliza ($vmOut -join "`n"))
     $n = @(Normaliza ($cOut -join "`n"))

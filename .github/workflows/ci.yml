@@ -53,6 +53,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace --verbose
+      # v3.5.40: validación LÚMEN completa en Windows real (no solo cargo
+      # test): checker sobre el corpus + gate 0 crashes sobre el binario.
+      - name: Validate All LÚMEN Examples
+        run: cargo run --bin lumen -- check examples
+      - name: Gate 0 crashes / 0 fails (Windows)
+        run: |
+          cargo build --release --bin lumen
+          python scripts/ci_gate.py --lumen target/release/lumen.exe --stdlib stdlib --examples examples --timeout 8 --workers 4
 
   macos-test:
     name: 🍎 Tests (macOS Opcional)
@@ -63,6 +71,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace
+      # v3.5.40: validación LÚMEN completa en macOS real.
+      - name: Validate All LÚMEN Examples
+        run: cargo run --bin lumen -- check examples
 
   wasm-check:
     name: 🌐 WASM Check
@@ -110,7 +121,7 @@ jobs:
           cp -r examples /tmp/pkg/examples
           chmod +x /tmp/pkg/lumen
       - name: Run gate sobre artefacto empaquetado (no solo árbol fuentes)
-        run: python scripts/ci_gate.py --lumen /tmp/pkg/lumen --stdlib /tmp/pkg/stdlib --examples /tmp/pkg/examples --timeout 8 --workers 8
+        run: python scripts/ci_gate.py --lumen /tmp/pkg/lumen --stdlib /tmp/pkg/stdlib --examples /tmp/pkg/examples --timeout 8 --workers 4
 
   sanitizer-check:
     name: 🧪 ASan/UBSan (nightly)
@@ -150,10 +161,68 @@ jobs:
             ls -la crates/lumen-vm/tests/production.rs | head
           fi
 
-  # ── 3. AUTOTAG AUTOMATIZADO TRAS CI VERDE ───────────────────────────────
+  # ── 2.5 SUITE VARIADA DE BENCHMARKS (checksums exactos, 5 lenguajes) ──────
+  # v3.5.40: las 4 tareas aditivas (sort/matmul/sieve/dict) con golden
+  # calculado por implementaciones de referencia. Cada lenguaje presente en
+  # el runner participa; los toolchains ausentes se omiten sin fallar.
+  bench-suite:
+    name: 📊 Bench suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allow_fail || false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            allow_fail: false
+            py: python3
+          - os: windows-latest
+            allow_fail: false
+            py: python
+          - os: macos-14
+            allow_fail: true
+            py: python3
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build lumen (debug — la suite verifica checksums, no tiempos)
+        run: cargo build --bin lumen
+      - name: Run benchmark suite (checksums en 5 lenguajes)
+        run: ${{ matrix.py }} scripts/ci_bench_suite.py
+
+  # ── 2.6 SMOKE AOT: stubs lumen_rt.h + enlace -lm (C -O3 y Cranelift) ──────
+  # v3.5.40: compila ejemplos a binario nativo con los DOS backends AOT y
+  # compara su salida contra la VM (mismo input → mismo output).
+  aot-smoke:
+    name: 🔨 AOT smoke (C -O3 + Cranelift vs VM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y gcc
+      - name: Build release lumen
+        run: cargo build --release --bin lumen
+      - name: Smoke fib (VM vs AOT-C vs AOT-Cranelift)
+        run: |
+          set -e
+          mkdir -p /tmp/aot_smoke && cp benchmarks/lumen/fib.nv examples/hello.nv /tmp/aot_smoke/
+          cd /tmp/aot_smoke
+          LUMEN="$GITHUB_WORKSPACE/target/release/lumen"
+          out_vm_fib=$("$LUMEN" run fib.nv)
+          "$LUMEN" build --native fib.nv > /dev/null && out_c_fib=$(./fib)
+          "$LUMEN" build --aot rust fib.nv > /dev/null && out_cl_fib=$(./fib)
+          out_vm_hello=$("$LUMEN" run hello.nv)
+          "$LUMEN" build --native hello.nv > /dev/null && out_c_hello=$(./hello)
+          echo "fib:  VM='$out_vm_fib' AOT-C='$out_c_fib' AOT-Cranelift='$out_cl_fib'"
+          echo "hello: VM='$out_vm_hello' AOT-C='$out_c_hello'"
+          test "$out_vm_fib" = "$out_c_fib" && test "$out_vm_fib" = "$out_cl_fib"
+          test "$out_vm_hello" = "$out_c_hello"
+
+
   autotag:
     name: 🏷️ Autotag v<version>
-    needs: [fmt, clippy, linux-test, windows-test, wasm-check, headless-check, gate]
+    needs: [fmt, clippy, linux-test, windows-test, wasm-check, headless-check, gate, bench-suite, aot-smoke]
     if: (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
