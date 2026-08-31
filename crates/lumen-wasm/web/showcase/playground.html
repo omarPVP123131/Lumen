@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>◈ LÚMEN Playground — bloques y código</title>
+<style>
+  :root {
+    --bg: #05070d;
+    --panel: #0c0f18;
+    --panel-2: #111522;
+    --line: rgba(148, 163, 184, .16);
+    --violet: #8b5cf6;
+    --violet-2: #a78bfa;
+    --cyan: #22d3ee;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --text: #e8ecf4;
+    --muted: #8b94a7;
+    --dim: #5b6474;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background:
+      radial-gradient(1000px 500px at 80% -10%, rgba(139, 92, 246, .10), transparent 60%),
+      radial-gradient(800px 400px at 10% 110%, rgba(34, 211, 238, .07), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    display: flex; flex-direction: column;
+    min-width: 900px;
+  }
+  /* ── cabecera ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; border-bottom: 1px solid var(--line); background: rgba(12, 15, 24, .8);
+    backdrop-filter: blur(6px);
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: .4px; }
+  .wordmark .bolt { color: var(--violet-2); font-size: 22px; }
+  .wordmark .name { color: var(--text); }
+  .wordmark .tag { color: var(--cyan); font-weight: 600; font-size: 15px; margin-left: 4px; }
+  .chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted);
+    padding: 4px 10px; border-radius: 999px; font-size: 12px; white-space: nowrap;
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip.live { color: var(--green); }
+  a.chip { text-decoration: none; color: var(--cyan); }
+  a.chip:hover { border-color: var(--cyan); }
+  /* ── pestañas ── */
+  .tabs {
+    display: flex; align-items: center; gap: 10px; padding: 8px 20px;
+    border-bottom: 1px solid var(--line); background: rgba(8, 10, 16, .6);
+  }
+  .tab {
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+    padding: 6px 16px; border-radius: 8px; cursor: pointer; font-family: var(--sans);
+    font-size: 14px; font-weight: 600;
+  }
+  .tab.on { background: color-mix(in srgb, var(--violet) 18%, var(--panel)); color: var(--violet-2); border-color: var(--violet); }
+  .tabs .hint { color: var(--dim); font-size: 12px; margin-left: auto; }
+  /* ── rejilla principal ── */
+  #grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr minmax(330px, 400px); }
+  #zona-bloques { display: grid; grid-template-columns: minmax(230px, 280px) 1fr; min-height: 0; }
+  body.modo-codigo #zona-bloques { display: none; }
+  body.modo-codigo #zona-codigo { display: flex; }
+  #zona-codigo { display: none; min-height: 0; flex-direction: column; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin: 12px; display: flex; flex-direction: column; min-height: 0; }
+  .panel-h {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--muted);
+    font-size: 13px; font-weight: 600;
+  }
+  .panel-h .mini {
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted);
+    border-radius: 6px; padding: 3px 9px; font-size: 11px; cursor: pointer;
+  }
+  .panel-h .mini:hover { color: var(--text); border-color: var(--dim); }
+  .panel-f { padding: 6px 12px; border-top: 1px solid var(--line); color: var(--dim); font-size: 11px; }
+  /* ── paleta ── */
+  .paleta { border-right: 1px solid var(--line); overflow-y: auto; padding: 12px; background: rgba(8, 10, 16, .55); }
+  .pal-h { color: var(--muted); font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+  .cat { margin-bottom: 14px; }
+  .cat-t { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .cat-t i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .pal .blk { margin: 0 0 6px; }
+  details.help { margin-top: 14px; color: var(--dim); font-size: 12px; }
+  details.help li { margin: 3px 0; }
+  /* ── zona de trabajo ── */
+  .ws-panel { display: flex; flex-direction: column; min-height: 0; padding: 12px; gap: 10px; }
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: var(--sans);
+  }
+  .btn:hover:not(:disabled) { border-color: var(--dim); }
+  .btn.pri { background: color-mix(in srgb, var(--violet) 22%, var(--panel-2)); border-color: var(--violet); color: var(--violet-2); }
+  .btn.pri:hover:not(:disabled) { background: color-mix(in srgb, var(--violet) 32%, var(--panel-2)); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .toolbar select, .toolbar label { color: var(--muted); font-size: 12px; }
+  .toolbar select {
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    border-radius: 6px; padding: 5px 8px; font-family: var(--sans);
+  }
+  /* ── lienzo de bloques ── */
+  #ws {
+    flex: 1; min-height: 320px; overflow: auto; border: 1px dashed var(--line);
+    border-radius: 12px; padding: 18px 14px; display: flex; flex-direction: column; gap: 8px;
+    align-items: flex-start; background:
+      linear-gradient(rgba(148,163,184,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148,163,184,.035) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  #ws:not(:has(.blk))::before {
+    content: "Aquí se arma tu programa… arrastra bloques desde la paleta (o haz doble clic en uno para añadirlo).";
+    color: var(--dim); font-size: 13px; margin: auto;
+  }
+  /* ── bloques ── */
+  .blk {
+    --bc: var(--violet);
+    display: inline-flex; flex-direction: column; user-select: none;
+    border-radius: 8px; font-size: 13px; max-width: 100%;
+  }
+  .blk .row {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    background: color-mix(in srgb, var(--bc) 12%, var(--panel-2));
+    border: 1px solid color-mix(in srgb, var(--bc) 45%, transparent);
+    border-left: 4px solid var(--bc); border-radius: 8px; padding: 5px 8px;
+    color: var(--text); cursor: default;
+  }
+  .blk .grip { color: color-mix(in srgb, var(--bc) 80%, var(--muted)); cursor: grab; font-size: 11px; padding: 0 2px; }
+  .blk .grip:active { cursor: grabbing; }
+  .blk .lbl { color: color-mix(in srgb, var(--bc) 75%, var(--text)); font-weight: 600; }
+  .blk .inp, .blk .sel {
+    border: 1px solid var(--line); background: #070a12; color: var(--text);
+    border-radius: 6px; padding: 3px 7px; font-size: 12px; font-family: var(--mono);
+    max-width: 120px;
+  }
+  .blk .inp:focus, .blk .sel:focus { outline: none; border-color: var(--cyan); }
+  .blk .del {
+    border: none; background: transparent; color: var(--dim); cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 0 3px; margin-left: auto; visibility: hidden;
+  }
+  .blk:hover .del { visibility: visible; }
+  .blk .del:hover { color: var(--rose); }
+  /* bloques de valor (píldoras) */
+  .blk.val { cursor: grab; }
+  .blk.val:active { cursor: grabbing; }
+  .blk.val .row {
+    background: color-mix(in srgb, var(--bc) 17%, #0a0e18);
+    border: 1px solid color-mix(in srgb, var(--bc) 50%, transparent);
+    border-radius: 999px; padding: 4px 10px;
+  }
+  /* huecos para valores */
+  .hole {
+    display: inline-flex; align-items: center; min-width: 46px; min-height: 24px;
+    border: 1px dashed color-mix(in srgb, var(--cyan) 55%, transparent);
+    border-radius: 8px; padding: 1px 4px; vertical-align: middle;
+  }
+  .hole:empty::after { content: "▫"; color: var(--dim); font-size: 11px; }
+  .hole.hole-hl { background: color-mix(in srgb, var(--cyan) 14%, transparent); border-color: var(--cyan); }
+  .hole .blk { margin: 2px 0; }
+  /* cuerpos anidados */
+  .body {
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+    margin: 2px 0 2px 14px; padding: 6px 0 6px 10px;
+    border-left: 2px solid color-mix(in srgb, var(--bc) 40%, transparent);
+    min-height: 24px;
+  }
+  .body:not(:has(.blk))::after { content: "▸ suelta bloques aquí"; color: var(--dim); font-size: 11px; padding: 2px 0; }
+  .blabel { color: var(--dim); font-size: 11px; font-weight: 600; margin: 4px 0 0 8px; letter-spacing: .6px; text-transform: uppercase; }
+  /* arrastre */
+  .blk.arrastrando {
+    position: fixed !important; z-index: 2000; pointer-events: none; opacity: .93;
+    transform: scale(1.03); box-shadow: 0 14px 34px rgba(0, 0, 0, .55); margin: 0;
+  }
+  body.drag-activo { cursor: grabbing; user-select: none; }
+  body.drag-activo .blk .row { cursor: grabbing; }
+  .ghost {
+    height: 10px; min-width: 90px; border-radius: 5px;
+    background: color-mix(in srgb, var(--violet) 22%, transparent);
+    border: 1px dashed var(--violet); pointer-events: none;
+  }
+  /* colores de categoría */
+  .c-vio { --bc: #8b5cf6; } .c-amb { --bc: #fbbf24; } .c-grn { --bc: #34d399; }
+  .c-cyn { --bc: #22d3ee; } .c-ros { --bc: #fb7185; } .c-lil { --bc: #a78bfa; }
+  .c-blu { --bc: #60a5fa; } .c-tea { --bc: #2dd4bf; }
+  /* ── editor de código ── */
+  #codigo {
+    flex: 1; min-height: 380px; resize: none; border: 1px solid var(--line);
+    background: #070a12; color: #d7e3f4; border-radius: 12px; padding: 14px;
+    font-family: var(--mono); font-size: 13px; line-height: 1.55; tab-size: 4;
+  }
+  #codigo:focus { outline: none; border-color: var(--cyan); }
+  /* ── lateral ── */
+  #lateral { overflow-y: auto; border-left: 1px solid var(--line); background: rgba(8, 10, 16, .5); display: flex; flex-direction: column; }
+  #lienzo { width: 100%; height: auto; background: #05070d; border-radius: 8px; display: block; }
+  #consola {
+    margin: 0; padding: 10px 12px; flex: 1; min-height: 140px; max-height: 220px; overflow: auto;
+    font-family: var(--mono); font-size: 12px; line-height: 1.5; color: #cbd5e1; white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #consola .sec { color: var(--cyan); }
+  #consola .err { color: var(--rose); }
+  #consola .ok { color: var(--green); }
+  #consola .dim { color: var(--dim); }
+  .genc summary { cursor: pointer; padding: 10px 12px; color: var(--muted); font-size: 13px; font-weight: 600; }
+  #gencode {
+    margin: 0 12px 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: #070a12; color: #b9c8e0; font-family: var(--mono); font-size: 11.5px;
+    max-height: 220px; overflow: auto; white-space: pre;
+  }
+  #btn-editar-codigo { margin: 0 12px 12px; }
+  /* ── responsive ── */
+  @media (max-width: 1100px) {
+    body { min-width: 0; }
+    #grid { grid-template-columns: 1fr; overflow-y: auto; }
+    #zona-bloques { grid-template-columns: 1fr; }
+    .paleta { border-right: none; border-bottom: 1px solid var(--line); max-height: 260px; }
+    #lateral { border-left: none; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <span class="bolt">◈</span>
+    <span><span class="name">LÚMEN</span> <span class="tag">playground</span></span>
+  </div>
+  <div class="chips">
+    <span class="chip">runtime <b id="chip-ver">cargando…</b></span>
+    <span class="chip">modo <b>bloques + código</b></span>
+    <span class="chip live" id="estado">● <b>inicializando…</b></span>
+    <a class="chip" href="./" title="volver al showcase">← showcase</a>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab on" id="tab-bloques">🧩 Bloques</button>
+  <button class="tab" id="tab-codigo">⌨️ Código</button>
+  <span class="hint" id="hint-tab">arrastra bloques, encájalos y pulsa Ejecutar — el código .nv generado siempre está a la vista</span>
+</div>
+
+<div id="grid">
+
+  <!-- ══════════ MODO BLOQUES ══════════ -->
+  <div id="zona-bloques">
+    <aside class="paleta">
+      <div class="pal-h">🧱 Paleta</div>
+      <div id="pal"></div>
+      <details class="help">
+        <summary>Cómo se usa</summary>
+        <ul>
+          <li><b>Arrastra</b> un bloque a la zona de trabajo (o <b>doble clic</b> para añadirlo al final).</li>
+          <li>Los bloques con muesca aceptan <b>más bloques dentro</b> (si, mientras, para…).</li>
+          <li>Los <b>huecos ▫</b> admiten bloques de valor (números, operadores…).</li>
+          <li><b>✕</b> elimina un bloque; arrastrar un valor <b>fuera de su hueco</b> también lo borra.</li>
+          <li><b>Ejecutar</b> compila y corre tu programa en la VM LÚMEN real (WebAssembly).</li>
+          <li>⚠ <b>cuidado</b>: un <i>mientras (verdadero)</i> sin <i>romper</i> congela la pestaña (la VM corre en el hilo principal).</li>
+        </ul>
+      </details>
+    </aside>
+
+    <section class="ws-panel">
+      <div class="toolbar">
+        <button class="btn pri" id="run-bloques" disabled>▶ Ejecutar</button>
+        <label>ejemplo
+          <select id="ej-bloques"></select>
+        </label>
+        <button class="btn" id="btn-cargar-ej" disabled>Cargar</button>
+        <button class="btn" id="btn-limpiar-bloques" disabled>🧹 Limpiar</button>
+        <button class="btn" id="btn-ver-codigo" disabled>⌨️ ver como código</button>
+      </div>
+      <div id="ws" class="slot"></div>
+    </section>
+  </div>
+
+  <!-- ══════════ MODO CÓDIGO ══════════ -->
+  <div id="zona-codigo">
+    <section class="ws-panel" style="flex:1; min-height:0;">
+      <div class="toolbar">
+        <button class="btn pri" id="run-codigo" disabled>▶ Ejecutar</button>
+        <button class="btn" id="btn-check" disabled>✓ Comprobar</button>
+        <label>ejemplo
+          <select id="ej-codigo"></select>
+        </label>
+        <button class="btn" id="btn-limpiar-codigo" disabled>🧹 Limpiar</button>
+      </div>
+      <textarea id="codigo" spellcheck="false" placeholder="escribe código LÚMEN aquí…"></textarea>
+    </section>
+  </div>
+
+  <!-- ══════════ LATERAL COMPARTIDO ══════════ -->
+  <aside id="lateral">
+    <section class="panel">
+      <div class="panel-h">🖼 Lienzo — puente LÚMEN ↔ JS
+        <button class="mini" id="btn-limpiar-lienzo">limpiar</button>
+      </div>
+      <canvas id="lienzo" width="480" height="360"></canvas>
+      <div class="panel-f">los bloques «Lienzo» y los ejemplos de dibujo usan <code>__js_llamar("punto"/"linea"/"color"/"limpiar")</code> — la VM LÚMEN llama a JavaScript real.</div>
+    </section>
+    <section class="panel">
+      <div class="panel-h">🖥 Consola
+        <button class="mini" id="btn-limpiar-consola">limpiar</button>
+      </div>
+      <pre id="consola"></pre>
+    </section>
+    <section class="panel">
+      <details class="genc" id="genc">
+        <summary>📜 código .nv generado por los bloques</summary>
+        <pre id="gencode">(todavía no has ejecutado bloques)</pre>
+        <button class="btn" id="btn-editar-codigo" disabled>⌨️ editar como código</button>
+      </details>
+    </section>
+  </aside>
+</div>
+
+<datalist id="vars"></datalist>
+
+<script type="module">
+import init, { LumenRuntime } from "./pkg/lumen_wasm.js";
+
+/* ════════════════════════════════════════════════════════════════
+   PLAYGROUND LÚMEN — motor de bloques propio (sin dependencias),
+   generador de código .nv y ejecución en la VM WebAssembly real.
+   ════════════════════════════════════════════════════════════════ */
+
+const $ = (s) => document.querySelector(s);
+const ws = $("#ws"), pal = $("#pal"), consola = $("#consola"), gencode = $("#gencode");
+const estadoEl = $("#estado"), chipVer = $("#chip-ver");
+
+/* ── utilidades ── */
+const esc = (s) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+const escHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const tick = () => new Promise((r) => setTimeout(r, 30));
+
+const INP = (k, v = "", ph = "") => `<input class="inp" data-k="${k}" value="${escHtml(v)}" placeholder="${escHtml(ph)}">`;
+const SEL = (k, opts, sel = 0) =>
+  `<select class="sel" data-k="${k}">${opts.map((o, i) => `<option${i === sel ? " selected" : ""}>${o}</option>`).join("")}</select>`;
+const HOLE = `<span class="hole slot" title="arrastra aquí un bloque de valor"></span>`;
+
+/* ── catálogo de bloques ──
+   kind: "stmt" (bloque con cuerpo) | "val" (bloque de valor, entra en huecos).
+   row: HTML de la cabecera. bodies: número de cuerpos anidados.
+   code: genera el .nv (recibe bloque, contexto y profundidad). */
+const DEFS = {
+  /* Salida */
+  imprimir: { cat: "Salida", kind: "stmt", color: "c-vio", row: `imprimir ${HOLE}`,
+    code: (b, c, d) => `${ind(d)}imprimir(${V(b, 0, c)});` },
+  /* Variables */
+  declarar: { cat: "Variables", kind: "stmt", color: "c-amb", row: `sea ${INP("nombre", "x")} = ${HOLE}`,
+    code: (b, c, d) => `${ind(d)}sea ${T(b, "nombre") || "x"} = ${V(b, 0, c)};` },
+  asignar: { cat: "Variables", kind: "stmt", color: "c-amb", row: `pon ${INP("nombre", "x")} ← ${HOLE}`,
+    code: (b, c, d) => `${ind(d)}${T(b, "nombre") || "x"} = ${V(b, 0, c)};` },
+  cambiar: { cat: "Variables", kind: "stmt", color: "c-amb", row: `cambiar ${INP("nombre", "x")} en ${HOLE}`,
+    code: (b, c, d) => { const n = T(b, "nombre") || "x"; return `${ind(d)}${n} = ${n} + ${V(b, 0, c)};`; } },
+  /* Valores */
+  num: { cat: "Valores", kind: "val", color: "c-grn", row: `${INP("n", "0")}`,
+    vcode: (b, c) => T(b, "n") || "0" },
+  texto: { cat: "Valores", kind: "val", color: "c-grn", row: `“${INP("t", "hola")}”`,
+    vcode: (b, c) => `"${esc(T(b, "t"))}"` },
+  booleano: { cat: "Valores", kind: "val", color: "c-grn", row: SEL("b", ["verdadero", "falso"]),
+    vcode: (b, c) => T(b, "b") || "verdadero" },
+  variable: { cat: "Valores", kind: "val", color: "c-grn", row: `var ${INP("nombre", "i", "nombre de variable")}`,
+    vcode: (b, c) => T(b, "nombre") || "x" },
+  elemento: { cat: "Valores", kind: "val", color: "c-grn", row: `${INP("lista", "xs")} [ ${INP("idx", "0")} ]`,
+    vcode: (b, c) => `${T(b, "lista") || "xs"}[${T(b, "idx") || "0"}]` },
+  largo_de: { cat: "Valores", kind: "val", color: "c-grn", row: `largo de ${HOLE}`,
+    vcode: (b, c) => `largo(${V(b, 0, c)})` },
+  unir: { cat: "Valores", kind: "val", color: "c-grn", row: `${HOLE} unir ${HOLE}`,
+    vcode: (b, c) => `(${V(b, 0, c)} + ${V(b, 1, c)})` },
+  llamada: { cat: "Valores", kind: "val", color: "c-grn", row: `${INP("fn", "potencia")}( ${INP("args", "2, 10")} )`,
+    vcode: (b, c) => `${T(b, "fn") || "potencia"}(${T(b, "args") || "2, 10"})` },
+  js_llamar: { cat: "Valores", kind: "val", color: "c-grn", row: `JS ${INP("fn", "doble")}( ${INP("args", "21")} )`,
+    vcode: (b, c) => `__js_llamar("${esc(T(b, "fn") || "doble")}", ${T(b, "args") || "0"})` },
+  lista_vacia: { cat: "Valores", kind: "val", color: "c-blu", row: `lista vacía`,
+    vcode: (b, c) => `[]` },
+  /* Operadores */
+  op: { cat: "Operadores", kind: "val", color: "c-cyn",
+    row: `${HOLE} ${SEL("op", ["+", "−", "×", "÷", "%", "=", "≠", "<", "≤", ">", "≥", "y", "o"])} ${HOLE}`,
+    vcode: (b, c) => `(${V(b, 0, c)} ${OPS[T(b, "op")] || "+"} ${V(b, 1, c)})` },
+  negar: { cat: "Operadores", kind: "val", color: "c-cyn", row: `no ${HOLE}`,
+    vcode: (b, c) => `!(${V(b, 0, c)})` },
+  /* Control */
+  si: { cat: "Control", kind: "stmt", color: "c-ros", row: `si ${HOLE} entonces`, bodies: [null, "sino"],
+    code: (b, c, d) => {
+      const b1 = B(b, 0, c, d + 1), b2 = B(b, 1, c, d + 1);
+      let out = `${ind(d)}si (${V(b, 0, c)}) {\n${b1}${ind(d)}}`;
+      if (b2.trim()) out += ` sino {\n${b2}${ind(d)}}`;
+      return out;
+    } },
+  mientras: { cat: "Control", kind: "stmt", color: "c-ros", row: `mientras ${HOLE} hacer`, bodies: [null],
+    code: (b, c, d) => `${ind(d)}mientras (${V(b, 0, c)}) {\n${B(b, 0, c, d + 1)}${ind(d)}}` },
+  para: { cat: "Control", kind: "stmt", color: "c-ros", row: `para ${INP("v", "i")} de ${HOLE} a ${HOLE}`, bodies: [null],
+    code: (b, c, d) => {
+      const v = T(b, "v") || "i";
+      return `${ind(d)}para (entero ${v} = ${V(b, 0, c)}; ${v} <= ${V(b, 1, c)}; ${v} = ${v} + 1) {\n${B(b, 0, c, d + 1)}${ind(d)}}`;
+    } },
+  repetir: { cat: "Control", kind: "stmt", color: "c-ros", row: `repetir ${HOLE} veces`, bodies: [null],
+    code: (b, c, d) => {
+      const i = `__i${++c.loop}`;
+      return `${ind(d)}para (entero ${i} = 0; ${i} < ${V(b, 0, c)}; ${i} = ${i} + 1) {\n${B(b, 0, c, d + 1)}${ind(d)}}`;
+    } },
+  romper: { cat: "Control", kind: "stmt", color: "c-ros", row: `romper el bucle`,
+    code: (b, c, d) => `${ind(d)}romper;` },
+  continuar: { cat: "Control", kind: "stmt", color: "c-ros", row: `continuar el bucle`,
+    code: (b, c, d) => `${ind(d)}continuar;` },
+  retornar: { cat: "Control", kind: "stmt", color: "c-ros", row: `retornar ${HOLE}`,
+    code: (b, c, d) => `${ind(d)}retornar ${V(b, 0, c)};` },
+  /* Funciones */
+  funcion: { cat: "Funciones", kind: "stmt", color: "c-lil",
+    row: `funcion ${SEL("tipo", ["entero", "numero", "texto", "booleano", "nada"])} ${INP("nombre", "mi_fn")}( ${INP("params", "entero n", "parámetros")} )`, bodies: [null],
+    code: (b, c, d) => `${ind(d)}funcion ${T(b, "tipo") || "entero"} ${T(b, "nombre") || "mi_fn"}(${T(b, "params")}) {\n${B(b, 0, c, d + 1)}${ind(d)}}` },
+  /* Listas */
+  agregar: { cat: "Listas", kind: "stmt", color: "c-blu", row: `agregar ${HOLE} a ${INP("lista", "xs")}`,
+    code: (b, c, d) => `${ind(d)}${T(b, "lista") || "xs"}.agregar(${V(b, 0, c)});` },
+  /* Lienzo (puente JS) */
+  limpiar_lienzo: { cat: "Lienzo", kind: "stmt", color: "c-tea", row: `limpiar lienzo`,
+    code: (b, c, d) => `${ind(d)}__js_llamar("limpiar");` },
+  color_lienzo: { cat: "Lienzo", kind: "stmt", color: "c-tea", row: `color ${INP("hex", "#22d3ee")}`,
+    code: (b, c, d) => `${ind(d)}__js_llamar("color", "${esc(T(b, "hex") || "#22d3ee")}");` },
+  punto: { cat: "Lienzo", kind: "stmt", color: "c-tea", row: `punto en ( ${HOLE} , ${HOLE} )`,
+    code: (b, c, d) => `${ind(d)}__js_llamar("punto", ${V(b, 0, c)}, ${V(b, 1, c)});` },
+  linea: { cat: "Lienzo", kind: "stmt", color: "c-tea", row: `línea de ( ${HOLE} , ${HOLE} ) a ( ${HOLE} , ${HOLE} )`,
+    code: (b, c, d) => `${ind(d)}__js_llamar("linea", ${V(b, 0, c)}, ${V(b, 1, c)}, ${V(b, 2, c)}, ${V(b, 3, c)});` },
+};
+const OPS = { "+": "+", "−": "-", "×": "*", "÷": "/", "%": "%", "=": "==", "≠": "!=", "<": "<", "≤": "<=", ">": ">", "≥": ">=", "y": "&&", "o": "||" };
+const CATS = ["Salida", "Variables", "Valores", "Operadores", "Control", "Funciones", "Listas", "Lienzo"];
+const CAT_COLOR = { Salida: "c-vio", Variables: "c-amb", Valores: "c-grn", Operadores: "c-cyn", Control: "c-ros", Funciones: "c-lil", Listas: "c-blu", Lienzo: "c-tea" };
+
+const ind = (d) => "    ".repeat(d);
+/* valor de un input/select de la FILA del bloque (solo hijos directos: evita
+   que los bloques anidados en los huecos oculten los controles propios) */
+const T = (b, k) => {
+  const el = [...b.firstElementChild.children].find((c) => c.dataset && c.dataset.k === k);
+  return el && el.value !== undefined ? el.value.trim() : "";
+};
+/* huecos de la cabecera (solo hijos directos de .row) */
+const holesDe = (b) => [...b.firstElementChild.children].filter((c) => c.classList.contains("hole"));
+/* código de un hueco; si está vacío se compila como 0 y se avisa */
+const V = (b, i, c) => {
+  const hs = holesDe(b);
+  const v = hs[i] ? hs[i].firstElementChild : null;
+  if (!v) { c.vacios++; return "0"; }
+  const def = DEFS[v.dataset.k];
+  return def.vcode(v, c);
+};
+/* cuerpo anidado (índice) → bloque de líneas ya indentadas a profundidad d */
+const B = (b, i, c, d) =>
+  [...b.querySelectorAll(":scope > .body")[i].children]
+    .filter((ch) => ch.classList.contains("blk"))
+    .map((ch) => genStmt(ch, c, d)).join("\n");
+const genStmt = (el, c, d) => DEFS[el.dataset.k].code(el, c, d);
+
+function generarCodigo() {
+  const c = { loop: 0, vacios: 0 };
+  const codigo = [...ws.children]
+    .filter((ch) => ch.classList.contains("blk"))
+    .map((el) => genStmt(el, c, 0)).join("\n");
+  return { codigo, vacios: c.vacios };
+}
+
+/* ── fábrica de bloques ── */
+function makeBlock(k, paraPaleta = false) {
+  const def = DEFS[k];
+  const el = document.createElement("div");
+  el.className = `blk ${def.kind} ${def.color}`;
+  el.dataset.k = k;
+  const row = document.createElement("div");
+  row.className = "row";
+  if (def.kind === "stmt") {
+    const grip = document.createElement("span");
+    grip.className = "grip"; grip.textContent = "⠿"; grip.title = "arrastra desde aquí";
+    row.appendChild(grip);
+  }
+  row.insertAdjacentHTML("beforeend", def.row);
+  if (def.kind === "stmt" && !paraPaleta) {
+    const del = document.createElement("button");
+    del.className = "del"; del.textContent = "×"; del.title = "eliminar bloque";
+    del.addEventListener("click", () => { el.remove(); });
+    row.appendChild(del);
+  }
+  el.appendChild(row);
+  if (def.bodies) {
+    def.bodies.forEach((label, i) => {
+      if (label) {
+        const lb = document.createElement("div");
+        lb.className = "blabel"; lb.textContent = label;
+        el.appendChild(lb);
+      }
+      const body = document.createElement("div");
+      body.className = "body slot";
+      el.appendChild(body);
+    });
+  }
+  return el;
+}
+
+/* ── paleta ── */
+function buildPaleta() {
+  for (const cat of CATS) {
+    const sec = document.createElement("div");
+    sec.className = "cat";
+    const t = document.createElement("div");
+    t.className = "cat-t";
+    t.innerHTML = `<i style="background:${catColor(cat)}"></i> ${cat}`;
+    sec.appendChild(t);
+    for (const [k, def] of Object.entries(DEFS)) {
+      if (def.cat !== cat) continue;
+      const b = makeBlock(k, true);
+      b.classList.add("pal");
+      b.addEventListener("dblclick", () => {
+        if (DEFS[k].kind !== "stmt") return;          // los valores solo entran en huecos
+        ws.appendChild(makeBlock(k)); marcarCambio();
+      });
+      sec.appendChild(b);
+    }
+    pal.appendChild(sec);
+  }
+}
+const catColor = (cat) => ({ "c-vio": "#8b5cf6", "c-amb": "#fbbf24", "c-grn": "#34d399", "c-cyn": "#22d3ee", "c-ros": "#fb7185", "c-lil": "#a78bfa", "c-blu": "#60a5fa", "c-tea": "#2dd4bf" })[CAT_COLOR[cat]];
+
+/* ── motor de arrastre (pointer events, sin dependencias) ── */
+let drag = null;
+
+function dragStart(el, x, y) {
+  drag = {
+    el,
+    origParent: el.parentElement,
+    origNext: el.nextSibling,
+    fromIsHole: el.parentElement ? el.parentElement.classList.contains("hole") : false,
+    ghost: null, holeEl: null,
+  };
+  el.classList.add("arrastrando");
+  el.style.left = (x + 8) + "px";
+  el.style.top = (y + 8) + "px";
+  document.body.classList.add("drag-activo");
+}
+
+function limpiarDrop() {
+  document.querySelectorAll(".ghost").forEach((g) => g.remove());
+  document.querySelectorAll(".hole-hl").forEach((h) => h.classList.remove("hole-hl"));
+}
+
+document.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  const t = e.target;
+  const blk = t.closest(".blk");
+  if (!blk) return;
+  const esVal = blk.classList.contains("val");
+  const enHueco = blk.parentElement && blk.parentElement.classList.contains("hole");
+  if (t.closest("input, select, button")) return;       // editable
+  if (!enHueco && t.closest(".hole")) return;           // hueco dentro de un bloque de enunciado
+  if (!esVal && !t.closest(".grip")) return;            // los bloques de enunciado se arrastran por el asa
+  e.preventDefault();
+  dragStart(blk.closest(".pal") ? makeBlock(blk.dataset.k) : blk, e.clientX, e.clientY);
+});
+
+document.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  drag.el.style.left = (e.clientX + 8) + "px";
+  drag.el.style.top = (e.clientY + 8) + "px";
+  limpiarDrop();
+  const hit = document.elementFromPoint(e.clientX, e.clientY);
+  if (!hit) return;
+  // ¿hueco de valor?
+  const hole = hit.closest(".hole");
+  if (hole && !drag.el.contains(hole)) {
+    if (drag.el.classList.contains("val")) { hole.classList.add("hole-hl"); drag.holeEl = hole; }
+    return;
+  }
+  // ¿contenedor de enunciados?
+  if (!drag.el.classList.contains("stmt")) return;
+  const slot = hit.closest(".body, #ws");
+  if (!slot || drag.el.contains(slot)) return;
+  const kids = [...slot.children].filter((c) => c.classList.contains("blk") && c.classList.contains("stmt") && c !== drag.el);
+  let idx = kids.length;
+  for (let i = 0; i < kids.length; i++) {
+    const r = kids[i].getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) { idx = i; break; }
+  }
+  const ghost = document.createElement("div");
+  ghost.className = "ghost";
+  slot.insertBefore(ghost, kids[idx] || null);
+  drag.ghost = ghost;
+});
+
+document.addEventListener("pointerup", (e) => {
+  if (!drag) return;
+  if (drag.holeEl) { drag.el.remove(); drag.holeEl.appendChild(drag.el); }
+  else if (drag.ghost) { drag.el.remove(); drag.ghost.replaceWith(drag.el); }
+  else if (drag.fromIsHole) { drag.el.remove(); }          // sacado de un hueco y soltado al vacío → se elimina
+  else { /* cancelado: vuelve a su sitio */ }
+  drag.el.classList.remove("arrastrando");
+  drag.el.style.left = drag.el.style.top = "";
+  limpiarDrop();
+  document.body.classList.remove("drag-activo");
+  drag = null;
+  marcarCambio();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && drag) {
+    const d = drag;
+    drag = null;
+    limpiarDrop();
+    document.body.classList.remove("drag-activo");
+    d.el.classList.remove("arrastrando");
+    d.el.style.left = d.el.style.top = "";
+    if (d.origParent) d.origParent.insertBefore(d.el, d.origNext);
+  }
+});
+
+/* ── sugerencias de variables (datalist) ── */
+function actualizarVars() {
+  const names = new Set();
+  ws.querySelectorAll(".blk").forEach((b) => {
+    const k = b.dataset.k;
+    if (k === "declarar" || k === "asignar" || k === "cambiar") { const n = T(b, "nombre"); if (n) names.add(n); }
+    if (k === "para") { const n = T(b, "v"); if (n) names.add(n); }
+    if (k === "funcion") T(b, "params").split(",").forEach((p) => {
+      const w = p.trim().split(/\s+/); if (w.length > 1) names.add(w[w.length - 1]);
+    });
+  });
+  $("#vars").innerHTML = [...names].map((n) => `<option value="${escHtml(n)}">`).join("");
+}
+
+/* ── lienzo (puente LÚMEN → JS) ── */
+const cv = $("#lienzo"), g2 = cv.getContext("2d");
+let colorAct = "#22d3ee";
+g2.fillStyle = "#05070d";
+g2.fillRect(0, 0, cv.width, cv.height);
+g2.strokeStyle = "rgba(148,163,184,.12)";
+for (let x = 0; x < cv.width; x += 24) { g2.beginPath(); g2.moveTo(x + .5, 0); g2.lineTo(x + .5, cv.height); g2.stroke(); }
+for (let y = 0; y < cv.height; y += 24) { g2.beginPath(); g2.moveTo(0, y + .5); g2.lineTo(cv.width, y + .5); g2.stroke(); }
+
+window.__lumen_call = (fnName, args) => {
+  const num = (a) => Number(a);
+  switch (fnName) {
+    case "punto": { g2.fillStyle = colorAct; const [x, y] = args.map(num); g2.fillRect(x - 1.5, y - 1.5, 3, 3); return ""; }
+    case "linea": {
+      const [x1, y1, x2, y2] = args.map(num);
+      g2.strokeStyle = colorAct; g2.lineWidth = 1.4;
+      g2.beginPath(); g2.moveTo(x1, y1); g2.lineTo(x2, y2); g2.stroke();
+      return "";
+    }
+    case "color": { colorAct = args[0] || "#22d3ee"; return ""; }
+    case "limpiar": {
+      g2.fillStyle = "#05070d"; g2.fillRect(0, 0, cv.width, cv.height);
+      g2.strokeStyle = "rgba(148,163,184,.12)";
+      for (let x = 0; x < cv.width; x += 24) { g2.beginPath(); g2.moveTo(x + .5, 0); g2.lineTo(x + .5, cv.height); g2.stroke(); }
+      for (let y = 0; y < cv.height; y += 24) { g2.beginPath(); g2.moveTo(0, y + .5); g2.lineTo(cv.width, y + .5); g2.stroke(); }
+      return "";
+    }
+    case "doble": return String(num(args[0]) * 2);
+    case "saludar": return "Hola " + args[0] + " desde JavaScript";
+    default: return "";
+  }
+};
+
+/* ── consola ── */
+function conTexto(t, cls = "") {
+  const sp = document.createElement("span");
+  sp.className = cls;
+  sp.textContent = t;
+  consola.appendChild(sp);
+  consola.appendChild(document.createTextNode("\n"));
+  consola.scrollTop = consola.scrollHeight;
+}
+function conSeccion(etiqueta, ms, salida, vacios) {
+  conTexto(`── ▶ ${etiqueta} · ${ms.toFixed(0)} ms ──`, "sec");
+  const lineas = salida.split("\n").filter((l) => l.trim());
+  if (!lineas.length) conTexto("«sin salida»", "dim");
+  for (const l of lineas) conTexto(l, /^Error/.test(l) ? "err" : "");
+  if (vacios > 0) conTexto(`⚠ ${vacios} hueco(s) vacío(s) compilados como 0`, "dim");
+}
+
+/* ── estado ── */
+function estado(t) { estadoEl.innerHTML = `● <b>${t}</b>`; }
+
+/* ── ejecución ── */
+let rt = null;
+async function ejecutar(codigo, etiqueta, vacios) {
+  if (!rt) return;
+  gencode.textContent = codigo;
+  $("#btn-editar-codigo").disabled = false;
+  const t0 = performance.now();
+  estado("ejecutando…");
+  await tick();
+  let out;
+  try { out = rt.run(codigo); }
+  catch (e) { out = "Error de JS: " + e; }
+  const ms = performance.now() - t0;
+  conSeccion(etiqueta, ms, out, vacios);
+  estado(/^Error/m.test(out) ? "⚠ con errores" : "listo — mira la consola");
+}
+
+/* ── ejemplos de bloques (árboles declarativos) ── */
+const EJ_BLOQUES = [];
+/* — helpers declarativos para construir árboles de bloques sin corchetes ambiguos — */
+const vb = (k, extra = {}) => ({ k, ...extra });                 // bloque de valor
+const sb = (k, extra = {}) => ({ k, ...extra });                 // bloque de enunciado
+const num = (n) => vb("num", { inp: { n: String(n) } });
+const varB = (nombre) => vb("variable", { inp: { nombre } });
+const txt = (t) => vb("texto", { inp: { t } });
+const opB = (op, a, b) => vb("op", { sel: { op }, holes: [a, b] });
+const llam = (fn, args) => vb("llamada", { inp: { fn, args } });
+const unirB = (a, b) => vb("unir", { holes: [a, b] });
+const imprimirB = (v) => sb("imprimir", { holes: [v] });
+const retornarB = (v) => sb("retornar", { holes: [v] });
+const siB = (cond, body, body2) => sb("si", { holes: [cond], body, body2 });
+const paraB = (v, a, b, body) => sb("para", { inp: { v }, holes: [a, b], body });
+const lineaB = (x1, y1, x2, y2) => sb("linea", { holes: [x1, y1, x2, y2] });
+/* condiciones y expresiones típicas */
+const modIgual = (d) => opB("=", opB("%", varB("i"), num(d)), num(0));
+const kOp = (op, base) => opB(op, num(base), opB("×", varB("k"), num(20)));
+
+EJ_BLOQUES.push(
+  { name: "Hola, LÚMEN", blocks: [
+    imprimirB(txt("¡Hola, LÚMEN!")),
+    sb("declarar", { inp: { nombre: "x" }, holes: [num(40)] }),
+    sb("asignar", { inp: { nombre: "x" }, holes: [opB("+", varB("x"), num(2))] }),
+    imprimirB(unirB(txt("x = "), llam("a_texto", "x"))),
+  ]},
+  { name: "Contar 1..5", blocks: [
+    paraB("i", num(1), num(5), [imprimirB(varB("i"))]),
+  ]},
+  { name: "Fibonacci 10", blocks: [
+    sb("funcion", { inp: { nombre: "fib", params: "entero n", tipo: "entero" }, body: [
+      siB(opB("≤", varB("n"), num(1)),
+        [retornarB(varB("n"))],
+        [retornarB(opB("+", llam("fib", "n - 1"), llam("fib", "n - 2")))]),
+    ]}),
+    imprimirB(unirB(txt("fib(10) = "), llam("fib", "10"))),
+  ]},
+  { name: "FizzBuzz 1..15", blocks: [
+    paraB("i", num(1), num(15), [
+      siB(modIgual(15),
+        [imprimirB(txt("FizzBuzz"))],
+        [siB(modIgual(3),
+          [imprimirB(txt("Fizz"))],
+          [siB(modIgual(5),
+            [imprimirB(txt("Buzz"))],
+            [imprimirB(varB("i"))])])]),
+    ]),
+  ]},
+  { name: "Cuadrados anidados (lienzo)", blocks: [
+    sb("limpiar_lienzo"),
+    sb("color_lienzo", { inp: { hex: "#8b5cf6" } }),
+    paraB("k", num(1), num(8), [
+      lineaB(kOp("−", 240), kOp("−", 180), kOp("+", 240), kOp("−", 180)),
+      lineaB(kOp("+", 240), kOp("−", 180), kOp("+", 240), kOp("+", 180)),
+      lineaB(kOp("+", 240), kOp("+", 180), kOp("−", 240), kOp("+", 180)),
+      lineaB(kOp("−", 240), kOp("+", 180), kOp("−", 240), kOp("−", 180)),
+    ]),
+  ]},
+);
+
+function buildBloque(spec) {
+  const el = makeBlock(spec.k);
+  const def = DEFS[spec.k];
+  if (spec.inp) for (const [k, v] of Object.entries(spec.inp)) {
+    const i = [...el.firstElementChild.children].find((c) => c.dataset && c.dataset.k === k);
+    if (i) i.value = v;
+  }
+  if (spec.sel) for (const [k, v] of Object.entries(spec.sel)) {
+    const s = [...el.firstElementChild.children].find((c) => c.dataset && c.dataset.k === k);
+    if (s) s.value = v;
+  }
+  if (spec.holes) {
+    const hs = holesDe(el);
+    spec.holes.forEach((hsSpec, i) => { if (hs[i] && hsSpec) hs[i].appendChild(buildBloque(hsSpec)); });
+  }
+  if (spec.body) { const body = el.querySelector(":scope > .body"); spec.body.forEach((c) => body.appendChild(buildBloque(c))); }
+  if (spec.body2) { const body = el.querySelectorAll(":scope > .body")[1]; spec.body2.forEach((c) => body.appendChild(buildBloque(c))); }
+  return el;
+}
+
+function cargarEjemploBloques(spec) {
+  ws.innerHTML = "";
+  spec.blocks.forEach((b) => ws.appendChild(buildBloque(b)));
+  conTexto(`ejemplo cargado: «${spec.name}» — pulsa ▶ Ejecutar`, "dim");
+  actualizarVars();
+}
+
+/* ── ejemplos de código ── */
+const EJ_CODIGO = [
+  { name: "Hola y suma de lista", code: `// Hola, LÚMEN: variables, listas y bucles
+imprimir("¡Hola, LÚMEN!");
+sea xs = [3, 1, 4, 1, 5];
+entero suma = 0;
+para (entero i = 0; i < largo(xs); i = i + 1) {
+    suma = suma + xs[i];
+}
+imprimir("suma = ", suma);` },
+  { name: "Fibonacci 20 (recursivo)", code: `funcion entero fib(entero n) {
+    si n <= 1 { retornar n; }
+    retornar fib(n - 1) + fib(n - 2);
+}
+imprimir("fib(20) = ", fib(20));` },
+  { name: "FizzBuzz 1..15", code: `para (entero i = 1; i <= 15; i = i + 1) {
+    si (i % 15 == 0) { imprimir("FizzBuzz"); }
+    sino si (i % 3 == 0) { imprimir("Fizz"); }
+    sino si (i % 5 == 0) { imprimir("Buzz"); }
+    sino { imprimir(i); }
+}` },
+  { name: "Primos hasta 10000", code: `funcion booleano es_primo(entero n) {
+    si (n < 2) { retornar falso; }
+    entero d = 2;
+    mientras (d * d <= n) {
+        si (n % d == 0) { retornar falso; }
+        d = d + 1;
+    }
+    retornar verdadero;
+}
+entero total = 0;
+para (entero n = 2; n <= 10000; n = n + 1) {
+    si (es_primo(n)) { total = total + 1; }
+}
+imprimir("primos hasta 10000: ", total);` },
+  { name: "Espiral cuadrada (lienzo)", code: `// Espiral "tortuga" con aritmética entera pura.
+funcion nada espiral(entero vueltas) {
+    entero x = 240;
+    entero y = 180;
+    entero len = 2;
+    entero dir = 0;
+    entero i = 0;
+    mientras (i < vueltas) {
+        entero j = 0;
+        mientras (j < len) {
+            si (dir == 0) { x = x + 1; }
+            si (dir == 1) { y = y + 1; }
+            si (dir == 2) { x = x - 1; }
+            si (dir == 3) { y = y - 1; }
+            __js_llamar("punto", x, y);
+            j = j + 1;
+        }
+        dir = (dir + 1) % 4;
+        len = len + 2;
+        i = i + 1;
+    }
+}
+__js_llamar("limpiar");
+__js_llamar("color", "#8b5cf6");
+espiral(48);
+imprimir("espiral terminada: 48 vueltas");` },
+  { name: "Árbol de Pitágoras (lienzo)", code: `// Árbol fractal: rotación de 45° con aritmética entera (factor 1/2).
+// Cada llamada calcula sus locales x2/y2 y dibuja su segmento al momento.
+// (Formulación natural: recursión con locales aritméticos — el bug #10 que
+// la rompía quedó arreglado de raíz en v3.5.41.)
+__js_llamar("limpiar");
+__js_llamar("color", "#34d399");
+funcion entero arbol(entero n, entero x, entero y, entero dx, entero dy) {
+    si (n <= 0) { retornar 0; }
+    entero x2 = x + dx;
+    entero y2 = y + dy;
+    __js_llamar("linea", x, y, x2, y2);
+    entero r1 = arbol(n - 1, x2, y2, (dx - dy) / 2, (dx + dy) / 2);
+    entero r2 = arbol(n - 1, x2, y2, (dx + dy) / 2, (dy - dx) / 2);
+    retornar r1 + r2 + 1;
+}
+imprimir("árbol dibujado: ", arbol(12, 240, 330, 0, -100), " líneas");` },
+  { name: "Puente JS (doble / saludar)", code: `imprimir("doble(21):", __js_llamar("doble", 21));
+imprimir("saludar:", __js_llamar("saludar", "Lumen"));
+imprimir(__js_llamar("info_nav"));` },
+  { name: "Errores a propósito", code: `// ¿Qué pasa si el código no compila? Pruébalo:
+imprimir(no_existe);` },
+];
+
+/* ── pestañas ── */
+function verModo(modo) {
+  document.body.classList.toggle("modo-codigo", modo === "codigo");
+  $("#tab-bloques").classList.toggle("on", modo === "bloques");
+  $("#tab-codigo").classList.toggle("on", modo === "codigo");
+  $("#hint-tab").textContent = modo === "bloques"
+    ? "arrastra bloques, encájalos y pulsa Ejecutar — el código .nv generado siempre está a la vista"
+    : "escribe código LÚMEN, Ejecutar lo corre en la VM WebAssembly; Comprobar analiza sin ejecutar";
+}
+$("#tab-bloques").addEventListener("click", () => verModo("bloques"));
+$("#tab-codigo").addEventListener("click", () => verModo("codigo"));
+
+/* ── botones ── */
+$("#run-bloques").addEventListener("click", async () => {
+  const { codigo, vacios } = generarCodigo();
+  await ejecutar(codigo, "bloques", vacios);
+});
+$("#btn-ver-codigo").addEventListener("click", () => {
+  const { codigo } = generarCodigo();
+  $("#codigo").value = codigo;
+  verModo("codigo");
+  conTexto("código generado por tus bloques — edítalo y ejecútalo", "dim");
+});
+$("#btn-editar-codigo").addEventListener("click", () => {
+  $("#codigo").value = gencode.textContent;
+  verModo("codigo");
+});
+$("#btn-limpiar-bloques").addEventListener("click", () => { ws.innerHTML = ""; conTexto("zona de trabajo vaciada", "dim"); });
+$("#btn-limpiar-consola").addEventListener("click", () => { consola.innerHTML = ""; });
+$("#btn-limpiar-lienzo").addEventListener("click", () => __lumen_call("limpiar", []));
+$("#btn-cargar-ej").addEventListener("click", () => {
+  const ej = EJ_BLOQUES[$("#ej-bloques").selectedIndex];
+  if (ej) cargarEjemploBloques(ej);
+});
+$("#run-codigo").addEventListener("click", async () => {
+  await ejecutar($("#codigo").value, "código", 0);
+});
+$("#btn-check").addEventListener("click", () => {
+  if (!rt) return;
+  const err = rt.check($("#codigo").value);
+  if (err === undefined || err === null || err === "") conTexto("✓ sin errores de compilación", "ok");
+  else conTexto("✖ " + err, "err");
+});
+$("#btn-limpiar-codigo").addEventListener("click", () => { $("#codigo").value = ""; $("#codigo").focus(); });
+
+function marcarCambio() {
+  actualizarVars();
+  if (gencode.textContent !== "(todavía no has ejecutado bloques)") {
+    const { codigo } = generarCodigo();
+    gencode.textContent = codigo;
+  }
+}
+
+/* ── arranque ── */
+function poblarSelects() {
+  const sb = $("#ej-bloques");
+  EJ_BLOQUES.forEach((e) => sb.appendChild(new Option(e.name)));
+  const sc = $("#ej-codigo");
+  EJ_CODIGO.forEach((e) => sc.appendChild(new Option(e.name)));
+  sc.addEventListener("change", () => {
+    const ej = EJ_CODIGO[sc.selectedIndex];
+    if (ej) $("#codigo").value = ej.code;
+  });
+}
+
+buildPaleta();
+poblarSelects();
+
+await init();
+rt = new LumenRuntime();
+chipVer.textContent = "v" + LumenRuntime.version();
+for (const b of document.querySelectorAll(".btn")) b.disabled = false;
+estado("runtime listo — VM LÚMEN " + LumenRuntime.version() + " en WebAssembly");
+conTexto(`bienvenido al playground — runtime LÚMEN v${LumenRuntime.version()} en WebAssembly`, "dim");
+conTexto("pista: carga un ejemplo con «Cargar» y pulsa ▶ Ejecutar", "dim");
+$("#codigo").value = EJ_CODIGO[0].code;
+</script>
+</body>
+</html>

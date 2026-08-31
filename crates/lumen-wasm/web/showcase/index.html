@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚡ LÚMEN Showcase — benchmarks reales en tu navegador</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<style>
+  :root {
+    --bg: #05070d;
+    --panel: #0c0f18;
+    --panel-2: #111522;
+    --line: rgba(148, 163, 184, .16);
+    --violet: #8b5cf6;
+    --violet-2: #a78bfa;
+    --cyan: #22d3ee;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --text: #e8ecf4;
+    --muted: #8b94a7;
+    --dim: #5b6474;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 520px at 12% -8%, rgba(139, 92, 246, .17), transparent 60%),
+      radial-gradient(760px 460px at 96% 8%, rgba(34, 211, 238, .11), transparent 55%),
+      radial-gradient(700px 700px at 50% 115%, rgba(139, 92, 246, .10), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.55;
+  }
+  /* rejilla sutil */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(148,163,184,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148,163,184,.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(900px 600px at 50% 0%, black 20%, transparent 75%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  /* ── cabecera ── */
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 44px; }
+  .wordmark {
+    display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 800; letter-spacing: .4px;
+  }
+  .wordmark .bolt {
+    width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px;
+    background: linear-gradient(135deg, var(--violet), #6d28d9);
+    box-shadow: 0 0 22px rgba(139, 92, 246, .45), inset 0 1px 0 rgba(255,255,255,.25);
+    font-size: 17px;
+  }
+  .wordmark .name {
+    background: linear-gradient(90deg, var(--violet-2), var(--cyan));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .wordmark .tag { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+  .chip {
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    border: 1px solid var(--line); background: rgba(12, 15, 24, .7);
+    padding: 5px 11px; border-radius: 999px; white-space: nowrap;
+  }
+  .chip b { color: var(--violet-2); font-weight: 600; }
+  .chip.live b { color: var(--green); }
+  a.chip-nav {
+    text-decoration: none; color: var(--violet-2); border-color: color-mix(in srgb, var(--violet) 55%, transparent);
+    transition: border-color .15s, color .15s;
+  }
+  a.chip-nav:hover { border-color: var(--violet); color: #c4b5fd; }
+
+  /* ── hero ── */
+  .hero { margin-bottom: 46px; }
+  .hero .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--violet-2);
+    border: 1px solid rgba(139,92,246,.35); border-radius: 999px; padding: 5px 14px;
+    background: rgba(139, 92, 246, .08); margin-bottom: 18px;
+  }
+  .hero .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: blink 2s infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  .hero h1 {
+    font-size: clamp(30px, 4.6vw, 50px); line-height: 1.12; font-weight: 800; letter-spacing: -.5px;
+    max-width: 760px;
+  }
+  .hero h1 .grad {
+    background: linear-gradient(90deg, var(--violet-2) 10%, var(--cyan) 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p { margin-top: 16px; color: var(--muted); font-size: 16px; max-width: 640px; }
+  .hero p b { color: var(--text); }
+  .hero-actions { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .hero-run {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: linear-gradient(90deg, var(--violet), #6d28d9);
+    color: #fff; font-weight: 700; font-size: 14.5px;
+    border: 0; padding: 12px 22px; border-radius: 12px; cursor: pointer;
+    box-shadow: 0 8px 26px rgba(109, 40, 217, .45);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .hero-run:hover { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(109, 40, 217, .55); }
+  .hero-run:disabled { opacity: .55; cursor: wait; transform: none; }
+  .hero-note { font-size: 12.5px; color: var(--dim); }
+
+  /* ── secciones ── */
+  section { margin-top: 58px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
+  .sec-head .num { font-family: var(--mono); color: var(--violet-2); font-size: 13px; }
+  .sec-head h2 { font-size: 21px; font-weight: 750; letter-spacing: -.2px; }
+  .sec-head .rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+
+  /* ── tarjetas de benchmark ── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 14px; }
+  .card {
+    position: relative; display: flex; flex-direction: column; gap: 10px;
+    background: linear-gradient(180deg, rgba(139, 92, 246, .05), var(--panel) 45%);
+    border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px 16px;
+    transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+    overflow: hidden;
+  }
+  .card::after {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(167, 139, 250, .5), transparent);
+    opacity: 0; transition: opacity .18s ease;
+  }
+  .card:hover { border-color: rgba(139, 92, 246, .42); transform: translateY(-2px); }
+  .card:hover::after { opacity: 1; }
+  .card .top { display: flex; align-items: center; gap: 10px; }
+  .card .icon {
+    width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+    background: rgba(139, 92, 246, .13); border: 1px solid rgba(139, 92, 246, .3);
+    font-size: 17px;
+  }
+  .card h3 { font-size: 15.5px; font-weight: 700; }
+  .card .sub { font-size: 12px; color: var(--dim); font-family: var(--mono); }
+  .card p { font-size: 13px; color: var(--muted); flex: 1; }
+  .golden {
+    font-family: var(--mono); font-size: 11.5px; color: var(--amber);
+    background: rgba(251, 191, 36, .07); border: 1px solid rgba(251, 191, 36, .25);
+    border-radius: 8px; padding: 6px 9px; overflow-x: auto; white-space: nowrap;
+  }
+  .btn-run {
+    border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer;
+    background: linear-gradient(90deg, var(--violet), #6d28d9);
+    color: #fff; font-weight: 700; font-size: 13px;
+    transition: filter .15s ease, transform .15s ease;
+  }
+  .btn-run:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .btn-run:disabled { opacity: .5; cursor: wait; }
+  .btn-run.running { animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { filter: brightness(1.3); } }
+  .out {
+    font-family: var(--mono); font-size: 12px; line-height: 1.5;
+    background: #070a12; border: 1px solid var(--line); border-radius: 9px;
+    padding: 8px 10px; min-height: 38px; white-space: pre-wrap; word-break: break-all;
+    color: var(--dim);
+  }
+  .out.ok { color: var(--green); border-color: rgba(52, 211, 153, .3); }
+  .out.bad { color: var(--rose); border-color: rgba(251, 113, 133, .35); }
+
+  /* ── terminal JIT ── */
+  .term {
+    background: #070a12; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  }
+  .term-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; background: var(--panel-2); border-bottom: 1px solid var(--line);
+  }
+  .term-bar .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .term-bar .dot.r { background: #f87171; } .term-bar .dot.y { background: #fbbf24; } .term-bar .dot.g { background: #34d399; }
+  .term-bar .ttl { margin-left: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .term-body { padding: 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.8; overflow-x: auto; }
+  .term-body .k-hot { color: var(--amber); }
+  .term-body .k-ok { color: var(--green); }
+  .term-body .k-inline { color: var(--cyan); }
+  .term-body .k-dim { color: var(--dim); }
+  .jit-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; align-items: start; }
+  .jit-side { display: flex; flex-direction: column; gap: 12px; }
+  .jit-item {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+  }
+  .jit-item h4 { font-size: 14px; margin-bottom: 6px; }
+  .jit-item h4 .tier { font-family: var(--mono); font-size: 11px; color: var(--violet-2); border: 1px solid rgba(139,92,246,.4); border-radius: 6px; padding: 1px 7px; margin-right: 7px; }
+  .jit-item p { font-size: 12.5px; color: var(--muted); }
+
+  /* ── puente + editor ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1.4fr; gap: 14px; align-items: start; }
+  .editor-shell { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #070a12; }
+  .editor-bar { display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+  .editor-bar .file { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .editor-bar .lang { margin-left: auto; font-size: 10.5px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+  textarea {
+    width: 100%; border: 0; background: transparent; color: var(--text);
+    padding: 14px; font-family: var(--mono); font-size: 13px; line-height: 1.6;
+    resize: vertical; min-height: 230px; outline: none; tab-size: 4;
+  }
+  .editor-foot { display: flex; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+  .editor-foot .out { flex: 1; min-height: 0; max-height: 130px; overflow-y: auto; }
+
+  /* ── tabla de referencia ── */
+  .table-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 14px; text-align: right; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td.mono { font-family: var(--mono); font-size: 12px; color: var(--amber); }
+  td.here { color: var(--violet-2); font-weight: 700; font-family: var(--mono); }
+  td.here.fill { color: var(--green); }
+  .table-note { padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+  .table-note code { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
+
+  /* ── pasos ── */
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .step .n {
+    width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--violet-2);
+    border: 1px solid rgba(139, 92, 246, .45); background: rgba(139, 92, 246, .1); margin-bottom: 12px;
+  }
+  .step h4 { font-size: 14.5px; margin-bottom: 6px; }
+  .step p { font-size: 12.5px; color: var(--muted); }
+  .step code { font-family: var(--mono); font-size: 11.5px; color: var(--cyan); }
+
+  /* ── bug banner ── */
+  .bug {
+    margin-top: 14px; display: flex; gap: 14px; align-items: flex-start;
+    background: linear-gradient(90deg, rgba(251, 113, 133, .08), transparent 70%);
+    border: 1px solid rgba(251, 113, 133, .3); border-radius: 14px; padding: 16px 18px;
+  }
+  .bug .icon { font-size: 22px; }
+  .bug h4 { font-size: 14px; margin-bottom: 4px; color: var(--rose); }
+  .bug p { font-size: 13px; color: var(--muted); }
+  .bug code { font-family: var(--mono); font-size: 12px; color: var(--text); background: rgba(251,113,133,.1); padding: 1px 6px; border-radius: 5px; }
+
+  footer { margin-top: 70px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 26px; font-size: 12.5px; color: var(--dim); }
+  footer a { color: var(--cyan); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 860px) {
+    .jit-grid, .two-col { grid-template-columns: 1fr; }
+    header { flex-direction: column; align-items: flex-start; }
+    .chips { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="wordmark">
+      <span class="bolt">⚡</span>
+      <span><span class="name">LÚMEN</span> <span class="tag">showcase</span></span>
+    </div>
+    <div class="chips">
+      <span class="chip">runtime <b id="chip-ver">cargando…</b></span>
+      <span class="chip">wasm <b id="chip-wasm">—</b></span>
+      <span class="chip live">● <b>en vivo</b></span>
+      <span class="chip">checksums <b>4/4 exactos</b></span>
+      <a class="chip chip-nav" href="playground.html">🧩 playground →</a>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="eyebrow"><span class="dot"></span> WebAssembly · sin servidores · esta pestaña</div>
+    <h1>El lenguaje en español,<br>corriendo <span class="grad">aquí mismo</span></h1>
+    <p>
+      La <b>VM de LÚMEN</b> compilada a WebAssembly ejecuta 4 benchmarks reales en tu navegador
+      y verifica cada resultado contra checksums exactos calculados con implementaciones de
+      referencia en <b>C, C++, Rust y Python</b>.
+    </p>
+    <div class="hero-actions">
+      <button class="hero-run" id="run-all" disabled>
+        <span>⚡ Ejecutar los 4 benchmarks</span>
+      </button>
+      <span class="hero-note" id="hero-status">cargando runtime wasm…</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head"><span class="num">01</span><h2>La suite en vivo</h2><div class="rule"></div></div>
+    <div class="grid">
+      <div class="card" id="card-sort">
+        <div class="top"><span class="icon">🔀</span><div><h3>sort</h3><span class="sub">quicksort · 100 000</span></div></div>
+        <p>Ordenación por índice con shuffle determinista (LCG, semilla 42) y pila explícita de rangos.</p>
+        <div class="golden">sort:333333333300000</div>
+        <button class="btn-run">▶ Ejecutar</button>
+        <div class="out">pendiente</div>
+      </div>
+      <div class="card" id="card-matmul">
+        <div class="top"><span class="icon">🧮</span><div><h3>matmul</h3><span class="sub">48 × 48 × 48</span></div></div>
+        <p>Multiplicación ingenua de matrices enteras: A=(i·j)%5, B=(i+j)%7, triple bucle.</p>
+        <div class="golden">matmul:520167</div>
+        <button class="btn-run">▶ Ejecutar</button>
+        <div class="out">pendiente</div>
+      </div>
+      <div class="card" id="card-sieve">
+        <div class="top"><span class="icon">🔍</span><div><h3>sieve</h3><span class="sub">primos hasta 1M</span></div></div>
+        <p>Criba de Eratóstenes con escritura por índice <code>criba[m] = 0</code> — el patrón que destapó un bug real.</p>
+        <div class="golden">sieve:78498</div>
+        <button class="btn-run">▶ Ejecutar</button>
+        <div class="out">pendiente</div>
+      </div>
+      <div class="card" id="card-dict">
+        <div class="top"><span class="icon">🗂️</span><div><h3>dict</h3><span class="sub">mapa · 30 000</span></div></div>
+        <p>30 000 inserciones + re-escrituras + lecturas sobre un diccionario con suma invariante.</p>
+        <div class="golden">dict:449985000</div>
+        <button class="btn-run">▶ Ejecutar</button>
+        <div class="out">pendiente</div>
+      </div>
+    </div>
+
+    <div class="bug">
+      <div class="icon">🐞</div>
+      <div>
+        <h4>Esta suite cazó un bug real antes que un usuario</h4>
+        <p>
+          El prototipo de <code>sieve(1M)</code> <b>no terminaba</b>: cada <code>criba[m] = 0</code> clonaba el
+          arreglo entero (O(n) por escritura → O(n²) en total). La corrección (opcode
+          <code>ArraySetVar</code>, escritura in-place con semántica de copia intacta) lo dejó en
+          ~1.2 s en nativo — y es exactamente lo que ejecuta el botón de arriba.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">02</span><h2>El JIT del binario nativo</h2><div class="rule"></div></div>
+    <div class="jit-grid">
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="ttl">target/release/lumen · LUMEN_JIT_LOG=1 · captura real</span>
+        </div>
+        <div class="term-body">
+<span class="k-dim">$ lumen run benchmarks/lumen/fib.nv</span>
+<span class="k-hot">[jit] 🔥 Hot function detected: 'fib' (50 llamadas) → JIT Tier-1 activado</span>
+<span class="k-ok">[jit] ✅ recursión nativa (registros): 'fib' (16 instrs)</span>
+<span class="k-dim">$ lumen run benchmarks/lumen/primes.nv</span>
+<span class="k-inline">[jit] 🔗 inlining de 'es_primo' en 'contar_primos'</span>
+<span class="k-ok">[jit] ✅ Tier-2 bucle nativo: 'contar_primos' (15 instrs)</span>
+<span class="k-dim">$ lumen run benchmarks/lumen/sieve.nv</span>
+<span class="k-ok">[jit] ✅ Tier-2 bucle nativo: 'bench_sieve' (47 instrs)</span>
+        </div>
+      </div>
+      <div class="jit-side">
+        <div class="jit-item">
+          <h4><span class="tier">TIER-R</span>recursión en registros</h4>
+          <p><code>fib</code> se recompila a recursión nativa sin frames de VM: 4.3 ms en la medición de referencia (~26× vs el intérprete, ~2× el C).</p>
+        </div>
+        <div class="jit-item">
+          <h4><span class="tier">TIER-2</span>bucles + inlining</h4>
+          <p><code>es_primo</code> se inlinea dentro de <code>contar_primos</code> y el bucle resultante pasa a código nativo. <code>bench_sieve</code> —el mismo código que corre arriba— también compila a Tier-2.</p>
+        </div>
+        <div class="jit-item">
+          <h4><span class="tier">TIER-1</span>funciones calientes</h4>
+          <p>Tras 50 llamadas, cualquier función caliente se promueve a código máquina con Cranelift, delegando por shims al runtime.</p>
+        </div>
+      </div>
+    </div>
+    <div class="table-note" style="margin-top:12px; background:var(--panel); border:1px solid var(--line); border-radius:12px;">
+      En wasm32 no se puede generar código máquina en runtime, así que el build <code>lumen-wasm</code> se
+      compila <b>sin</b> el backend JIT y corre la VM pura: misma semántica, distinta velocidad. Por eso
+      los tiempos de tu navegador (abajo) son mayores que la columna nativa.
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">03</span><h2>Mediciones</h2><div class="rule"></div></div>
+    <div class="table-card">
+      <table>
+        <tr><th>tarea</th><th>golden</th><th>C (gcc -O2)</th><th>Rust (-O)</th><th>Python 3</th><th>Lúmen JIT nativo</th><th>tu navegador (wasm)</th></tr>
+        <tr><td>sort 100k</td><td class="mono">333333333300000</td><td>12.2 ms</td><td>11.3 ms</td><td>194 ms</td><td>1149 ms</td><td class="here" id="here-sort">—</td></tr>
+        <tr><td>matmul 48³</td><td class="mono">520167</td><td>1.7 ms</td><td>1.6 ms</td><td>4.7 ms</td><td>63 ms</td><td class="here" id="here-matmul">—</td></tr>
+        <tr><td>sieve 1M</td><td class="mono">78498</td><td>3.3 ms</td><td>3.9 ms</td><td>62 ms</td><td>1163 ms</td><td class="here" id="here-sieve">—</td></tr>
+        <tr><td>dict 30k</td><td class="mono">449985000</td><td>1.5 ms</td><td>3.4 ms</td><td>4.1 ms</td><td>241 ms</td><td class="here" id="here-dict">—</td></tr>
+      </table>
+      <div class="table-note">
+        Columnas C/Rust/Python/nativo: <b>medición de referencia</b> del sandbox de desarrollo
+        (Linux x64, 2 cores; mediana de 5–7 ejecuciones con el binario ya compilado). Reproduce en tu
+        máquina con <code>python3 scripts/ci_bench_suite.py</code> — los números variarán según el equipo.
+        La columna «tu navegador» es la medición real de esta máquina, en vivo. Además, la suite oficial
+        de 5 benchmarks (fib/sum/primes/strings/arrays) da <b>TOTAL ~244 ms</b> en la misma referencia.
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">04</span><h2>Dos mundos, un programa</h2><div class="rule"></div></div>
+    <div class="two-col">
+      <div class="card" id="card-bridge">
+        <div class="top"><span class="icon">🔗</span><div><h3>Puente LÚMEN ↔ JavaScript</h3><span class="sub">__js_llamar</span></div></div>
+        <p>La VM emite <code>__lumen_call('fn', [args])</code> y esta página lo resuelve contra funciones JavaScript reales.</p>
+        <div class="golden">doble(21) → 42 · saludar("Lumen") → "Hola…"</div>
+        <button class="btn-run">▶ Ejecutar puente</button>
+        <div class="out">pendiente</div>
+      </div>
+      <div class="card" id="card-editor" style="padding:0; gap:0;">
+        <div class="editor-shell">
+          <div class="editor-bar">
+            <span class="dot r" style="width:10px;height:10px;border-radius:50%;background:#f87171;display:inline-block;"></span>
+            <span class="dot y" style="width:10px;height:10px;border-radius:50%;background:#fbbf24;display:inline-block;"></span>
+            <span class="dot g" style="width:10px;height:10px;border-radius:50%;background:#34d399;display:inline-block;"></span>
+            <span class="file">consola.nv</span>
+            <span class="lang">LÚMEN · VM wasm</span>
+          </div>
+          <textarea id="editor" spellcheck="false">funcion entero fib(entero n) {
+    si n &lt;= 1 { retornar n; }
+    retornar fib(n - 1) + fib(n - 2);
+}
+
+funcion entero principal() {
+    imprimir("fib(20) = ", fib(20));
+    sea xs = [3, 1, 4, 1, 5];
+    entero suma = 0;
+    para (entero i = 0; i &lt; largo(xs); i = i + 1) {
+        suma = suma + xs[i];
+    }
+    imprimir("suma xs = ", suma);
+    imprimir("puente JS: ", __js_llamar("saludar", "Lumen"));
+    retornar 0;
+}</textarea>
+          <div class="editor-foot">
+            <button class="btn-run" style="flex:0 0 auto;">▶ Ejecutar</button>
+            <div class="out" style="flex:1;">pendiente</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="num">05</span><h2>Por qué estos números son de fiar</h2><div class="rule"></div></div>
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <h4>Checksums exactos</h4>
+        <p>Cada tarea imprime un valor calculado con implementaciones de referencia independientes. No hay tolerancia: o coincide, o falla.</p>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <h4>Cinco lenguajes, un algoritmo</h4>
+        <p>Mismo quicksort, misma criba, mismo mapa en <code>benchmarks/{c,cpp,rust,python,lumen}</code>. La comparación cruzada es justa por construcción.</p>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <h4>Gate en CI</h4>
+        <p><code>scripts/ci_bench_suite.py</code> corre los 5 lenguajes en ubuntu/windows/macos en cada push y bloquea la release si un checksum diverge.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>LÚMEN · <span id="foot-ver">…</span></span>
+    <a href="https://github.com/omarPVP123131/Lumen" target="_blank" rel="noopener">github.com/omarPVP123131/Lumen</a>
+    <a href="https://github.com/omarPVP123131/Lumen/blob/master/docs/informes/BENCHMARK_SUITE.md" target="_blank" rel="noopener">docs/informes/BENCHMARK_SUITE.md</a>
+    <span>página servida como estático · sin backends</span>
+  </footer>
+</div>
+
+<script type="module">
+import init, { LumenRuntime } from './pkg/lumen_wasm.js';
+
+const SRC = {
+  sort: `funcion numero bench_sort(entero n) {
+    sea a = [];
+    entero i = 0;
+    mientras (i < n) { a.agregar(i); i = i + 1; }
+    entero x = 42;
+    i = 0;
+    mientras (i < n) {
+        x = (x * 1103515245 + 12345) % 2147483648;
+        entero j = x % n;
+        entero t = a[i]; a[i] = a[j]; a[j] = t;
+        i = i + 1;
+    }
+    sea pi = []; sea pj = [];
+    entero k = 0;
+    mientras (k < n) { pi.agregar(0); pj.agregar(0); k = k + 1; }
+    entero top = 0;
+    pi[0] = 0; pj[0] = n - 1;
+    mientras (top >= 0) {
+        entero izq = pi[top]; entero der = pj[top]; top = top - 1;
+        si (izq < der) {
+            entero pivote = a[izq];
+            entero i2 = izq; entero j2 = der;
+            mientras (i2 <= j2) {
+                mientras (a[i2] < pivote) { i2 = i2 + 1; }
+                mientras (a[j2] > pivote) { j2 = j2 - 1; }
+                si (i2 <= j2) {
+                    entero t = a[i2]; a[i2] = a[j2]; a[j2] = t;
+                    i2 = i2 + 1; j2 = j2 - 1;
+                }
+            }
+            top = top + 1; pi[top] = izq; pj[top] = j2;
+            top = top + 1; pi[top] = i2; pj[top] = der;
+        }
+    }
+    numero total = 0;
+    i = 0;
+    mientras (i < n) { total = total + a[i] * (i + 1); i = i + 1; }
+    retornar total;
+}
+imprimir("sort:" + bench_sort(100000));`,
+
+  matmul: `funcion numero bench_matmul(entero n) {
+    sea A = []; sea B = [];
+    entero i = 0;
+    mientras (i < n) {
+        sea fa = []; sea fb = [];
+        entero j = 0;
+        mientras (j < n) {
+            fa.agregar((i * j) % 5);
+            fb.agregar((i + j) % 7);
+            j = j + 1;
+        }
+        A.agregar(fa); B.agregar(fb);
+        i = i + 1;
+    }
+    numero total = 0;
+    i = 0;
+    mientras (i < n) {
+        entero j = 0;
+        mientras (j < n) {
+            numero s = 0;
+            entero k = 0;
+            mientras (k < n) { s = s + A[i][k] * B[k][j]; k = k + 1; }
+            total = total + s;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar total;
+}
+imprimir("matmul:" + bench_matmul(48));`,
+
+  sieve: `funcion numero bench_sieve(entero lim) {
+    sea criba = [];
+    entero i = 0;
+    mientras (i <= lim) { criba.agregar(1); i = i + 1; }
+    entero p = 2;
+    mientras (p * p <= lim) {
+        si (criba[p] == 1) {
+            entero m = p * p;
+            mientras (m <= lim) { criba[m] = 0; m = m + p; }
+        }
+        p = p + 1;
+    }
+    numero cuenta = 0;
+    entero q = 2;
+    mientras (q <= lim) { cuenta = cuenta + criba[q]; q = q + 1; }
+    retornar cuenta;
+}
+imprimir("sieve:" + bench_sieve(1000000));`,
+
+  dict: `funcion numero bench_dict(entero n) {
+    sea d = __map_nuevo();
+    entero i = 0;
+    mientras (i < n) { d = __map_poner(d, i, i); i = i + 1; }
+    i = 0;
+    mientras (i < n) {
+        si ((i % 2) == 0) {
+            entero v = __map_obtener(d, i);
+            d = __map_poner(d, i, v);
+        }
+        i = i + 1;
+    }
+    numero total = 0;
+    i = 0;
+    mientras (i < n) { total = total + __map_obtener(d, i); i = i + 1; }
+    retornar total;
+}
+imprimir("dict:" + bench_dict(30000));`
+};
+
+const EXPECTED = {
+  sort: 'sort:333333333300000',
+  matmul: 'matmul:520167',
+  sieve: 'sieve:78498',
+  dict: 'dict:449985000'
+};
+
+const BRIDGE_SRC = `imprimir("doble(21):", __js_llamar("doble", 21));
+imprimir("saludar:", __js_llamar("saludar", "Lumen"));
+imprimir(__js_llamar("info_nav"));`;
+
+// ── puente LÚMEN ↔ JS ──
+window.__lumen_call = function (fnName, args) {
+  const fns = {
+    doble: (a) => String(Number(a) * 2),
+    saludar: (n) => 'Hola ' + n + ' desde JavaScript',
+    info_nav: () => 'Navegador: ' + (navigator.userAgent.match(/Firefox|Chrome|Safari/) || ['?'])[0],
+  };
+  if (fns[fnName]) {
+    try { return fns[fnName](...args); } catch (e) { return 'error JS: ' + e; }
+  }
+  return '';
+};
+
+const heroStatus = document.getElementById('hero-status');
+const runAllBtn = document.getElementById('run-all');
+const versionChip = document.getElementById('chip-ver');
+const wasmChip = document.getElementById('chip-wasm');
+const footVer = document.getElementById('foot-ver');
+
+// ── arranque ──
+await init();
+const rt = new LumenRuntime();
+const ver = LumenRuntime.version();
+versionChip.textContent = 'v' + ver;
+footVer.textContent = 'runtime v' + ver;
+heroStatus.textContent = 'runtime listo — pulsa Ejecutar. La VM corre en el hilo principal: los benchmarks grandes tardan 1–2 s.';
+runAllBtn.disabled = false;
+for (const b of document.querySelectorAll('.btn-run')) b.disabled = false;
+
+fetch('./pkg/lumen_wasm_bg.wasm', { method: 'HEAD' })
+  .then(r => { const n = Number(r.headers.get('Content-Length')); wasmChip.textContent = (n / 1048576).toFixed(1) + ' MB'; })
+  .catch(() => { wasmChip.textContent = '—'; });
+
+function busy(btn, on) {
+  btn.disabled = on;
+  btn.classList.toggle('running', on);
+}
+
+async function runOne(name) {
+  const card = document.getElementById('card-' + name);
+  const btn = card.querySelector('.btn-run');
+  const out = card.querySelector('.out');
+  busy(btn, true);
+  out.className = 'out';
+  out.textContent = 'ejecutando…';
+  await new Promise(r => setTimeout(r, 40));
+  const t0 = performance.now();
+  let result;
+  try { result = rt.run(SRC[name]); }
+  catch (e) {
+    out.className = 'out bad';
+    out.textContent = 'error: ' + e;
+    busy(btn, false);
+    return false;
+  }
+  const ms = performance.now() - t0;
+  const line = (result.split('\n').filter(l => l.trim())[0] || '').trim();
+  const ok = line === EXPECTED[name];
+  out.className = 'out ' + (ok ? 'ok' : 'bad');
+  out.textContent = (ok ? '✓ ' : '✗ ') + line + '\n' + ms.toFixed(0) + ' ms (tu máquina)';
+  const cell = document.getElementById('here-' + name);
+  cell.textContent = ms.toFixed(0) + ' ms';
+  cell.classList.add('fill');
+  busy(btn, false);
+  return ok;
+}
+
+for (const name of Object.keys(SRC)) {
+  document.querySelector('#card-' + name + ' .btn-run')
+    .addEventListener('click', () => runOne(name));
+}
+
+runAllBtn.addEventListener('click', async () => {
+  busy(runAllBtn, true);
+  let ok = 0;
+  const t0 = performance.now();
+  for (const name of Object.keys(SRC)) {
+    if (await runOne(name)) ok++;
+  }
+  const total = performance.now() - t0;
+  busy(runAllBtn, false);
+  heroStatus.textContent = ok + '/4 checksums ✓ en ' + total.toFixed(0) + ' ms totales (tu máquina).';
+  heroStatus.style.color = ok === 4 ? 'var(--green)' : 'var(--rose)';
+});
+
+// ── puente ──
+const bridgeBtn = document.querySelector('#card-bridge .btn-run');
+const bridgeOut = document.querySelector('#card-bridge .out');
+bridgeBtn.addEventListener('click', async () => {
+  busy(bridgeBtn, true);
+  bridgeOut.className = 'out';
+  bridgeOut.textContent = 'ejecutando…';
+  await new Promise(r => setTimeout(r, 40));
+  let result;
+  try { result = rt.run(BRIDGE_SRC); }
+  catch (e) { bridgeOut.className = 'out bad'; bridgeOut.textContent = 'error: ' + e; busy(bridgeBtn, false); return; }
+  const ok = result.includes('doble(21):42') && result.includes('Hola Lumen desde JavaScript');
+  bridgeOut.className = 'out ' + (ok ? 'ok' : 'bad');
+  bridgeOut.textContent = (ok ? '✓ puente activo\n' : '✗\n') + result;
+  busy(bridgeBtn, false);
+});
+
+// ── editor ──
+const editorBtn = document.querySelector('#card-editor .btn-run');
+const editorOut = document.querySelector('#card-editor .out');
+editorBtn.addEventListener('click', async () => {
+  busy(editorBtn, true);
+  editorOut.className = 'out';
+  editorOut.textContent = 'ejecutando…';
+  await new Promise(r => setTimeout(r, 40));
+  const t0 = performance.now();
+  let result;
+  try { result = rt.run(document.getElementById('editor').value); }
+  catch (e) { editorOut.className = 'out bad'; editorOut.textContent = 'error: ' + e; busy(editorBtn, false); return; }
+  const ms = performance.now() - t0;
+  editorOut.className = 'out ok';
+  editorOut.textContent = result + '(' + ms.toFixed(0) + ' ms)';
+  busy(editorBtn, false);
+});
+</script>
+</body>
+</html>

@@ -5,7 +5,7 @@
 > (fmt + clippy `-D warnings` + tests + `lumen check examples` 396/396),
 > ci_gate 392/389 PASS ×2, fixpoint self-hosting byte-idéntico, y las
 > rondas de rendimiento v3.5.31 → v3.5.37 (TOTAL de benchmarks 590 ms →
-> **267 ms** con JIT, fib 4.4 ms ≈ 2× el C).
+> **~245 ms** con JIT (registros en bucles + inlining), fib 3.9 ms ≈ 2× el C).
 
 ## Estructura
 
@@ -42,7 +42,11 @@ docs/
 │   └── grammar.ebnf                — gramática EBNF
 └── informes/              — informes y reportes históricos
     ├── AUDIT_REPORT.md            — auditoría del repo
+    ├── AUDITORIA_CONSOLIDADA.md   — auditoría v3.2.0 → re-verificación v3.5.7 +
+    │                              benchmarks VM/JIT vs AOT-C vs Cranelift + hoja de ruta
     ├── BENCHMARK.md               — reporte de benchmarks (VM/JIT vs C/Rust/Python)
+    ├── BENCHMARK_SUITE.md         — suite variada v3.5.40 (sort/matmul/sieve/dict,
+    │                                5 lenguajes, checksums exactos, CI multiplataforma)
     ├── EXECUTIVE_SUMMARY.md       — resumen ejecutivo
     ├── LUMEN_REPORT.md            — reporte integral del proyecto
     ├── TEST_REPORT.md             — reporte de tests y verificación
@@ -67,4 +71,6 @@ Otros documentos en la raíz:
 | Ejemplos | `lumen check examples` — 396 archivos, 0 errores |
 | Gate de CI | `ci_gate.py` 392 PASS / 0 crashes ×2 (JIT ON/OFF) |
 | Self-hosting | fixpoint byte-idéntico (170985 B, sha256 `02b0460d…`) |
-| Rendimiento JIT | TOTAL 267 ms vs 1542 ms intérprete (5.8×); fib 4.4 ms (23×) |
+| Rendimiento JIT | TOTAL ~245 ms vs 1542 ms intérprete (6.3×); fib 3.9 ms (26×) |
+| Suite variada (v3.5.40) | sort/matmul/sieve/dict — 20/20 checksums en 5 lenguajes ([BENCHMARK_SUITE.md](informes/BENCHMARK_SUITE.md)) |
+| Showcase web | `crates/lumen-wasm/web/showcase.html` — suite + editor + puente JS en el navegador |
