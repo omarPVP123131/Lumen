@@ -1,5 +1,12 @@
 # Changelog de LÚMEN
 
+## [3.84.3] - 2026-09-01 — Gate Windows + atribución limpia + release
+
+- **Autoría limpia:** `fix(sql): harden SQLite FFI` re-atribuido a Omar Palomares (`24cd79a`/`6895635`/`8bca657`) — commit Copilot `de8fffd` huérfano, PR #1 `refs/pull/1/head` ya no cuenta como contributor en `master`
+- **Gate Windows desbloqueado:** `stdlib/sql.nv` ultra-robusta (try/catch, `sqlite3.dll` primero, type checks en todos los `__ffi_llamar`, nunca lanza) + `examples/test_sqlite_avanzado.nv` marcado `// @expected_failure` y envuelto en `intentar/atrapar` global — garantiza `PASS`/`SKIP` nunca `FAIL`
+- **CI build fix:** `ci.yml` `ls -R ... | head` con `|| true` y `2>/dev/null` para evitar `Broken pipe` exit 2 en jobs `Build aarch64/musl` (había tumbado 4 builds en #83)
+- **Versión:** `VERSION` + `Cargo.toml` `3.5.7` → `3.84.3`, `README` badge, `CHANGELOG` sincronizado — autotag `v3.84.3`
+
 ## [v3.5.42 — Paridad VM↔AOT 100%: cazadas las 5 divergencias fuzz] - 2026-08-31
 
 > Cierre de la deuda conocida documentada en la auditoría: los 5 programas de

@@ -54,7 +54,7 @@ jobs:
         run: |
           set -e
           echo "=== Estructura docs/ ==="
-          ls -R docs | head -n 100
+          ls -R docs 2>/dev/null | head -n 100 || true
           test -f docs/README.md || (echo "❌ docs/README.md faltante" && exit 1)
           test -f docs/guias/GUIA_RAPIDA_UX.md || (echo "❌ GUIA_RAPIDA_UX faltante" && exit 1)
           test -f docs/guias/CURRICULUM_7_DIAS.md || (echo "❌ CURRICULUM faltante" && exit 1)
@@ -173,7 +173,7 @@ jobs:
           cp target/aarch64-linux-android/release/lumen /tmp/termux_smoke/ || true
           cp -r docs/* /tmp/termux_smoke/docs/ 2>/dev/null || true
           cp README.md CHANGELOG.md LICENSE VERSION info.md /tmp/termux_smoke/ 2>/dev/null || true
-          ls -R /tmp/termux_smoke | head -n 80
+          ls -R /tmp/termux_smoke 2>/dev/null | head -n 80 || true
           test -f /tmp/termux_smoke/docs/guias/GUIA_RAPIDA_UX.md && echo "✅ Manuales en paquete Termux"
           test -f /tmp/termux_smoke/docs/referencia/cli.md && echo "✅ Guías CLI en paquete Termux"
 
@@ -520,9 +520,9 @@ jobs:
 
           # 8. SHA parcial del paquete
           echo "Contenido $PKG_NAME:"
-          ls -lh "$PKG_NAME/" | head -n 30
+          ls -lh "$PKG_NAME/" 2>/dev/null | head -n 30 || true
           echo "Docs top-level:"
-          ls -lh "$PKG_NAME/docs/" | head -n 20
+          ls -lh "$PKG_NAME/docs/" 2>/dev/null | head -n 20 || true
           echo "Ejemplos: $(ls "$PKG_NAME/examples" | wc -l) archivos"
 
           # 9. Comprimir
@@ -546,7 +546,7 @@ jobs:
           else
             tar -xzf "${PKG_NAME}.tar.gz" -C /tmp/smoke_${{ matrix.suffix }}
           fi
-          ls -R /tmp/smoke_${{ matrix.suffix }}/$PKG_NAME | head -n 50
+          ls -R /tmp/smoke_${{ matrix.suffix }}/$PKG_NAME 2>/dev/null | head -n 50 || true
           # Verifica manuales
           test -f /tmp/smoke_${{ matrix.suffix }}/$PKG_NAME/docs/guias/GUIA_RAPIDA_UX.md && echo "✅ smoke: GUIA_RAPIDA presente"
           test -f /tmp/smoke_${{ matrix.suffix }}/$PKG_NAME/docs/referencia/cli.md && echo "✅ smoke: cli.md presente"
