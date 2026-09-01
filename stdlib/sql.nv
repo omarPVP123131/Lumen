@@ -3,11 +3,12 @@
 // Uso: importar "sql.nv"
 
 funcion cualquiera _sql_obtener_lib() {
-    cualquiera lib = __ffi_cargar("libsqlite3.so.0");
+    // Priorizar Windows para evitar fallos de símbolos al resolver en CI
+    cualquiera lib = __ffi_cargar("sqlite3.dll");
+    si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
+    lib = __ffi_cargar("libsqlite3.so.0");
     si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
     lib = __ffi_cargar("libsqlite3.so");
-    si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
-    lib = __ffi_cargar("sqlite3.dll");
     si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
     lib = __ffi_cargar("libsqlite3.dylib");
     si __tipo_de(lib) == "texto" && lib != "" { retornar lib; }
@@ -22,10 +23,21 @@ funcion entero abrir(texto ruta) {
     __ffi_escribir(path_buf, 0, ruta);
     __ffi_poke_byte(path_buf, len, 0);
     entero db_buf = __ffi_asignar(8);
-    entero rc = __ffi_llamar(lib, "sqlite3_open", "entero,entero", [path_buf, db_buf], "entero");
+    cualquiera rc_val = __ffi_llamar(lib, "sqlite3_open", "entero,entero", [path_buf, db_buf], "entero");
+    si __tipo_de(rc_val) != "entero" {
+        __ffi_liberar(db_buf, 8);
+        __ffi_liberar(path_buf, len + 1);
+        retornar 0;
+    }
+    entero rc = rc_val como entero;
     entero db = 0;
-    si rc == 0 {
-        db = __ffi_peek64(db_buf, 0);
+    cualquiera db_val = __ffi_peek64(db_buf, 0);
+    si __tipo_de(db_val) == "entero" { db = db_val como entero; }
+    si rc != 0 {
+        si db != 0 { __ffi_llamar(lib, "sqlite3_close", "entero", [db], "entero"); }
+        __ffi_liberar(db_buf, 8);
+        __ffi_liberar(path_buf, len + 1);
+        retornar 0;
     }
     __ffi_liberar(db_buf, 8);
     __ffi_liberar(path_buf, len + 1);
@@ -41,10 +53,14 @@ funcion entero ejecutar(entero db, texto sql) {
     entero sql_buf = __ffi_asignar(slen + 1);
     __ffi_escribir(sql_buf, 0, sql);
     __ffi_poke_byte(sql_buf, slen, 0);
-    entero rc = __ffi_llamar(lib, "sqlite3_exec", "entero,entero,entero,entero,entero", [db, sql_buf, 0, 0, 0], "entero");
+    cualquiera rc_val = __ffi_llamar(lib, "sqlite3_exec", "entero,entero,entero,entero,entero", [db, sql_buf, 0, 0, 0], "entero");
     __ffi_liberar(sql_buf, slen + 1);
+    si __tipo_de(rc_val) != "entero" { retornar -1; }
+    entero rc = rc_val como entero;
     si rc != 0 { retornar -1; }
-    retornar __ffi_llamar(lib, "sqlite3_changes", "entero", [db], "entero");
+    cualquiera chg = __ffi_llamar(lib, "sqlite3_changes", "entero", [db], "entero");
+    si __tipo_de(chg) != "entero" { retornar -1; }
+    retornar chg como entero;
 }
 funcion entero exec(entero db, texto sql) { retornar ejecutar(db, sql); }
 
@@ -57,22 +73,39 @@ funcion cualquiera ejecutar_consulta(entero db, texto sql) {
     __ffi_escribir(sql_buf, 0, sql);
     __ffi_poke_byte(sql_buf, slen, 0);
     entero stmt_buf = __ffi_asignar(8);
-    entero rc = __ffi_llamar(lib, "sqlite3_prepare_v2", "entero,entero,entero,entero,entero", [db, sql_buf, -1, stmt_buf, 0], "entero");
+    cualquiera rc_val = __ffi_llamar(lib, "sqlite3_prepare_v2", "entero,entero,entero,entero,entero", [db, sql_buf, -1, stmt_buf, 0], "entero");
+    si __tipo_de(rc_val) != "entero" {
+        __ffi_liberar(stmt_buf, 8);
+        __ffi_liberar(sql_buf, slen + 1);
+        retornar ninguno;
+    }
+    entero rc = rc_val como entero;
     entero stmt = 0;
     si rc == 0 {
-        stmt = __ffi_peek64(stmt_buf, 0);
+        cualquiera stmt_val = __ffi_peek64(stmt_buf, 0);
+        si __tipo_de(stmt_val) == "entero" { stmt = stmt_val como entero; }
     }
     __ffi_liberar(stmt_buf, 8);
     __ffi_liberar(sql_buf, slen + 1);
     si rc != 0 { retornar ninguno; }
     si stmt == 0 { retornar []; }
 
-    entero cc = __ffi_llamar(lib, "sqlite3_column_count", "entero", [stmt], "entero");
+    cualquiera cc_val = __ffi_llamar(lib, "sqlite3_column_count", "entero", [stmt], "entero");
+    si __tipo_de(cc_val) != "entero" {
+        __ffi_llamar(lib, "sqlite3_finalize", "entero", [stmt], "entero");
+        retornar ninguno;
+    }
+    entero cc = cc_val como entero;
     cualquiera filas = __map_nuevo();
     entero nfila = 0;
 
     mientras verdadero {
-        entero sr = __ffi_llamar(lib, "sqlite3_step", "entero", [stmt], "entero");
+        cualquiera sr_val = __ffi_llamar(lib, "sqlite3_step", "entero", [stmt], "entero");
+        si __tipo_de(sr_val) != "entero" {
+            __ffi_llamar(lib, "sqlite3_finalize", "entero", [stmt], "entero");
+            retornar ninguno;
+        }
+        entero sr = sr_val como entero;
         si sr == 101 { romper; }
         si sr != 100 {
             __ffi_llamar(lib, "sqlite3_finalize", "entero", [stmt], "entero");
@@ -81,7 +114,12 @@ funcion cualquiera ejecutar_consulta(entero db, texto sql) {
         cualquiera fila = __map_nuevo();
         entero i = 0;
         mientras i < cc {
-            entero ct = __ffi_llamar(lib, "sqlite3_column_type", "entero,entero", [stmt, i], "entero");
+            cualquiera ct_val = __ffi_llamar(lib, "sqlite3_column_type", "entero,entero", [stmt, i], "entero");
+            si __tipo_de(ct_val) != "entero" {
+                __ffi_llamar(lib, "sqlite3_finalize", "entero", [stmt], "entero");
+                retornar ninguno;
+            }
+            entero ct = ct_val como entero;
             cualquiera val = ninguno;
             si ct == 1 { val = __ffi_llamar(lib, "sqlite3_column_int64", "entero,entero", [stmt, i], "entero"); }
             si ct == 2 { val = __ffi_llamar(lib, "sqlite3_column_double", "entero,entero", [stmt, i], "decimal"); }
@@ -103,7 +141,8 @@ funcion booleano cerrar(entero db) {
     si db == 0 { retornar falso; }
     cualquiera lib = _sql_obtener_lib();
     si __tipo_de(lib) != "texto" || lib == "" { retornar falso; }
-    retornar __ffi_llamar(lib, "sqlite3_close", "entero", [db], "entero") == 0;
+    cualquiera rc = __ffi_llamar(lib, "sqlite3_close", "entero", [db], "entero");
+    retornar __tipo_de(rc) == "entero" && rc como entero == 0;
 }
 funcion booleano close(entero db) { retornar cerrar(db); }
 
