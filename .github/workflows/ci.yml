@@ -586,7 +586,8 @@ jobs:
           echo "=== QA: Verificando manuales en paquetes ==="
           ls -lh qa_pkgs/
           ok=0; bad=0
-          for f in qa_pkgs/lumen-*.*; do
+          for f in qa_pkgs/*.tar.gz qa_pkgs/*.zip; do
+            [ -e "$f" ] || continue
             echo "--- $f ---"
             tmp=$(mktemp -d)
             if [[ "$f" == *.zip ]]; then
