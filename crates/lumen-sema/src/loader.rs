@@ -538,9 +538,7 @@ fn fix_transitive_decl(
             }
         }
         Decl::Const { value, .. } => fix_transitive_expr(value, locals, imported_decls, known),
-        Decl::Function {
-            params, body, ..
-        } => {
+        Decl::Function { params, body, .. } => {
             let mut new_locals = locals.clone();
             for p in params {
                 new_locals.insert(p.name.clone());
@@ -587,11 +585,12 @@ fn fix_transitive_stmt(
             locals.insert(name.clone());
         }
         Stmt::Expr { expr, .. } => fix_transitive_expr(expr, locals, imported_decls, known),
-        Stmt::Return { value, .. } => {
-            if let Some(ex) = value {
-                fix_transitive_expr(ex, locals, imported_decls, known);
-            }
+        Stmt::Return {
+            value: Some(ex), ..
+        } => {
+            fix_transitive_expr(ex, locals, imported_decls, known);
         }
+        Stmt::Return { value: None, .. } => {}
         Stmt::If {
             condition,
             then_body,
@@ -682,7 +681,10 @@ fn fix_transitive_stmt(
             }
         }
         Stmt::Match {
-            expr, arms, default, ..
+            expr,
+            arms,
+            default,
+            ..
         } => {
             fix_transitive_expr(expr, locals, imported_decls, known);
             for arm in arms {
@@ -741,9 +743,9 @@ fn collect_pattern_idents(expr: &Expr, locals: &mut HashSet<String>) {
                 collect_pattern_idents(a, locals);
             }
         }
-        Expr::Algun { expr, .. }
-        | Expr::Exito { expr, .. }
-        | Expr::Error { expr, .. } => collect_pattern_idents(expr, locals),
+        Expr::Algun { expr, .. } | Expr::Exito { expr, .. } | Expr::Error { expr, .. } => {
+            collect_pattern_idents(expr, locals)
+        }
         Expr::EnumCtor { args, .. } => {
             for a in args {
                 collect_pattern_idents(a, locals);
@@ -792,7 +794,9 @@ fn fix_transitive_expr(
             }
         }
         Expr::StructInit {
-            struct_name, fields, ..
+            struct_name,
+            fields,
+            ..
         } => {
             if !locals.contains(struct_name)
                 && !is_known_prefixed(struct_name, known)
@@ -818,7 +822,9 @@ fn fix_transitive_expr(
                 fix_transitive_expr(a, locals, imported_decls, known);
             }
         }
-        Expr::FieldAccess { expr: inner, .. } => fix_transitive_expr(inner, locals, imported_decls, known),
+        Expr::FieldAccess { expr: inner, .. } => {
+            fix_transitive_expr(inner, locals, imported_decls, known)
+        }
         Expr::Index { expr, index, .. } => {
             fix_transitive_expr(expr, locals, imported_decls, known);
             fix_transitive_expr(index, locals, imported_decls, known);
@@ -828,7 +834,9 @@ fn fix_transitive_expr(
             fix_transitive_expr(right, locals, imported_decls, known);
         }
         Expr::Unary { operand, .. } => fix_transitive_expr(operand, locals, imported_decls, known),
-        Expr::Grouping { expr: inner, .. } => fix_transitive_expr(inner, locals, imported_decls, known),
+        Expr::Grouping { expr: inner, .. } => {
+            fix_transitive_expr(inner, locals, imported_decls, known)
+        }
         Expr::Tuple { items, .. } => {
             for it in items.iter_mut() {
                 fix_transitive_expr(it, locals, imported_decls, known);
@@ -865,7 +873,9 @@ fn fix_transitive_expr(
         }
         Expr::Algun { expr: inner, .. }
         | Expr::Exito { expr: inner, .. }
-        | Expr::Error { expr: inner, .. } => fix_transitive_expr(inner, locals, imported_decls, known),
+        | Expr::Error { expr: inner, .. } => {
+            fix_transitive_expr(inner, locals, imported_decls, known)
+        }
         Expr::Range { start, end, .. } => {
             fix_transitive_expr(start, locals, imported_decls, known);
             fix_transitive_expr(end, locals, imported_decls, known);
@@ -880,7 +890,9 @@ fn fix_transitive_expr(
             fix_transitive_expr(true_branch, locals, imported_decls, known);
             fix_transitive_expr(false_branch, locals, imported_decls, known);
         }
-        Expr::Comptime { expr: inner, .. } => fix_transitive_expr(inner, locals, imported_decls, known),
+        Expr::Comptime { expr: inner, .. } => {
+            fix_transitive_expr(inner, locals, imported_decls, known)
+        }
         _ => {}
     }
 }

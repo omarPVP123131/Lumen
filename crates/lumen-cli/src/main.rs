@@ -413,7 +413,9 @@ fn print_help() {
     println!();
     println!("  📖 SINTAXIS BÁSICA / CORE SYNTAX:");
     println!();
-    println!("   funcion entero suma(entero a, entero b) {{ ... }}   // params: Tipo nombre  (estilo C)");
+    println!(
+        "   funcion entero suma(entero a, entero b) {{ ... }}   // params: Tipo nombre  (estilo C)"
+    );
     println!("   funcion entero resta(a: entero, b: entero) {{ ... }} // o: nombre: Tipo  (estilo struct, ambos válidos)");
     println!(
         "   estructura Punto {{ x: entero, y: entero }}          // campos SIEMPRE nombre: Tipo"

@@ -4109,7 +4109,9 @@ impl SemanticAnalyzer {
                 }
             }
             Expr::StructInit {
-                struct_name, fields, ..
+                struct_name,
+                fields,
+                ..
             } => {
                 if let TypeInfo::Struct {
                     name: expected_name,
