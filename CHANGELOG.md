@@ -1,5 +1,10 @@
 # Changelog de LÚMEN
 
+## [3.94.22] - 2026-09-02 — Fix #9 residual `n1.siguiente` + bump 3.94.21→3.94.22
+
+- **#9 residual FIX:** `si sea algun(sig) = n1.siguiente` (field access `opcion<Nodo>` en struct recursivo) ya infiere `Nodo` con campos `valor`/`siguiente` — `bind_pattern_vars` para `Opcion` ahora resuelve `Struct` vacío vía `self.structs.get(name)` y `FieldAccess` hace fallback a `self.structs` si `fields.is_empty()`; `sig.valor` ya no da `E059`, imprime `2` correctamente (VM y nativo)
+- **Hereda 3.94.21:** fix 19 `E033` transitive locals (`id`→`gui_id`), `lumen check` 396/396
+
 ## [3.94.21] - 2026-09-02 — Fix 19 errores `lumen check` (transitive locals) + bump
 
 - **Hotfix 3.84.4 → 3.94.21:** `fix_transitive` en `loader.rs` no compartía `locals` entre `own_nodes` y no insertaba `Variable`/`Const` en `locals` → `id` en `gui_ventana.nv` se reescribía a `gui_id` y `ahora` en `jr_concurrencia.nv` a `fecha_ahora` → 19 `E033` en `lumen check` 3.84.4. Fix: `Variable`/`Const` insertan en `locals`, `own_nodes` comparten un único `transitive_locals`, `fix_transitive_expr` respeta `locals` → `lumen check` 396/396 `0 errores`.

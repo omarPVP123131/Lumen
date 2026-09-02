@@ -3557,10 +3557,21 @@ impl SemanticAnalyzer {
             Expr::FieldAccess { expr, field, span } => {
                 let expr_type = self.analyze_expr(expr);
                 // Auto-deref Prestado<T> → T para acceso a campos (QA bug #6)
-                let resolved = match &expr_type {
+                let mut resolved = match &expr_type {
                     TypeInfo::Prestado { inner, .. } => (**inner).clone(),
                     _ => expr_type.clone(),
                 };
+                // Fix #9 residual: si es Struct con fields vacíos (recursivo opcion<Self>), buscar real en self.structs
+                if let TypeInfo::Struct { name, fields } = &resolved {
+                    if fields.is_empty() {
+                        if let Some((real_fields, _)) = self.structs.get(name) {
+                            resolved = TypeInfo::Struct {
+                                name: name.clone(),
+                                fields: real_fields.clone(),
+                            };
+                        }
+                    }
+                }
                 match &resolved {
                     TypeInfo::Struct { fields, .. } => {
                         let field_type = fields.iter().find(|(name, _)| name == field);
@@ -4049,7 +4060,21 @@ impl SemanticAnalyzer {
             }
             Expr::Algun { expr, .. } => {
                 if let TypeInfo::Opcion(inner) = base_type {
-                    self.bind_pattern_vars(expr, *inner, span);
+                    // Fix #9 residual: si inner es Struct con fields vacíos (recursivo opcion<Self>), buscar en self.structs
+                    let inner_type = match *inner.clone() {
+                        TypeInfo::Struct { name, fields } if fields.is_empty() => {
+                            if let Some((real_fields, _)) = self.structs.get(&name) {
+                                TypeInfo::Struct {
+                                    name: name.clone(),
+                                    fields: real_fields.clone(),
+                                }
+                            } else {
+                                TypeInfo::Struct { name, fields }
+                            }
+                        }
+                        other => other,
+                    };
+                    self.bind_pattern_vars(expr, inner_type, span);
                 } else {
                     // No es Opcion — usa el tipo base o Numero
                     self.bind_pattern_vars(expr, base_type, span);
