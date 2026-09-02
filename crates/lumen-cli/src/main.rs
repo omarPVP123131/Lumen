@@ -482,7 +482,9 @@ fn print_help() {
     println!("   search <termino>            Buscar paquetes en el registro oficial (lumen-pkgs)");
     println!("   doctor / info               Diagnosticar entorno, compiladores y stdlib");
     println!("   serve [--port <num>]        Iniciar Playground Web local (WASM + API)");
-    println!("   wasm [build|serve]          Guía del flujo WASM (el playground no requiere compilar)");
+    println!(
+        "   wasm [build|serve]          Guía del flujo WASM (el playground no requiere compilar)"
+    );
     println!("   lsp                         Iniciar servidor Language Server Protocol");
     println!();
     println!("  ⚙️  OPCIONES & BANDERAS / OPTIONS & FLAGS:");
@@ -3379,10 +3381,7 @@ fn handle_http_request(stream: &mut std::net::TcpStream, root: &Path) {
             repo_root.join("crates/lumen-wasm/web").join(raw_rel),
         ]
     } else {
-        vec![
-            root.join(raw_rel),
-            root.join("web").join(raw_rel),
-        ]
+        vec![root.join(raw_rel), root.join("web").join(raw_rel)]
     };
     if is_asset {
         if let Some(tail) = &pkg_tail {
@@ -3513,7 +3512,9 @@ fn print_wasm_help(sub: &str) {
             println!("  🕸️  WEBASSEMBLY & PLAYGROUND — SIN COMPILACIÓN");
             println!("  ═══════════════════════════════════════════════");
             println!("  • lumen serve [--port <n>]   Levanta el playground web (modo híbrido:");
-            println!("                               la VM nativa ejecuta el código vía /api/run).");
+            println!(
+                "                               la VM nativa ejecuta el código vía /api/run)."
+            );
             println!("  • lumen wasm build           Instrucciones para compilar el .wasm real");
             println!("                               (opcional: requiere wasm-pack + wasm32).");
             println!();
