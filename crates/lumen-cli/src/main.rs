@@ -413,14 +413,16 @@ fn print_help() {
     println!();
     println!("  📖 SINTAXIS BÁSICA / CORE SYNTAX:");
     println!();
-    println!("   funcion entero suma(entero a, entero b) {{ ... }}   // params: Tipo nombre");
-    println!("   funcion entero resta(a: entero, b: entero) {{ ... }} // o: nombre: Tipo (estilo struct)");
+    println!("   funcion entero suma(entero a, entero b) {{ ... }}   // params: Tipo nombre  (estilo C)");
+    println!("   funcion entero resta(a: entero, b: entero) {{ ... }} // o: nombre: Tipo  (estilo struct, ambos válidos)");
     println!(
         "   estructura Punto {{ x: entero, y: entero }}          // campos SIEMPRE nombre: Tipo"
     );
     println!(
         "   impl Punto {{ funcion vacio mover(este, dx: entero) }} // receptor 'este' sin tipo"
     );
+    println!("   // NOTA: params aceptan ambos órdenes; campos de struct siempre nombre: Tipo");
+    println!("   // impl inherente (sin trait) no soportado: usa `rasgo` + `impl Rasgo para Tipo`");
     println!(
         "   si cond {{ }} sino {{ }} · mientras cond {{ }} · para (i = 0; i < n; i = i + 1) {{ }}"
     );

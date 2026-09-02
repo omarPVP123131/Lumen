@@ -127,6 +127,7 @@ impl ModuleLoader {
             fs::canonicalize(current_path).unwrap_or_else(|_| current_path.to_path_buf())
         };
         let mut result = Vec::new();
+        let mut own_nodes: Vec<DeclOrStmt> = Vec::new();
         for node in program {
             match node {
                 DeclOrStmt::Stmt(Stmt::Import { path, alias, span }) => {
@@ -177,9 +178,20 @@ impl ModuleLoader {
                     prefix_program(&mut prefixed, &prefix, &self.known_prefixes);
                     result.extend(prefixed);
                 }
-                other => result.push(other),
+                other => own_nodes.push(other),
             }
         }
+        // Fix #5: transitive imports — el código propio (own_nodes) puede llamar
+        // a símbolos definidos en imports transitivos (p.ej. main -> a -> b, main llama a usar_b()
+        // que está definido como a_usar_b). Si own_nodes usa `usar_b` sin prefijo y result
+        // contiene `a_usar_b`, reescribirlo a `a_usar_b` para que resuelva.
+        if !own_nodes.is_empty() && !result.is_empty() {
+            let imported_decls = collect_module_declarations(&result);
+            for node in &mut own_nodes {
+                fix_transitive_program(node, &imported_decls, &self.known_prefixes);
+            }
+        }
+        result.extend(own_nodes);
         Ok(result)
     }
 
@@ -489,6 +501,387 @@ fn prefix_program(program: &mut Program, prefix: &str, known: &HashSet<String>) 
     let mut locals = HashSet::new();
     for node in program.iter_mut() {
         prefix_node(node, prefix, &mut locals, true, known, &module_decls);
+    }
+}
+
+fn fix_transitive_program(
+    node: &mut DeclOrStmt,
+    imported_decls: &HashSet<String>,
+    known: &HashSet<String>,
+) {
+    let mut locals = HashSet::new();
+    fix_transitive_node(node, &mut locals, imported_decls, known);
+}
+
+fn fix_transitive_node(
+    node: &mut DeclOrStmt,
+    locals: &mut HashSet<String>,
+    imported_decls: &HashSet<String>,
+    known: &HashSet<String>,
+) {
+    match node {
+        DeclOrStmt::Decl(d) => fix_transitive_decl(d, locals, imported_decls, known),
+        DeclOrStmt::Stmt(s) => fix_transitive_stmt(s, locals, imported_decls, known),
+    }
+}
+
+fn fix_transitive_decl(
+    decl: &mut Decl,
+    locals: &mut HashSet<String>,
+    imported_decls: &HashSet<String>,
+    known: &HashSet<String>,
+) {
+    match decl {
+        Decl::Variable { init, .. } => {
+            if let Some(expr) = init {
+                fix_transitive_expr(expr, locals, imported_decls, known);
+            }
+        }
+        Decl::Const { value, .. } => fix_transitive_expr(value, locals, imported_decls, known),
+        Decl::Function {
+            params, body, ..
+        } => {
+            let mut new_locals = locals.clone();
+            for p in params {
+                new_locals.insert(p.name.clone());
+            }
+            for n in body {
+                fix_transitive_node(n, &mut new_locals, imported_decls, known);
+            }
+        }
+        Decl::Struct { .. } | Decl::Enum { .. } | Decl::Rasgo { .. } => {}
+        Decl::Destructure { targets, init, .. } => {
+            fix_transitive_expr(init, locals, imported_decls, known);
+            for t in targets {
+                if t.name != "_" {
+                    locals.insert(t.name.clone());
+                }
+            }
+        }
+        Decl::ImplRasgo { methods, .. } => {
+            for decl in methods {
+                if let Decl::Function { params, body, .. } = decl {
+                    let mut new_locals = locals.clone();
+                    for p in params {
+                        new_locals.insert(p.name.clone());
+                    }
+                    for n in body {
+                        fix_transitive_node(n, &mut new_locals, imported_decls, known);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn fix_transitive_stmt(
+    stmt: &mut Stmt,
+    locals: &mut HashSet<String>,
+    imported_decls: &HashSet<String>,
+    known: &HashSet<String>,
+) {
+    match stmt {
+        Stmt::Assignment { name, value, .. } => {
+            fix_transitive_expr(value, locals, imported_decls, known);
+            // lhs is definition, not a use
+            locals.insert(name.clone());
+        }
+        Stmt::Expr { expr, .. } => fix_transitive_expr(expr, locals, imported_decls, known),
+        Stmt::Return { value, .. } => {
+            if let Some(ex) = value {
+                fix_transitive_expr(ex, locals, imported_decls, known);
+            }
+        }
+        Stmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            fix_transitive_expr(condition, locals, imported_decls, known);
+            let mut then_locals = locals.clone();
+            for n in then_body {
+                fix_transitive_node(n, &mut then_locals, imported_decls, known);
+            }
+            if let Some(eb) = else_body {
+                let mut else_locals = locals.clone();
+                for n in eb {
+                    fix_transitive_node(n, &mut else_locals, imported_decls, known);
+                }
+            }
+        }
+        Stmt::IfLet {
+            pattern,
+            value,
+            then_body,
+            else_body,
+            ..
+        } => {
+            fix_transitive_expr(value, locals, imported_decls, known);
+            let mut then_locals = locals.clone();
+            // pattern vars become locals
+            collect_pattern_idents(pattern, &mut then_locals);
+            for n in then_body {
+                fix_transitive_node(n, &mut then_locals, imported_decls, known);
+            }
+            if let Some(eb) = else_body {
+                let mut else_locals = locals.clone();
+                for n in eb {
+                    fix_transitive_node(n, &mut else_locals, imported_decls, known);
+                }
+            }
+        }
+        Stmt::GuardLet {
+            pattern,
+            value,
+            else_body,
+            ..
+        } => {
+            fix_transitive_expr(value, locals, imported_decls, known);
+            collect_pattern_idents(pattern, locals);
+            let mut else_locals = locals.clone();
+            for n in else_body {
+                fix_transitive_node(n, &mut else_locals, imported_decls, known);
+            }
+        }
+        Stmt::While {
+            condition, body, ..
+        } => {
+            fix_transitive_expr(condition, locals, imported_decls, known);
+            let mut body_locals = locals.clone();
+            for n in body {
+                fix_transitive_node(n, &mut body_locals, imported_decls, known);
+            }
+        }
+        Stmt::For {
+            init,
+            condition,
+            update,
+            body,
+            ..
+        } => {
+            let mut for_locals = locals.clone();
+            fix_transitive_decl(init, &mut for_locals, imported_decls, known);
+            fix_transitive_expr(condition, &mut for_locals, imported_decls, known);
+            fix_transitive_stmt(update, &mut for_locals, imported_decls, known);
+            for n in body {
+                fix_transitive_node(n, &mut for_locals, imported_decls, known);
+            }
+        }
+        Stmt::ForEach {
+            var_name,
+            expr,
+            body,
+            ..
+        } => {
+            fix_transitive_expr(expr, locals, imported_decls, known);
+            let mut for_locals = locals.clone();
+            for_locals.insert(var_name.clone());
+            for n in body {
+                fix_transitive_node(n, &mut for_locals, imported_decls, known);
+            }
+        }
+        Stmt::Match {
+            expr, arms, default, ..
+        } => {
+            fix_transitive_expr(expr, locals, imported_decls, known);
+            for arm in arms {
+                let mut arm_locals = locals.clone();
+                collect_pattern_idents(&arm.value, &mut arm_locals);
+                for alt in &mut arm.alt_values {
+                    fix_transitive_expr(alt, &mut arm_locals, imported_decls, known);
+                }
+                if let Some(g) = &mut arm.guard {
+                    fix_transitive_expr(g, &mut arm_locals, imported_decls, known);
+                }
+                for n in &mut arm.body {
+                    fix_transitive_node(n, &mut arm_locals, imported_decls, known);
+                }
+            }
+            if let Some(db) = default {
+                let mut def_locals = locals.clone();
+                for n in db {
+                    fix_transitive_node(n, &mut def_locals, imported_decls, known);
+                }
+            }
+        }
+        Stmt::Import { .. } => {}
+        Stmt::Break { .. } | Stmt::Continue { .. } => {}
+        Stmt::Block { stmts, .. } => {
+            let mut block_locals = locals.clone();
+            for n in stmts {
+                fix_transitive_node(n, &mut block_locals, imported_decls, known);
+            }
+        }
+        Stmt::TryCatch {
+            try_body,
+            catch_body,
+            ..
+        } => {
+            let mut try_locals = locals.clone();
+            for n in try_body {
+                fix_transitive_node(n, &mut try_locals, imported_decls, known);
+            }
+            let mut catch_locals = locals.clone();
+            for n in catch_body {
+                fix_transitive_node(n, &mut catch_locals, imported_decls, known);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_pattern_idents(expr: &Expr, locals: &mut HashSet<String>) {
+    match expr {
+        Expr::Ident { name, .. } => {
+            locals.insert(name.clone());
+        }
+        Expr::Call { args, .. } => {
+            for a in args {
+                collect_pattern_idents(a, locals);
+            }
+        }
+        Expr::Algun { expr, .. }
+        | Expr::Exito { expr, .. }
+        | Expr::Error { expr, .. } => collect_pattern_idents(expr, locals),
+        Expr::EnumCtor { args, .. } => {
+            for a in args {
+                collect_pattern_idents(a, locals);
+            }
+        }
+        Expr::Tuple { items, .. } => {
+            for it in items {
+                collect_pattern_idents(it, locals);
+            }
+        }
+        Expr::StructInit { fields, .. } => {
+            for (_, v) in fields {
+                collect_pattern_idents(v, locals);
+            }
+        }
+        Expr::List { items, .. } => {
+            for it in items {
+                collect_pattern_idents(it, locals);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn fix_transitive_expr(
+    expr: &mut Expr,
+    locals: &mut HashSet<String>,
+    imported_decls: &HashSet<String>,
+    known: &HashSet<String>,
+) {
+    match expr {
+        Expr::Ident { name, .. } => {
+            if locals.contains(name) || is_known_prefixed(name, known) || is_builtin(name) {
+                return;
+            }
+            // Buscar en imported_decls un nombre que termine con _name o sea name con prefijo
+            for decl in imported_decls {
+                for prefix in known {
+                    let prefixed = format!("{}_{}", prefix, name);
+                    if decl == &prefixed {
+                        *name = prefixed;
+                        return;
+                    }
+                }
+                // También si decl es exactamente name (sin prefijo) pero con otro prefix, ya estaría como prefixed
+            }
+        }
+        Expr::StructInit {
+            struct_name, fields, ..
+        } => {
+            if !locals.contains(struct_name)
+                && !is_known_prefixed(struct_name, known)
+                && !is_builtin(struct_name)
+            {
+                for decl in imported_decls {
+                    for prefix in known {
+                        let prefixed = format!("{}_{}", prefix, struct_name);
+                        if decl == &prefixed {
+                            *struct_name = prefixed.clone();
+                            break;
+                        }
+                    }
+                }
+            }
+            for (_, v) in fields.iter_mut() {
+                fix_transitive_expr(v, locals, imported_decls, known);
+            }
+        }
+        Expr::Call { callee, args, .. } => {
+            fix_transitive_expr(callee, locals, imported_decls, known);
+            for a in args.iter_mut() {
+                fix_transitive_expr(a, locals, imported_decls, known);
+            }
+        }
+        Expr::FieldAccess { expr: inner, .. } => fix_transitive_expr(inner, locals, imported_decls, known),
+        Expr::Index { expr, index, .. } => {
+            fix_transitive_expr(expr, locals, imported_decls, known);
+            fix_transitive_expr(index, locals, imported_decls, known);
+        }
+        Expr::Binary { left, right, .. } => {
+            fix_transitive_expr(left, locals, imported_decls, known);
+            fix_transitive_expr(right, locals, imported_decls, known);
+        }
+        Expr::Unary { operand, .. } => fix_transitive_expr(operand, locals, imported_decls, known),
+        Expr::Grouping { expr: inner, .. } => fix_transitive_expr(inner, locals, imported_decls, known),
+        Expr::Tuple { items, .. } => {
+            for it in items.iter_mut() {
+                fix_transitive_expr(it, locals, imported_decls, known);
+            }
+        }
+        Expr::List { items, .. } => {
+            for it in items.iter_mut() {
+                fix_transitive_expr(it, locals, imported_decls, known);
+            }
+        }
+        Expr::EnumCtor {
+            enum_name,
+            variant: _,
+            args,
+            ..
+        } => {
+            if !is_known_prefixed(enum_name, known) && !is_builtin(enum_name) {
+                for decl in imported_decls {
+                    for prefix in known {
+                        let prefixed = format!("{}_{}", prefix, enum_name);
+                        if decl == &prefixed || decl == enum_name {
+                            // Si encontramos el enum, prefijar
+                            if imported_decls.contains(&prefixed) {
+                                *enum_name = prefixed.clone();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            for a in args.iter_mut() {
+                fix_transitive_expr(a, locals, imported_decls, known);
+            }
+        }
+        Expr::Algun { expr: inner, .. }
+        | Expr::Exito { expr: inner, .. }
+        | Expr::Error { expr: inner, .. } => fix_transitive_expr(inner, locals, imported_decls, known),
+        Expr::Range { start, end, .. } => {
+            fix_transitive_expr(start, locals, imported_decls, known);
+            fix_transitive_expr(end, locals, imported_decls, known);
+        }
+        Expr::Ternary {
+            condition,
+            true_branch,
+            false_branch,
+            ..
+        } => {
+            fix_transitive_expr(condition, locals, imported_decls, known);
+            fix_transitive_expr(true_branch, locals, imported_decls, known);
+            fix_transitive_expr(false_branch, locals, imported_decls, known);
+        }
+        Expr::Comptime { expr: inner, .. } => fix_transitive_expr(inner, locals, imported_decls, known),
+        _ => {}
     }
 }
 

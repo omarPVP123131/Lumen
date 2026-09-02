@@ -8063,6 +8063,7 @@ fn xe_spill(
     s: &mut String,
     estack: &mut Vec<(String, bool, bool, u8, bool)>,
     handler_labels: &[usize],
+    fn_ret_int: bool,
 ) {
     let risky = estack.iter().any(|(_, r, _, _, _)| *r);
     for (e, _, _, kind, _) in estack.drain(..) {
@@ -8075,17 +8076,23 @@ fn xe_spill(
         s.push_str(&format!("  PUSH({});\n", ve));
     }
     if risky {
-        xe_errchk(s, handler_labels);
+        xe_errchk(s, handler_labels, fn_ret_int);
     }
 }
 
-fn xe_errchk(s: &mut String, handler_labels: &[usize]) {
+fn xe_errchk(s: &mut String, handler_labels: &[usize], fn_ret_int: bool) {
     match handler_labels.last() {
         Some(l) => s.push_str(&format!(
             "  if (__builtin_expect(_err,0)) {{ _hn--; SP = _h_sp[_hn]; PUSH(_v_str(_last_err_msg)); _err = 0; goto L_{}; }}\n",
             l
         )),
-        None => s.push_str("  if (__builtin_expect(_err,0)) return _v_void();\n"),
+        None => {
+            if fn_ret_int {
+                s.push_str("  if (__builtin_expect(_err,0)) return 0;\n");
+            } else {
+                s.push_str("  if (__builtin_expect(_err,0)) return _v_void();\n");
+            }
+        }
     }
 }
 
@@ -8341,7 +8348,7 @@ fn emit_func(
                 // v3.5.26: push nativo sobre array de enteros promovido.
                 let (ve, _, _, ke, _) = estack.pop().unwrap();
                 let _dummy = estack.pop(); // dummy del Load xs
-                xe_spill(&mut s, &mut estack, &handler_labels);
+                xe_spill(&mut s, &mut estack, &handler_labels, fn_ret_int);
                 let val_expr = if ke == 1 {
                     ve
                 } else {
@@ -8495,7 +8502,7 @@ fn emit_func(
                         e2, pv, pv, pv, pv
                     ));
                         if r && ke != 0 {
-                            xe_errchk(&mut s, &handler_labels);
+                            xe_errchk(&mut s, &handler_labels, fn_ret_int);
                         }
                         i += 1;
                         continue;
@@ -8509,7 +8516,7 @@ fn emit_func(
                         };
                         s.push_str(&format!("  {} = {};\n", ll_name, expr));
                         if r && ke != 1 {
-                            xe_errchk(&mut s, &handler_labels);
+                            xe_errchk(&mut s, &handler_labels, fn_ret_int);
                         }
                         i += 1;
                         continue;
@@ -8531,7 +8538,7 @@ fn emit_func(
                     ));
                     }
                     if r {
-                        xe_errchk(&mut s, &handler_labels);
+                        xe_errchk(&mut s, &handler_labels, fn_ret_int);
                     }
                 }
             }
@@ -8544,15 +8551,15 @@ fn emit_func(
                     s.push_str(&format!("  if (!_truthy({})) goto L_{};\n", e, t));
                 }
                 if r {
-                    xe_errchk(&mut s, &handler_labels);
+                    xe_errchk(&mut s, &handler_labels, fn_ret_int);
                 }
             }
             Instr::Jmp(t) => {
-                xe_spill(&mut s, &mut estack, &handler_labels);
+                xe_spill(&mut s, &mut estack, &handler_labels, fn_ret_int);
                 s.push_str(&format!("  goto L_{};\n", t));
             }
             Instr::Label(t) => {
-                xe_spill(&mut s, &mut estack, &handler_labels);
+                xe_spill(&mut s, &mut estack, &handler_labels, fn_ret_int);
                 s.push_str(&format!("  L_{}:;\n", t));
             }
             Instr::Return if !estack.is_empty() => {
@@ -8564,11 +8571,11 @@ fn emit_func(
                         2 => format!("(long long)({})", e),
                         _ => format!("(long long)_asf({})", e),
                     };
-                    xe_spill(&mut s, &mut estack, &handler_labels);
+                    xe_spill(&mut s, &mut estack, &handler_labels, fn_ret_int);
                     s.push_str(&format!("  {{ SP = _sb; return {}; }}\n", e2));
                 } else {
                     let e = if ke != 0 { format!("_v_int({})", e) } else { e };
-                    xe_spill(&mut s, &mut estack, &handler_labels);
+                    xe_spill(&mut s, &mut estack, &handler_labels, fn_ret_int);
                     s.push_str(&format!(
                         "  {{ Val _r = ({}); if (_r.t == T_FRE && _r.p && _r.i > 0) {{ for (int _k = 0; _k < (int)_r.i; _k++) ((Val*)_r.en)[_k] = _dcp(*((Val**)_r.p)[_k]); }} SP = _sb; return _r; }}\n",
                         e
@@ -8580,7 +8587,7 @@ fn emit_func(
                 let e = if ke != 0 { format!("_v_int({})", e) } else { e };
                 s.push_str(&format!("  printf(\"%s\\n\", _fmt({}));\n", e));
                 if r {
-                    xe_errchk(&mut s, &handler_labels);
+                    xe_errchk(&mut s, &handler_labels, fn_ret_int);
                 }
             }
             Instr::Read => {
@@ -8634,7 +8641,7 @@ fn emit_func(
                 // v3.5.22: el resultado de la llamada va a ST[]; cualquier
                 // expresión pendiente debe estar YA en ST (en orden) para que
                 // los consumidores legacy posteriores popeen correctamente.
-                xe_spill(&mut s, &mut estack, &handler_labels);
+                xe_spill(&mut s, &mut estack, &handler_labels, fn_ret_int);
                 let callee_throws =
                     instr_throws(&Instr::Call(cn.clone(), *argc), no_throw, program);
                 // v3.5.23: ABI de registros — llamada directa sin staging gv.
@@ -8721,7 +8728,7 @@ fn emit_func(
                         }
                     }
                     if callee_throws {
-                        xe_errchk(&mut s, &handler_labels);
+                        xe_errchk(&mut s, &handler_labels, fn_ret_int);
                     }
                 } else {
                     for (j, (e, _, _, kind, movable)) in args_e.iter().enumerate() {
@@ -8781,7 +8788,7 @@ fn emit_func(
                         ));
                     }
                     if callee_throws {
-                        xe_errchk(&mut s, &handler_labels);
+                        xe_errchk(&mut s, &handler_labels, fn_ret_int);
                     }
                 }
             }
@@ -8832,7 +8839,7 @@ fn emit_func(
             continue;
         }
         // ────────── camino clásico (ST[]/PUSH/POP) ──────────
-        xe_spill(&mut s, &mut estack, &handler_labels);
+        xe_spill(&mut s, &mut estack, &handler_labels, fn_ret_int);
         let instr = &instrs_all[i];
         // v3.5.24: ¿puede LANZAR realmente esta instrucción? (Div/Mod,
         // bounds, llamadas a funciones/builtins que lanzan). Las demás ya no
@@ -9427,13 +9434,20 @@ fn emit_func(
         }
         // Chequeo de error tras operaciones riesgosas (intentar/atrapar sin
         // unwinding): salta al catch abierto más cercano o propaga al llamador.
+        // Fix #8: respeta el tipo de retorno de la función (long long vs Val)
         if risky {
             match handler_labels.last() {
                 Some(l) => s.push_str(&format!(
                     "  if (__builtin_expect(_err,0)) {{ _hn--; SP = _h_sp[_hn]; PUSH(_v_str(_last_err_msg)); _err = 0; goto L_{}; }}\n",
                     l
                 )),
-                None => s.push_str("  if (__builtin_expect(_err,0)) return _v_void();\n"),
+                None => {
+                    if fn_ret_int {
+                        s.push_str("  if (__builtin_expect(_err,0)) return 0;\n");
+                    } else {
+                        s.push_str("  if (__builtin_expect(_err,0)) return _v_void();\n");
+                    }
+                }
             }
         }
         i += 1;

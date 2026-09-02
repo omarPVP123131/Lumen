@@ -1,5 +1,16 @@
 # Changelog de LÚMEN
 
+## [3.84.4] - 2026-09-02 — Fix reporte único 13 bugs (6 abiertos) — crítico/high/medium
+
+- **#9 Crítico FIX:** `si sea algun(p) = opcion<Punto>` ya infiere `Punto` (no `Numero`) — `bind_pattern_vars` ahora propaga `Opcion<T>`/`Resultado<T,E>`/`Struct`/`Tuple`/`Lista`/`Enum` correctamente; `Punto {x,y}` y `opcion<Punto>` funcionan para listas ligadas/árboles
+- **#8 Alta FIX:** `build --native` `Val` vs `long long` — `emit_func` y `xe_spill/xe_errchk` ahora retornan `0` para funciones `entero` y `_v_void()` para `Val`; `gente[1].edad=26` compila y corre idéntico en VM y nativo (C -O3)
+- **#5 Alta FIX:** imports transitivos `b->a->main` — `loader::flatten` ahora reescribe llamadas en `own_nodes` buscando decls importados (`a_usar_b` para `usar_b`); `nn.nv`/`tensor.nv` y `a.nv`/`b.nv` ya resuelven sin prefijo manual
+- **#10 Media FIX:** 6/70 stdlib no compilaban — `bpe.nv`/`logging.nv`/`tracing.nv` renombrado `resultado`→`salida`/`res`/`buf` (keyword `Result`), `metrics.nv` `nulo`→`ninguno` + `a_entero`→`como entero`, `profiler.nv` casts `como entero`, `nn.nv` ya OK con fix #5; `stdlib/` 70/70 `lumen check` OK
+- **#11/12 Docs:** `--help` ahora explica ambos órdenes de params (`Tipo nombre` C vs `nombre: Tipo` struct) y nota `impl inherente no soportado`; `en_tiempo_compilacion` docs aclaran que solo pliega código puro (side-effects como `imprimir` quedan en runtime — zero-cost solo para puro)
+- **#13 Medium:** cascadas parser deduplicadas (ya no 9 errores por 1 causa) — `sema` y `loader` con guards y `fix_transitive` con `collect_pattern_idents` + `HashSet` dedup; CI `ci.yml` QA ya no itera `lumen-wasm-pkg` y `ls | head` con `|| true`
+- **CI:** `ci.yml` `ls -R | head` y `QA` ya verdes en #86; `stdlib` 70/70 verde
+- **Versión:** `3.84.3` → `3.84.4` (`VERSION`, `Cargo.toml` 3.84.4, `Cargo.lock` 18 crates, `README` badge)
+
 ## [3.84.3] - 2026-09-01 — Gate Windows + atribución limpia + release
 
 - **Autoría limpia:** `fix(sql): harden SQLite FFI` re-atribuido a Omar Palomares (`24cd79a`/`6895635`/`8bca657`) — commit Copilot `de8fffd` huérfano, PR #1 `refs/pull/1/head` ya no cuenta como contributor en `master`

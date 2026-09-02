@@ -25,13 +25,13 @@ funcion void profile_start(texto name) { perfil_iniciar(name); }
 /// End profiling and return duration in microseconds
 funcion entero perfil_finalizar(texto nombre) {
     cualquiera entrada = __map_obtener(__perfil_datos, nombre);
-    entero inicio = __map_obtener(entrada, "inicio");
+    entero inicio = __map_obtener(entrada, "inicio") como entero;
     entero fin = __tiempo_ahora();
     entero duracion = fin - inicio;
-    entero contador = __map_obtener(entrada, "contador");
-    entero tiempo_total = __map_obtener(entrada, "tiempo_total") + duracion;
-    entero tiempo_min = __map_obtener(entrada, "tiempo_min");
-    entero tiempo_max = __map_obtener(entrada, "tiempo_max");
+    entero contador = __map_obtener(entrada, "contador") como entero;
+    entero tiempo_total = (__map_obtener(entrada, "tiempo_total") como entero) + duracion;
+    entero tiempo_min = __map_obtener(entrada, "tiempo_min") como entero;
+    entero tiempo_max = __map_obtener(entrada, "tiempo_max") como entero;
 
     si tiempo_min - duracion > 0 {
         tiempo_min = duracion;
@@ -84,8 +84,8 @@ funcion entero profile_total_time(texto name) { retornar perfil_tiempo_total(nam
 /// Get average execution time
 funcion entero perfil_promedio(texto nombre) {
     cualquiera entrada = __map_obtener(__perfil_datos, nombre);
-    entero total = __map_obtener(entrada, "tiempo_total");
-    entero cont = __map_obtener(entrada, "contador");
+    entero total = __map_obtener(entrada, "tiempo_total") como entero;
+    entero cont = __map_obtener(entrada, "contador") como entero;
     si cont == 0 {
         retornar 0;
     }
@@ -105,11 +105,11 @@ funcion texto perfil_reporte() {
     mientras total - i > 0 {
         texto nombre = claves[i];
         cualquiera entrada = __map_obtener(__perfil_datos, nombre);
-        entero dur = __map_obtener(entrada, "duracion");
-        entero cont = __map_obtener(entrada, "contador");
-        entero tiempo_total = __map_obtener(entrada, "tiempo_total");
-        entero tiempo_min = __map_obtener(entrada, "tiempo_min");
-        entero tiempo_max = __map_obtener(entrada, "tiempo_max");
+        entero dur = __map_obtener(entrada, "duracion") como entero;
+        entero cont = __map_obtener(entrada, "contador") como entero;
+        entero tiempo_total = __map_obtener(entrada, "tiempo_total") como entero;
+        entero tiempo_min = __map_obtener(entrada, "tiempo_min") como entero;
+        entero tiempo_max = __map_obtener(entrada, "tiempo_max") como entero;
         entero prom = 0;
         si cont - 0 > 0 {
             prom = tiempo_total / cont;
@@ -140,8 +140,8 @@ funcion texto perfil_resumen() {
     mientras total - i > 0 {
         texto nombre = claves[i];
         cualquiera entrada = __map_obtener(__perfil_datos, nombre);
-        entero cont = __map_obtener(entrada, "contador");
-        entero tiempo_total = __map_obtener(entrada, "tiempo_total");
+        entero cont = __map_obtener(entrada, "contador") como entero;
+        entero tiempo_total = __map_obtener(entrada, "tiempo_total") como entero;
         entero prom = 0;
         si cont - 0 > 0 {
             prom = tiempo_total / cont;

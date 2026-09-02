@@ -55,7 +55,7 @@ impl TokenizadorBPE {
     }
 
     funcion texto decodificar(este, lista<entero> token_ids) {
-        texto resultado = "";
+        texto salida = "";
         para (entero i = 0; i < token_ids.largo(); i = i + 1) {
             entero id = token_ids[i];
             texto id_str = a_texto(id);
@@ -63,12 +63,12 @@ impl TokenizadorBPE {
             si __map_contiene(este.vocabulario_inverso, id_str) {
                 tok = __map_obtener(este.vocabulario_inverso, id_str);
             }
-            resultado = resultado + tok;
+            salida = salida + tok;
             si i < token_ids.largo() - 1 {
-                resultado = resultado + " ";
+                salida = salida + " ";
             }
         }
-        retornar resultado;
+        retornar salida;
     }
 }
 

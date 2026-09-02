@@ -1270,9 +1270,9 @@ impl SemanticAnalyzer {
                 else_body,
                 span,
             } => {
-                self.analyze_expr(value);
+                let value_type = self.analyze_expr(value);
                 self.scopes.push(Scope::new());
-                self.bind_pattern_vars(pattern, *span);
+                self.bind_pattern_vars(pattern, value_type, *span);
                 for n in then_body {
                     self.analyze_decl_or_stmt(n);
                 }
@@ -1292,8 +1292,8 @@ impl SemanticAnalyzer {
                 else_body,
                 span,
             } => {
-                self.analyze_expr(value);
-                self.bind_pattern_vars(pattern, *span);
+                let value_type = self.analyze_expr(value);
+                self.bind_pattern_vars(pattern, value_type, *span);
                 self.scopes.push(Scope::new());
                 for n in else_body {
                     self.analyze_decl_or_stmt(n);
@@ -1462,7 +1462,10 @@ impl SemanticAnalyzer {
 
                 for arm in arms {
                     self.scopes.push(Scope::new());
-                    self.bind_pattern_vars(&arm.value, arm.span);
+                    self.bind_pattern_vars(&arm.value, expr_type.clone(), arm.span);
+                    for alt in &arm.alt_values {
+                        self.bind_pattern_vars(alt, expr_type.clone(), arm.span);
+                    }
                     let is_range_arm = matches!(&arm.value, Expr::Range { .. });
                     let is_pattern_arm = matches!(
                         &arm.value,
@@ -4010,47 +4013,138 @@ impl SemanticAnalyzer {
     }
 
     // Vincula las variables capturadas por un patrón de if-let / arm de match
-    // en el scope actual (tipo dinámico `Numero` — acepta cualquier valor).
-    fn bind_pattern_vars(&mut self, pattern: &Expr, span: Span) {
+    // Propaga el tipo esperado (Opcion<T>, Resultado<T,E>, Struct, etc.) en vez de hardcodear Numero.
+    fn bind_pattern_vars(&mut self, pattern: &Expr, expected_type: TypeInfo, span: Span) {
+        // Desempaqueta Prestado/Dueno para el matching del patrón (el binding conserva el tipo base)
+        let base_type = match &expected_type {
+            TypeInfo::Prestado { inner, .. } => (**inner).clone(),
+            TypeInfo::Dueno(inner) => (**inner).clone(),
+            _ => expected_type.clone(),
+        };
         match pattern {
             Expr::Ident { name, .. } => {
-                let _ = self.current_scope().define(name, TypeInfo::Numero, span);
+                let _ = self.current_scope().define(name, base_type, span);
             }
-            Expr::Call { args, .. } => {
+            Expr::Call { args, callee, .. } => {
+                // `Call` como patrón: p.ej. `Variante(x)` sin calificar — tratar como EnumCtor si el callee es Ident
+                if let Expr::Ident { name: var_name, .. } = &**callee {
+                    // Buscar si es variante de un enum conocido y el expected es Enum
+                    if let TypeInfo::Enum(enum_name) = &base_type {
+                        if let Some(variants) = self.enums.get(enum_name).cloned() {
+                            for (vname, field_types) in variants {
+                                if &vname == var_name {
+                                    for (arg, ftype) in args.iter().zip(field_types.iter()) {
+                                        self.bind_pattern_vars(arg, ftype.clone(), span);
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Fallback genérico: bindea cada arg con Numero
                 for a in args.iter() {
-                    self.bind_pattern_vars(a, span);
+                    self.bind_pattern_vars(a, TypeInfo::Numero, span);
                 }
             }
             Expr::Algun { expr, .. } => {
-                self.bind_pattern_vars(expr, span);
+                if let TypeInfo::Opcion(inner) = base_type {
+                    self.bind_pattern_vars(expr, *inner, span);
+                } else {
+                    // No es Opcion — usa el tipo base o Numero
+                    self.bind_pattern_vars(expr, base_type, span);
+                }
             }
             Expr::Exito { expr, .. } => {
-                self.bind_pattern_vars(expr, span);
+                if let TypeInfo::Resultado { ok, .. } = base_type {
+                    self.bind_pattern_vars(expr, *ok, span);
+                } else {
+                    self.bind_pattern_vars(expr, base_type, span);
+                }
             }
             Expr::Error { expr, .. } => {
-                self.bind_pattern_vars(expr, span);
+                if let TypeInfo::Resultado { err, .. } = base_type {
+                    // err es Box<TypeInfo> en Resultado { ok, err }
+                    self.bind_pattern_vars(expr, *err, span);
+                } else {
+                    self.bind_pattern_vars(expr, base_type, span);
+                }
             }
             Expr::Ninguno { .. } => {}
-            // QA bug #3: destructurar enums de usuario con datos
-            // `Exitoso(valor)` / `Resultado::Exitoso(valor)` como patrón if-let
-            Expr::EnumCtor { args, .. } => {
+            Expr::EnumCtor {
+                enum_name,
+                variant,
+                args,
+                ..
+            } => {
+                if let TypeInfo::Enum(expected_enum) = &base_type {
+                    // Si el enum del patrón coincide con el esperado, propagar tipos de campos
+                    if expected_enum == enum_name {
+                        if let Some(variants) = self.enums.get(enum_name).cloned() {
+                            for (vname, field_types) in variants {
+                                if &vname == variant {
+                                    for (arg, ftype) in args.iter().zip(field_types.iter()) {
+                                        self.bind_pattern_vars(arg, ftype.clone(), span);
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Fallback: cada arg con Numero
                 for a in args.iter() {
-                    self.bind_pattern_vars(a, span);
+                    self.bind_pattern_vars(a, TypeInfo::Numero, span);
                 }
             }
             Expr::Tuple { items, .. } => {
-                for it in items.iter() {
-                    self.bind_pattern_vars(it, span);
+                if let TypeInfo::Tuple(inner_types) = base_type {
+                    for (it, ftype) in items.iter().zip(inner_types.iter()) {
+                        self.bind_pattern_vars(it, ftype.clone(), span);
+                    }
+                } else {
+                    for it in items.iter() {
+                        self.bind_pattern_vars(it, TypeInfo::Numero, span);
+                    }
                 }
             }
-            Expr::StructInit { fields, .. } => {
+            Expr::StructInit {
+                struct_name, fields, ..
+            } => {
+                if let TypeInfo::Struct {
+                    name: expected_name,
+                    fields: expected_fields,
+                } = base_type
+                {
+                    if &expected_name == struct_name {
+                        // Construir mapa de tipos esperados por nombre de campo
+                        let field_map: std::collections::HashMap<_, _> = expected_fields
+                            .iter()
+                            .map(|(n, t)| (n.clone(), t.clone()))
+                            .collect();
+                        for (fname, val) in fields.iter() {
+                            if let Some(ftype) = field_map.get(fname) {
+                                self.bind_pattern_vars(val, ftype.clone(), span);
+                            } else {
+                                self.bind_pattern_vars(val, TypeInfo::Numero, span);
+                            }
+                        }
+                        return;
+                    }
+                }
                 for (_name, val) in fields.iter() {
-                    self.bind_pattern_vars(val, span);
+                    self.bind_pattern_vars(val, TypeInfo::Numero, span);
                 }
             }
             Expr::List { items, .. } => {
-                for it in items.iter() {
-                    self.bind_pattern_vars(it, span);
+                if let TypeInfo::Lista(inner) = base_type {
+                    for it in items.iter() {
+                        self.bind_pattern_vars(it, (*inner).clone(), span);
+                    }
+                } else {
+                    for it in items.iter() {
+                        self.bind_pattern_vars(it, TypeInfo::Numero, span);
+                    }
                 }
             }
             _ => {}
