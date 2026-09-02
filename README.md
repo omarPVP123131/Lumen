@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/omarPVP123131/Lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/omarPVP123131/Lumen/actions)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-3.84.4-orange)
+![Version](https://img.shields.io/badge/version-3.94.21-orange)
 ![Tests](https://img.shields.io/badge/tests-956%20passing-brightgreen)
 ![JIT](https://img.shields.io/badge/JIT-Tier--2%20%2B%20Tier--R%20activo-blueviolet)
 ![Bench](https://img.shields.io/badge/bench-JIT%20267ms%20(5.8x)-blue)
@@ -36,7 +36,7 @@ lumen bundle src/main.nv -o mi_app
 
 ---
 
-## 💡 Características Principales de LÚMEN v3.84.4
+## 💡 Características Principales de LÚMEN v3.94.21
 
 ### 1. Paridad Bilingüe 100% Nativa (Español / English)
 ```lumen
@@ -108,7 +108,7 @@ function integer calculate_fibonacci(integer n) {
 | **Self-Hosting (Compilador + VM en LÚMEN)** | ✅ Bootstrapping doble certificado — fixpoint byte-idéntico |
 | **AI/ML (Fases 186-200)** | 🔜 Próximo hito |
 
-**Verificación v3.84.4 — Producción Real:** **956 pruebas en verde** (636 e2e + 11 production + resto workspace), **695 vm tests** (636 e2e + 11 production + 48 unit), 396/396 en `lumen check`, 396 ejemplos `run` OK con `CI=1`, clippy sin avisos (`cargo clippy --all -- -D warnings`), **8 benches criterion** (`cargo bench -p lumen-bench`) y cuatro fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con defaults persistidos (`FuncMeta.defaults`) y modo headless centralizado (`stdlib/graficos.nv:es_headless()` via `LUMEN_HEADLESS`/`CI`). AOT Industrial: C/Cranelift/LLVM completos con memoria nativa (`long long` sin tags, `_lw_*` handles). Ver checklist completo en [docs/desarrollo/produccion.md](docs/desarrollo/produccion.md).
+**Verificación v3.94.21 — Producción Real:** **956 pruebas en verde** (636 e2e + 11 production + resto workspace), **695 vm tests** (636 e2e + 11 production + 48 unit), 396/396 en `lumen check`, 396 ejemplos `run` OK con `CI=1`, clippy sin avisos (`cargo clippy --all -- -D warnings`), **8 benches criterion** (`cargo bench -p lumen-bench`) y cuatro fuzzers diferenciales sin divergencias. `CHUNK_VERSION 7` con defaults persistidos (`FuncMeta.defaults`) y modo headless centralizado (`stdlib/graficos.nv:es_headless()` via `LUMEN_HEADLESS`/`CI`). AOT Industrial: C/Cranelift/LLVM completos con memoria nativa (`long long` sin tags, `_lw_*` handles). Ver checklist completo en [docs/desarrollo/produccion.md](docs/desarrollo/produccion.md).
 
 ### ⚡ Rendimiento JIT — rondas v3.5.31 → v3.5.37 (ago 2026)
 
@@ -132,7 +132,7 @@ también cazaron **4 bugs reales** (constant folder IR, folder de optimización,
 puntero `flat` obsoleto en Tier-2, indexado sin guard en Load/Store nativos) —
 todos arreglados y cubiertos por la batería de paridad ON/OFF.
 
-### Producción Real (v3.84.4) — Checklist y Comandos
+### Producción Real (v3.94.21) — Checklist y Comandos
 
 > Fixes escalables ya aplicados: `builder last_significant()` + `label_counter` global (fix fallthrough `Variable 'a'/'n'`), `vm FuncMeta.defaults` persistidos `CHUNK_VERSION 7` + `bind_args` unificado, `stdlib/graficos.nv es_headless()` centralizado.
 
@@ -178,5 +178,5 @@ La documentación está organizada por carpetas — índice completo en [docs/RE
 
 ---
 
-*LÚMEN v3.84.4 — © 2026 LÚMEN Core Team & Comunidad. **Autor principal: Omar Palomares Velasco** — [@omarPVP123131](https://github.com/omarPVP123131). 956 tests, 396 ejemplos, AOT C/Cranelift/LLVM completos, JIT Tier-1/Tier-2/Tier-R activo.*
+*LÚMEN v3.94.21 — © 2026 LÚMEN Core Team & Comunidad. **Autor principal: Omar Palomares Velasco** — [@omarPVP123131](https://github.com/omarPVP123131). 956 tests, 396 ejemplos, AOT C/Cranelift/LLVM completos, JIT Tier-1/Tier-2/Tier-R activo.*
 

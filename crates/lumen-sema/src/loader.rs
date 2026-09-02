@@ -187,8 +187,14 @@ impl ModuleLoader {
         // contiene `a_usar_b`, reescribirlo a `a_usar_b` para que resuelva.
         if !own_nodes.is_empty() && !result.is_empty() {
             let imported_decls = collect_module_declarations(&result);
+            let mut transitive_locals = HashSet::new();
             for node in &mut own_nodes {
-                fix_transitive_program(node, &imported_decls, &self.known_prefixes);
+                fix_transitive_node(
+                    node,
+                    &mut transitive_locals,
+                    &imported_decls,
+                    &self.known_prefixes,
+                );
             }
         }
         result.extend(own_nodes);
@@ -504,15 +510,6 @@ fn prefix_program(program: &mut Program, prefix: &str, known: &HashSet<String>) 
     }
 }
 
-fn fix_transitive_program(
-    node: &mut DeclOrStmt,
-    imported_decls: &HashSet<String>,
-    known: &HashSet<String>,
-) {
-    let mut locals = HashSet::new();
-    fix_transitive_node(node, &mut locals, imported_decls, known);
-}
-
 fn fix_transitive_node(
     node: &mut DeclOrStmt,
     locals: &mut HashSet<String>,
@@ -532,12 +529,16 @@ fn fix_transitive_decl(
     known: &HashSet<String>,
 ) {
     match decl {
-        Decl::Variable { init, .. } => {
+        Decl::Variable { name, init, .. } => {
             if let Some(expr) = init {
                 fix_transitive_expr(expr, locals, imported_decls, known);
             }
+            locals.insert(name.clone());
         }
-        Decl::Const { value, .. } => fix_transitive_expr(value, locals, imported_decls, known),
+        Decl::Const { name, value, .. } => {
+            fix_transitive_expr(value, locals, imported_decls, known);
+            locals.insert(name.clone());
+        }
         Decl::Function { params, body, .. } => {
             let mut new_locals = locals.clone();
             for p in params {

@@ -1,5 +1,11 @@
 # Changelog de LÚMEN
 
+## [3.94.21] - 2026-09-02 — Fix 19 errores `lumen check` (transitive locals) + bump
+
+- **Hotfix 3.84.4 → 3.94.21:** `fix_transitive` en `loader.rs` no compartía `locals` entre `own_nodes` y no insertaba `Variable`/`Const` en `locals` → `id` en `gui_ventana.nv` se reescribía a `gui_id` y `ahora` en `jr_concurrencia.nv` a `fecha_ahora` → 19 `E033` en `lumen check` 3.84.4. Fix: `Variable`/`Const` insertan en `locals`, `own_nodes` comparten un único `transitive_locals`, `fix_transitive_expr` respeta `locals` → `lumen check` 396/396 `0 errores`.
+- **Sin tags:** no se pushea tag `v3.94.21` (a petición); `VERSION`/`Cargo` ya en `3.94.21`, `Cargo.lock` 18 crates, `README` badge `3.94.21`.
+- **Hereda 3.84.4:** #9 `opcion<Punto>` bind, #8 `Val` vs `long long`, #5 transitive `a_usar_b`, #10 stdlib 70/70, #11/12 `--help`, #13 dedup, CI `ls | head || true`, QA `lumen-v*.tar.gz`.
+
 ## [3.84.4] - 2026-09-02 — Fix reporte único 13 bugs (6 abiertos) — crítico/high/medium
 
 - **#9 Crítico FIX:** `si sea algun(p) = opcion<Punto>` ya infiere `Punto` (no `Numero`) — `bind_pattern_vars` ahora propaga `Opcion<T>`/`Resultado<T,E>`/`Struct`/`Tuple`/`Lista`/`Enum` correctamente; `Punto {x,y}` y `opcion<Punto>` funcionan para listas ligadas/árboles
