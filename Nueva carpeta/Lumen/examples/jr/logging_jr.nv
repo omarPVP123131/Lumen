@@ -1,0 +1,62 @@
+// ==========================================
+// logging_jr.nv — Logging Module (junior)
+// Tests: info log, error log, set level
+// Uso: lumen run -L stdlib/ examples/jr/logging_jr.nv
+// ==========================================
+
+imprimir("=== Logging JR: Basic Logging ===");
+
+// ── Ej 1: Info Level Logging ──
+// Ej 1: Log informational messages
+imprimir("--- Ej 1: Logging Informativo ---");
+funcion void log_info(texto msg) {
+    imprimir("[INFO]  ", msg);
+}
+log_info("Aplicacion iniciada correctamente");
+log_info("Cargando configuracion...");
+log_info("Puerto: 8080");
+log_info("Modo: desarrollo");
+
+// ── Ej 2: Error Level Logging ──
+// Ej 2: Log error messages
+imprimir("--- Ej 2: Logging de Errores ---");
+funcion void log_error(texto msg) {
+    imprimir("[ERROR] ", msg);
+}
+log_error("No se pudo conectar a la base de datos");
+log_error("Archivo no encontrado: config.nv");
+log_error("Timeout de conexion: 30s");
+
+// ── Ej 3: Dynamic Log Level ──
+// Ej 3: Set and change log levels
+imprimir("--- Ej 3: Niveles de Logging ---");
+entero LOG_ERROR = 1;
+entero LOG_WARN = 2;
+entero LOG_INFO = 3;
+entero LOG_DEBUG = 4;
+entero nivel_actual = LOG_INFO;
+
+funcion void log(texto nivel, texto msg, entero nivel_req) {
+    si nivel_actual - nivel_req > -1 {
+        imprimir("[", nivel, "] ", msg);
+    }
+}
+// Show all levels
+imprimir("Mostrando mensajes con nivel actual = INFO (3):");
+nivel_actual = LOG_INFO;
+log("ERROR", "Error critico (visible)", LOG_ERROR);
+log("WARN",  "Advertencia (visible)", LOG_WARN);
+log("INFO",  "Info (visible)", LOG_INFO);
+log("DEBUG", "Debug (oculto, nivel inferior)", LOG_DEBUG);
+
+imprimir("Cambiando nivel a DEBUG (4):");
+nivel_actual = LOG_DEBUG;
+log("ERROR", "Error critico (visible)", LOG_ERROR);
+log("DEBUG", "Debug ahora visible!", LOG_DEBUG);
+
+imprimir("Cambiando nivel a ERROR (1):");
+nivel_actual = LOG_ERROR;
+log("ERROR", "Solo errores visibles", LOG_ERROR);
+log("WARN",  "Advertencia oculta", LOG_WARN);
+
+imprimir("--- FIN LOGGING JR ---");

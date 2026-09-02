@@ -1,0 +1,29 @@
+// EJEMPLO GRÁFICOS — Ventana SDL2 con rectángulos animados
+// Uso: lumen run examples/graficos_demo.nv
+// Requiere: SDL2.dll en el PATH
+
+importar "graficos.nv";
+
+funcion entero SDL_INIT_VIDEO = 32;
+
+imprimir("=== Gráficos SDL2 ===");
+
+booleano ok = graficos_iniciar(SDL_INIT_VIDEO);
+imprimir("init: ", ok);
+
+entero win = graficos_ventana("LÚMEN Gráficos", 100, 100, 640, 480, 0);
+imprimir("window: ", win);
+
+entero ren = graficos_renderizador(win, -1, 0);
+imprimir("renderer: ", ren);
+
+graficos_color_render(ren, 0, 0, 0, 255);
+graficos_limpiar_render(ren);
+graficos_rectangulo(ren, 50, 50, 100, 100);
+graficos_presentar(ren);
+
+graficos_dormir(2000);
+
+graficos_cerrar_ventana(win);
+graficos_salir();
+imprimir("OK");

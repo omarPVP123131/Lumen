@@ -1,0 +1,39 @@
+// ============================================================================
+// Prueba de Base de Datos Vectorial Nativa en LÚMEN
+// ============================================================================
+importar "vector_db.nv";
+
+funcion vacio principal() {
+    imprimir("── TEST: BASE DE DATOS VECTORIAL & RAG EN LÚMEN ──");
+    
+    vector_db_BaseVectores db = vector_db_crear(3, "docs_ia");
+    
+    // Inserción de documentos con vectores de embedding
+    db = vector_db_insertar(db, "doc_1", "LÚMEN es un lenguaje bilingüe de alto rendimiento", [0.9, 0.1, 0.2], "tecnologia");
+    db = vector_db_insertar(db, "doc_2", "Rust y Cranelift ofrecen compilación nativa segura", [0.8, 0.3, 0.1], "tecnologia");
+    db = vector_db_insertar(db, "doc_3", "Receta de cocina para preparar pasta italiana", [0.0, 0.9, 0.8], "cocina");
+    db = vector_db_insertar(db, "doc_4", "Deep Learning con tensores y autograd dinámico", [0.7, 0.4, 0.3], "ia");
+    
+    imprimir("Total de documentos indexados:", vector_db_tamano(db));
+    
+    // Consulta vectorial (embedding de 'compilación y lenguaje')
+    lista<decimal> consulta = [0.85, 0.2, 0.15];
+    
+    imprimir("\nTop 2 documentos más similares (Similitud Coseno):");
+    lista<vector_db_ResultadoBusqueda> resultados = vector_db_buscar(db, consulta, 2, "coseno");
+    
+    para (entero i = 0; i < largo(resultados); i = i + 1) {
+        imprimir("  Rank", i + 1, ": [ID:", resultados[i].id, "] Score:", resultados[i].similitud);
+        imprimir("         Contenido:", resultados[i].contenido);
+    }
+    
+    imprimir("\nBúsqueda con filtro de categoría 'cocina':");
+    lista<vector_db_ResultadoBusqueda> cocina = vector_db_buscar_con_filtro(db, consulta, "cocina", 1);
+    para (entero i = 0; i < largo(cocina); i = i + 1) {
+        imprimir("  [Cocina] ID:", cocina[i].id, "Score:", cocina[i].similitud, "->", cocina[i].contenido);
+    }
+    
+    imprimir("\n✓ VectorDB test completado con éxito.");
+}
+
+principal();

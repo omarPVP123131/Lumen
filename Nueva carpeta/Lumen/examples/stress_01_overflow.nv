@@ -1,0 +1,15 @@
+// @expected_failure: div/mod por cero es error esperado (no crash), overflow hace wrap
+// STRESS-01: Overflow y división — debe hacer wrap, no panic
+entero max = 9223372036854775807;
+imprimir("max: ", max);
+imprimir("overflow wrap: ", max + 1);
+imprimir("neg wrap: ", -max);
+entero mn = 0 - 9223372036854775807 - 1;
+imprimir("min: ", mn);
+imprimir("neg_min wrap: ", -mn);
+imprimir("div_min wrap: ", mn / (0 - 1));
+imprimir("mod_min wrap: ", mn % (0 - 1));
+imprimir("shl wrap: ", 1 << 63);
+imprimir("mul wrap: ", 999999999999999999 * 99);
+intentar { entero x = 1 / 0; } atrapar (e) { imprimir("div0 atrapado"); }
+imprimir("stress01_ok");

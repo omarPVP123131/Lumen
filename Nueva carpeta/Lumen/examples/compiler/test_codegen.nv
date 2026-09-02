@@ -1,0 +1,27 @@
+// @should_error — compiler self-test, not for lumen run (use cargo test / fuego.ps1)
+imprimir("skip: compiler self-test — use cargo test"); retornar;
+// test_codegen.nv — Test codegen con AST manual
+importar "codegen.nv";
+
+// ── Construir AST manualmente ─────────────────────────────
+// VarDecl: entero x = 42;
+funcion numero _test_var_decl() {
+    numero lit = __map_nuevo();
+    lit = __map_poner(lit, "tipo", "Literal");
+    lit = __map_poner(lit, "v", "42");
+    
+    numero vd = __map_nuevo();
+    vd = __map_poner(vd, "tipo", "VarDecl");
+    vd = __map_poner(vd, "nombre", "x");
+    vd = __map_poner(vd, "valor", lit);
+    retornar vd;
+}
+
+// ── Main test ─────────────────────────────────────────────
+imprimir("=== Codegen Test: VarDecl ===");
+numero vd = _test_var_decl();
+numero cg = codegen_generar(vd);
+codegen_imprimir(cg);
+
+imprimir("");
+imprimir("=== Codegen Test: AST manual OK ===");

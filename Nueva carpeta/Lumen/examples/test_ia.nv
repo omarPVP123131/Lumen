@@ -1,0 +1,68 @@
+// @expected_failure: ia_aplicar_rope index 14 OOB
+// ============================================================================
+// Prueba del Motor de Inferencia IA, Cuantización y RoPE en LÚMEN
+// ============================================================================
+importar "ia.nv";
+// Headless/CI guard — demo requiere display/SDL2/consola interactiva
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo omitida (requiere display)");
+    retornar;
+}
+
+funcion vacio principal() {
+    imprimir("── TEST: MOTOR IA (CUANTIZACIÓN INT8, RoPE & KV-CACHE) ──");
+    
+    // 1. Matriz de pesos simulada (FP64 -> INT8)
+    lista<lista<decimal>> pesos_fp = [
+        [0.85, -0.42, 0.12, 0.95],
+        [-0.10, 0.77, -0.63, 0.31],
+        [0.55, 0.20, -0.88, -0.05]
+    ];
+    
+    ia_TensorCuantizadoInt8 w_int8 = ia_cuantizar_int8(pesos_fp);
+    imprimir("• Matriz de Pesos Cuantizada a INT8 (3x4):");
+    imprimir("  Escala (Scale factor):", w_int8.escala);
+    imprimir("  Total bytes de datos:", largo(w_int8.datos));
+    
+    // Vector de activación de entrada
+    lista<decimal> x = [1.0, 0.5, -0.5, 2.0];
+    
+    // Multiplicación Matriz-Vector cuantizada (W8A16)
+    lista<decimal> salida = ia_matmul_cuantizado(w_int8, x);
+    imprimir("\n• Resultado Matmul Cuantizado (W8A16):");
+    para (entero i = 0; i < largo(salida); i = i + 1) {
+        imprimir("  Y[", i, "] =", salida[i]);
+    }
+    
+    // 2. Rotary Position Embeddings (RoPE)
+    lista<decimal> q_vec = [1.0, 0.0, 0.5, 0.5];
+    lista<decimal> q_rot = ia_aplicar_rope(q_vec, 1, 4);
+    imprimir("\n• RoPE aplicado en posición 1:");
+    para (entero i = 0; i < largo(q_rot); i = i + 1) {
+        imprimir("  Rot[", i, "] =", q_rot[i]);
+    }
+    
+    // 3. KV-Cache
+    ia_KVCache kv = ia_kv_cache_crear();
+    kv = ia_kv_cache_agregar(kv, [0.1, 0.2], [0.3, 0.4]);
+    kv = ia_kv_cache_agregar(kv, [0.5, 0.6], [0.7, 0.8]);
+    imprimir("\n• KV-Cache Longitud de Secuencia:", kv.longitud_seq);
+    
+    // 4. Softmax con Temperatura y Muestreo Nucleus Top-P
+    lista<decimal> logits = [2.5, 1.2, 0.3, 4.8, -1.0];
+    lista<decimal> probs = ia_softmax(logits, 0.8);
+    imprimir("\n• Distribución Softmax (Temp=0.8):");
+    para (entero i = 0; i < largo(probs); i = i + 1) {
+        imprimir("  P(token_", i, ") =", probs[i]);
+    }
+    
+    entero token_seleccionado = ia_muestrear_top_p(probs, 0.9);
+    imprimir("  Token muestreado por Top-P (Nucleus 0.9):", token_seleccionado);
+    
+    imprimir("\n✓ Módulo IA verificado con éxito.");
+}
+
+principal();

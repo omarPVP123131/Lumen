@@ -1,0 +1,43 @@
+// ============================================================================
+// LÚMEN Standard Library — Asignador por Regiones (Arena Allocator)
+// stdlib/arena.nv
+// ============================================================================
+
+estructura RegionArena {
+    capacidad: entero,
+    usado: entero,
+    bloques: lista<texto>,
+}
+
+funcion RegionArena arena_crear(entero capacidad_inicial = 1024) {
+    retornar RegionArena {
+        capacidad: capacidad_inicial,
+        usado: 0,
+        bloques: [],
+    };
+}
+
+impl RegionArena {
+    funcion RegionArena asignar(este, texto datos) {
+        este.bloques.agregar(datos);
+        este.usado = este.usado + 1;
+        retornar este;
+    }
+
+    funcion texto obtener(este, entero idx) {
+        si idx >= 0 && idx < este.bloques.largo() {
+            retornar este.bloques[idx];
+        }
+        retornar "";
+    }
+
+    funcion RegionArena reiniciar(este) {
+        este.bloques = [];
+        este.usado = 0;
+        retornar este;
+    }
+
+    funcion entero total_asignaciones(este) {
+        retornar este.usado;
+    }
+}

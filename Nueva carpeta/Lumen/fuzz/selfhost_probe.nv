@@ -1,0 +1,7 @@
+funcion vacio inc(prestado mut entero x) { x = x + 1; }
+funcion vacio main() {
+    entero v = 41;
+    inc(v);
+    imprimir(v);
+}
+

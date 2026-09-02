@@ -1,0 +1,43 @@
+// v3.5.29 — regresión arrays de enteros sin boxear (Cranelift/AOT-C):
+// push nativo con crecimiento, get con bounds-check (lanza fuera de rango),
+// ArrayLen nativo y literales promovidos.
+funcion entero suma_pares(entero n) {
+    sea xs = [];
+    entero i = 0;
+    mientras (i < n) {
+        xs.agregar(i * 2);
+        i = i + 1;
+    }
+    numero acc = 0;
+    entero j = 0;
+    mientras (j < xs.largo()) {
+        acc = acc + xs[j];
+        j = j + 1;
+    }
+    retornar acc;
+}
+
+funcion entero con_literal() {
+    sea xs = [1, 2, 3];
+    xs.agregar(4);
+    xs.agregar(5);
+    numero acc = 0;
+    entero j = 0;
+    mientras (j < xs.largo()) {
+        acc = acc + xs[j];
+        j = j + 1;
+    }
+    retornar acc;
+}
+
+funcion vacio main() {
+    imprimir(suma_pares(1000));
+    imprimir(con_literal());
+    intentar {
+        sea ys = [];
+        ys.agregar(7);
+        imprimir(ys[5]);
+    } atrapar (e) {
+        imprimir("atrapado");
+    }
+}

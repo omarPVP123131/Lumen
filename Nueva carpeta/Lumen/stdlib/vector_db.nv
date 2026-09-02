@@ -1,0 +1,260 @@
+// ============================================================================
+// Módulo vector_db — Base de Datos Vectorial Nativa y Búsqueda por Similitud
+// Native Vector Database, Embeddings Index & Nearest Neighbor Search for LÚMEN
+// Uso: importar "vector_db.nv"
+// ============================================================================
+
+// ── 0. Funciones Matemáticas Auxiliares ──────────────────────────────
+
+funcion decimal vdb_raiz(decimal x) {
+    si x <= 0.0 {
+        retornar 0.0;
+    }
+    decimal r = x / 2.0;
+    si r == 0.0 {
+        retornar 0.0;
+    }
+    para (entero i = 0; i < 20; i = i + 1) {
+        r = (r + (x / r)) / 2.0;
+    }
+    retornar r;
+}
+
+funcion decimal vdb_abs(decimal x) {
+    si x < 0.0 {
+        retornar -x;
+    }
+    retornar x;
+}
+
+// ── 1. Métricas de Distancia y Similitud Vectorial ───────────────────
+
+// Producto punto entre dos vectores de igual dimensión
+funcion decimal producto_punto_vec(lista<decimal> a, lista<decimal> b) {
+    decimal suma = 0.0;
+    entero n = largo(a);
+    entero m = largo(b);
+    entero limite = n;
+    si m < n {
+        limite = m;
+    }
+    para (entero i = 0; i < limite; i = i + 1) {
+        suma = suma + (a[i] * b[i]);
+    }
+    retornar suma;
+}
+
+// Norma L2 / Magnitud Euclidiana de un vector
+funcion decimal magnitud_vec(lista<decimal> v) {
+    decimal suma = 0.0;
+    para (entero i = 0; i < largo(v); i = i + 1) {
+        suma = suma + (v[i] * v[i]);
+    }
+    si suma <= 0.0 {
+        retornar 0.0;
+    }
+    retornar vdb_raiz(suma);
+}
+
+// Similitud Coseno: cos(θ) = (A · B) / (||A|| * ||B||) -> Rango [-1.0, 1.0]
+funcion decimal similitud_coseno(lista<decimal> a, lista<decimal> b) {
+    decimal dot = producto_punto_vec(a, b);
+    decimal mag_a = magnitud_vec(a);
+    decimal mag_b = magnitud_vec(b);
+    si mag_a == 0.0 || mag_b == 0.0 {
+        retornar 0.0;
+    }
+    retornar dot / (mag_a * mag_b);
+}
+funcion decimal cosine_similarity(lista<decimal> a, lista<decimal> b) { retornar similitud_coseno(a, b); }
+
+// Distancia Euclidiana L2: sqrt(sum((a_i - b_i)^2))
+funcion decimal distancia_euclidiana(lista<decimal> a, lista<decimal> b) {
+    decimal suma = 0.0;
+    entero limite = largo(a);
+    si largo(b) < limite {
+        limite = largo(b);
+    }
+    para (entero i = 0; i < limite; i = i + 1) {
+        decimal diff = a[i] - b[i];
+        suma = suma + (diff * diff);
+    }
+    retornar vdb_raiz(suma);
+}
+funcion decimal euclidean_distance(lista<decimal> a, lista<decimal> b) { retornar distancia_euclidiana(a, b); }
+
+// Normalización de vector a norma unitaria (L2-norm = 1.0)
+funcion lista<decimal> normalizar_vector(lista<decimal> v) {
+    decimal mag = magnitud_vec(v);
+    lista<decimal> res = [];
+    si mag == 0.0 {
+        para (entero i = 0; i < largo(v); i = i + 1) {
+            res.agregar(0.0);
+        }
+        retornar res;
+    }
+    para (entero i = 0; i < largo(v); i = i + 1) {
+        res.agregar(v[i] / mag);
+    }
+    retornar res;
+}
+funcion lista<decimal> normalize_vector(lista<decimal> v) { retornar normalizar_vector(v); }
+
+// ── 2. Estructuras de Datos de la Base Vectorial ──────────────────────
+
+estructura DocumentoVector {
+    id: texto,
+    contenido: texto,
+    vector: lista<decimal>,
+    metadatos: texto
+}
+
+estructura ResultadoBusqueda {
+    id: texto,
+    similitud: decimal,
+    contenido: texto,
+    metadatos: texto
+}
+
+estructura BaseVectores {
+    ids: lista<texto>,
+    contenidos: lista<texto>,
+    vectores: lista<lista<decimal>>,
+    metadatos: lista<texto>,
+    dimension: entero,
+    nombre_coleccion: texto
+}
+
+// ── 3. Constructor y Operaciones de BaseVectores ──────────────────────
+
+funcion BaseVectores vector_db_crear(entero dimension = 128, texto nombre = "default") {
+    lista<texto> ids = [];
+    lista<texto> contenidos = [];
+    lista<lista<decimal>> vectores = [];
+    lista<texto> metas = [];
+    retornar BaseVectores {
+        ids: ids,
+        contenidos: contenidos,
+        vectores: vectores,
+        metadatos: metas,
+        dimension: dimension,
+        nombre_coleccion: nombre
+    };
+}
+funcion BaseVectores vector_db_new(entero dimension = 128, texto nombre = "default") {
+    retornar vector_db_crear(dimension, nombre);
+}
+
+// Inserción de un nuevo documento vectorial con metadatos
+funcion BaseVectores vector_db_insertar(BaseVectores db, texto id, texto contenido, lista<decimal> vector, texto meta = "{}") {
+    lista<decimal> norm_vec = normalizar_vector(vector);
+    
+    // Si el ID ya existe, actualizarlo
+    lista<texto> cur_ids = db.ids;
+    lista<texto> cur_cont = db.contenidos;
+    lista<lista<decimal>> cur_vecs = db.vectores;
+    lista<texto> cur_meta = db.metadatos;
+
+    para (entero i = 0; i < largo(cur_ids); i = i + 1) {
+        si cur_ids[i] == id {
+            cur_cont[i] = contenido;
+            cur_vecs[i] = norm_vec;
+            cur_meta[i] = meta;
+            db.contenidos = cur_cont;
+            db.vectores = cur_vecs;
+            db.metadatos = cur_meta;
+            retornar db;
+        }
+    }
+    
+    // Si es nuevo, agregar a la colección
+    cur_ids.agregar(id);
+    cur_cont.agregar(contenido);
+    cur_vecs.agregar(norm_vec);
+    cur_meta.agregar(meta);
+    
+    db.ids = cur_ids;
+    db.contenidos = cur_cont;
+    db.vectores = cur_vecs;
+    db.metadatos = cur_meta;
+    retornar db;
+}
+funcion BaseVectores vector_db_insert(BaseVectores db, texto id, texto contenido, lista<decimal> vector, texto meta = "{}") {
+    retornar vector_db_insertar(db, id, contenido, vector, meta);
+}
+
+// Cantidad de vectores almacenados
+funcion entero vector_db_tamano(BaseVectores db) {
+    retornar largo(db.ids);
+}
+funcion entero vector_db_count(BaseVectores db) { retornar vector_db_tamano(db); }
+
+// Búsqueda de los Top-K vecinos más cercanos por similitud coseno
+funcion lista<ResultadoBusqueda> vector_db_buscar(BaseVectores db, lista<decimal> consulta_vec, entero top_k = 5, texto metrica = "coseno") {
+    lista<decimal> q_norm = normalizar_vector(consulta_vec);
+    entero total = largo(db.ids);
+    lista<ResultadoBusqueda> todos = [];
+    
+    // 1. Calcular similitud para cada documento
+    para (entero i = 0; i < total; i = i + 1) {
+        decimal sim = 0.0;
+        si metrica == "coseno" {
+            sim = producto_punto_vec(q_norm, db.vectores[i]);
+        } sino si metrica == "dot" {
+            sim = producto_punto_vec(consulta_vec, db.vectores[i]);
+        } sino {
+            decimal dist = distancia_euclidiana(consulta_vec, db.vectores[i]);
+            sim = 1.0 / (1.0 + dist);
+        }
+        
+        ResultadoBusqueda r = ResultadoBusqueda {
+            id: db.ids[i],
+            similitud: sim,
+            contenido: db.contenidos[i],
+            metadatos: db.metadatos[i]
+        };
+        todos.agregar(r);
+    }
+    
+    // 2. Ordenamiento por burbuja descendente por similitud
+    entero n = largo(todos);
+    para (entero i = 0; i < n; i = i + 1) {
+        para (entero j = 0; j < n - i - 1; j = j + 1) {
+            si todos[j].similitud < todos[j + 1].similitud {
+                ResultadoBusqueda temp = todos[j];
+                todos[j] = todos[j + 1];
+                todos[j + 1] = temp;
+            }
+        }
+    }
+    
+    // 3. Tomar top_k resultados
+    lista<ResultadoBusqueda> resultados = [];
+    entero limite = top_k;
+    si n < limite {
+        limite = n;
+    }
+    para (entero k = 0; k < limite; k = k + 1) {
+        resultados.agregar(todos[k]);
+    }
+    retornar resultados;
+}
+funcion lista<ResultadoBusqueda> vector_db_search(BaseVectores db, lista<decimal> consulta_vec, entero top_k = 5, texto metrica = "coseno") {
+    retornar vector_db_buscar(db, consulta_vec, top_k, metrica);
+}
+
+// Búsqueda con filtro de metadatos (RAG metadata filtering)
+funcion lista<ResultadoBusqueda> vector_db_buscar_con_filtro(BaseVectores db, lista<decimal> consulta_vec, texto filtro_meta, entero top_k = 5) {
+    lista<ResultadoBusqueda> preliminares = vector_db_buscar(db, consulta_vec, largo(db.ids), "coseno");
+    lista<ResultadoBusqueda> filtrados = [];
+    
+    para (entero i = 0; i < largo(preliminares); i = i + 1) {
+        si preliminares[i].metadatos == filtro_meta {
+            filtrados.agregar(preliminares[i]);
+            si largo(filtrados) >= top_k {
+                retornar filtrados;
+            }
+        }
+    }
+    retornar filtrados;
+}

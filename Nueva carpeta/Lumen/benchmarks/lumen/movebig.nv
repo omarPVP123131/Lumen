@@ -1,0 +1,19 @@
+// Benchmark v3.5.22 — move-semantics: último uso de array grande (100k)
+// se pasa SIN copia profunda.
+funcion numero suma_lista(lista xs) {
+    sea t = 0;
+    entero j = 0;
+    mientras (j < largo(xs)) {
+        t = t + xs[j];
+        j = j + 1;
+    }
+    retornar t;
+}
+
+sea big = [];
+entero k = 0;
+mientras (k < 100000) {
+    big.agregar(k);
+    k = k + 1;
+}
+imprimir("move:" + suma_lista(big));

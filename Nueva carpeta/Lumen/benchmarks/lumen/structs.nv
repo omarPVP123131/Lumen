@@ -1,0 +1,18 @@
+// Benchmark — structs: acceso a campos + método en bucle
+estructura Punto { x: entero, y: entero }
+impl Punto {
+    funcion entero sumar(este) { retornar este.x + este.y; }
+}
+funcion entero principal() {
+    Punto p = Punto { x: 0, y: 0 };
+    entero acc = 0;
+    entero i = 0;
+    mientras (i < 200000) {
+        p.x = i;
+        p.y = i + 1;
+        acc = acc + p.sumar();
+        i = i + 1;
+    }
+    imprimir("structs:" + a_texto(acc));
+    retornar 0;
+}

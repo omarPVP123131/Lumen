@@ -1,0 +1,38 @@
+// ==========================================
+// graficos_jr.nv — Basic Graphics API (junior)
+// Tests: init check, version query, flags test
+// Uso: lumen run -L stdlib/ examples/jr/graficos_jr.nv
+// ==========================================
+
+imprimir("=== Graficos JR: Basic Graphics API ===");
+
+// Ej 1: Init Check — verify subsystem responds
+imprimir("--- Ej 1: Verificacion de Inicializacion ---");
+entero SDL_INIT_TIMER = 1;
+entero SDL_INIT_VIDEO = 32;
+entero SDL_INIT_AUDIO = 16;
+imprimir("Flags SDL2: TIMER=", SDL_INIT_TIMER, " VIDEO=", SDL_INIT_VIDEO, " AUDIO=", SDL_INIT_AUDIO);
+imprimir("graficos_iniciar(flag) acepta entero y retorna booleano");
+imprimir("En sistemas sin SDL2, retorna falso correctamente");
+
+// Ej 2: Flag Constants and Combinations
+imprimir("--- Ej 2: Constantes de Flags ---");
+entero flags = SDL_INIT_TIMER + SDL_INIT_VIDEO;
+imprimir("TIMER + VIDEO = ", flags);
+imprimir("Flags son combinables con suma aritmetica");
+
+// Ej 3: State Machine Flow
+imprimir("--- Ej 3: Maquina de Estados ---");
+imprimir("Flujo: INIT -> VENTANA -> RENDER -> BUCLE -> QUIT");
+entero paso = 1;
+mientras paso < 6 {
+    si paso == 1 { imprimir("  Paso ", paso, ": Inicializar SDL2"); }
+    si paso == 2 { imprimir("  Paso ", paso, ": Crear ventana"); }
+    si paso == 3 { imprimir("  Paso ", paso, ": Crear renderizador"); }
+    si paso == 4 { imprimir("  Paso ", paso, ": Bucle de eventos"); }
+    si paso == 5 { imprimir("  Paso ", paso, ": Salir (SDL_Quit)"); }
+    paso = paso + 1;
+}
+imprimir("Total: 5 pasos en el ciclo de vida grafico");
+
+imprimir("--- FIN GRAFICOS JR ---");

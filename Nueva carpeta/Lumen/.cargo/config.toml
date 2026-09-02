@@ -1,0 +1,10 @@
+# LUMEN cargo config — seguridad + perf
+# - Seguridad: hardening para memoria segura (Rust + checks adicionales)
+# - Perf: para max velocidad local usa RUSTFLAGS=""-C target-cpu=native"" cargo build --release
+#   (el workflow CI usa portable x86-64-v3 para distribución)
+[build]
+rustflags = []
+
+# WASM: sin mimalloc ni native
+[target.'cfg(target_arch=\"wasm32\")']
+rustflags = []

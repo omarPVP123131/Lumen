@@ -1,0 +1,32 @@
+// Suite variada 4 — Diccionario (mapa) de 30k claves: inserción, re-escritura
+// y lectura. `__map_nuevo()` / `__map_poner(d, k, v)` (re-asignando el mapa) /
+// `__map_obtener(d, k)`. Fase 2 re-escribe las claves pares con el mismo valor
+// (ejercita escrituras SIN cambiar la suma). Golden: 449985000 (Σ i, 0..29999).
+
+funcion numero bench_dict(entero n) {
+    sea d = __map_nuevo();
+    entero i = 0;
+    mientras (i < n) {
+        d = __map_poner(d, i, i);
+        i = i + 1;
+    }
+    // Fase 2: re-escrituras sobre la mitad de las claves (mismo valor).
+    i = 0;
+    mientras (i < n) {
+        si ((i % 2) == 0) {
+            entero v = __map_obtener(d, i);
+            d = __map_poner(d, i, v);
+        }
+        i = i + 1;
+    }
+    // Fase 3: lectura y suma.
+    numero total = 0;
+    i = 0;
+    mientras (i < n) {
+        total = total + __map_obtener(d, i);
+        i = i + 1;
+    }
+    retornar total;
+}
+
+imprimir("dict:" + bench_dict(30000));

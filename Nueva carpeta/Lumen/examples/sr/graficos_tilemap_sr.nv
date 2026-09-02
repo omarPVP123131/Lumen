@@ -1,0 +1,107 @@
+// @expected_failure: Array index invalid - tilemap
+// Headless/CI guard — demo requiere display/SDL2/consola interactiva
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo omitida (requiere display)");
+    retornar;
+}
+// ==========================================
+// graficos_tilemap_sr.nv — Tilemap (intermediate)
+// Tests: collision points, camera calculations, tile counting
+// Uso: lumen run -L stdlib/ examples/sr/graficos_tilemap_sr.nv
+// ==========================================
+
+imprimir("=== Graficos Tilemap SR: Collision & Camera ===");
+
+// ── Ej 1: Tilemap Collision Detection ──
+// Ej 1: World position to tile collision
+imprimir("--- Ej 1: Deteccion de Colisiones ---");
+funcion entero tile_en_posicion(lista<entero> tm, entero ancho, entero alto, entero tile_w, entero tile_h, numero wx, numero wy) {
+    entero tx = (wx / (tile_w como numero)) como entero;
+    entero ty = (wy / (tile_h como numero)) como entero;
+    si tx < 0 { retornar -1; }
+    si ty < 0 { retornar -1; }
+    si tx > ancho - 1 { retornar -1; }
+    si ty > alto - 1 { retornar -1; }
+    retornar tm[ty * ancho + tx];
+}
+// Create test tilemap with walls
+lista<entero> mapa = [];
+entero i = 0;
+mientras i < 25 { mapa.agregar(0); i = i + 1; }  // 5x5
+// Set some walls (tile_id=1 = solid)
+mapa[1*5+2] = 1;  // wall at (2,1)
+mapa[2*5+2] = 1;  // wall at (2,2)
+mapa[3*5+1] = 1;  // wall at (1,3)
+imprimir("Mapa 5x5 con muros (tile=1) en (2,1), (2,2), (1,3)");
+// Test collisions
+lista<lista<numero>> pruebas = [[40.0, 60.0], [110.0, 60.0], [110.0, 110.0], [60.0, 110.0]];
+entero pi = 0;
+mientras pi < largo(pruebas) {
+    numero wx = pruebas[pi][0];
+    numero wy = pruebas[pi][1];
+    entero tile = tile_en_posicion(mapa, 5, 5, 32, 32, wx, wy);
+    texto res_tile = "libre";
+    si tile > 0 { res_tile = "COLISION (tile=" + tile + ")"; }
+    si tile < 0 { res_tile = "FUERA DEL MAPA"; }
+    imprimir("  Pos(", wx, ",", wy, ") -> ", res_tile);
+    pi = pi + 1;
+}
+
+// ── Ej 2: Camera Viewport Calculation ──
+// Ej 2: Calculate visible tiles with camera offset
+imprimir("--- Ej 2: Calculo de Camara ---");
+funcion lista<entero> tiles_visibles(entero cam_x, entero cam_y, entero scr_w, entero scr_h, entero tile_w, entero tile_h, entero map_w, entero map_h) {
+    entero inicio_x = cam_x / tile_w;
+    si inicio_x < 0 { inicio_x = 0; }
+    entero inicio_y = cam_y / tile_h;
+    si inicio_y < 0 { inicio_y = 0; }
+    entero fin_x = (cam_x + scr_w + tile_w - 1) / tile_w;
+    si fin_x > map_w { fin_x = map_w; }
+    entero fin_y = (cam_y + scr_h + tile_h - 1) / tile_h;
+    si fin_y > map_h { fin_y = map_h; }
+    retornar [inicio_x, inicio_y, fin_x, fin_y];
+}
+// Camera at position (100, 50), screen 640x480, tiles 32x32, map 100x100
+lista<entero> vis = tiles_visibles(100, 50, 640, 480, 32, 32, 100, 100);
+imprimir("Camara en (100,50), pantalla 640x480, tiles 32x32:");
+imprimir("  Tiles visibles: x[", vis[0], "..", vis[2], "] y[", vis[1], "..", vis[3], "]");
+entero tiles_total = (vis[2] - vis[0]) * (vis[3] - vis[1]);
+imprimir("  Total tiles a dibujar: ", tiles_total);
+
+// ── Ej 3: Tile Type Counter ──
+// Ej 3: Count tile types in a map
+imprimir("--- Ej 3: Conteo de Tipos de Tile ---");
+funcion lista<entero> contar_tiles(lista<entero> tm) {
+    // Count occurrences of each tile_id (0-10)
+    lista<entero> conteo = [];
+    entero j = 0;
+    mientras j < 11 { conteo.agregar(0); j = j + 1; }
+    entero k = 0;
+    mientras k < largo(tm) {
+        entero tid = tm[k];
+        si tid > 0 { si tid < 11 { conteo[tid] = conteo[tid] + 1; } }
+        k = k + 1;
+    }
+    retornar conteo;
+}
+// Create a mixed tilemap
+lista<entero> mapa2 = [1, 1, 2, 2, 0, 3, 1, 1, 2, 0, 0, 3, 4, 1, 2, 0];
+lista<entero> cuentas = contar_tiles(mapa2);
+imprimir("Mapa de ", largo(mapa2), " celdas:");
+entero ti = 1;
+mientras ti < 11 {
+    si cuentas[ti] > 0 {
+        texto nom = "desconocido";
+        si ti == 1 { nom = "tierra"; }
+        si ti == 2 { nom = "cesped"; }
+        si ti == 3 { nom = "piedra"; }
+        si ti == 4 { nom = "agua"; }
+        imprimir("  Tile ", ti, " (", nom, "): ", cuentas[ti]);
+    }
+    ti = ti + 1;
+}
+
+imprimir("--- FIN GRAFICOS TILEMAP SR ---");

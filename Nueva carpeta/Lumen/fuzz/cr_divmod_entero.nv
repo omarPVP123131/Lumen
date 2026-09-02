@@ -1,0 +1,31 @@
+// v3.5.28 — regresión: Div/Mod entre enteros en Cranelift pasaba los
+// operandos CRUDOS (i64) a _lw_bin, que espera handles → SEGFAULT.
+funcion booleano es_primo(entero n) {
+    si (n < 2) { retornar falso; }
+    si (n == 2) { retornar verdadero; }
+    si (n % 2 == 0) { retornar falso; }
+    entero i = 3;
+    mientras (i * i <= n) {
+        si (n % i == 0) { retornar falso; }
+        i = i + 2;
+    }
+    retornar verdadero;
+}
+
+funcion entero contar_primos(entero lim) {
+    sea c = 0;
+    entero k = 2;
+    mientras (k < lim) {
+        si (es_primo(k)) { c = c + 1; }
+        k = k + 1;
+    }
+    retornar c;
+}
+
+funcion vacio main() {
+    imprimir(7 / 2);
+    imprimir(7 % 3);
+    imprimir(es_primo(7));
+    imprimir(es_primo(9));
+    imprimir(contar_primos(100));
+}

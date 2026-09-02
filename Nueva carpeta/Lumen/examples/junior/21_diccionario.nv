@@ -1,0 +1,10 @@
+importar ingles;
+
+struct Par {
+    clave: string,
+    valor: integer
+}
+
+Par p = Par { clave: "x", valor: 100 };
+print(p.clave);
+print(p.valor);

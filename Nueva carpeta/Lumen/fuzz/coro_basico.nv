@@ -1,0 +1,12 @@
+funcion texto trabajo() {
+    imprimir("paso1");
+    __coro_ceder();
+    imprimir("paso2");
+    retornar "hecho";
+}
+funcion vacio main() {
+    sea id = __coro_crear("trabajo", 0);
+    imprimir(id);
+    __coro_reanudar(id);
+    __coro_reanudar(id);
+}

@@ -1,0 +1,14 @@
+// Edge case: deeply chained assignment o.items[i].field = v
+// This is a variant of bug #2 with an extra level of indirection
+estructura Inner { val: entero }
+estructura Outer { items: lista<Inner> }
+
+funcion entero principal() {
+    Outer o = Outer { items: [Inner { val: 1 }, Inner { val: 2 }] };
+    imprimir("antes:");
+    imprimir(o.items[1].val);
+    o.items[1].val = 99;
+    imprimir("despues:");
+    imprimir(o.items[1].val);
+    retornar 0;
+}

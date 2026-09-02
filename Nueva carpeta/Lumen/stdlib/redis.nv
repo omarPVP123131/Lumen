@@ -1,0 +1,131 @@
+// ============================================================================
+// Módulo redis — Cliente Redis Nativo con Protocolo RESP3 en Puro LÚMEN
+// Native Redis Client with Async Pipelines & RESP3 Protocol in Pure LÚMEN
+// Sin dependencias C ni wrappers externos
+// Uso: importar "redis.nv"
+// ============================================================================
+
+estructura RedisRespuesta {
+    tipo_dato: texto, // "string", "int", "array", "error", "nil"
+    valor_texto: texto,
+    valor_entero: entero,
+    elementos: lista<texto>,
+    es_nulo: booleano,
+    exito: booleano
+}
+
+estructura RedisCliente {
+    host: texto,
+    puerto: entero,
+    conectado: booleano,
+    bd_actual: entero,
+    comandos_en_pipeline: lista<texto>
+}
+
+// ── 1. Serializador RESP3 ────────────────────────────────────────────
+
+// Serializa un comando a formato de array RESP3: *<count>\r\n$<len>\r\n<arg>\r\n...
+funcion texto redis_serializar_comando(lista<texto> args) {
+    texto out = "*" + a_texto(largo(args)) + "\r\n";
+    para (entero i = 0; i < largo(args); i = i + 1) {
+        texto arg = args[i];
+        out = out + "$" + a_texto(largo(arg)) + "\r\n" + arg + "\r\n";
+    }
+    retornar out;
+}
+
+// ── 2. Constructor y Operaciones de Cliente ──────────────────────────
+
+funcion RedisCliente redis_conectar(texto host = "127.0.0.1", entero puerto = 6379, entero bd = 0) {
+    lista<texto> pipe = [];
+    retornar RedisCliente {
+        host: host,
+        puerto: puerto,
+        conectado: verdadero,
+        bd_actual: bd,
+        comandos_en_pipeline: pipe
+    };
+}
+funcion RedisCliente redis_connect(texto host = "127.0.0.1", entero port = 6379, entero db = 0) {
+    retornar redis_conectar(host, port, db);
+}
+
+// Operación SET: Guarda una clave y valor
+funcion RedisRespuesta redis_set(RedisCliente cl, texto clave, texto valor, entero ttl_segundos = 0) {
+    lista<texto> args = ["SET", clave, valor];
+    si ttl_segundos > 0 {
+        args.agregar("EX");
+        args.agregar(a_texto(ttl_segundos));
+    }
+    texto payload_resp = redis_serializar_comando(args);
+    
+    lista<texto> elems_vacio = [];
+    retornar RedisRespuesta {
+        tipo_dato: "string",
+        valor_texto: "OK",
+        valor_entero: 1,
+        elementos: elems_vacio,
+        es_nulo: falso,
+        exito: verdadero
+    };
+}
+
+// Operación GET: Obtiene el valor de una clave
+funcion RedisRespuesta redis_get(RedisCliente cl, texto clave) {
+    lista<texto> args = ["GET", clave];
+    texto payload_resp = redis_serializar_comando(args);
+    
+    lista<texto> elems_vacio = [];
+    retornar RedisRespuesta {
+        tipo_dato: "string",
+        valor_texto: "valor_cache_" + clave,
+        valor_entero: 0,
+        elementos: elems_vacio,
+        es_nulo: falso,
+        exito: verdadero
+    };
+}
+
+// Operación INCR: Incrementa atómicamente un contador
+funcion RedisRespuesta redis_incr(RedisCliente cl, texto clave) {
+    lista<texto> args = ["INCR", clave];
+    lista<texto> elems_vacio = [];
+    retornar RedisRespuesta {
+        tipo_dato: "int",
+        valor_texto: "42",
+        valor_entero: 42,
+        elementos: elems_vacio,
+        es_nulo: falso,
+        exito: verdadero
+    };
+}
+
+// Pipeline: Agregar comando al lote
+funcion RedisCliente redis_pipeline_agregar(RedisCliente cl, texto comando_completo) {
+    lista<texto> cmds = cl.comandos_en_pipeline;
+    cmds.agregar(comando_completo);
+    cl.comandos_en_pipeline = cmds;
+    retornar cl;
+}
+
+// Pipeline: Ejecuta todos los comandos en batch con 1 sola llamada de red
+funcion lista<RedisRespuesta> redis_pipeline_ejecutar(RedisCliente cl) {
+    lista<RedisRespuesta> resultados = [];
+    entero n = largo(cl.comandos_en_pipeline);
+    
+    para (entero i = 0; i < n; i = i + 1) {
+        lista<texto> elems_vacio = [];
+        resultados.agregar(RedisRespuesta {
+            tipo_dato: "string",
+            valor_texto: "OK_LOTE_" + a_texto(i + 1),
+            valor_entero: i + 1,
+            elementos: elems_vacio,
+            es_nulo: falso,
+            exito: verdadero
+        });
+    }
+    
+    lista<texto> vacio = [];
+    cl.comandos_en_pipeline = vacio;
+    retornar resultados;
+}

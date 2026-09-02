@@ -1,0 +1,21 @@
+importar ingles;
+
+rasgo Duplicable {
+    funcion entero duplicar(yo);
+}
+
+estructura Contador { valor: entero }
+
+impl Duplicable para Contador {
+    funcion entero duplicar(yo) {
+        retornar yo.valor * 2;
+    }
+}
+
+funcion entero doblar(Contador item) {
+    retornar item.duplicar();
+}
+
+Contador c = Contador { valor: 21 };
+entero r = doblar(c);
+imprimir(r);

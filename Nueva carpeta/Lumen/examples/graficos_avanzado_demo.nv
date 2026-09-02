@@ -1,0 +1,298 @@
+// EJEMPLO GRÁFICOS AVANZADO — Partículas, Sprites y Audio SDL2
+// Uso: lumen run examples/graficos_avanzado.nv
+// Requiere: SDL2.dll en el PATH
+// Opcional: SDL2_mixer.dll para audio, .bmp para sprites
+
+importar "graficos.nv";
+importar "graficos_avanzado.nv";
+importar "sistema.nv";
+
+// ============================================================
+// CONSTANTES SDL2 / SDL2 CONSTANTS
+// ============================================================
+
+const entero SDL_INIT_VIDEO = 32;
+const entero SDL_SCANCODE_ESC = 41;
+const entero SDL_SCANCODE_SPACE = 44;
+const entero SDL_SCANCODE_UP = 82;
+const entero SDL_SCANCODE_DOWN = 81;
+const entero SDL_SCANCODE_LEFT = 80;
+const entero SDL_SCANCODE_RIGHT = 79;
+const entero SDL_SCANCODE_1 = 30;
+const entero SDL_SCANCODE_2 = 31;
+const entero SDL_SCANCODE_3 = 32;
+
+// ============================================================
+// INICIALIZACIÓN / INIT
+// ============================================================
+
+imprimir("=== Gráficos Avanzados LÚMEN ===");
+// Headless/CI: omitir demo que requiere display (SDL2 alpha blending requiere param 'a' fix)
+texto _ci2 = sistema_env_obtener("CI");
+texto _hl2 = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci2 != "" || _hl2 == "1" {
+    imprimir("Headless/CI detectado — demo particulas omitida (requiere display)");
+    retornar;
+}
+imprimir("1. Inicializando SDL2...");
+
+si !graficos_iniciar(SDL_INIT_VIDEO) {
+    imprimir("ERROR: No se pudo iniciar SDL2");
+    retornar;
+}
+
+entero win = graficos_ventana("LÚMEN — Partículas Avanzadas", 100, 100, 800, 600, 0);
+si win == 0 {
+    imprimir("ERROR: No se pudo crear ventana");
+    graficos_salir();
+    retornar;
+}
+
+entero ren = graficos_renderizador(win, -1, 0);
+si ren == 0 {
+    imprimir("ERROR: No se pudo crear renderer");
+    graficos_cerrar_ventana(win);
+    graficos_salir();
+    retornar;
+}
+
+// ============================================================
+// INICIAR MÓDULO AVANZADO / INIT ADVANCED MODULE
+// ============================================================
+
+imprimir("2. Iniciando módulo avanzado...");
+graficos_avanzado_iniciar(ren);
+
+// ============================================================
+// ESTADO DEL SISTEMA / SYSTEM STATE
+// ============================================================
+
+imprimir("3. Preparando sistema de partículas...");
+lista<graficos_avanzado_Particula> particulas = [];
+entero frame_count = 0;
+entero fuente_x = 400;
+entero fuente_y = 300;
+booleano explotar = falso;
+entero modo = 0;  // 0=explosion, 1=lluvia, 2=fuego
+booleano modo_cambio = falso;
+
+// Para detección de tecla de modo (flanco de subida)
+entero prev_1 = 0;
+entero prev_2 = 0;
+entero prev_3 = 0;
+entero prev_space = 0;
+
+// Eventos
+entero evt_buf = __ffi_asignar(64);
+
+imprimir("4. Iniciando bucle principal...");
+imprimir("   [1][2][3] Cambiar modo (explo/lluvia/fuego)");
+imprimir("   [ESPACIO] Lanzar partículas");
+imprimir("   [FLECHAS] Mover origen");
+imprimir("   [ESC]     Salir");
+
+// ============================================================
+// BUCLE PRINCIPAL / MAIN LOOP
+// ============================================================
+
+mientras verdadero {
+    // --- Leer eventos SDL (vacia la cola) ---
+    texto evt = graficos_leer_evento(evt_buf);
+    si evt == "QUIT" { romper; }
+
+    // --- Teclado en tiempo real (scancodes SDL2) ---
+    entero kb = graficos_teclado();
+
+    si kb != 0 {
+        // ESC → salir
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_ESC) { romper; }
+
+        // FLECHAS → mover fuente
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_LEFT) { fuente_x = fuente_x - 6; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_RIGHT) { fuente_x = fuente_x + 6; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_UP) { fuente_y = fuente_y - 6; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_DOWN) { fuente_y = fuente_y + 6; }
+
+        // ESPACIO → explotar
+        entero space_down = 0;
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_SPACE) { space_down = 1; }
+        si space_down == 1 && prev_space == 0 { explotar = verdadero; }
+        prev_space = space_down;
+
+        // [1] → modo explosion
+        entero d1 = 0;
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_1) { d1 = 1; }
+        si d1 == 1 && prev_1 == 0 { modo = 0; modo_cambio = verdadero; }
+        prev_1 = d1;
+
+        // [2] → modo lluvia
+        entero d2 = 0;
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_2) { d2 = 1; }
+        si d2 == 1 && prev_2 == 0 { modo = 1; modo_cambio = verdadero; }
+        prev_2 = d2;
+
+        // [3] → modo fuego
+        entero d3 = 0;
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_3) { d3 = 1; }
+        si d3 == 1 && prev_3 == 0 { modo = 2; modo_cambio = verdadero; }
+        prev_3 = d3;
+    }
+
+    // Mostrar cambio de modo
+    si modo_cambio {
+        texto nom = "";
+        si modo == 0 { nom = "EXPLOSION"; }
+        sino si modo == 1 { nom = "LLUVIA"; }
+        sino { nom = "FUEGO"; }
+        imprimir("Modo: ", nom);
+        modo_cambio = falso;
+    }
+
+    // --- Explosión/emisión con ESPACIO ---
+    si explotar {
+        entero n = 50;
+        si modo == 1 { n = 30; }
+        si modo == 2 { n = 40; }
+
+        lista<graficos_avanzado_Particula> nuevas =
+            graficos_avanzado_particulas_crear(n,
+                fuente_x como decimal, fuente_y como decimal);
+
+        // Personalizar según modo
+        entero i = 0;
+        mientras i < largo(nuevas) {
+            si modo == 1 {
+                // LLUVIA: azules, caída rápida
+                nuevas[i].vy = nuevas[i].vy + 4.0;
+                nuevas[i].color_r = 50;
+                nuevas[i].color_g = 100 + (i * 30) % 156;
+                nuevas[i].color_b = 220;
+                nuevas[i].vida = 25 + (i % 10);
+                nuevas[i].vida_max = 25 + (i % 10);
+            } sino si modo == 2 {
+                // FUEGO: rojos/naranjas, suben
+                nuevas[i].vy = nuevas[i].vy - 2.5;
+                nuevas[i].vx = nuevas[i].vx * 0.4;
+                nuevas[i].color_r = 220;
+                nuevas[i].color_g = 50 + (i * 40) % 100;
+                nuevas[i].color_b = 0;
+                nuevas[i].vida = 18 + (i % 12) * 2;
+                nuevas[i].vida_max = 18 + (i % 12) * 2;
+                nuevas[i].tamano = 3 + (i % 3);
+            }
+            particulas = particulas ++ [nuevas[i]];
+            i = i + 1;
+        }
+        explotar = falso;
+    }
+
+    // --- Generación continua ---
+    frame_count = frame_count + 1;
+
+    // LLUVIA continua
+    si modo == 1 && frame_count % 2 == 0 {
+        decimal rx = ((frame_count * 17) % 800) como decimal;
+        lista<graficos_avanzado_Particula> gota =
+            graficos_avanzado_particulas_crear(1, rx, -20.0);
+        si largo(gota) > 0 {
+            gota[0].vy = 4.0 + ((frame_count % 5) como decimal) * 0.3;
+            gota[0].vx = 0.0;
+            gota[0].color_r = 60;
+            gota[0].color_g = 140;
+            gota[0].color_b = 255;
+            gota[0].vida = 25 + (frame_count % 10);
+            gota[0].vida_max = 25 + (frame_count % 10);
+            gota[0].tamano = 2;
+            particulas = particulas ++ [gota[0]];
+        }
+    }
+
+    // FUEGO continuo
+    si modo == 2 && frame_count % 3 == 0 {
+        decimal fx = fuente_x como decimal + ((frame_count * 7) % 30 - 15) como decimal;
+        decimal fy = fuente_y como decimal;
+        lista<graficos_avanzado_Particula> llama =
+            graficos_avanzado_particulas_crear(2, fx, fy);
+        entero j = 0;
+        mientras j < largo(llama) {
+            llama[j].vy = llama[j].vy - 4.0;
+            llama[j].vx = llama[j].vx * 0.2;
+            llama[j].color_r = 230;
+            llama[j].color_g = 80 + (j * 50) % 80;
+            llama[j].color_b = 0;
+            llama[j].vida = 12 + (frame_count % 8);
+            llama[j].vida_max = 12 + (frame_count % 8);
+            llama[j].tamano = 3 + j;
+            particulas = particulas ++ [llama[j]];
+            j = j + 1;
+        }
+    }
+
+    // --- Actualizar partículas (mover, gravedad, eliminar muertas) ---
+    particulas = graficos_avanzado_particulas_actualizar(particulas);
+
+    // --- Dibujar ---
+    // Fondo oscuro
+    graficos_color_render(ren, 10, 10, 20, 255);
+    graficos_limpiar_render(ren);
+
+    // Partículas
+    graficos_avanzado_particulas_dibujar(particulas);
+
+    // Mira en origen
+    graficos_color_render(ren, 255, 255, 100, 255);
+    graficos_rectangulo(ren, fuente_x - 5, fuente_y - 5, 10, 10);
+    graficos_rectangulo(ren, fuente_x - 15, fuente_y - 1, 30, 3);
+    graficos_rectangulo(ren, fuente_x - 1, fuente_y - 15, 3, 30);
+
+    // HUD - indicador de modo
+    texto modo_nombre = "";
+    si modo == 0 { modo_nombre = "EXPLOSION"; }
+    sino si modo == 1 { modo_nombre = "LLUVIA"; }
+    sino { modo_nombre = "FUEGO"; }
+
+    entero hud_color_r = 100;
+    entero hud_color_g = 200;
+    entero hud_color_b = 255;
+    si modo == 0 { hud_color_r = 255; hud_color_g = 200; hud_color_b = 100; }
+    sino si modo == 1 { hud_color_r = 100; hud_color_g = 200; hud_color_b = 255; }
+    sino { hud_color_r = 255; hud_color_g = 100; hud_color_b = 50; }
+
+    // Fondo HUD semi-transparente
+    graficos_color_render(ren, 0, 0, 0, 160);
+    graficos_rectangulo(ren, 5, 5, 190, 48);
+
+    // Indicador modo (rectángulo coloreado)
+    graficos_color_render(ren, hud_color_r, hud_color_g, hud_color_b, 255);
+    graficos_rectangulo(ren, 10, 10, 12, 12);
+
+    // Texto simulado
+    graficos_color_render(ren, 200, 200, 200, 255);
+    graficos_rectangulo(ren, 28, 13, 80, 4);  // "Modo: EXPLOSION"
+    graficos_rectangulo(ren, 28, 23, 60, 3);  // "[1][2][3] cambiar"
+    graficos_rectangulo(ren, 28, 33, 50, 3);  // contador
+
+    // Contador de partículas (barra)
+    entero total = largo(particulas);
+    entero bar_w = 80;
+    si total > bar_w { bar_w = 80; }
+    graficos_color_render(ren, 100, 255, 100, 200);
+    graficos_rectangulo(ren, 28, 40, bar_w, 4);
+    graficos_color_render(ren, 200, 200, 200, 150);
+    graficos_rectangulo(ren, 28, 40, 80, 4);
+
+    // --- Presentar ---
+    graficos_presentar(ren);
+    graficos_dormir(16);
+}
+
+// ============================================================
+// LIMPIEZA / CLEANUP
+// ============================================================
+
+__ffi_liberar(evt_buf, 64);
+graficos_cerrar_ventana(win);
+graficos_salir();
+imprimir("=== Demo de partículas finalizada ===");
+imprimir("Frames: ", frame_count);
+imprimir("Partículas totales: ", largo(particulas));

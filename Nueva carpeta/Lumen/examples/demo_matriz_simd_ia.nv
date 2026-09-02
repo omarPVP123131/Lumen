@@ -1,0 +1,54 @@
+// ============================================================================
+// LÚMEN — Demostración de Álgebra Lineal 2D con Tiled SIMD GEMM (Caché L1/L2)
+// ============================================================================
+
+importar "matriz_simd.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🏎️ LÚMEN 2D MATRIX SIMD GEMM — Cache-Tiled Neural Engine (v2.4.6) ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Inicializar dos matrices 4x4
+imprimir("1. Creando matrices 4x4 (Pesos de Red Neuronal & Entradas)...");
+matriz_simd_Matriz2D A = matriz_simd_matriz_desde_lista(4, 4, [
+    1.0,  2.0,  3.0,  4.0,
+    5.0,  6.0,  7.0,  8.0,
+    9.0, 10.0, 11.0, 12.0,
+   13.0, 14.0, 15.0, 16.0
+]);
+
+matriz_simd_Matriz2D B = matriz_simd_matriz_desde_lista(4, 4, [
+    0.5,  0.0,  1.0, -0.5,
+    1.0,  0.5, -1.0,  2.0,
+   -0.5,  1.0,  0.5,  0.0,
+    0.0, -0.5,  1.0,  1.5
+]);
+
+imprimir("   Matriz A (Entradas):");
+imprimir(matriz_simd_matriz_a_texto(A, 4, 4));
+
+imprimir("   Matriz B (Pesos Sinápticos):");
+imprimir(matriz_simd_matriz_a_texto(B, 4, 4));
+
+// 2. Multiplicación de Matrices Tiled GEMM con SIMD AVX2
+imprimir("2. Ejecutando Multiplicación Tiled GEMM con SIMD FMA (C = A * B)...");
+matriz_simd_Matriz2D C = matriz_simd_matriz_multiplicar_simd(A, B, 4);
+
+imprimir("   ✓ Resultado C = (A · B):");
+imprimir(matriz_simd_matriz_a_texto(C, 4, 4));
+
+// 3. Aplicar Activación No Lineal ReLU
+imprimir("3. Aplicando Función de Activación ReLU (Capa Densa)...");
+matriz_simd_Matriz2D C_relu = matriz_simd_matriz_relu(C);
+imprimir("   ✓ Capa con Activación ReLU (valores negativos a 0.0):");
+imprimir(matriz_simd_matriz_a_texto(C_relu, 4, 4));
+
+// 4. Inferencia Vectorial GEMV (Matriz x Vector)
+imprimir("4. Multiplicación Matriz-Vector GEMV (Capa de Proyección)...");
+lista<decimal> vector_entrada = [1.0, 2.0, 3.0, 4.0];
+lista<decimal> salida_vector = matriz_simd_matriz_producto_vector(C_relu, vector_entrada);
+imprimir("   ✓ Vector de salida procesado: ", salida_vector);
+
+imprimir("");
+imprimir("✨ ¡Álgebra Lineal 2D con aceleración Tiled SIMD ejecutada con éxito en LÚMEN!");

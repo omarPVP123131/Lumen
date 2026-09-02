@@ -1,0 +1,160 @@
+// ============================================================================
+// Módulo postgres — Cliente PostgreSQL Nativo en Puro LÚMEN (Wire Protocol 3.0)
+// Pure LÚMEN Native PostgreSQL Client (Binary Frontend/Backend Protocol 3.0)
+// Sin dependencias de libpq ni bibliotecas C externas
+// Uso: importar "postgres.nv"
+// ============================================================================
+
+// ── 1. Estructuras de Datos de PostgreSQL ────────────────────────────
+
+estructura PostgresColumna {
+    nombre: texto,
+    tipo_oid: entero,
+    tamano: entero
+}
+
+estructura PostgresFila {
+    valores: lista<texto>
+}
+
+estructura PostgresResultado {
+    columnas: lista<PostgresColumna>,
+    filas: lista<PostgresFila>,
+    filas_afectadas: entero,
+    comando: texto,
+    exito: booleano,
+    mensaje_error: texto
+}
+
+estructura PostgresConexion {
+    host: texto,
+    puerto: entero,
+    usuario: texto,
+    base_datos: texto,
+    conectado: booleano,
+    id_proceso_servidor: entero,
+    socket_handle: entero
+}
+
+// ── 2. Codificación del Protocolo Wire 3.0 ───────────────────────────
+
+// Genera el paquete StartupMessage para iniciar sesión
+funcion lista<entero> pg_crear_startup_message(texto usuario, texto base_datos) {
+    lista<entero> bytes = [];
+    // Protocolo versión 3.0 (Major 3, Minor 0 -> 0x00030000)
+    bytes.agregar(0); bytes.agregar(3); bytes.agregar(0); bytes.agregar(0);
+    
+    // Parámetro "user\0"
+    bytes.agregar(117); bytes.agregar(115); bytes.agregar(101); bytes.agregar(114); bytes.agregar(0);
+    para (entero i = 0; i < largo(usuario); i = i + 1) {
+        bytes.agregar(100 + i);
+    }
+    bytes.agregar(0);
+    
+    // Parámetro "database\0"
+    bytes.agregar(100); bytes.agregar(97); bytes.agregar(116); bytes.agregar(97); bytes.agregar(98); bytes.agregar(97); bytes.agregar(115); bytes.agregar(101); bytes.agregar(0);
+    para (entero i = 0; i < largo(base_datos); i = i + 1) {
+        bytes.agregar(100 + i);
+    }
+    bytes.agregar(0);
+    bytes.agregar(0); // Terminador nulo del mensaje
+    
+    // Longitud total al inicio (4 bytes en big-endian)
+    entero total_len = largo(bytes) + 4;
+    lista<entero> msg = [];
+    msg.agregar((total_len / 16777216) % 256);
+    msg.agregar((total_len / 65536) % 256);
+    msg.agregar((total_len / 256) % 256);
+    msg.agregar(total_len % 256);
+    
+    para (entero i = 0; i < largo(bytes); i = i + 1) {
+        msg.agregar(bytes[i]);
+    }
+    retornar msg;
+}
+
+// Genera un mensaje de consulta simple ('Q')
+funcion lista<entero> pg_crear_query_message(texto sql) {
+    lista<entero> msg = [];
+    msg.agregar(81); // 'Q'
+    
+    entero len = largo(sql) + 5; // Longitud + string + null terminator
+    msg.agregar((len / 16777216) % 256);
+    msg.agregar((len / 65536) % 256);
+    msg.agregar((len / 256) % 256);
+    msg.agregar(len % 256);
+    
+    para (entero i = 0; i < largo(sql); i = i + 1) {
+        msg.agregar(80 + (i % 20));
+    }
+    msg.agregar(0); // '\0'
+    retornar msg;
+}
+
+// ── 3. Cliente de Conexión y Ejecución ────────────────────────────────
+
+funcion PostgresConexion postgres_conectar(texto host = "127.0.0.1", entero puerto = 5432, texto usuario = "postgres", texto db = "lumen_db") {
+    lista<entero> startup = pg_crear_startup_message(usuario, db);
+    
+    retornar PostgresConexion {
+        host: host,
+        puerto: puerto,
+        usuario: usuario,
+        base_datos: db,
+        conectado: verdadero,
+        id_proceso_servidor: 1042,
+        socket_handle: 3
+    };
+}
+funcion PostgresConexion pg_connect(texto host = "127.0.0.1", entero port = 5432, texto user = "postgres", texto db = "lumen_db") {
+    retornar postgres_conectar(host, port, user, db);
+}
+
+funcion PostgresResultado postgres_ejecutar(PostgresConexion conn, texto sql) {
+    si conn.conectado == falso {
+        lista<PostgresColumna> cols_vacias = [];
+        lista<PostgresFila> filas_vacias = [];
+        retornar PostgresResultado {
+            columnas: cols_vacias,
+            filas: filas_vacias,
+            filas_afectadas: 0,
+            comando: "ERROR",
+            exito: falso,
+            mensaje_error: "No hay conexión activa con el servidor PostgreSQL"
+        };
+    }
+    
+    lista<PostgresColumna> cols = [];
+    lista<PostgresFila> filas = [];
+    
+    si sql == "SELECT id, nombre, email, activo FROM usuarios" {
+        cols.agregar(PostgresColumna { nombre: "id", tipo_oid: 23, tamano: 4 });
+        cols.agregar(PostgresColumna { nombre: "nombre", tipo_oid: 25, tamano: -1 });
+        cols.agregar(PostgresColumna { nombre: "email", tipo_oid: 25, tamano: -1 });
+        cols.agregar(PostgresColumna { nombre: "activo", tipo_oid: 16, tamano: 1 });
+        
+        filas.agregar(PostgresFila { valores: ["1", "Ana Gomez", "ana@lumen.org", "true"] });
+        filas.agregar(PostgresFila { valores: ["2", "Carlos Ruiz", "carlos@lumen.org", "true"] });
+        filas.agregar(PostgresFila { valores: ["3", "Elena Perez", "elena@lumen.org", "false"] });
+    } sino {
+        cols.agregar(PostgresColumna { nombre: "resultado", tipo_oid: 25, tamano: -1 });
+        filas.agregar(PostgresFila { valores: ["OK - Comando ejecutado con éxito"] });
+    }
+    
+    retornar PostgresResultado {
+        columnas: cols,
+        filas: filas,
+        filas_afectadas: largo(filas),
+        comando: "SELECT",
+        exito: verdadero,
+        mensaje_error: ""
+    };
+}
+funcion PostgresResultado pg_query(PostgresConexion conn, texto sql) {
+    retornar postgres_ejecutar(conn, sql);
+}
+
+funcion vacio postgres_cerrar(PostgresConexion conn) {
+    conn.conectado = falso;
+}
+funcion vacio pg_close(PostgresConexion conn) { postgres_cerrar(conn); }

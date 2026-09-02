@@ -1,0 +1,50 @@
+// ==========================================
+// json_jr.nv — JSON parsing (junior)
+// Uso: lumen run -L stdlib/ examples/jr/json_jr.nv
+// ==========================================
+importar "json.nv";
+
+imprimir("=== JSON JR: Basic JSON Operations ===");
+
+// ── Example 1: Parse Simple JSON ──
+imprimir("--- Ej 1: Parsear JSON Simple ---");
+sea json_str = "{\"nombre\": \"Ana\", \"edad\": 30}";
+sea parsed = json_parsear(json_str);
+imprimir("JSON original: ", json_str);
+imprimir("Parseado:      ", parsed);
+
+// Parse another simple object
+sea otro = json_parsear("{\"lenguaje\": \"Lúmen\", \"version\": \"2.0\"}");
+imprimir("Otro JSON:     ", otro);
+
+// ── Example 2: Stringify (Serialize) ──
+imprimir("--- Ej 2: Serializar a JSON ---");
+// Parse something first, then stringify back
+sea persona = json_parsear("{\"nombre\": \"Luis\", \"edad\": 25, \"activo\": true}");
+sea json_texto = json_serializar(persona);
+imprimir("Objeto original: ", persona);
+imprimir("Serializado:     ", json_texto);
+
+// English alias
+sea json_en = json_stringify(persona);
+imprimir("Stringify (en):  ", json_en);
+
+// ── Example 3: Roundtrip (Parse → Stringify → Parse) ──
+imprimir("--- Ej 3: Roundtrip ---");
+sea original = "{\"x\": 10, \"y\": 20, \"etiqueta\": \"punto\"}";
+imprimir("Original:     ", original);
+
+sea p1 = json_parsear(original);
+sea s1 = json_serializar(p1);
+imprimir("Paso 1 → str: ", s1);
+
+sea p2 = json_parsear(s1);
+sea s2 = json_serializar(p2);
+imprimir("Paso 2 → str: ", s2);
+
+// English roundtrip
+sea en_parsed = json_parse("{\"city\": \"Madrid\", \"country\": \"España\"}");
+sea en_str = json_stringify(en_parsed);
+imprimir("Roundtrip EN: ", en_str);
+
+imprimir("--- FIN JSON JR ---");

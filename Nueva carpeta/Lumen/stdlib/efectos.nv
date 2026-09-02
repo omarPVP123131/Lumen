@@ -1,0 +1,25 @@
+// ============================================================================
+// Módulo efectos — Sistema de Efectos Algebraicos y Computación Pura
+// Algebraic Effects, Pure Functions & Deterministic Computations for LÚMEN
+// Uso: importar "efectos.nv"
+// ============================================================================
+
+estructura EfectoAlgebraico {
+    nombre_efecto: texto,
+    es_puro: booleano,
+    sin_efectos_io: booleano,
+    sin_mutacion_global: booleano
+}
+
+funcion EfectoAlgebraico efecto_crear_puro(texto nombre_funcion) {
+    retornar EfectoAlgebraico {
+        nombre_efecto: nombre_funcion,
+        es_puro: verdadero,
+        sin_efectos_io: verdadero,
+        sin_mutacion_global: verdadero
+    };
+}
+
+funcion booleano efecto_validar_determinismo(EfectoAlgebraico ef) {
+    retornar ef.es_puro && ef.sin_efectos_io && ef.sin_mutacion_global;
+}

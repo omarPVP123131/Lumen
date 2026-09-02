@@ -1,0 +1,48 @@
+// ============================================================================
+// LÚMEN — Demostración de AddressSanitizer (ASan) & LeakSanitizer (LSan)
+// ============================================================================
+
+importar "sanitizer.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🛡️ LÚMEN ADDRESS-SANITIZER & LEAK-SANITIZER ENGINE (v2.4.6)        ║");
+imprimir("║   Auditoría de Memoria, Bounds Checking & Detección de Fugas (LSan)  ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Inicializar el auditor de sanitización de memoria
+imprimir("1. Inicializando Auditor de Memoria (ASan + LSan Activos)...");
+sanitizer_SanitizerAuditor auditor = sanitizer_iniciar(verdadero, verdadero);
+
+// 2. Simular asignaciones dinámicas y verificar límites (Bounds Checking)
+imprimir("");
+imprimir("2. Rastreo de Asignaciones y Verificación de Límites de Acceso...");
+auditor = sanitizer_registrar_asignacion(auditor, 1048576, 4096, 24, "buffer_red_tcp");
+auditor = sanitizer_registrar_asignacion(auditor, 1052672, 8192, 28, "tabla_hash_simd");
+auditor = sanitizer_registrar_asignacion(auditor, 1060864, 1024, 32, "payload_json");
+
+imprimir("   ✓ Asignaciones registradas : ", auditor.total_bloques_asignados);
+imprimir("   ✓ Memoria viva en heap     : ", auditor.bytes_vivos_actuales, " bytes");
+
+// 3. Probar verificación de límites de acceso (Bounds Check)
+booleano acceso_seguro = sanitizer_verificar_limites(auditor, 5, 10, 38);
+booleano acceso_invalido = sanitizer_verificar_limites(auditor, 15, 10, 42);
+
+imprimir("   • Acceso a índice seguro (5 < 10)  : ", acceso_seguro ? "PERMITIDO" : "BLOQUEADO");
+imprimir("   • Acceso fuera de límite (15 >= 10): ", acceso_invalido ? "PERMITIDO" : "BLOQUEADO (ASan Guard)");
+
+// 4. Liberar bloques de memoria y auditar fugas
+imprimir("");
+imprimir("4. Liberando bloques de memoria asignados...");
+auditor = sanitizer_registrar_liberacion(auditor, 1048576);
+auditor = sanitizer_registrar_liberacion(auditor, 1052672);
+auditor = sanitizer_registrar_liberacion(auditor, 1060864);
+
+auditor = sanitizer_auditar_fugas(auditor);
+
+imprimir("");
+imprimir("5. Reporte Final de Salud de Memoria:");
+imprimir(sanitizer_generar_reporte(auditor));
+
+imprimir("");
+imprimir("✨ ¡AddressSanitizer y LeakSanitizer verificados con éxito en LÚMEN!");

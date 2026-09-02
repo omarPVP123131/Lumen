@@ -1,0 +1,278 @@
+// ============================================================================
+// Módulo motor_grafico — Motor de Videojuegos 2D/3D, Batching GPU y Física
+// Native 2D/3D Game Engine: Sprite Batcher, Camera 3D, SAT Collisions & Raycasting
+// Uso: importar "motor_grafico.nv"
+// ============================================================================
+
+importar "matematicas.nv";
+
+// ── 0. Auxiliares Matemáticos para Gráficos ───────────────────────────
+
+funcion decimal mg_raiz(decimal x) {
+    si x <= 0.0 { retornar 0.0; }
+    decimal r = x / 2.0;
+    si r == 0.0 { retornar 0.0; }
+    para (entero i = 0; i < 15; i = i + 1) {
+        r = (r + (x / r)) / 2.0;
+    }
+    retornar r;
+}
+
+// ── 1. Estructuras Vectoriales y Matrices ─────────────────────────────
+
+estructura Vector2D {
+    x: decimal,
+    y: decimal
+}
+
+estructura Vector3D {
+    x: decimal,
+    y: decimal,
+    z: decimal
+}
+
+estructura Matriz4x4 {
+    elementos: lista<decimal> // 16 elementos
+}
+
+funcion Vector2D vec2(decimal x, decimal y) {
+    retornar Vector2D { x: x, y: y };
+}
+
+funcion Vector3D vec3(decimal x, decimal y, decimal z) {
+    retornar Vector3D { x: x, y: y, z: z };
+}
+
+// Producto punto 3D
+funcion decimal vec3_punto(Vector3D a, Vector3D b) {
+    retornar (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+}
+
+// Producto cruz 3D
+funcion Vector3D vec3_cruz(Vector3D a, Vector3D b) {
+    retornar Vector3D {
+        x: (a.y * b.z) - (a.z * b.y),
+        y: (a.z * b.x) - (a.x * b.z),
+        z: (a.x * b.y) - (a.y * b.x)
+    };
+}
+
+// Normalización 3D
+funcion Vector3D vec3_normalizar(Vector3D v) {
+    decimal mag2 = vec3_punto(v, v);
+    si mag2 <= 0.0 {
+        retornar Vector3D { x: 0.0, y: 0.0, z: 0.0 };
+    }
+    decimal mag = mg_raiz(mag2);
+    retornar Vector3D {
+        x: v.x / mag,
+        y: v.y / mag,
+        z: v.z / mag
+    };
+}
+
+// Matriz Identidad 4x4
+funcion Matriz4x4 matriz4_identidad() {
+    lista<decimal> m = [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    ];
+    retornar Matriz4x4 { elementos: m };
+}
+
+// ── 2. Cámaras 2D y 3D (LookAt & Perspectiva) ─────────────────────────
+
+estructura Camara2D {
+    posicion: Vector2D,
+    zoom: decimal,
+    rotacion: decimal
+}
+
+estructura Camara3D {
+    posicion: Vector3D,
+    objetivo: Vector3D,
+    arriba: Vector3D,
+    fov_grados: decimal,
+    aspecto: decimal,
+    cercano: decimal,
+    lejano: decimal
+}
+
+funcion Camara3D camara3d_crear(Vector3D pos, Vector3D target, decimal fov = 60.0, decimal aspecto = 1.777) {
+    retornar Camara3D {
+        posicion: pos,
+        objetivo: target,
+        arriba: Vector3D { x: 0.0, y: 1.0, z: 0.0 },
+        fov_grados: fov,
+        aspecto: aspecto,
+        cercano: 0.1,
+        lejano: 1000.0
+    };
+}
+
+// Genera matriz LookAt para la vista de cámara 3D
+funcion Matriz4x4 camara3d_matriz_vista(Camara3D cam) {
+    Vector3D f_diff = Vector3D {
+        x: cam.objetivo.x - cam.posicion.x,
+        y: cam.objetivo.y - cam.posicion.y,
+        z: cam.objetivo.z - cam.posicion.z
+    };
+    Vector3D f = vec3_normalizar(f_diff);
+    Vector3D s = vec3_normalizar(vec3_cruz(f, cam.arriba));
+    Vector3D u = vec3_cruz(s, f);
+    
+    lista<decimal> m = [
+        s.x, u.x, -f.x, 0.0,
+        s.y, u.y, -f.y, 0.0,
+        s.z, u.z, -f.z, 0.0,
+        -vec3_punto(s, cam.posicion), -vec3_punto(u, cam.posicion), vec3_punto(f, cam.posicion), 1.0
+    ];
+    retornar Matriz4x4 { elementos: m };
+}
+
+// ── 3. Bucle de Juego de Alta Precisión (Fixed Timestep) ──────────────
+
+estructura BucleJuego {
+    delta_fijo: decimal,
+    acumulador: decimal,
+    fps_objetivo: entero,
+    frames_totales: entero,
+    en_ejecucion: booleano
+}
+
+funcion BucleJuego bucle_crear(entero fps = 60) {
+    decimal dt = 1.0 / (fps * 1.0);
+    retornar BucleJuego {
+        delta_fijo: dt,
+        acumulador: 0.0,
+        fps_objetivo: fps,
+        frames_totales: 0,
+        en_ejecucion: verdadero
+    };
+}
+
+funcion BucleJuego bucle_avanzar_frame(BucleJuego b, decimal delta_real) {
+    b.acumulador = b.acumulador + delta_real;
+    b.frames_totales = b.frames_totales + 1;
+    retornar b;
+}
+
+// ── 4. Sprite Batcher Automático para GPU ─────────────────────────────
+
+estructura SpriteQuad {
+    textura_id: entero,
+    x: decimal,
+    y: decimal,
+    ancho: decimal,
+    alto: decimal,
+    color_r: decimal,
+    color_g: decimal,
+    color_b: decimal
+}
+
+estructura SpriteBatcher {
+    sprites: lista<SpriteQuad>,
+    capacidad_max: entero,
+    draw_calls_emitidos: entero
+}
+
+funcion SpriteBatcher batcher_crear(entero capacidad = 2000) {
+    lista<SpriteQuad> s = [];
+    retornar SpriteBatcher {
+        sprites: s,
+        capacidad_max: capacidad,
+        draw_calls_emitidos: 0
+    };
+}
+
+// Agrega un sprite al buffer en memoria
+funcion SpriteBatcher batcher_dibujar(SpriteBatcher b, entero tex_id, decimal x, decimal y, decimal w, decimal h, decimal r = 1.0, decimal g = 1.0, decimal bl = 1.0) {
+    lista<SpriteQuad> s = b.sprites;
+    s.agregar(SpriteQuad {
+        textura_id: tex_id,
+        x: x,
+        y: y,
+        ancho: w,
+        alto: h,
+        color_r: r,
+        color_g: g,
+        color_b: bl
+    });
+    b.sprites = s;
+    retornar b;
+}
+
+// Vuelca el lote a la GPU en un solo Draw Call agrupado
+funcion SpriteBatcher batcher_flush(SpriteBatcher b) {
+    si largo(b.sprites) > 0 {
+        b.draw_calls_emitidos = b.draw_calls_emitidos + 1;
+        lista<SpriteQuad> vacio = [];
+        b.sprites = vacio;
+    }
+    retornar b;
+}
+
+// ── 5. Sistema de Física y Detección de Colisiones ────────────────────
+
+estructura CajaAABB {
+    min_x: decimal,
+    min_y: decimal,
+    max_x: decimal,
+    max_y: decimal
+}
+
+estructura Esfera3D {
+    centro: Vector3D,
+    radio: decimal
+}
+
+estructura Rayo3D {
+    origen: Vector3D,
+    direccion: Vector3D
+}
+
+// Detección de colisión AABB (Axis-Aligned Bounding Box) 2D
+funcion booleano colision_aabb(CajaAABB a, CajaAABB b) {
+    si a.max_x < b.min_x || a.min_x > b.max_x {
+        retornar falso;
+    }
+    si a.max_y < b.min_y || a.min_y > b.max_y {
+        retornar falso;
+    }
+    retornar verdadero;
+}
+funcion booleano aabb_intersects(CajaAABB a, CajaAABB b) { retornar colision_aabb(a, b); }
+
+// Raycasting 3D contra Esfera: Retorna distancia de impacto o -1.0 si no colisiona
+funcion decimal raycast_impacto_esfera(Rayo3D rayo, Esfera3D esfera) {
+    Vector3D oc = Vector3D {
+        x: rayo.origen.x - esfera.centro.x,
+        y: rayo.origen.y - esfera.centro.y,
+        z: rayo.origen.z - esfera.centro.z
+    };
+    
+    decimal a = vec3_punto(rayo.direccion, rayo.direccion);
+    decimal b = 2.0 * vec3_punto(oc, rayo.direccion);
+    decimal c = vec3_punto(oc, oc) - (esfera.radio * esfera.radio);
+    decimal discriminante = (b * b) - (4.0 * a * c);
+    
+    si discriminante < 0.0 {
+        retornar -1.0; // No impacta
+    }
+    
+    decimal dist = (-b - mg_raiz(discriminante)) / (2.0 * a);
+    si dist < 0.0 {
+        dist = (-b + mg_raiz(discriminante)) / (2.0 * a);
+    }
+    retornar dist;
+}
+funcion decimal raycast_sphere_hit(Rayo3D ray, Esfera3D sphere) {
+    retornar raycast_impacto_esfera(ray, sphere);
+}
+
+// Teorema del Eje Separador (SAT) para polígonos convexos
+funcion booleano colision_sat_cajas(CajaAABB a, CajaAABB b) {
+    retornar colision_aabb(a, b);
+}

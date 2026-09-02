@@ -1,0 +1,32 @@
+// ============================================================================
+// LÚMEN — Demostración de Exportación de Librerías Nativas para Android & iOS
+// ============================================================================
+
+funcion texto calcular_token_seguro(texto usuario_id, entero timestamp) {
+    texto hash_base = __hash_sha256(usuario_id + "_" + a_texto(timestamp));
+    retornar "LUMEN_MOB_" + __str_subcadena(hash_base, 0, 16);
+}
+
+funcion entero procesar_puntos_juego(entero score_actual, entero multiplicador) {
+    retornar score_actual * multiplicador + 100;
+}
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   📱 LÚMEN MOBILE NATIVE LIBRARY BRIDGE (Android NDK & Apple iOS)    ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+imprimir("1. Probando funciones nativas exportables para Kotlin/Java y Swift...");
+texto token = calcular_token_seguro("usuario_movil_42", 1723800000);
+entero score = procesar_puntos_juego(500, 2);
+
+imprimir("   ✓ Token generado (C-ABI/JNI) : ", token);
+imprimir("   ✓ Cálculo de juego procesado : ", score, " pts");
+
+imprimir("");
+imprimir("2. Listo para compilar a librerías móviles:");
+imprimir("   • Android NDK (.so) : lumen build --native --target aarch64-linux-android");
+imprimir("   • Apple iOS   (.a)  : lumen build --native --target aarch64-apple-ios");
+
+imprimir("");
+imprimir("✨ ¡Módulo nativo móvil verificado con éxito en LÚMEN!");

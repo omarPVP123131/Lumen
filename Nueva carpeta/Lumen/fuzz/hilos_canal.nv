@@ -1,0 +1,16 @@
+// v3.5.17 — Canal entre hilos: productor en hilo, consumidor en principal.
+// El consumidor bloquea en __canal_recibir hasta que el productor envía.
+funcion entero productor(texto ch) {
+    __canal_enviar(ch, 7);
+    __canal_enviar(ch, 35);
+    __canal_enviar(ch, 100);
+    retornar 1;
+}
+
+sea c = __canal_nuevo();
+sea h = __hilo_lanzar("productor", c);
+sea a = __canal_recibir(c);
+sea b = __canal_recibir(c);
+sea d = __canal_recibir(c);
+sea ok = __hilo_esperar(h);
+imprimir("canal=" + (a + b + d) + " productor=" + ok);

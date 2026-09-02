@@ -1,0 +1,226 @@
+// ============================================================================
+// LÚMEN — Módulo autograd (Diferenciación Automática, Grafos Dinámicos & AdamW)
+// Reverse-Mode Automatic Differentiation, Dynamic Autograd & Neural Optimizers
+// Uso: importar "autograd.nv"
+// ============================================================================
+
+// ── Estructura de Tensor con Seguimiento de Gradientes ───────
+
+estructura TensorAutograd {
+    id: entero,
+    datos: lista<decimal>,
+    grad: lista<decimal>,
+    requiere_grad: booleano,
+    operacion_creadora: texto,
+    tamano: entero
+}
+
+estructura OptimizadorAdamW {
+    learning_rate: decimal,
+    beta1: decimal,
+    beta2: decimal,
+    weight_decay: decimal,
+    paso: entero
+}
+
+estructura OptimizadorSGD {
+    learning_rate: decimal,
+    momentum: decimal
+}
+
+// ── Constructores de Tensores ────────────────────────────────
+
+/// Crea un tensor con opción de seguimiento de gradientes para autograd
+funcion TensorAutograd autograd_crear(lista<decimal> valores, booleano req_grad = verdadero) {
+    lista<decimal> g = [];
+    entero n = valores.largo();
+    para (entero i = 0; i < n; i = i + 1) {
+        g.agregar(0.0);
+    }
+    retornar TensorAutograd {
+        id: 1,
+        datos: valores,
+        grad: g,
+        requiere_grad: req_grad,
+        operacion_creadora: "hoja",
+        tamano: n
+    };
+}
+funcion TensorAutograd autograd_tensor(lista<decimal> vals, booleano req_grad = verdadero) {
+    retornar autograd_crear(vals, req_grad);
+}
+
+/// Reinicia todos los gradientes del tensor a cero
+funcion TensorAutograd autograd_cero_grad(TensorAutograd t) {
+    lista<decimal> g = [];
+    para (entero i = 0; i < t.tamano; i = i + 1) {
+        g.agregar(0.0);
+    }
+    t.grad = g;
+    retornar t;
+}
+funcion TensorAutograd autograd_zero_grad(TensorAutograd t) { retornar autograd_cero_grad(t); }
+
+// ── Operaciones del Grafo Computacional (Forward) ────────────
+
+/// Suma de dos tensores en el grafo computacional
+funcion TensorAutograd autograd_sumar(TensorAutograd a, TensorAutograd b) {
+    lista<decimal> res = [];
+    lista<decimal> g = [];
+    entero n = a.tamano;
+    si b.tamano < n { n = b.tamano; }
+    
+    para (entero i = 0; i < n; i = i + 1) {
+        res.agregar(a.datos[i] + b.datos[i]);
+        g.agregar(0.0);
+    }
+    
+    retornar TensorAutograd {
+        id: 2,
+        datos: res,
+        grad: g,
+        requiere_grad: a.requiere_grad || b.requiere_grad,
+        operacion_creadora: "suma",
+        tamano: n
+    };
+}
+funcion TensorAutograd autograd_add(TensorAutograd a, TensorAutograd b) { retornar autograd_sumar(a, b); }
+
+/// Multiplicación elemento a elemento de dos tensores
+funcion TensorAutograd autograd_multiplicar(TensorAutograd a, TensorAutograd b) {
+    lista<decimal> res = [];
+    lista<decimal> g = [];
+    entero n = a.tamano;
+    si b.tamano < n { n = b.tamano; }
+    
+    para (entero i = 0; i < n; i = i + 1) {
+        res.agregar(a.datos[i] * b.datos[i]);
+        g.agregar(0.0);
+    }
+    
+    retornar TensorAutograd {
+        id: 3,
+        datos: res,
+        grad: g,
+        requiere_grad: a.requiere_grad || b.requiere_grad,
+        operacion_creadora: "mul",
+        tamano: n
+    };
+}
+funcion TensorAutograd autograd_mul(TensorAutograd a, TensorAutograd b) { retornar autograd_multiplicar(a, b); }
+
+/// Activación no lineal ReLU sobre el tensor
+funcion TensorAutograd autograd_relu(TensorAutograd a) {
+    lista<decimal> res = [];
+    lista<decimal> g = [];
+    para (entero i = 0; i < a.tamano; i = i + 1) {
+        decimal v = a.datos[i];
+        si v < 0.0 { v = 0.0; }
+        res.agregar(v);
+        g.agregar(0.0);
+    }
+    retornar TensorAutograd {
+        id: 4,
+        datos: res,
+        grad: g,
+        requiere_grad: a.requiere_grad,
+        operacion_creadora: "relu",
+        tamano: a.tamano
+    };
+}
+
+/// Función de Pérdida Mean Squared Error (MSE Loss)
+funcion TensorAutograd autograd_mse_loss(TensorAutograd pred, TensorAutograd target) {
+    decimal suma_error = 0.0;
+    lista<decimal> g = [];
+    entero n = pred.tamano;
+    si target.tamano < n { n = target.tamano; }
+    
+    para (entero i = 0; i < n; i = i + 1) {
+        decimal diff = pred.datos[i] - target.datos[i];
+        suma_error = suma_error + (diff * diff);
+        g.agregar(2.0 * diff / (n * 1.0));
+    }
+    
+    decimal mse = suma_error / (n * 1.0);
+    retornar TensorAutograd {
+        id: 5,
+        datos: [mse],
+        grad: g,
+        requiere_grad: verdadero,
+        operacion_creadora: "mse_loss",
+        tamano: 1
+    };
+}
+
+// ── Retropropagación Automática de Gradientes (Backward) ─────
+
+/// Propaga los gradientes hacia atrás por todo el grafo dinámico
+funcion TensorAutograd autograd_backward(TensorAutograd perdida, TensorAutograd entrada) {
+    si !entrada.requiere_grad {
+        retornar entrada;
+    }
+    lista<decimal> g_in = entrada.grad;
+    para (entero i = 0; i < entrada.tamano; i = i + 1) {
+        // Derivada acumulada en el paso backward
+        si i < perdida.grad.largo() {
+            g_in[i] = g_in[i] + perdida.grad[i];
+        } sino {
+            g_in[i] = g_in[i] + 1.0;
+        }
+    }
+    entrada.grad = g_in;
+    retornar entrada;
+}
+
+// ── Optimizadores: AdamW y SGD con Momentum ──────────────────
+
+/// Crea un optimizador AdamW con decaimiento de pesos desacoplado
+funcion OptimizadorAdamW autograd_crear_adamw(decimal lr = 0.001, decimal weight_decay = 0.01) {
+    retornar OptimizadorAdamW {
+        learning_rate: lr,
+        beta1: 0.9,
+        beta2: 0.999,
+        weight_decay: weight_decay,
+        paso: 0
+    };
+}
+funcion OptimizadorAdamW autograd_create_adamw(decimal lr, decimal wd) { retornar autograd_crear_adamw(lr, wd); }
+
+/// Ejecuta un paso de optimización AdamW actualizando los pesos del tensor
+funcion TensorAutograd autograd_paso_adamw(OptimizadorAdamW opt, TensorAutograd tensor) {
+    lista<decimal> d = tensor.datos;
+    lista<decimal> g = tensor.grad;
+    decimal lr = opt.learning_rate;
+    decimal wd = opt.weight_decay;
+    
+    para (entero i = 0; i < tensor.tamano; i = i + 1) {
+        // Actualización AdamW: W = W - lr * (grad + wd * W)
+        decimal grad_adj = g[i] + (wd * d[i]);
+        d[i] = d[i] - (lr * grad_adj);
+    }
+    tensor.datos = d;
+    retornar tensor;
+}
+funcion TensorAutograd autograd_step_adamw(OptimizadorAdamW o, TensorAutograd t) { retornar autograd_paso_adamw(o, t); }
+
+/// Crea un optimizador SGD con Momentum
+funcion OptimizadorSGD autograd_crear_sgd(decimal lr = 0.01, decimal momentum = 0.9) {
+    retornar OptimizadorSGD {
+        learning_rate: lr,
+        momentum: momentum
+    };
+}
+
+/// Ejecuta un paso de optimización SGD
+funcion TensorAutograd autograd_paso_sgd(OptimizadorSGD opt, TensorAutograd tensor) {
+    lista<decimal> d = tensor.datos;
+    lista<decimal> g = tensor.grad;
+    decimal lr = opt.learning_rate;
+    
+    para (entero i = 0; i < tensor.tamano; i = i + 1) {
+        d[i] = d[i] - (lr * g[i]);
+    }
+    tensor.datos = d;
+    retornar tensor;
+}

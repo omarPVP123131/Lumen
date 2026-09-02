@@ -1,0 +1,99 @@
+// ============================================================================
+// Módulo concurrencia_estructurada — Concurrencia Estructurada & Guardería de Tareas
+// Structured Concurrency & Task Group Nursery for LÚMEN (0 Orphan Tasks Guarantee)
+// Uso: importar "concurrencia_estructurada.nv"
+// ============================================================================
+
+estructura TareaHija {
+    id: texto,
+    nombre: texto,
+    cancelada: booleano,
+    completada: booleano,
+    resultado: texto
+}
+
+estructura GrupoTareas {
+    id: texto,
+    tareas: lista<TareaHija>,
+    cancelacion_solicitada: booleano,
+    max_paralelismo: entero,
+    errores: lista<texto>
+}
+
+// ── 1. Constructor de Guardería de Tareas (Task Group Nursery) ────────
+
+funcion GrupoTareas grupo_tareas_crear(entero max_concurrencia = 8, texto id_grupo = "grupo_nursery") {
+    lista<TareaHija> t = [];
+    lista<texto> errs = [];
+    retornar GrupoTareas {
+        id: id_grupo,
+        tareas: t,
+        cancelacion_solicitada: falso,
+        max_paralelismo: max_concurrencia,
+        errores: errs
+    };
+}
+funcion GrupoTareas task_group_new(entero max_concurrency = 8, texto group_id = "task_nursery") {
+    retornar grupo_tareas_crear(max_concurrency, group_id);
+}
+
+// ── 2. Lanzar Tarea Hija Vinculada al Ámbito ──────────────────────────
+
+funcion GrupoTareas grupo_tareas_lanzar(GrupoTareas g, texto nombre_tarea, texto payload = "") {
+    si g.cancelacion_solicitada {
+        retornar g; // No lanza si el grupo fue cancelado
+    }
+    
+    lista<TareaHija> ts = g.tareas;
+    texto tid = "tarea_" + a_texto(largo(ts) + 1);
+    
+    ts.agregar(TareaHija {
+        id: tid,
+        nombre: nombre_tarea,
+        cancelada: falso,
+        completada: verdadero, // Procesada dentro del ámbito
+        resultado: "PROCESADO_OK: " + payload
+    });
+    
+    g.tareas = ts;
+    retornar g;
+}
+funcion GrupoTareas task_group_spawn(GrupoTareas g, texto task_name, texto payload = "") {
+    retornar grupo_tareas_lanzar(g, task_name, payload);
+}
+
+// ── 3. Esperar Todas las Tareas (Join All with Error Propagation) ─────
+
+funcion GrupoTareas grupo_tareas_esperar_todas(GrupoTareas g) {
+    // Si alguna tarea falló, propaga la cancelación a todas las hijas en cascada
+    si largo(g.errores) > 0 {
+        retornar grupo_tareas_cancelar_cascada(g);
+    }
+    retornar g;
+}
+funcion GrupoTareas task_group_join_all(GrupoTareas g) {
+    retornar grupo_tareas_esperar_todas(g);
+}
+
+// ── 4. Cancelación en Cascada (Zero Orphan Tasks) ────────────────────
+
+funcion GrupoTareas grupo_tareas_cancelar_cascada(GrupoTareas g) {
+    g.cancelacion_solicitada = verdadero;
+    lista<TareaHija> ts = g.tareas;
+    
+    para (entero i = 0; i < largo(ts); i = i + 1) {
+        TareaHija t = ts[i];
+        t.cancelada = verdadero;
+        ts[i] = t;
+    }
+    
+    g.tareas = ts;
+    retornar g;
+}
+funcion GrupoTareas task_group_cancel_all(GrupoTareas g) {
+    retornar grupo_tareas_cancelar_cascada(g);
+}
+
+funcion entero grupo_tareas_conteo(GrupoTareas g) {
+    retornar largo(g.tareas);
+}

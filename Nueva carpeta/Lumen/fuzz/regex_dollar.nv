@@ -1,0 +1,5 @@
+funcion vacio main() {
+    imprimir(__regex_reemplazar("mundo", "Hola mundo", "Lumen"));
+    imprimir(__regex_reemplazar("(\\w+)@(\\w+)", "user@dom", "$2/$1"));
+    imprimir(__regex_reemplazar("a+", "baaad", "[${0}]"));
+}

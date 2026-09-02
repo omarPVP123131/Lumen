@@ -1,0 +1,106 @@
+// ==========================================
+// graficos_charts_sr.nv — Charts (intermediate)
+// Tests: line interpolation, legend layout, color palette
+// Uso: lumen run -L stdlib/ examples/sr/graficos_charts_sr.nv
+// ==========================================
+
+imprimir("=== Graficos Charts SR: Interpolation & Layout ===");
+
+// ── Ej 1: Line Chart Interpolation ──
+// Ej 1: Linear interpolation between data points
+imprimir("--- Ej 1: Interpolacion de Lineas ---");
+funcion lista<lista<numero>> interpolar_linea(lista<numero> datos, entero pasos_extra) {
+    lista<lista<numero>> pts = [];
+    entero i = 0;
+    mientras i < largo(datos) - 1 {
+        numero y1 = datos[i];
+        numero y2 = datos[i + 1];
+        entero s = 0;
+        mientras s < pasos_extra + 1 {
+            numero t = (s como numero) / ((pasos_extra + 1) como numero);
+            numero x = (i como numero) + t;
+            numero y = y1 + (y2 - y1) * t;
+            pts.agregar([x, y]);
+            s = s + 1;
+        }
+        i = i + 1;
+    }
+    retornar pts;
+}
+lista<numero> serie = [10.0, 25.0, 15.0, 30.0, 20.0, 35.0];
+lista<lista<numero>> interpolados = interpolar_linea(serie, 2);
+imprimir("Serie original: 10, 25, 15, 30, 20, 35");
+imprimir("Puntos interpolados (", largo(interpolados), " puntos):");
+entero i = 0;
+mientras i < largo(interpolados) {
+    imprimir("  (", interpolados[i][0], ", ", interpolados[i][1], ")");
+    i = i + 1;
+}
+
+// ── Ej 2: Legend Layout Calculator ──
+// Ej 2: Calculate legend position and size
+imprimir("--- Ej 2: Calculo de Layout de Leyenda ---");
+funcion entero ancho_leyenda(lista<texto> nombres) {
+    entero max_w = 0;
+    entero i = 0;
+    mientras i < largo(nombres) {
+        entero w = nombres[i].largo() * 6 + 20;  // 6px/char + color swatch
+        si w > max_w { max_w = i; }
+        i = i + 1;
+    }
+    si max_w < largo(nombres) { max_w = nombres[max_w].largo() * 6 + 20; }
+    retornar max_w;
+}
+funcion entero alto_leyenda(entero num_items) {
+    retornar num_items * 14 + 4;  // 14px per item + padding
+}
+lista<texto> series_nombres = ["Ventas", "Gastos", "Beneficio"];
+imprimir("Leyenda con ", largo(series_nombres), " series:");
+imprimir("  Ancho: ", ancho_leyenda(series_nombres), "px");
+imprimir("  Alto:  ", alto_leyenda(largo(series_nombres)), "px");
+// Placement: top-right corner
+imprimir("  Posicion sugerida: esquina superior derecha");
+
+// ── Ej 3: Color Palette Generator ──
+// Ej 3: Generate distinct colors for multi-series charts
+imprimir("--- Ej 3: Generador de Paleta de Colores ---");
+funcion lista<lista<entero>> generar_paleta(entero n) {
+    lista<lista<entero>> paleta = [];
+    entero i = 0;
+    mientras i < n {
+        // Spread hues evenly
+        entero hue = (i * 255) / n;
+        entero r = 0;
+        entero g = 0;
+        entero b = 0;
+        si hue < 85 {
+            r = (hue * 3);
+            g = 255 - (hue * 3);
+            b = 0;
+        }
+        si hue > 84 { si hue < 170 {
+            entero h2 = hue - 85;
+            r = 255 - (h2 * 3);
+            g = 0;
+            b = (h2 * 3);
+        } }
+        si hue > 169 {
+            entero h3 = hue - 170;
+            r = 0;
+            g = (h3 * 3);
+            b = 255 - (h3 * 3);
+        }
+        paleta.agregar([r, g, b]);
+        i = i + 1;
+    }
+    retornar paleta;
+}
+lista<lista<entero>> paleta = generar_paleta(6);
+imprimir("Paleta de 6 colores distintos:");
+i = 0;
+mientras i < largo(paleta) {
+    imprimir("  Serie ", i + 1, ": rgb(", paleta[i][0], ",", paleta[i][1], ",", paleta[i][2], ")");
+    i = i + 1;
+}
+
+imprimir("--- FIN GRAFICOS CHARTS SR ---");

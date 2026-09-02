@@ -1,0 +1,17 @@
+[package]
+name = "lumen-repl"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "REPL interactivo para el lenguaje LÚMEN — bucle lectura-evaluación-impresión"
+keywords = ["lumen", "language", "repl", "interactive", "educational"]
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
+lumen-codegen = { path = "../lumen-codegen" }
+lumen-vm = { path = "../lumen-vm" }

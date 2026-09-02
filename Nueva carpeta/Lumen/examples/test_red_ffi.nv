@@ -1,0 +1,17 @@
+// Test de red.nv via HTTP - API actual
+importar "red.nv";
+// Headless/CI guard — test de red, omitido en CI (requiere red/httpbin)
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — test de red omitido");
+    retornar;
+}
+
+imprimir("=== Red Test via FFI ===");
+
+resultado<texto, texto> resp = red_http_obtener("http://example.com/");
+imprimir("resp: ", resp);
+
+imprimir("--- FIN ---");

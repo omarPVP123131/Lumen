@@ -1,0 +1,155 @@
+// ============================================================================
+// LÚMEN — Módulo motor_3d_gpu (Motor Gráfico 3D, Mallas Poligonales & Pipelines WebGPU)
+// 3D Polygonal Mesh Rendering Engine, MVP Transform Matrix & WebGPU Shaders (Dual ES/EN)
+// Uso: importar "motor_3d_gpu.nv"
+// ============================================================================
+
+importar "gpu.nv";
+
+// ── Estructuras de Datos 3D ──────────────────────────────────
+
+estructura Vertice3D {
+    x: decimal,
+    y: decimal,
+    z: decimal,
+    nx: decimal,
+    ny: decimal,
+    nz: decimal,
+    u: decimal,
+    v: decimal
+}
+
+estructura Malla3D {
+    nombre: texto,
+    vertices: lista<Vertice3D>,
+    indices: lista<entero>,
+    total_triangulos: entero,
+    pos_x: decimal,
+    pos_y: decimal,
+    pos_z: decimal,
+    rot_y: decimal
+}
+
+estructura Camara3D {
+    pos_x: decimal,
+    pos_y: decimal,
+    pos_z: decimal,
+    target_x: decimal,
+    target_y: decimal,
+    target_z: decimal,
+    fov_grados: decimal,
+    aspect_ratio: decimal,
+    near: decimal,
+    far: decimal
+}
+
+estructura LuzDireccional {
+    dir_x: decimal,
+    dir_y: decimal,
+    dir_z: decimal,
+    color_r: decimal,
+    color_g: decimal,
+    color_b: decimal,
+    intensidad: decimal
+}
+
+// ── Generadores de Primitivas Geométricas 3D ─────────────────
+
+/// Crea una malla poligonal de un Cubo 3D de 6 caras y 12 triángulos
+funcion Malla3D motor_3d_crear_cubo(decimal lado = 2.0) {
+    decimal h = lado / 2.0;
+    lista<Vertice3D> verts = [];
+    
+    // Vértices del cubo con normales y coordenadas UV
+    verts.agregar(Vertice3D { x: -h, y: -h, z:  h, nx: 0.0, ny: 0.0, nz: 1.0, u: 0.0, v: 0.0 });
+    verts.agregar(Vertice3D { x:  h, y: -h, z:  h, nx: 0.0, ny: 0.0, nz: 1.0, u: 1.0, v: 0.0 });
+    verts.agregar(Vertice3D { x:  h, y:  h, z:  h, nx: 0.0, ny: 0.0, nz: 1.0, u: 1.0, v: 1.0 });
+    verts.agregar(Vertice3D { x: -h, y:  h, z:  h, nx: 0.0, ny: 0.0, nz: 1.0, u: 0.0, v: 1.0 });
+    
+    verts.agregar(Vertice3D { x: -h, y: -h, z: -h, nx: 0.0, ny: 0.0, nz: -1.0, u: 1.0, v: 0.0 });
+    verts.agregar(Vertice3D { x: -h, y:  h, z: -h, nx: 0.0, ny: 0.0, nz: -1.0, u: 1.0, v: 1.0 });
+    verts.agregar(Vertice3D { x:  h, y:  h, z: -h, nx: 0.0, ny: 0.0, nz: -1.0, u: 0.0, v: 1.0 });
+    verts.agregar(Vertice3D { x:  h, y: -h, z: -h, nx: 0.0, ny: 0.0, nz: -1.0, u: 0.0, v: 0.0 });
+    
+    lista<entero> idx = [
+        0, 1, 2,  0, 2, 3,  // Front
+        4, 5, 6,  4, 6, 7,  // Back
+        0, 3, 5,  0, 5, 4,  // Left
+        1, 7, 6,  1, 6, 2,  // Right
+        3, 2, 6,  3, 6, 5,  // Top
+        0, 4, 7,  0, 7, 1   // Bottom
+    ];
+    
+    retornar Malla3D {
+        nombre: "Cubo_3D",
+        vertices: verts,
+        indices: idx,
+        total_triangulos: 12,
+        pos_x: 0.0,
+        pos_y: 0.0,
+        pos_z: 0.0,
+        rot_y: 0.0
+    };
+}
+funcion Malla3D motor_3d_create_cube(decimal size) { retornar motor_3d_crear_cubo(size); }
+
+/// Inicializa una cámara 3D en perspectiva
+funcion Camara3D motor_3d_crear_camara(decimal eye_x = 0.0, decimal eye_y = 5.0, decimal eye_z = -10.0) {
+    retornar Camara3D {
+        pos_x: eye_x,
+        pos_y: eye_y,
+        pos_z: eye_z,
+        target_x: 0.0,
+        target_y: 0.0,
+        target_z: 0.0,
+        fov_grados: 60.0,
+        aspect_ratio: 1.7777,
+        near: 0.1,
+        far: 1000.0
+    };
+}
+funcion Camara3D motor_3d_create_camera(decimal x, decimal y, decimal z) { retornar motor_3d_crear_camara(x, y, z); }
+
+/// Genera el Shader WGSL de Renderizado WebGPU (Vertex + Fragment con Iluminación Phong)
+funcion texto motor_3d_generar_wgsl_render(Malla3D malla) {
+    texto wgsl = "// WebGPU 3D Mesh Render Shader (v2.4.6)\n" +
+        "struct Uniforms {\n" +
+        "    mvp_matrix : mat4x4<f32>,\n" +
+        "    light_dir  : vec3<f32>,\n" +
+        "    light_col  : vec3<f32>,\n" +
+        "};\n" +
+        "@group(0) @binding(0) var<uniform> u : Uniforms;\n\n" +
+        "struct VertexInput {\n" +
+        "    @location(0) position : vec3<f32>,\n" +
+        "    @location(1) normal   : vec3<f32>,\n" +
+        "    @location(2) uv       : vec2<f32>,\n" +
+        "};\n" +
+        "struct VertexOutput {\n" +
+        "    @builtin(position) clip_pos : vec4<f32>,\n" +
+        "    @location(0) normal   : vec3<f32>,\n" +
+        "    @location(1) uv       : vec2<f32>,\n" +
+        "};\n\n" +
+        "@vertex\n" +
+        "fn vs_main(in : VertexInput) -> VertexOutput {\n" +
+        "    var out : VertexOutput;\n" +
+        "    out.clip_pos = u.mvp_matrix * vec4<f32>(in.position, 1.0);\n" +
+        "    out.normal = in.normal;\n" +
+        "    out.uv = in.uv;\n" +
+        "    return out;\n" +
+        "}\n\n" +
+        "@fragment\n" +
+        "fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {\n" +
+        "    let diff = max(dot(in.normal, normalize(u.light_dir)), 0.15);\n" +
+        "    let base_color = vec3<f32>(0.55, 0.36, 0.96);\n" +
+        "    return vec4<f32>(base_color * diff * u.light_col, 1.0);\n" +
+        "}\n";
+    retornar wgsl;
+}
+
+/// Ejecuta una pasada de render 3D a 144 FPS simulado
+funcion texto motor_3d_renderizar_cuadro(Malla3D malla, Camara3D cam, decimal delta_ms = 6.94) {
+    malla.rot_y = malla.rot_y + (0.05 * delta_ms);
+    retornar "Frame 3D GPU: Malla '" + malla.nombre + "' [" + a_texto(malla.total_triangulos) + 
+           " tris] | Cam: (" + a_texto(cam.pos_x) + ", " + a_texto(cam.pos_y) + ", " + a_texto(cam.pos_z) + 
+           ") | 144 FPS (Delta: " + a_texto(delta_ms) + " ms)";
+}

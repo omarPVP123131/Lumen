@@ -1,0 +1,21 @@
+importar ingles;
+
+// Test: enums, match exhaustivo + guards
+enum Color { Rojo, Verde, Azul }
+
+Color c = Color::Rojo;
+entero brillo = 80;
+
+texto desc = "?";
+elegir (c) {
+    caso Color::Rojo si brillo > 50: { desc = "rojo brillante"; }
+    caso Color::Rojo: { desc = "rojo"; }
+    caso Color::Verde: { desc = "verde"; }
+    defecto: { desc = "otro"; }
+}
+imprimir(desc);
+
+// Enums con datos — acceso directo
+enum Forma { Circulo(decimal), Punto }
+Forma f = Forma::Circulo(5.0);
+imprimir("Forma creada");

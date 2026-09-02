@@ -1,0 +1,8 @@
+importar ingles;
+
+function integer suma(integer a, integer b) {
+    return a + b;
+}
+
+integer res = suma(3, 7);
+print(res);

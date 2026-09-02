@@ -1,0 +1,23 @@
+importar ingles;
+
+function integer contar_primos(integer limite) {
+    integer cuenta = 0;
+    integer num = 2;
+    while (num <= limite) {
+        boolean es_primo = true;
+        integer div = 2;
+        while (div * div <= num) {
+            if (num % div == 0) {
+                es_primo = false;
+            }
+            div = div + 1;
+        }
+        if (es_primo) {
+            cuenta = cuenta + 1;
+        }
+        num = num + 1;
+    }
+    return cuenta;
+}
+
+print(contar_primos(30));

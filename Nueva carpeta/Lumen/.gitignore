@@ -1,0 +1,242 @@
+# ============================================================================
+# LÚMEN — MASTER .gitignore (v3.5.7) — Multiplataforma
+# Producción, CI/CD, benchmarks, WASM, Android/Termux, macOS, Windows, Linux
+# ============================================================================
+
+# ── 1. RUST & CARGO ───────────────────────────────────────────────────────
+# target/ cubre cualquier nivel (raíz, crates/*, etc.) — dedup de /target/ + **/target/
+target/
+**/*.rs.bk
+Cargo.lock.bak
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+# coverage
+coverage/
+coverage.json
+lcov.info
+*.lcov
+target/coverage/
+target/pre-vuelo-report.json
+target/pre-commit-report.json
+
+# ── 2. LÚMEN BYTECODE & PAQUETES ──────────────────────────────────────────
+*.nvc
+*.nva
+*.lmp
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+*.zip
+*.7z
+*.rar
+*.pkg
+*.dmg
+*.deb
+*.rpm
+*.pkg.tar.zst
+*.apk
+*.aab
+*.dex
+
+# ── 3. BINARIOS NATIVOS ───────────────────────────────────────────────────
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.msi
+*.msix
+*.appx
+*.elf
+*.bin
+*.out
+*.so
+*.so.*
+*.a
+*.o
+*.obj
+*.appimage
+*.snap
+*.flatpak
+*.dylib
+*.framework/
+*.dSYM/
+*.ipa
+
+# ── 4. RUNTIME LÚMEN, CACHÉ Y REGISTRO ────────────────────────────────────
+.lumen/
+lumen_cache/
+.lumen_cache/
+.lumen_registry/
+.registry_cache/
+lumen_serve.log.json
+target/lumen_serve.log.json
+credentials.json
+.credentials.json
+
+# ── 5. BENCHMARKS — BINARIOS Y ARTEFACTOS GENERADOS ───────────────────────
+# Binarios compilados (AOT-C / Cranelift / LLVM) — nunca versionar
+benchmarks/results/exe_*
+benchmarks/results/exe_*.exe
+benchmarks/results/bench_*
+benchmarks/results/bench_*.exe
+# IR / runtime C generado por --llvm (se puede regenerar)
+# Nota: actualmente trackeados en git; si se quieren des-trackear, hacer git rm --cached
+# benchmarks/lumen/*.ll
+# benchmarks/lumen/*.llvm_rt.c
+# Binarios temporales de stdlib/compiler y ejemplos
+benchmarks/lumen/*.nvc
+stdlib/compiler/bench_fib
+stdlib/compiler/bench_out.nvc
+benchmarks_output/
+bench_fib
+
+# ── 6. WASM / NODE / WEB ──────────────────────────────────────────────────
+crates/lumen-wasm/pkg/
+crates/lumen-wasm/target/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.turbo/
+.vercel/
+.next/
+.nuxt/
+dist/
+build/
+out/
+__pycache__/
+*.pyc
+*.pyo
+
+# ── 7. ANDROID / TERMUX / NDK ─────────────────────────────────────────────
+.gradle/
+local.properties
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+captures/
+.cxx/
+android_build/
+gen/
+
+# ── 8. APPLE (macOS / iOS / Xcode) ────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+*.xcuserstate
+project.xcworkspace/
+xcuserdata/
+DerivedData/
+Pods/
+
+# ── 9. WINDOWS OS ─────────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msm
+*.msp
+
+# ── 10. LINUX / UNIX ──────────────────────────────────────────────────────
+*~
+.directory
+.fuse_hidden*
+.nfs*
+core
+core.*
+vgcore.*
+
+# ── 11. IDEs Y EDITORES ───────────────────────────────────────────────────
+# VS Code — conservar configs compartidas del proyecto
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+# JetBrains
+.idea/
+*.iml
+# Visual Studio
+.vs/
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.sln
+# Otros editores
+.zed/
+.fleet/
+.opencode/
+*.swp
+*.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
+
+# ── 12. TESTING, LOGS Y TEMPORALES ────────────────────────────────────────
+*.log
+*.tmp
+tmp/
+temp/
+# artefactos de tests stdlib / examples (dedup)
+3,0,0.txt
+__test_*.txt
+__test_*.cfg
+__test_*.csv
+__test_*.log
+app_real.log
+destino_real.txt
+lexcmp_edge.txt
+nul
+part_a.txt
+part_b.txt
+source_real.txt
+stream_data_real.txt
+temp_log_real.txt
+temp_rot_real.txt*
+test.db
+test_async.txt
+test_big_sr.txt
+test_buffer_sr.csv
+test_ffi_io.txt
+test_jr_*.txt
+test_salida.txt
+test_salida_servidor.txt
+entrada_vm.txt
+target.txt
+fuego_tmp_err.txt
+fuego_tmp_out.txt
+*.tmp.nv
+*.temp.c
+# reportes legacy (ahora en docs/informes/)
+reports/
+
+# ── 13. FUZZING ───────────────────────────────────────────────────────────
+fuzz/corpus/
+fuzz/artifacts/
+crates/lumen-vm/fuzz/corpus/
+crates/lumen-vm/fuzz/artifacts/
+
+# ── 14. SECRETOS Y ENV ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.keystore
+id_rsa
+id_ed25519
+
+# Showcase wasm: paquete GENERADO por wasm-bindgen (no versionar)
+crates/lumen-wasm/web/showcase/pkg/

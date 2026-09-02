@@ -1,0 +1,22 @@
+// Stress de hilos v3.5.17: 8 hilos con argumento de texto + entero.
+// Determinista: cada hilo i devuelve f(i), se suman los join.
+funcion entero mezcla(texto etiqueta, entero n) {
+    sea acc = n * n;
+    entero i = 0;
+    mientras (i < 20000) {
+        acc = acc + largo(etiqueta) + n;
+        i = i + 1;
+    }
+    retornar acc + largo(etiqueta);
+}
+
+sea h0 = __hilo_lanzar("mezcla", "hilo-cero", 1);
+sea h1 = __hilo_lanzar("mezcla", "hilo-uno", 2);
+sea h2 = __hilo_lanzar("mezcla", "hilo-dos", 3);
+sea h3 = __hilo_lanzar("mezcla", "hilo-tres", 4);
+sea h4 = __hilo_lanzar("mezcla", "hilo-cuatro", 5);
+sea h5 = __hilo_lanzar("mezcla", "hilo-cinco", 6);
+sea h6 = __hilo_lanzar("mezcla", "hilo-seis", 7);
+sea h7 = __hilo_lanzar("mezcla", "hilo-siete", 8);
+sea total = __hilo_esperar(h0) + __hilo_esperar(h1) + __hilo_esperar(h2) + __hilo_esperar(h3) + __hilo_esperar(h4) + __hilo_esperar(h5) + __hilo_esperar(h6) + __hilo_esperar(h7);
+imprimir("STRESS_TOTAL=" + total);

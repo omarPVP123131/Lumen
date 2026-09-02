@@ -1,0 +1,21 @@
+// STRESS-02: errores aritméticos capturables con intentar/atrapar
+intentar {
+    entero x = 1 / 0;
+} atrapar (e) {
+    imprimir("div0 capturado");
+}
+intentar {
+    entero y = 5 % 0;
+} atrapar (e2) {
+    imprimir("mod0 capturado");
+}
+intentar {
+    decimal nan = 0.0 / 0.0;
+    imprimir("nan: ", nan);
+} atrapar (e3) {
+    imprimir("float div0 capturado");
+}
+imprimir("wrap+: ", 9223372036854775807 + 1);
+decimal inf = 1.0e308 * 10.0;
+imprimir("inf: ", inf);
+imprimir("stress02_ok");

@@ -1,0 +1,93 @@
+// ==========================================
+// tui_temas_sr.nv — TUI Themes (intermediate)
+// Tests: theme switch, contrast check, RGB conversion
+// Uso: lumen run -L stdlib/ examples/sr/tui_temas_sr.nv
+// ==========================================
+
+imprimir("=== TUI Temas SR: Theme Switching ===");
+
+// ── Ej 1: Theme Switcher ──
+// Ej 1: Switch between themes and compare
+imprimir("--- Ej 1: Cambio de Temas ---");
+funcion lista<entero> tema_claro() {
+    retornar [231, 16, 33, 20, 75, 16, 250, 16, 196, 34, 214, 33];
+}
+funcion lista<entero> tema_oscuro() {
+    retornar [0, 255, 27, 214, 99, 231, 235, 255, 196, 46, 214, 51];
+}
+funcion lista<entero> tema_alto_contraste() {
+    retornar [0, 255, 255, 226, 51, 0, 255, 0, 196, 46, 226, 51];
+}
+// Compare themes
+funcion entero contar_diffs(lista<entero> t1, lista<entero> t2) {
+    entero diffs = 0;
+    entero i = 0;
+    mientras i < largo(t1) {
+        si t1[i] - t2[i] != 0 { diffs = diffs + 1; }
+        i = i + 1;
+    }
+    retornar diffs;
+}
+imprimir("Claro vs Oscuro: ", contar_diffs(tema_claro(), tema_oscuro()), " diferencias");
+imprimir("Oscuro vs AltoContraste: ", contar_diffs(tema_oscuro(), tema_alto_contraste()), " diferencias");
+// Contrast check
+funcion numero contraste_fondo_texto(lista<entero> t) {
+    entero diff = t[0] - t[1];
+    si diff < 0 { diff = -diff; }
+    retornar diff como numero;
+}
+imprimir("Contraste Claro:          ", contraste_fondo_texto(tema_claro()));
+imprimir("Contraste Oscuro:         ", contraste_fondo_texto(tema_oscuro()));
+imprimir("Contraste Alto Contraste: ", contraste_fondo_texto(tema_alto_contraste()));
+
+// ── Ej 2: Contrast Ratio Calculator ──
+// Ej 2: Calculate approximate contrast between two ANSI colors
+imprimir("--- Ej 2: Calculo de Contraste ---");
+funcion numero ratio_contraste(entero c1, entero c2) {
+    numero l1 = (c1 como numero) / 255.0 + 0.05;
+    numero l2 = (c2 como numero) / 255.0 + 0.05;
+    si l1 > l2 { retornar l1 / l2; }
+    retornar l2 / l1;
+}
+imprimir("Ratios de contraste aproximados:");
+imprimir("  Negro/Blanco: ", ratio_contraste(0, 255));
+imprimir("  Gris/Blanco:  ", ratio_contraste(128, 255));
+imprimir("  Rojo/Negro:   ", ratio_contraste(196, 0));
+
+// ── Ej 3: ANSI to RGB Converter ──
+// Ej 3: Convert ANSI 0-255 to approximate RGB
+imprimir("--- Ej 3: Conversion ANSI a RGB ---");
+funcion lista<entero> ansi_a_rgb(entero code) {
+    si code < 16 {
+        // Use simple mapping for 16 base colors
+        entero r = 0;
+        entero g = 0;
+        entero b = 0;
+        si code % 2 != 0 { r = 128; }
+        si (code / 2) % 2 != 0 { g = 128; }
+        si (code / 4) % 2 != 0 { b = 128; }
+        si code > 7 { r = r + 127; g = g + 127; b = b + 127; }
+        si code == 7 { r = 192; g = 192; b = 192; }
+        si code == 8 { r = 128; g = 128; b = 128; }
+        si code == 15 { r = 255; g = 255; b = 255; }
+        retornar [r, g, b];
+    }
+    si code < 232 {
+        entero c = code - 16;
+        entero r = (c / 36) * 51;
+        entero g = ((c / 6) % 6) * 51;
+        entero b = (c % 6) * 51;
+        retornar [r, g, b];
+    }
+    entero gs = (code - 232) * 10 + 8;
+    retornar [gs, gs, gs];
+}
+lista<entero> colores_test = [0, 1, 9, 16, 196, 231, 255];
+entero ci = 0;
+mientras ci < largo(colores_test) {
+    lista<entero> rgb = ansi_a_rgb(colores_test[ci]);
+    imprimir("  ANSI ", colores_test[ci], " -> RGB(", rgb[0], ",", rgb[1], ",", rgb[2], ")");
+    ci = ci + 1;
+}
+
+imprimir("--- FIN TUI TEMAS SR ---");

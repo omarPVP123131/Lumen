@@ -1,0 +1,17 @@
+// Benchmark — mapa: inserción y lectura de claves
+funcion entero principal() {
+    sea d = __map_nuevo();
+    entero i = 0;
+    mientras (i < 1000) {
+        d = __map_poner(d, i, i * 2);
+        i = i + 1;
+    }
+    numero total = 0;
+    i = 0;
+    mientras (i < 1000) {
+        total = total + __map_obtener(d, i);
+        i = i + 1;
+    }
+    imprimir("maps:" + a_texto(total));
+    retornar 0;
+}

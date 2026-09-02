@@ -1,0 +1,22 @@
+// Regresión v3.5.17: capturas en los 3 backends tras añadir hilos.
+funcion entero contador() {
+    sea n = 10;
+    funcion entero incrementar(entero x) {
+        retornar n + x;
+    }
+    retornar incrementar(3);
+}
+
+funcion entero fabrica() {
+    funcion entero externo() {
+        sea base = 1000;
+        funcion entero interno(entero y) {
+            retornar base + y;
+        }
+        retornar interno(11);
+    }
+    retornar externo();
+}
+
+imprimir("sin-captura:" + contador());
+imprimir("abuelo:" + fabrica());

@@ -1,0 +1,10 @@
+// STRESS-05: Semántica de valores con agregar in-place (b = a; a.agregar no debe afectar b)
+lista<entero> a = [1, 2, 3];
+lista<entero> b = a;
+a.agregar(99);
+si b.largo() == 3 && a.largo() == 4 {
+    imprimir("value_semantics_ok");
+} sino {
+    imprimir("VALUE_SEMANTICS_BROKEN");
+}
+imprimir("stress05_ok");

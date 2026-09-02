@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# ============================================================================
+# LÚMEN — Git Pre-Commit Hook Blindado
+# Valida formato, linter, tests y ejemplos antes de permitir el commit.
+# ============================================================================
+
+echo "🔍 [LÚMEN Hook: pre-commit] 1/4 Verificando formato con cargo fmt..."
+if ! cargo fmt -- --check; then
+    echo "❌ ERROR: cargo fmt detectó archivos no formateados."
+    echo "💡 Ejecuta 'cargo fmt' para corregir automáticamente y vuelve a intentar."
+    exit 1
+fi
+
+echo "🔍 [LÚMEN Hook: pre-commit] 2/4 Ejecutando Clippy Linter (-D warnings)..."
+if ! cargo clippy --all -- -D warnings; then
+    echo "❌ ERROR: cargo clippy detectó advertencias de compilación."
+    exit 1
+fi
+
+echo "🔍 [LÚMEN Hook: pre-commit] 3/4 Ejecutando pruebas unitarias del workspace..."
+if ! cargo test --workspace --quiet; then
+    echo "❌ ERROR: cargo test falló en una o más pruebas."
+    exit 1
+fi
+
+echo "🔍 [LÚMEN Hook: pre-commit] 4/4 Verificando integridad de ejemplos (lumen check)..."
+if ! cargo run --bin lumen -- check examples >/dev/null 2>&1; then
+    echo "❌ ERROR: lumen check detectó errores en los ejemplos."
+    exit 1
+fi
+
+echo "✅ [LÚMEN Hook: pre-commit] ¡Todos los checks de calidad pasaron con 100% de éxito!"
+exit 0

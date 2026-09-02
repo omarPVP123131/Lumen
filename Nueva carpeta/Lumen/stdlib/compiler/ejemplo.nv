@@ -1,0 +1,2 @@
+entero x = 42;
+imprimir(x);

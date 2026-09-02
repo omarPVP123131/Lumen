@@ -1,0 +1,16 @@
+// Benchmark — enums: construcción + elegir en bucle
+enum Op { Suma(entero, entero), Nada }
+funcion entero principal() {
+    entero acc = 0;
+    entero i = 0;
+    mientras (i < 100000) {
+        Op o = Op::Suma(i, i + 1);
+        elegir (o) {
+            caso Op::Suma(a, b): acc = acc + a + b;
+            caso Op::Nada: acc = acc + 1;
+        }
+        i = i + 1;
+    }
+    imprimir("enums:" + a_texto(acc));
+    retornar 0;
+}

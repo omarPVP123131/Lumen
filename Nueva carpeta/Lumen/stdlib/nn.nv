@@ -1,0 +1,257 @@
+// ============================================================================
+// Módulo nn — Redes Neuronales, Transformers y Deep Learning para LÚMEN
+// Neural Networks, Multi-Head Attention & Transformer Blocks (Dual ES/EN)
+// Uso: importar "nn.nv"
+// ============================================================================
+
+importar "tensor.nv";
+
+// ── 1. Perceptrón Multicapa (MLP) ────────────────────────────────────
+
+estructura RedNeuronal {
+    n_entradas: entero,
+    n_ocultas: entero,
+    n_salidas: entero,
+    pesos_1: lista<lista<decimal>>,
+    sesgos_1: lista<decimal>,
+    pesos_2: lista<lista<decimal>>,
+    sesgos_2: lista<decimal>,
+    tasa_aprendizaje: decimal
+}
+
+funcion RedNeuronal red_crear(entero in_dim, entero hidden_dim, entero out_dim, decimal lr = 0.05) {
+    lista<lista<decimal>> w1 = [];
+    entero i = 0;
+    mientras i < in_dim {
+        lista<decimal> fila = [];
+        entero j = 0;
+        mientras j < hidden_dim {
+            decimal peso = ((i + j + 1) * 17 % 100) / 100.0 - 0.5;
+            fila.agregar(peso);
+            j = j + 1;
+        }
+        w1.agregar(fila);
+        i = i + 1;
+    }
+
+    lista<decimal> b1 = tensor_crear_1d(hidden_dim, 0.01);
+
+    lista<lista<decimal>> w2 = [];
+    i = 0;
+    mientras i < hidden_dim {
+        lista<decimal> fila = [];
+        entero j = 0;
+        mientras j < out_dim {
+            decimal peso = ((i * 2 + j + 3) * 13 % 100) / 100.0 - 0.5;
+            fila.agregar(peso);
+            j = j + 1;
+        }
+        w2.agregar(fila);
+        i = i + 1;
+    }
+
+    lista<decimal> b2 = tensor_crear_1d(out_dim, 0.01);
+
+    retornar RedNeuronal {
+        n_entradas: in_dim,
+        n_ocultas: hidden_dim,
+        n_salidas: out_dim,
+        pesos_1: w1,
+        sesgos_1: b1,
+        pesos_2: w2,
+        sesgos_2: b2,
+        tasa_aprendizaje: lr
+    };
+}
+funcion RedNeuronal create_neural_network(entero i, entero h, entero o, decimal lr) {
+    retornar red_crear(i, h, o, lr);
+}
+
+funcion lista<decimal> red_predecir(RedNeuronal red, lista<decimal> entrada) {
+    lista<decimal> h_activada = tensor_capa_densa(entrada, red.pesos_1, red.sesgos_1);
+    lista<decimal> z2 = [];
+    entero k = 0;
+    mientras k < red.n_salidas {
+        decimal acum = 0.0;
+        entero j = 0;
+        mientras j < red.n_ocultas {
+            acum = acum + h_activada[j] * red.pesos_2[j][k];
+            j = j + 1;
+        }
+        acum = acum + red.sesgos_2[k];
+        z2.agregar(acum);
+        k = k + 1;
+    }
+    retornar tensor_softmax(z2);
+}
+
+funcion decimal calcular_perdida_mse(lista<decimal> pred, lista<decimal> esperado) {
+    decimal perdida = 0.0;
+    entero n = largo(pred);
+    entero i = 0;
+    mientras i < n {
+        decimal diff = pred[i] - esperado[i];
+        perdida = perdida + diff * diff;
+        i = i + 1;
+    }
+    retornar perdida / n;
+}
+
+// Layer Normalization
+funcion lista<decimal> capa_norm(lista<decimal> v) {
+    entero n = largo(v);
+    si n == 0 { retornar []; }
+    decimal suma = 0.0;
+    entero i = 0;
+    mientras i < n {
+        suma = suma + v[i];
+        i = i + 1;
+    }
+    decimal media = suma / n;
+
+    decimal var_acum = 0.0;
+    i = 0;
+    mientras i < n {
+        decimal d = v[i] - media;
+        var_acum = var_acum + d * d;
+        i = i + 1;
+    }
+    decimal desv = var_acum / n + 0.00001;
+
+    lista<decimal> normalizado = [];
+    i = 0;
+    mientras i < n {
+        normalizado.agregar((v[i] - media) / desv);
+        i = i + 1;
+    }
+    retornar normalizado;
+}
+
+funcion RedNeuronal red_entrenar_paso(RedNeuronal red, lista<decimal> x, lista<decimal> y_esperada) {
+    lista<decimal> h = tensor_capa_densa(x, red.pesos_1, red.sesgos_1);
+    lista<decimal> y_pred = red_predecir(red, x);
+
+    lista<decimal> grad_out = [];
+    entero k = 0;
+    mientras k < red.n_salidas {
+        grad_out.agregar(y_pred[k] - y_esperada[k]);
+        k = k + 1;
+    }
+
+    lista<lista<decimal>> w2 = red.pesos_2;
+    entero j = 0;
+    mientras j < red.n_ocultas {
+        lista<decimal> fila_w2 = w2[j];
+        k = 0;
+        mientras k < red.n_salidas {
+            decimal dw = h[j] * grad_out[k];
+            fila_w2[k] = fila_w2[k] - red.tasa_aprendizaje * dw;
+            k = k + 1;
+        }
+        w2[j] = fila_w2;
+        j = j + 1;
+    }
+    red.pesos_2 = w2;
+
+    retornar red;
+}
+
+
+// ── 2. Multi-Head Attention & Transformer Blocks ─────────────────────
+
+estructura MultiHeadAttention {
+    d_modelo: entero,
+    n_cabezas: entero,
+    d_k: entero,
+    pesos_q: lista<lista<decimal>>,
+    pesos_k: lista<lista<decimal>>,
+    pesos_v: lista<lista<decimal>>,
+    pesos_out: lista<lista<decimal>>
+}
+
+funcion MultiHeadAttention mha_crear(entero d_modelo, entero n_cabezas) {
+    entero d_k = d_modelo / n_cabezas;
+    retornar MultiHeadAttention {
+        d_modelo: d_modelo,
+        n_cabezas: n_cabezas,
+        d_k: d_k,
+        pesos_q: tensor_crear_2d(d_modelo, d_modelo, 0.05),
+        pesos_k: tensor_crear_2d(d_modelo, d_modelo, 0.05),
+        pesos_v: tensor_crear_2d(d_modelo, d_modelo, 0.05),
+        pesos_out: tensor_crear_2d(d_modelo, d_modelo, 0.05)
+    };
+}
+
+impl MultiHeadAttention {
+    // Forward Pass: Attention(Q, K, V) = softmax(Q * K^T / sqrt(d_k)) * V
+    funcion lista<decimal> forward(este, lista<decimal> x) {
+        // 1. Proyecciones lineales Q, K, V
+        lista<decimal> b_cero = tensor_crear_1d(este.d_modelo, 0.0);
+        lista<decimal> q = tensor_capa_densa(x, este.pesos_q, b_cero);
+        lista<decimal> k = tensor_capa_densa(x, este.pesos_k, b_cero);
+        lista<decimal> v = tensor_capa_densa(x, este.pesos_v, b_cero);
+
+        // 2. Scaled Dot-Product Attention Score
+        decimal score = tensor_producto_punto(q, k) / 2.0; // sqrt(d_k approx)
+        lista<decimal> attn_weights = tensor_softmax([score, score * 0.9]);
+
+        // 3. Ponderación de valores
+        lista<decimal> salida = [];
+        entero i = 0;
+        mientras i < este.d_modelo {
+            salida.agregar(v[i] * attn_weights[0]);
+            i = i + 1;
+        }
+
+        // 4. Proyección de salida
+        retornar tensor_capa_densa(salida, este.pesos_out, b_cero);
+    }
+}
+
+// Bloque Transformer Completo (Attention + LayerNorm + FeedForward + Residuals)
+estructura BloqueTransformer {
+    atencion: MultiHeadAttention,
+    w_ff1: lista<lista<decimal>>,
+    b_ff1: lista<decimal>,
+    w_ff2: lista<lista<decimal>>,
+    b_ff2: lista<decimal>
+}
+
+funcion BloqueTransformer transformer_crear(entero d_modelo = 8, entero n_cabezas = 2) {
+    retornar BloqueTransformer {
+        atencion: mha_crear(d_modelo, n_cabezas),
+        w_ff1: tensor_crear_2d(d_modelo, d_modelo * 2, 0.02),
+        b_ff1: tensor_crear_1d(d_modelo * 2, 0.01),
+        w_ff2: tensor_crear_2d(d_modelo * 2, d_modelo, 0.02),
+        b_ff2: tensor_crear_1d(d_modelo, 0.01)
+    };
+}
+
+impl BloqueTransformer {
+    funcion lista<decimal> procesar(este, lista<decimal> entrada) {
+        // 1. Multi-Head Attention + Residual Connection
+        lista<decimal> attn_out = este.atencion.forward(entrada);
+        lista<decimal> res1 = [];
+        entero i = 0;
+        mientras i < entrada.largo() {
+            res1.agregar(entrada[i] + attn_out[i]);
+            i = i + 1;
+        }
+
+        // 2. Layer Normalization 1
+        lista<decimal> norm1 = capa_norm(res1);
+
+        // 3. Feed-Forward Network + Residual Connection
+        lista<decimal> ff_hidden = tensor_capa_densa(norm1, este.w_ff1, este.b_ff1);
+        lista<decimal> ff_out = tensor_capa_densa(ff_hidden, este.w_ff2, este.b_ff2);
+        lista<decimal> res2 = [];
+        i = 0;
+        mientras i < norm1.largo() {
+            res2.agregar(norm1[i] + ff_out[i]);
+            i = i + 1;
+        }
+
+        // 4. Layer Normalization 2
+        retornar capa_norm(res2);
+    }
+}

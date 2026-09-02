@@ -1,0 +1,275 @@
+// DEMO TEMAS TUI — Demostración interactiva del sistema de temas
+// TUI THEMES DEMO — Interactive demonstration of the theme system
+// Uso: lumen run examples/tui_temas_demo.nv
+// Requiere: terminal interactiva con soporte ANSI
+//
+// Controles:
+//   [1] = Tema predeterminado (Catppuccin)
+//   [2] = Tema claro
+//   [3] = Tema oscuro
+//   [4] = Tema alto contraste
+//   [q/ESC] = Salir
+
+importar "tui_temas.nv";
+importar "tui_core.nv";
+importar "sistema.nv";
+
+// ============================================================
+// CONSTANTES / CONSTANTS
+// ============================================================
+
+entero ANCHO = 70;
+entero ALTO = 20;
+
+// ============================================================
+// FUNCIONES AUXILIARES / HELPER FUNCTIONS
+// ============================================================
+
+/// Repite un texto N veces
+funcion texto _repetir(texto s, entero n) {
+    texto res = "";
+    entero i = 0;
+    mientras i < n {
+        res = res + s;
+        i = i + 1;
+    }
+    retornar res;
+}
+
+/// Obtiene estilo de borde ANSI según config
+funcion texto __borde_h(entero estilo) {
+    si estilo == 0 { retornar "─"; }
+    si estilo == 1 { retornar "─"; }
+    si estilo == 2 { retornar "═"; }
+    si estilo == 3 { retornar "▔"; }
+    retornar "─";
+}
+
+funcion texto __borde_v(entero estilo) {
+    si estilo == 0 { retornar "│"; }
+    si estilo == 1 { retornar "│"; }
+    si estilo == 2 { retornar "║"; }
+    si estilo == 3 { retornar "█"; }
+    retornar "│";
+}
+
+funcion texto __esquina_tl(entero estilo) {
+    si estilo == 0 { retornar "┌"; }
+    si estilo == 1 { retornar "╭"; }
+    si estilo == 2 { retornar "╔"; }
+    si estilo == 3 { retornar "█"; }
+    retornar "┌";
+}
+
+funcion texto __esquina_tr(entero estilo) {
+    si estilo == 0 { retornar "┐"; }
+    si estilo == 1 { retornar "╮"; }
+    si estilo == 2 { retornar "╗"; }
+    si estilo == 3 { retornar "█"; }
+    retornar "┐";
+}
+
+funcion texto __esquina_bl(entero estilo) {
+    si estilo == 0 { retornar "└"; }
+    si estilo == 1 { retornar "╰"; }
+    si estilo == 2 { retornar "╚"; }
+    si estilo == 3 { retornar "█"; }
+    retornar "└";
+}
+
+funcion texto __esquina_br(entero estilo) {
+    si estilo == 0 { retornar "┘"; }
+    si estilo == 1 { retornar "╯"; }
+    si estilo == 2 { retornar "╝"; }
+    si estilo == 3 { retornar "█"; }
+    retornar "┘";
+}
+
+// ============================================================
+// PANTALLA DE DEMO / DEMO SCREEN
+// ============================================================
+
+/// Dibuja la interfaz de demostración con el tema actual
+funcion void dibujar_pantalla() {
+    tui_temas_TemaTUI t = tui_temas_tema_actual();
+
+    // Aplicar colores de fondo y texto base
+    texto fg = "\033[38;5;" + a_texto(t.texto) + "m";
+    texto bg = "\033[48;5;" + a_texto(t.fondo) + "m";
+    texto reset = "\033[0m";
+    tui_core__tc_write(bg + fg);
+
+    // Borde superior
+    texto bh = __borde_h(t.borde_estilo);
+    texto bv = __borde_v(t.borde_estilo);
+    texto tl = __esquina_tl(t.borde_estilo);
+    texto tr = __esquina_tr(t.borde_estilo);
+    texto bl = __esquina_bl(t.borde_estilo);
+    texto br = __esquina_br(t.borde_estilo);
+
+    // Título del tema
+    texto borde_titulo = "\033[38;5;" + a_texto(t.borde) + "m";
+    texto titulo_color = "\033[38;5;" + a_texto(t.titulo) + "m";
+    texto error_color = "\033[38;5;" + a_texto(t.error) + "m";
+    texto exito_color = "\033[38;5;" + a_texto(t.exito) + "m";
+    texto adv_color = "\033[38;5;" + a_texto(t.advertencia) + "m";
+    texto info_color = "\033[38;5;" + a_texto(t.informacion) + "m";
+
+    // Línea 1
+    tui_core__tc_escribir(borde_titulo + tl + bh + bh + bh + bh + bh + bh + bh + bh +
+        bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh +
+        bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh +
+        bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh + bh +
+        bh + bh + bh + bh + bh + bh + bh + bh + tr, 2, 1);
+
+    // Línea 2 - título
+    texto titulo_texto = " " + t.nombre + " ";
+    entero titulo_len = titulo_texto.largo();
+    entero esp_izq = (ANCHO - 2 - titulo_len) / 2;
+    entero esp_der = ANCHO - 2 - titulo_len - esp_izq;
+    tui_core__tc_escribir(borde_titulo + bv + _repetir(" ", esp_izq) +
+        titulo_color + titulo_texto + reset + bg + fg +
+        _repetir(" ", esp_der) + borde_titulo + bv, 2, 2);
+
+    // Línea 3 - separador
+    tui_core__tc_escribir(borde_titulo + tl + _repetir(bh, ANCHO - 2) + tr, 2, 3);
+
+    // Línea 4 - content area (botones de ejemplo)
+    entero ly = 4;
+
+    // Botón normal
+    tui_core__tc_escribir(borde_titulo + bv + "  " +
+        "\033[48;5;" + a_texto(t.boton) + "m" +
+        "\033[38;5;" + a_texto(t.boton_texto) + "m" +
+        "  [1] Predeterminado  " +
+        reset + bg + fg +
+        "  " +
+        "\033[48;5;" + a_texto(t.boton) + "m" +
+        "\033[38;5;" + a_texto(t.boton_texto) + "m" +
+        "  [2] Claro  " +
+        reset + bg + fg +
+        "  " +
+        "\033[48;5;" + a_texto(t.boton) + "m" +
+        "\033[38;5;" + a_texto(t.boton_texto) + "m" +
+        "  [3] Oscuro  " +
+        reset + bg + fg +
+        "  " +
+        "\033[48;5;" + a_texto(t.boton) + "m" +
+        "\033[38;5;" + a_texto(t.boton_texto) + "m" +
+        "  [4] Alto Contraste  " +
+        reset + bg + fg +
+        "  " + borde_titulo + bv, 2, ly);
+
+    ly = ly + 1;
+
+    // Botón seleccionado ejemplo
+    tui_core__tc_escribir(borde_titulo + bv + "  " +
+        "\033[48;5;" + a_texto(t.seleccion) + "m" +
+        "\033[38;5;" + a_texto(t.seleccion_texto) + "m" +
+        "  Botón Seleccionado  " +
+        reset + bg + fg +
+        "        " +
+        "\033[48;5;" + a_texto(t.boton) + "m" +
+        "\033[38;5;" + a_texto(t.boton_texto) + "m" +
+        "  Botón Normal  " +
+        reset + bg + fg +
+        "          " + borde_titulo + bv, 2, ly);
+
+    ly = ly + 1;
+
+    // Mensajes de colores
+    tui_core__tc_escribir(borde_titulo + bv + "  " +
+        error_color + "■ Error" + reset + bg + fg +
+        "    " +
+        exito_color + "■ Éxito" + reset + bg + fg +
+        "    " +
+        adv_color + "■ Advertencia" + reset + bg + fg +
+        "    " +
+        info_color + "■ Información" + reset + bg + fg +
+        "        " + borde_titulo + bv, 2, ly);
+
+    ly = ly + 1;
+
+    // Texto normal de ejemplo
+    tui_core__tc_escribir(borde_titulo + bv + "  Este es un texto de ejemplo con el tema " +
+        titulo_color + t.nombre + reset + bg + fg + "     " + borde_titulo + bv, 2, ly);
+
+    ly = ly + 1;
+
+    // Barra de progreso simulada
+    tui_core__tc_escribir(borde_titulo + bv + "  Progreso: " +
+        info_color + "████████░░" + reset + bg + fg + "  80%          " + borde_titulo + bv, 2, ly);
+
+    ly = ly + 1;
+
+    // Info de tema
+    ly = ly + 1;
+    tui_core__tc_escribir(borde_titulo + bv + "  Tema activo: " +
+        titulo_color + t.nombre + reset + bg + fg +
+        "  |  Estilo borde: " + a_texto(t.borde_estilo) +
+        "  |  Padding: " + a_texto(t.padding) +
+        "      " + borde_titulo + bv, 2, ly);
+
+    ly = ly + 1;
+
+    // Navegación
+    ly = ly + 1;
+    tui_core__tc_escribir(borde_titulo + bv +
+        "  [1-4] Cambiar tema  |  [q/ESC] Salir" +
+        _repetir(" ", 20) + borde_titulo + bv, 2, ly);
+
+    // Borde inferior
+    ly = ALTO - 1;
+    tui_core__tc_escribir(borde_titulo + bl + _repetir(bh, ANCHO - 2) + br, 2, ly);
+
+    // Reset
+    tui_core__tc_write(reset);
+}
+
+// ============================================================
+// INICIALIZACIÓN / INIT
+// ============================================================
+
+imprimir("=== TUI Themes Demo ===");
+// Headless/CI: TUI requiere consola interactiva — en pipe/CI el FFI ReadConsoleInput hace AV 0xC0000005
+texto _ci3 = sistema_env_obtener("CI");
+texto _hl3 = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci3 != "" || _hl3 == "1" {
+    imprimir("Headless/CI detectado — demo TUI omitida (requiere consola interactiva)");
+    retornar;
+}
+imprimir("Iniciando...");
+
+// Inicializar temas
+tui_temas_temas_iniciar();
+
+// Activar raw mode
+entero ok = tui_core__tc_raw(verdadero) como entero;
+si ok == 0 {
+    imprimir("Advertencia: No se pudo activar raw mode");
+}
+
+// Bucle principal
+mientras verdadero {
+    dibujar_pantalla();
+
+    // Leer tecla
+    texto k = tui_core__tc_leer_byte();
+
+    si k == "q" || k == "ESC" { romper; }
+
+    // Cambiar temas
+    si k == "1" { tui_temas_tema_asignar(0); }
+    sino si k == "2" { tui_temas_tema_asignar(1); }
+    sino si k == "3" { tui_temas_tema_asignar(2); }
+    sino si k == "4" { tui_temas_tema_asignar(3); }
+
+    // Pequeña pausa para evitar rebotes (espera pasiva)
+    // leer_byte ya bloquea, pero damos tiempo extra para evitar flicker
+    entero i = 0; mientras i < 10000 { i = i + 1; }
+}
+
+// Restaurar terminal
+tui_core__tc_raw(falso);
+tui_core__tc_limpiar();
+imprimir("TUI Themes Demo finalizada.");

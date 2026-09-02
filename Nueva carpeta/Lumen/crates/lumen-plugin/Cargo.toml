@@ -1,0 +1,17 @@
+[package]
+name = "lumen-plugin"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Sistema de plugins para el compilador LÚMEN — hooks en todas las fases"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }

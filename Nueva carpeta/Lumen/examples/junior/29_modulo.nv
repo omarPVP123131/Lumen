@@ -1,0 +1,6 @@
+importar ingles;
+
+print(10 % 3);
+print(17 % 5);
+print(100 % 7);
+print(3 % 3);

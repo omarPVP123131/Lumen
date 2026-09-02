@@ -1,0 +1,10 @@
+funcion entero trabajo() { retornar 42; }
+funcion vacio main() {
+    sea nombre = "mundo";
+    texto s = f"hola {nombre}!";
+    imprimir(s);
+    sea x = f"{1 + 2}";
+    imprimir(x);
+    sea tid = __tarea_lanzar("trabajo");
+    imprimir(__tarea_esperar(tid));
+}

@@ -1,0 +1,1084 @@
+use crate::error::LexError;
+use crate::token::{Pos, Span, Token, TokenKind};
+
+pub struct Lexer {
+    chars: Vec<char>,
+    pos: usize,
+    line: usize,
+    col: usize,
+    errors: Vec<LexError>,
+}
+
+impl Lexer {
+    pub fn new(source: &str) -> Self {
+        Self {
+            chars: source.chars().collect(),
+            pos: 0,
+            line: 1,
+            col: 1,
+            errors: Vec::new(),
+        }
+    }
+
+    pub fn tokenize(mut self) -> (Vec<Token>, Vec<LexError>) {
+        let mut tokens = Vec::new();
+        loop {
+            self.skip_whitespace();
+            if self.is_eof() {
+                tokens.push(Token::new(
+                    TokenKind::Eof,
+                    Span::new(self.current_pos(), self.current_pos()),
+                ));
+                return (tokens, self.errors);
+            }
+
+            match self.advance() {
+                // Single-line comment
+                Some('/') if self.peek() == Some('/') => {
+                    while let Some(ch) = self.peek() {
+                        if ch == '\n' || ch == '\r' {
+                            break;
+                        }
+                        self.advance();
+                    }
+                }
+                // Block comment
+                Some('/') if self.peek() == Some('*') => {
+                    self.advance();
+                    loop {
+                        match self.advance() {
+                            Some('*') if self.peek() == Some('/') => {
+                                self.advance();
+                                break;
+                            }
+                            Some(_) => {}
+                            None => {
+                                self.errors.push(LexError {
+                                    code: "E003".to_string(),
+                                    message: "Comentario de bloque sin cerrar".to_string(),
+                                    pos: self.current_pos(),
+                                    suggestion: "Agrega '*/' para cerrar el comentario".to_string(),
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+                // String literal
+                Some('"') => {
+                    let start_pos = self.prev_pos();
+                    let mut s = String::new();
+                    loop {
+                        match self.advance() {
+                            Some('"') => break,
+                            Some('\\') => match self.advance() {
+                                Some('n') => s.push('\n'),
+                                Some('t') => s.push('\t'),
+                                Some('r') => s.push('\r'),
+                                Some('"') => s.push('"'),
+                                Some('\\') => s.push('\\'),
+                                Some(ch) => s.push(ch),
+                                None => {
+                                    self.errors.push(LexError {
+                                        code: "E004".to_string(),
+                                        message: "Secuencia de escape incompleta".to_string(),
+                                        pos: self.current_pos(),
+                                        suggestion: "Usa \\n, \\t, \\\" o \\\\".to_string(),
+                                    });
+                                    break;
+                                }
+                            },
+                            Some(ch) => s.push(ch),
+                            None => {
+                                self.errors.push(LexError {
+                                    code: "E002".to_string(),
+                                    message: "String literal sin cerrar".to_string(),
+                                    pos: start_pos,
+                                    suggestion: "Agrega una comilla doble '\"' al final del texto"
+                                        .to_string(),
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    tokens.push(Token::new(
+                        TokenKind::StrLiteral(s),
+                        Span::new(start_pos, self.prev_pos()),
+                    ));
+                }
+                // Operators and delimiters
+                Some('+') => {
+                    if self.peek() == Some('+') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::PlusPlus));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Plus));
+                    }
+                }
+                Some('-') => tokens.push(self.single_token(TokenKind::Minus)),
+                Some('*') => tokens.push(self.single_token(TokenKind::Star)),
+                Some('/') => tokens.push(self.single_token(TokenKind::Slash)),
+                Some('%') => tokens.push(self.single_token(TokenKind::Percent)),
+                Some(';') => tokens.push(self.single_token(TokenKind::Semicolon)),
+                Some(',') => tokens.push(self.single_token(TokenKind::Comma)),
+                Some('(') => tokens.push(self.single_token(TokenKind::LeftParen)),
+                Some(')') => tokens.push(self.single_token(TokenKind::RightParen)),
+                Some('{') => tokens.push(self.single_token(TokenKind::LeftBrace)),
+                Some('}') => tokens.push(self.single_token(TokenKind::RightBrace)),
+                Some('[') => tokens.push(self.single_token(TokenKind::LeftBracket)),
+                Some(']') => tokens.push(self.single_token(TokenKind::RightBracket)),
+                Some('.') => {
+                    if self.peek() == Some('.') {
+                        self.advance();
+                        if self.peek() == Some('=') {
+                            self.advance();
+                            tokens.push(self.double_token(TokenKind::DotDotEqual));
+                        } else {
+                            tokens.push(self.double_token(TokenKind::DotDot));
+                        }
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Dot));
+                    }
+                }
+                Some(':') => {
+                    if self.peek() == Some(':') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::DoubleColon));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Colon));
+                    }
+                }
+                Some('=') => {
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::EqualEqual));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Equal));
+                    }
+                }
+                Some('!') => {
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::BangEqual));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Bang));
+                    }
+                }
+                Some('<') => {
+                    if self.peek() == Some('<') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::ShiftLeft));
+                    } else if self.peek() == Some('=') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::LessEqual));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Less));
+                    }
+                }
+                Some('>') => {
+                    if self.peek() == Some('>') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::ShiftRight));
+                    } else if self.peek() == Some('=') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::GreaterEqual));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Greater));
+                    }
+                }
+                Some('?') => {
+                    if self.peek() == Some('.') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::QuestionDot));
+                    } else if self.peek() == Some(':') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::QuestionColon));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Question));
+                    }
+                }
+                Some('^') => tokens.push(self.single_token(TokenKind::Caret)),
+                Some('~') => tokens.push(self.single_token(TokenKind::Tilde)),
+                Some('&') => {
+                    if self.peek() == Some('&') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::AndAnd));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Ampersand));
+                    }
+                }
+                Some('|') => {
+                    if self.peek() == Some('|') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::OrOr));
+                    } else if self.peek() == Some('>') {
+                        self.advance();
+                        tokens.push(self.double_token(TokenKind::PipeGreater));
+                    } else {
+                        tokens.push(self.single_token(TokenKind::Pipe));
+                    }
+                }
+                Some('f') | Some('F') if self.peek() == Some('"') => {
+                    let start_pos = self.prev_pos();
+                    self.advance(); // consume '"'
+                    let mut s = String::new();
+                    loop {
+                        match self.advance() {
+                            Some('"') => break,
+                            Some('\\') => match self.advance() {
+                                Some('n') => s.push('\n'),
+                                Some('t') => s.push('\t'),
+                                Some('r') => s.push('\r'),
+                                Some('"') => s.push('"'),
+                                Some('\\') => s.push('\\'),
+                                Some(ch) => s.push(ch),
+                                None => {
+                                    self.errors.push(LexError {
+                                        code: "E004".to_string(),
+                                        message: "Secuencia de escape incompleta".to_string(),
+                                        pos: self.current_pos(),
+                                        suggestion: "Usa \\n, \\t, \\\" o \\\\".to_string(),
+                                    });
+                                    break;
+                                }
+                            },
+                            Some(ch) => s.push(ch),
+                            None => {
+                                self.errors.push(LexError {
+                                    code: "E002".to_string(),
+                                    message: "String interpolado f\"...\" sin cerrar".to_string(),
+                                    pos: start_pos,
+                                    suggestion: "Agrega una comilla doble '\"' al final del texto"
+                                        .to_string(),
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    tokens.push(Token::new(
+                        TokenKind::FStrLiteral(s),
+                        Span::new(start_pos, self.prev_pos()),
+                    ));
+                }
+                Some(ch) if ch.is_ascii_digit() => {
+                    let start_pos = self.prev_pos();
+                    let mut num = String::new();
+                    num.push(ch);
+                    let mut is_float = false;
+                    while let Some(next) = self.peek() {
+                        if next.is_ascii_digit() {
+                            num.push(self.advance().unwrap());
+                        } else if next == '.' && !is_float {
+                            // No consumir el punto si es inicio de rango: `1..5` / `1..=5`
+                            if self.peek_n(1) == Some('.') {
+                                break;
+                            }
+                            is_float = true;
+                            num.push(self.advance().unwrap());
+                        } else {
+                            break;
+                        }
+                    }
+                    // Hex literal: 0x8B4513 → decimal value
+                    if num == "0" && matches!(self.peek(), Some('x') | Some('X')) {
+                        self.advance();
+                        let mut hex = String::new();
+                        while let Some(h) = self.peek() {
+                            if h.is_ascii_hexdigit() {
+                                hex.push(self.advance().unwrap());
+                            } else {
+                                break;
+                            }
+                        }
+                        if !hex.is_empty() {
+                            if let Ok(v) = u64::from_str_radix(&hex, 16) {
+                                num = v.to_string();
+                            }
+                        }
+                    }
+                    // Notación científica: 1e5, 1.5E-3, 2.0e+10
+                    // Solo si hay dígito tras 'e'/'E' (+/- opcional) para no romper `3emil`
+                    if matches!(self.peek(), Some('e') | Some('E')) {
+                        let mut exp_ok = false;
+                        if let Some(sign) = self.peek_n(1) {
+                            if sign == '+' || sign == '-' {
+                                if let Some(d) = self.peek_n(2) {
+                                    exp_ok = d.is_ascii_digit();
+                                }
+                            } else if sign.is_ascii_digit() {
+                                exp_ok = true;
+                            }
+                        }
+                        if exp_ok {
+                            num.push(self.advance().unwrap()); // e/E
+                            if matches!(self.peek(), Some('+') | Some('-')) {
+                                num.push(self.advance().unwrap());
+                            }
+                            while let Some(d) = self.peek() {
+                                if d.is_ascii_digit() {
+                                    num.push(self.advance().unwrap());
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    tokens.push(Token::new(
+                        TokenKind::NumLiteral(num),
+                        Span::new(start_pos, self.prev_pos()),
+                    ));
+                }
+                Some(ch) if is_ident_start(ch) => {
+                    let start_pos = self.prev_pos();
+                    let mut ident = String::new();
+                    ident.push(ch);
+                    while let Some(next) = self.peek() {
+                        if is_ident_continue(next) {
+                            ident.push(self.advance().unwrap());
+                        } else {
+                            break;
+                        }
+                    }
+                    let kind = TokenKind::is_keyword(&ident).unwrap_or(TokenKind::Ident(ident));
+                    tokens.push(Token::new(kind, Span::new(start_pos, self.prev_pos())));
+                }
+                Some(ch) => {
+                    self.errors.push(LexError {
+                        code: "E001".to_string(),
+                        message: format!("Caracter inesperado: '{}'", ch),
+                        pos: self.prev_pos(),
+                        suggestion: "Revisa la ortografía del código".to_string(),
+                    });
+                }
+                None => return (tokens, self.errors),
+            }
+        }
+    }
+
+    fn single_token(&self, kind: TokenKind) -> Token {
+        let pos = self.prev_pos();
+        Token::new(kind, Span::new(pos, pos))
+    }
+
+    fn double_token(&self, kind: TokenKind) -> Token {
+        let start = self.prev_pos();
+        let end = self.current_pos();
+        Token::new(kind, Span::new(start, end))
+    }
+
+    fn advance(&mut self) -> Option<char> {
+        let ch = self.chars.get(self.pos).copied();
+        if let Some(c) = ch {
+            self.pos += 1;
+            if c == '\n' {
+                self.line += 1;
+                self.col = 1;
+            } else {
+                self.col += 1;
+            }
+        }
+        ch
+    }
+
+    fn peek(&self) -> Option<char> {
+        self.chars.get(self.pos).copied()
+    }
+
+    fn peek_n(&self, n: usize) -> Option<char> {
+        self.chars.get(self.pos + n).copied()
+    }
+
+    fn is_eof(&self) -> bool {
+        self.pos >= self.chars.len()
+    }
+
+    fn skip_whitespace(&mut self) {
+        while let Some(ch) = self.peek() {
+            if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn current_pos(&self) -> Pos {
+        Pos::new(self.line, self.col)
+    }
+
+    fn prev_pos(&self) -> Pos {
+        let line = self.line;
+        let col = if self.col > 1 { self.col - 1 } else { 1 };
+        Pos::new(line, col)
+    }
+}
+
+fn is_ident_start(ch: char) -> bool {
+    ch.is_ascii_alphabetic() || ch == '_'
+}
+
+fn is_ident_continue(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tokenize(source: &str) -> Vec<TokenKind> {
+        let lexer = Lexer::new(source);
+        let (tokens, errors) = lexer.tokenize();
+        assert!(errors.is_empty(), "Lexer errors: {:?}", errors);
+        tokens.into_iter().map(|t| t.kind).collect()
+    }
+
+    fn tokenize_with_errors(source: &str) -> (Vec<TokenKind>, Vec<LexError>) {
+        let lexer = Lexer::new(source);
+        let (tokens, errors) = lexer.tokenize();
+        (tokens.into_iter().map(|t| t.kind).collect(), errors)
+    }
+
+    #[test]
+    fn test_empty_source() {
+        let kinds = tokenize("");
+        assert_eq!(kinds, vec![TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_whitespace_only() {
+        let kinds = tokenize("   \n  \t  ");
+        assert_eq!(kinds, vec![TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_keywords_spanish() {
+        let kinds = tokenize("si sino mientras para funcion retornar verdadero falso numero texto booleano imprimir leer");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Si,
+                TokenKind::Sino,
+                TokenKind::Mientras,
+                TokenKind::Para,
+                TokenKind::Funcion,
+                TokenKind::Retornar,
+                TokenKind::Verdadero,
+                TokenKind::Falso,
+                TokenKind::Numero,
+                TokenKind::Texto,
+                TokenKind::Booleano,
+                TokenKind::Imprimir,
+                TokenKind::Leer,
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_keywords_english() {
+        let kinds = tokenize(
+            "if else while for function return true false number string boolean print read",
+        );
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::If,
+                TokenKind::Else,
+                TokenKind::While,
+                TokenKind::For,
+                TokenKind::Function,
+                TokenKind::Return,
+                TokenKind::True,
+                TokenKind::False,
+                TokenKind::Number,
+                TokenKind::String,
+                TokenKind::Boolean,
+                TokenKind::Print,
+                TokenKind::Read,
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_identifiers() {
+        let kinds = tokenize("x _miVar variable123 _");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident("x".to_string()),
+                TokenKind::Ident("_miVar".to_string()),
+                TokenKind::Ident("variable123".to_string()),
+                TokenKind::Ident("_".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_numeric_literals() {
+        let kinds = tokenize("42 3.14 0 100.0");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("42".to_string()),
+                TokenKind::NumLiteral("3.14".to_string()),
+                TokenKind::NumLiteral("0".to_string()),
+                TokenKind::NumLiteral("100.0".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_range_literals() {
+        let kinds = tokenize("1..5 1..=5 0..10");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDotEqual,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::NumLiteral("0".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("10".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_float_not_confused_with_range() {
+        let kinds = tokenize("3.14 2. 1.0..=3.0");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("3.14".to_string()),
+                TokenKind::NumLiteral("2.".to_string()),
+                TokenKind::NumLiteral("1.0".to_string()),
+                TokenKind::DotDotEqual,
+                TokenKind::NumLiteral("3.0".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_string_literals() {
+        let kinds = tokenize(r#""hola" "mundo" "" "#);
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::StrLiteral("hola".to_string()),
+                TokenKind::StrLiteral("mundo".to_string()),
+                TokenKind::StrLiteral("".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_string_escapes() {
+        let kinds = tokenize(r#""line1\nline2" "tab\there" "quote\"" "back\\slash""#);
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::StrLiteral("line1\nline2".to_string()),
+                TokenKind::StrLiteral("tab\there".to_string()),
+                TokenKind::StrLiteral("quote\"".to_string()),
+                TokenKind::StrLiteral("back\\slash".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_operators() {
+        let kinds = tokenize("+ - * / = == != < <= > >= && || !");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Plus,
+                TokenKind::Minus,
+                TokenKind::Star,
+                TokenKind::Slash,
+                TokenKind::Equal,
+                TokenKind::EqualEqual,
+                TokenKind::BangEqual,
+                TokenKind::Less,
+                TokenKind::LessEqual,
+                TokenKind::Greater,
+                TokenKind::GreaterEqual,
+                TokenKind::AndAnd,
+                TokenKind::OrOr,
+                TokenKind::Bang,
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_delimiters() {
+        let kinds = tokenize("( ) { } ; ,");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::LeftParen,
+                TokenKind::RightParen,
+                TokenKind::LeftBrace,
+                TokenKind::RightBrace,
+                TokenKind::Semicolon,
+                TokenKind::Comma,
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_line_comment() {
+        let kinds = tokenize("42 // esto es un comentario\n 100");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("42".to_string()),
+                TokenKind::NumLiteral("100".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_block_comment() {
+        let kinds = tokenize("42 /* bloque */ 100");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("42".to_string()),
+                TokenKind::NumLiteral("100".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_block_comment_multiline() {
+        let kinds = tokenize("1 /* linea1\n   linea2 */ 2");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::NumLiteral("2".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unterminated_string() {
+        let (_, errors) = tokenize_with_errors(r#" "hola"#);
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E002");
+    }
+
+    #[test]
+    fn test_unterminated_block_comment() {
+        let (_, errors) = tokenize_with_errors("/* comentario sin cerrar");
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E003");
+    }
+
+    #[test]
+    fn test_invalid_character() {
+        let (_, errors) = tokenize_with_errors("@");
+        assert!(!errors.is_empty());
+        assert_eq!(errors[0].code, "E001");
+    }
+
+    #[test]
+    fn test_ampersand_token() {
+        let tokens = tokenize("&");
+        assert_eq!(tokens, vec![TokenKind::Ampersand, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_shift_tokens() {
+        let tokens = tokenize("<< >>");
+        assert_eq!(
+            tokens,
+            vec![TokenKind::ShiftLeft, TokenKind::ShiftRight, TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn test_pipe_token() {
+        let tokens = tokenize("| |>");
+        assert_eq!(
+            tokens,
+            vec![TokenKind::Pipe, TokenKind::PipeGreater, TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn test_positions() {
+        let lexer = Lexer::new("numero x = 42\nmientras (x > 0) {\n    x = x - 1\n}");
+        let (tokens, errors) = lexer.tokenize();
+        assert!(errors.is_empty());
+        assert_eq!(tokens[0].pos().line, 1);
+        assert_eq!(tokens[0].pos().col, 1);
+        assert_eq!(tokens[3].pos().line, 1);
+        let mientras_token = &tokens[4];
+        assert_eq!(mientras_token.pos().line, 2);
+        assert_eq!(mientras_token.pos().col, 1);
+    }
+
+    #[test]
+    fn test_complex_program() {
+        let source = r#"funcion numero suma(numero a, numero b) {
+    retornar a + b
+}
+numero res = suma(3, 7)
+imprimir(res)"#;
+        let kinds = tokenize(source);
+        assert_eq!(kinds[0], TokenKind::Funcion);
+        assert_eq!(kinds[1], TokenKind::Numero);
+        assert_eq!(kinds[2], TokenKind::Ident("suma".to_string()));
+        assert_eq!(kinds[3], TokenKind::LeftParen);
+        assert_eq!(kinds[4], TokenKind::Numero);
+        assert_eq!(kinds[5], TokenKind::Ident("a".to_string()));
+        assert_eq!(kinds[6], TokenKind::Comma);
+        assert_eq!(kinds[7], TokenKind::Numero);
+        assert_eq!(kinds[8], TokenKind::Ident("b".to_string()));
+        assert_eq!(kinds[9], TokenKind::RightParen);
+        assert_eq!(kinds[10], TokenKind::LeftBrace);
+        assert_eq!(kinds[11], TokenKind::Retornar);
+        assert_eq!(kinds[12], TokenKind::Ident("a".to_string()));
+        assert_eq!(kinds[13], TokenKind::Plus);
+        assert_eq!(kinds[14], TokenKind::Ident("b".to_string()));
+        assert_eq!(kinds[15], TokenKind::RightBrace);
+        assert_eq!(kinds[16], TokenKind::Numero);
+        assert_eq!(kinds[17], TokenKind::Ident("res".to_string()));
+        assert_eq!(kinds[18], TokenKind::Equal);
+        assert_eq!(kinds[19], TokenKind::Ident("suma".to_string()));
+        assert_eq!(kinds[20], TokenKind::LeftParen);
+        assert_eq!(kinds[21], TokenKind::NumLiteral("3".to_string()));
+        assert_eq!(kinds[22], TokenKind::Comma);
+        assert_eq!(kinds[23], TokenKind::NumLiteral("7".to_string()));
+        assert_eq!(kinds[24], TokenKind::RightParen);
+        assert_eq!(kinds[25], TokenKind::Imprimir);
+        assert_eq!(kinds[26], TokenKind::LeftParen);
+        assert_eq!(kinds[27], TokenKind::Ident("res".to_string()));
+        assert_eq!(kinds[28], TokenKind::RightParen);
+        assert_eq!(kinds[29], TokenKind::Eof);
+    }
+
+    #[test]
+    fn test_mixed_indentation() {
+        let source = "  \t  numero x\n\t\tx = 5  ";
+        let kinds = tokenize(source);
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Numero,
+                TokenKind::Ident("x".to_string()),
+                TokenKind::Ident("x".to_string()),
+                TokenKind::Equal,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_multiple_errors() {
+        let (_, errors) = tokenize_with_errors("@ # $");
+        assert_eq!(errors.len(), 3);
+        assert!(errors.iter().all(|e| e.code == "E001"));
+    }
+
+    #[test]
+    fn test_string_with_unicode() {
+        let kinds = tokenize(r#""¡Hola, LÚMEN!""#);
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::StrLiteral("¡Hola, LÚMEN!".to_string()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_incomplete_escape() {
+        let (_, errors) = tokenize_with_errors(r#""hola\"#);
+        assert!(!errors.is_empty());
+    }
+
+    #[test]
+    fn test_new_lexer_range_dotdot() {
+        let kinds = tokenize("1..5");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_range_dotdotequal() {
+        let kinds = tokenize("1..=5");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDotEqual,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_float_vs_range_simple() {
+        let kinds = tokenize("1..5 1.5");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::NumLiteral("1.5".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_float_literal() {
+        let kinds = tokenize("3.14 0.5 100.0");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("3.14".to_string()),
+                TokenKind::NumLiteral("0.5".to_string()),
+                TokenKind::NumLiteral("100.0".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_mixed_float_range() {
+        let kinds = tokenize("1.5..5 1.0..=3.0");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::NumLiteral("1.5".to_string()),
+                TokenKind::DotDot,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::NumLiteral("1.0".to_string()),
+                TokenKind::DotDotEqual,
+                TokenKind::NumLiteral("3.0".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_pipe_single() {
+        let kinds = tokenize("|");
+        assert_eq!(kinds, vec![TokenKind::Pipe, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_pipe_oror_distinction() {
+        let kinds = tokenize("| || |");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Pipe,
+                TokenKind::OrOr,
+                TokenKind::Pipe,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_pipe_greater() {
+        let kinds = tokenize("|> |> 5 |> foo");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::PipeGreater,
+                TokenKind::PipeGreater,
+                TokenKind::NumLiteral("5".to_string()),
+                TokenKind::PipeGreater,
+                TokenKind::Ident("foo".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_ampersand_single() {
+        let kinds = tokenize("&");
+        assert_eq!(kinds, vec![TokenKind::Ampersand, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_andand() {
+        let kinds = tokenize("&& & &&");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::AndAnd,
+                TokenKind::Ampersand,
+                TokenKind::AndAnd,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_shift_left() {
+        let kinds = tokenize("<<");
+        assert_eq!(kinds, vec![TokenKind::ShiftLeft, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_shift_right() {
+        let kinds = tokenize(">>");
+        assert_eq!(kinds, vec![TokenKind::ShiftRight, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_algun() {
+        let kinds = tokenize("algun");
+        assert_eq!(kinds, vec![TokenKind::Algun, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_ninguno() {
+        let kinds = tokenize("ninguno");
+        assert_eq!(kinds, vec![TokenKind::Ninguno, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_exito_error() {
+        let kinds = tokenize("exito error");
+        assert_eq!(
+            kinds,
+            vec![TokenKind::Exito, TokenKind::ErrKeyword, TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_sea_para_elegir() {
+        let kinds = tokenize("sea para elegir");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Sea,
+                TokenKind::Para,
+                TokenKind::Elegir,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_caso_defecto_como() {
+        let kinds = tokenize("caso defecto como");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Caso,
+                TokenKind::Defecto,
+                TokenKind::Como,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_opcion() {
+        let kinds = tokenize("opcion");
+        assert_eq!(kinds, vec![TokenKind::Opcion, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_resultado() {
+        let kinds = tokenize("resultado");
+        assert_eq!(kinds, vec![TokenKind::Resultado, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_keyword_numero() {
+        let kinds = tokenize("numero");
+        assert_eq!(kinds, vec![TokenKind::Numero, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn test_new_lexer_ident_abs_min_max() {
+        let kinds = tokenize("abs min max");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident("abs".to_string()),
+                TokenKind::Ident("min".to_string()),
+                TokenKind::Ident("max".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_string_escape_newline() {
+        let kinds = tokenize(r#""a\nb""#);
+        assert_eq!(
+            kinds,
+            vec![TokenKind::StrLiteral("a\nb".to_string()), TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_string_escape_tab() {
+        let kinds = tokenize(r#""a\tb""#);
+        assert_eq!(
+            kinds,
+            vec![TokenKind::StrLiteral("a\tb".to_string()), TokenKind::Eof]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_string_escape_backslash_quote() {
+        let kinds = tokenize(r#""a\"b" "c\\d""#);
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::StrLiteral("a\"b".to_string()),
+                TokenKind::StrLiteral("c\\d".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_new_lexer_string_unicode() {
+        let kinds = tokenize(r#""¡Hola, LÚMEN! 🚀""#);
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::StrLiteral("¡Hola, LÚMEN! 🚀".to_string()),
+                TokenKind::Eof
+            ]
+        );
+    }
+}

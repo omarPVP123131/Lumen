@@ -1,0 +1,14 @@
+// Benchmark v3.5.22 — costo de pasar arrays/textos a funciones (500k llamadas)
+funcion numero procesar(lista xs, texto s) {
+    retornar largo(xs) + largo(s);
+}
+
+sea xs = [1, 2, 3, 4, 5, 6, 7, 8];
+sea s = "hola-mundo-lumen";
+numero acc = 0;
+entero i = 0;
+mientras (i < 500000) {
+    acc = acc + procesar(xs, s);
+    i = i + 1;
+}
+imprimir("pass:" + acc);

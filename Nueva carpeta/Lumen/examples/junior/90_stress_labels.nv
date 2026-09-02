@@ -1,0 +1,19 @@
+importar ingles;
+
+integer encontrado = 0;
+integer i = 0;
+while (i < 10) {
+    integer j = 0;
+    while (j < 10) {
+        if (i * j > 50) {
+            encontrado = i * j;
+            break;
+        }
+        j = j + 1;
+    }
+    if (encontrado > 0) {
+        break;
+    }
+    i = i + 1;
+}
+print(encontrado);

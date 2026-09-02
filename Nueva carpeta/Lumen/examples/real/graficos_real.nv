@@ -1,0 +1,80 @@
+// ==========================================
+// graficos_real.nv — Graphics API (real-world)
+// Tests BITMAP info, texture dimensions, event validation
+// Uso: lumen run -L stdlib/ examples/real/graficos_real.nv
+// ==========================================
+
+imprimir("=== Graficos REAL: Real-World Graphics ===");
+
+// ── Ej 1: BMP File Header Analysis ──
+// Ej 1: Analyze BMP header structure and validation
+imprimir("--- Ej 1: Estructura de BMP Info ---");
+// BMP header is 54 bytes: 14 (file header) + 40 (DIB header)
+entero BMP_HEADER_SIZE = 54;
+entero BMP_SIGNATURE_OFFSET = 0;  // "BM" = 0x4D42
+entero BMP_SIZE_OFFSET = 2;        // file size
+entero BMP_WIDTH_OFFSET = 18;      // image width
+entero BMP_HEIGHT_OFFSET = 22;     // image height
+entero BMP_BPP_OFFSET = 28;        // bits per pixel
+imprimir("Tamano cabecera BMP: ", BMP_HEADER_SIZE, " bytes");
+imprimir("Offset firma: ", BMP_SIGNATURE_OFFSET);
+imprimir("Offset tamano: ", BMP_SIZE_OFFSET);
+imprimir("Offset ancho: ", BMP_WIDTH_OFFSET);
+imprimir("Offset alto: ", BMP_HEIGHT_OFFSET);
+imprimir("Offset BPP: ", BMP_BPP_OFFSET);
+
+// ── Ej 2: Texture Dimension Calculator ──
+// Ej 2: Calculate texture dimensions from BMP header
+imprimir("--- Ej 2: Calculo de Dimensiones de Textura ---");
+// Simulated texture dimensions
+funcion entero calcular_bytes(entero w, entero h, entero bpp) {
+    // BMP rows are padded to 4-byte boundaries
+    entero row_bytes = (w * bpp + 7) / 8;
+    entero padding = (4 - (row_bytes % 4)) % 4;
+    entero total_row = row_bytes + padding;
+    retornar total_row * h + BMP_HEADER_SIZE;
+}
+entero w_img = 64;
+entero h_img = 64;
+entero bpp = 24;
+entero total = calcular_bytes(w_img, h_img, bpp);
+imprimir("Imagen ", w_img, "x", h_img, " @ ", bpp, "bpp");
+imprimir("Bytes totales estimados: ", total);
+// Test with different sizes
+imprimir("32x32@24bpp  = ", calcular_bytes(32, 32, 24), " bytes");
+imprimir("128x128@24bpp = ", calcular_bytes(128, 128, 24), " bytes");
+imprimir("256x256@32bpp = ", calcular_bytes(256, 256, 32), " bytes");
+
+// ── Ej 3: Event Loop Validation ──
+// Ej 3: Event type constants and dispatch logic
+imprimir("--- Ej 3: Validacion de Eventos ---");
+// SDL_EventType constants
+entero EVT_QUIT = 256;
+entero EVT_KEYDOWN = 768;
+entero EVT_KEYUP = 769;
+entero EVT_MOUSEMOTION = 1024;
+entero EVT_MOUSEBUTTONDOWN = 1025;
+entero EVT_MOUSEBUTTONUP = 1026;
+
+funcion texto nombre_evento(entero evt_tipo) {
+    si evt_tipo == 256 { retornar "QUIT"; }
+    si evt_tipo == 768 { retornar "KEYDOWN"; }
+    si evt_tipo == 769 { retornar "KEYUP"; }
+    si evt_tipo == 1024 { retornar "MOUSEMOTION"; }
+    si evt_tipo == 1025 { retornar "MOUSEBTNDOWN"; }
+    si evt_tipo == 1026 { retornar "MOUSEBTNUP"; }
+    retornar "DESCONOCIDO";
+}
+// Test all event types
+lista<entero> eventos = [256, 768, 769, 1024, 1025, 1026, 999];
+entero i = 0;
+mientras i < largo(eventos) {
+    imprimir("Evento ", eventos[i], " -> ", nombre_evento(eventos[i]));
+    i = i + 1;
+}
+// Event polling simulation
+imprimir("PollEvent retorna 0 si no hay eventos, >0 si hay");
+imprimir("Evento QUIT cierra el bucle principal");
+imprimir("Evento KEYDOWN trae el scancode en offset 20");
+
+imprimir("--- FIN GRAFICOS REAL ---");

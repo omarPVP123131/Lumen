@@ -1,0 +1,33 @@
+estructura Cuenta {
+    saldo: entero,
+}
+
+impl Cuenta {
+    funcion vacio depositar(este, entero monto) {
+        este.saldo = este.saldo + monto;
+    }
+    funcion booleano retirar(este, entero monto) {
+        si este.saldo >= monto {
+            este.saldo = este.saldo - monto;
+            retornar verdadero;
+        }
+        retornar falso;
+    }
+    funcion entero obtener_saldo(este) {
+        retornar este.saldo;
+    }
+}
+
+funcion entero principal() {
+    Cuenta c = Cuenta { saldo: 100 };
+    c.depositar(250);
+    imprimir(c.obtener_saldo());
+    si c.retirar(100) {
+        imprimir("retiro ok");
+    }
+    si !c.retirar(9999) {
+        imprimir("fondo insuficiente");
+    }
+    imprimir(c.obtener_saldo());
+    retornar 0;
+}

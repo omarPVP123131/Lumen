@@ -1,0 +1,53 @@
+// ============================================================================
+// LÚMEN — Demostración de Protocolo HTTP/3 & QUIC sobre UDP (RFC 9000 & 9114)
+// ============================================================================
+
+importar "quic.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🌐 LÚMEN HTTP/3 & QUIC MULTIPLEXED UDP ENGINE (v2.4.6)              ║");
+imprimir("║   0-RTT Handshake, Streams Multiplexados sin Head-of-Line Blocking   ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Establecer conexión cliente QUIC con 0-RTT Handshake
+imprimir("1. Negociando conexión QUIC sobre UDP (0-RTT TLS 1.3)...");
+quic_QuicConexion conn = quic_conectar("api.lumen-cloud.com", 443, verdadero);
+imprimir("   ✓ ", quic_resumen_conexion(conn));
+imprimir("   • Estado de Handshake: ", conn.estado_handshake);
+imprimir("   • Source Connection ID (SCID): ", conn.id_conexion_scid);
+
+// 2. Multiplexación de Streams independientes (Sin bloqueo)
+imprimir("");
+imprimir("2. Abriendo Streams QUIC concurrentes para telemetría...");
+conn = quic_abrir_stream(conn, verdadero);
+conn = quic_abrir_stream(conn, verdadero);
+conn = quic_abrir_stream(conn, verdadero);
+
+imprimir("   ✓ Streams activos en la misma conexión UDP: ", conn.streams.largo());
+
+// 3. Enviar datos por streams independientes
+imprimir("");
+imprimir("3. Transmitiendo paquetes por Stream #1 y Stream #2 en paralelo...");
+conn = quic_enviar_stream(conn, 1, "PAYLOAD_AUDIO_STREAM_48KHZ");
+conn = quic_enviar_stream(conn, 2, "PAYLOAD_VIDEO_WEBM_1080P");
+
+quic_QuicStream st1 = conn.streams[0];
+quic_QuicStream st2 = conn.streams[1];
+imprimir("   • Stream #1 Bytes transmitidos: ", st1.bytes_enviados, " bytes");
+imprimir("   • Stream #2 Bytes transmitidos: ", st2.bytes_enviados, " bytes");
+
+// 4. Peticiones HTTP/3 con cabeceras QPACK
+imprimir("");
+imprimir("4. Enviando Petición HTTP/3 GET con compresión QPACK...");
+quic_Http3Respuesta resp_get = quic_http3_get(conn, "/v1/estado_cluster");
+imprimir("   [Cabeceras QPACK]: ", resp_get.cabeceras_qpack);
+imprimir("   [Cuerpo HTTP/3]  : ", resp_get.cuerpo);
+
+imprimir("");
+imprimir("5. Enviando Petición HTTP/3 POST (Registro de Métricas)...");
+quic_Http3Respuesta resp_post = quic_http3_post(conn, "/v1/metricas", "{\"tps\": 125000, \"latencia_ms\": 0.42}");
+imprimir("   [Respuesta POST] : Código HTTP ", resp_post.codigo_estado, " -> ", resp_post.cuerpo);
+
+imprimir("");
+imprimir("✨ ¡Protocolo HTTP/3 & QUIC sobre UDP ejecutado con éxito en LÚMEN!");

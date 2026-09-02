@@ -1,0 +1,45 @@
+// ==========================================
+// tui_jr.nv — TUI Module (junior)
+// Tests: terminal UI basics, utils, key codes
+// Uso: lumen run -L stdlib/ examples/jr/tui_jr.nv
+// ==========================================
+
+imprimir("=== TUI JR: Terminal UI Basics ===");
+
+// Ej 1: ANSI Escape Codes
+imprimir("--- Ej 1: Secuencias ANSI ---");
+imprimir("ANSI codes para control de terminal:");
+imprimir("  Clear screen:  ESC[2J ESC[H");
+imprimir("  Reset colors:  ESC[0m");
+imprimir("  Bold text:     ESC[1m");
+imprimir("  Cursor home:   ESC[H");
+imprimir("  FG color 196:  ESC[38;5;196m (rojo)");
+imprimir("  BG color 27:   ESC[48;5;27m (azul)");
+
+// Ej 2: String Utilities
+imprimir("--- Ej 2: Utilidades de Texto ---");
+// String repeat
+texto rpt = "=";
+entero n = 10;
+texto res = "";
+entero i = 0;
+mientras i < n {
+    res = res + rpt;
+    i = i + 1;
+}
+imprimir("repetir('=', 10) = '", res, "'");
+// String length and concat
+texto s1 = "Hola";
+texto s2 = " Mundo";
+texto s3 = s1 + s2;
+imprimir("concat: '", s1, "' + '", s2, "' = '", s3, "' (len=", s3.largo(), ")");
+
+// Ej 3: Key Code Reference
+imprimir("--- Ej 3: Teclas Comunes ---");
+imprimir("Navegacion: UP, DOWN, LEFT, RIGHT");
+imprimir("Accion:     ENTER, ESC, BACKSPACE, TAB");
+imprimir("Paginar:    PGUP, PGDN, HOME, END");
+imprimir("Salir:      'q' o ESC");
+imprimir("Las teclas se leen como texto (string)");
+
+imprimir("--- FIN TUI JR ---");

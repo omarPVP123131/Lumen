@@ -1,0 +1,15 @@
+[package]
+name = "lumen-fmt"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Formateador automático para código fuente LÚMEN (.nv)"
+keywords = ["lumen", "language", "formatter", "fmt", "educational"]
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+serde = { workspace = true, features = ["derive"] }
+toml = "0.8"

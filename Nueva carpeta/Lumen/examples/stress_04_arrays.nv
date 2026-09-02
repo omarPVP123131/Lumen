@@ -1,0 +1,11 @@
+// STRESS-04: Arrays grandes — debe ser O(n) no O(n²), y semántica de valores
+lista<entero> vacio_arr = [];
+imprimir("arr vacio largo: ", vacio_arr.largo());
+lista<entero> grande = [];
+entero i = 0;
+mientras i < 20000 {
+    grande.agregar(i);
+    i = i + 1;
+}
+imprimir("arr 20k largo: ", grande.largo());
+imprimir("stress04_ok");

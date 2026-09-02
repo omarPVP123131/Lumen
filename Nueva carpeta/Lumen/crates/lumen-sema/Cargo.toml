@@ -1,0 +1,20 @@
+[package]
+name = "lumen-sema"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Análisis semántico del lenguaje LÚMEN — type checking, scopes, módulos"
+keywords = ["lumen", "language", "semantic", "type-checking", "educational"]
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+lumen-ir = { path = "../lumen-ir" }
+lumen-codegen = { path = "../lumen-codegen" }
+lumen-vm = { path = "../lumen-vm", default-features = false, features = [] }

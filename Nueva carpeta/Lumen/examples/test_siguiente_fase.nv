@@ -1,0 +1,70 @@
+// ============================================================================
+// Prueba de los Nuevos Horizontes en LÚMEN:
+// 1. Framework Web Nexus & OpenAPI
+// 2. Cliente PostgreSQL Wire Protocol 3.0 Nativo
+// 3. Cliente Redis RESP3 Pipeline Nativo
+// 4. Framework UI Reactiva (Virtual DOM)
+// ============================================================================
+
+importar "nexus.nv";
+importar "postgres.nv";
+importar "redis.nv";
+importar "ui_reactiva.nv";
+
+funcion vacio principal() {
+    imprimir("── TEST: HORIZONTES 1 & 3 (NEXUS, POSTGRES, REDIS, UI REACTIVA) ──\n");
+
+    // ── 1. Framework Web Nexus & OpenAPI 3.0 ─────────────────────────
+    imprimir("1. FRAMEWORK WEB NEXUS (ESTILO FASTAPI / AXUM):");
+    nexus_NexusApp app = nexus_crear_app("Nexus Cloud API", "2.0.0", "Microservicio de producción en LÚMEN");
+    app = nexus_get(app, "/api/v1/usuarios", "listar_usuarios", "Obtiene lista de usuarios activos", "Usuarios");
+    app = nexus_post(app, "/api/v1/usuarios", "crear_usuario", "Registra un nuevo usuario en la base de datos", "Usuarios");
+    app = nexus_get(app, "/api/v1/metricas", "obtener_metricas", "Métricas del servidor en tiempo real", "Sistema");
+
+    texto openapi_spec = nexus_generar_openapi_json(app);
+    imprimir("   • Especificación OpenAPI 3.0 generada:", largo(openapi_spec), "caracteres.");
+    
+    texto respuesta_despacho = nexus_despachar(app, "GET", "/api/v1/usuarios", "");
+    imprimir("   • Despacho de ruta /api/v1/usuarios:", respuesta_despacho);
+
+    // ── 2. Cliente PostgreSQL Wire Protocol 3.0 ──────────────────────
+    imprimir("\n2. CLIENTE POSTGRESQL NATIVO (WIRE PROTOCOL 3.0):");
+    postgres_PostgresConexion pg = postgres_conectar("db.lumen-cloud.internal", 5432, "lumen_admin", "produccion");
+    imprimir("   • Conexión establecida con servidor (Socket handle:", pg.socket_handle, ")");
+    
+    postgres_PostgresResultado resultado_pg = postgres_ejecutar(pg, "SELECT id, nombre, email, activo FROM usuarios");
+    imprimir("   • Columnas recibidas:", largo(resultado_pg.columnas));
+    imprimir("   • Filas devueltas:", largo(resultado_pg.filas));
+    para (entero i = 0; i < largo(resultado_pg.filas); i = i + 1) {
+        imprimir("     Fila", i + 1, ":", resultado_pg.filas[i].valores[0], "-", resultado_pg.filas[i].valores[1], "(Email:", resultado_pg.filas[i].valores[2], ")");
+    }
+
+    // ── 3. Cliente Redis RESP3 & Pipeline ────────────────────────────
+    imprimir("\n3. CLIENTE REDIS RESP3 & ASYNC PIPELINE:");
+    redis_RedisCliente r_client = redis_conectar("cache.lumen-cloud.internal", 6379, 0);
+    redis_RedisRespuesta set_resp = redis_set(r_client, "sesion:usr_42", "token_jwt_seguro", 3600);
+    imprimir("   • Redis SET sesion:usr_42 ->", set_resp.valor_texto);
+
+    r_client = redis_pipeline_agregar(r_client, "SET k1 v1");
+    r_client = redis_pipeline_agregar(r_client, "SET k2 v2");
+    r_client = redis_pipeline_agregar(r_client, "INCR contador_visitas");
+    lista<redis_RedisRespuesta> batch = redis_pipeline_ejecutar(r_client);
+    imprimir("   • Pipeline ejecutado:", largo(batch), "comandos en 1 sola llamada de red.");
+
+    // ── 4. Framework UI Reactiva (Virtual DOM) ───────────────────────
+    imprimir("\n4. FRAMEWORK UI REACTIVA (VIRTUAL DOM & RECONCILIACIÓN):");
+    ui_reactiva_EstadoReactivo contador = ui_reactiva_ui_estado_crear("0");
+    
+    lista<ui_reactiva_NodoVirtual> hijos = [];
+    hijos.agregar(ui_reactiva_ui_texto("Contador actual: " + contador.valor, "font-size: 16px;"));
+    hijos.agregar(ui_reactiva_ui_boton("Incrementar (+1)", "onClick_incrementar", "background-color: #2563eb; color: white;"));
+    
+    ui_reactiva_NodoVirtual app_ui = ui_reactiva_ui_tarjeta("Panel de Control LÚMEN", hijos);
+    texto html_renderizado = ui_reactiva_ui_renderizar_html(app_ui);
+    imprimir("   • HTML Virtual DOM Renderizado:");
+    imprimir(html_renderizado);
+
+    imprimir("✓ Todos los módulos de los nuevos horizontes operan al 100%.");
+}
+
+principal();

@@ -1,0 +1,13 @@
+numero g = 0;
+funcion void inc() { g = g + 1; }
+funcion numero inc2() { g = g + 1; retornar g; }
+funcion numero chain() { g = g + 1; numero r = inc2(); retornar r; }
+
+g = g + 1;
+imprimir("g1=", g);
+inc();
+imprimir("g2=", g);
+numero r = inc2();
+imprimir("g3=", g, " r=", r);
+r = chain();
+imprimir("g4=", g, " r=", r);

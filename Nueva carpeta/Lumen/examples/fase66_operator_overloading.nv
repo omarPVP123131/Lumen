@@ -1,0 +1,16 @@
+// Fase 66 — Operator Overloading: extension methods sobre tipos primitivos
+rasgo Multiplicable {
+    funcion entero doble(este);
+}
+
+impl Multiplicable para entero {
+    funcion entero doble(este) {
+        retornar este * 2;
+    }
+}
+
+funcion entero principal() {
+    entero n = 21;
+    imprimir(n.doble());
+    retornar 0;
+}

@@ -1,0 +1,45 @@
+// ============================================================================
+// LÚMEN v2.4.6 — DEMO: DASHBOARD UI REACTIVO & VIRTUAL DOM MULTIPLATAFORMA
+// Combina: ui_reactiva.nv + actor.nv
+// ============================================================================
+
+importar "ui_reactiva.nv";
+importar "actor.nv";
+
+funcion vacio principal() {
+    imprimir("╔══════════════════════════════════════════════════════════════════╗");
+    imprimir("║   LÚMEN v2.4.6 — DASHBOARD UI REACTIVO & VIRTUAL DOM             ║");
+    imprimir("╚══════════════════════════════════════════════════════════════════╝\n");
+
+    // 1. Estado Reactivo con Hooks
+    imprimir("1. INICIALIZANDO ESTADO REACTIVO (HOOKS):");
+    ui_reactiva_EstadoReactivo estado_usuarios = ui_reactiva_ui_estado_crear("1,420");
+    ui_reactiva_EstadoReactivo estado_tps = ui_reactiva_ui_estado_crear("84,500 req/s");
+    imprimir("   • Estado 1 [Usuarios Activos]:", estado_usuarios.valor);
+    imprimir("   • Estado 2 [Throughput TPS]  :", estado_tps.valor);
+
+    // 2. Construcción del Árbol Virtual DOM
+    imprimir("\n2. CONSTRUYENDO ÁRBOL VIRTUAL DOM DECLARATIVO:");
+    lista<ui_reactiva_NodoVirtual> metricas_hijos = [];
+    metricas_hijos.agregar(ui_reactiva_ui_texto("👥 Conexiones WebSocket Activas: " + estado_usuarios.valor, "font-weight: bold;"));
+    metricas_hijos.agregar(ui_reactiva_ui_texto("⚡ Throughput de Microservicios: " + estado_tps.valor, "color: #10b981;"));
+    metricas_hijos.agregar(ui_reactiva_ui_boton("🔄 Refrescar Métricas", "onClick_refrescar", "background: #8b5cf6; color: white; padding: 8px 16px; border-radius: 6px;"));
+
+    ui_reactiva_NodoVirtual card_metricas = ui_reactiva_ui_tarjeta("Panel de Telemetría Cloud", metricas_hijos);
+
+    // 3. Renderizado Multiplataforma a HTML5
+    imprimir("\n3. RENDERIZANDO A HTML5 VIRTUAL DOM:");
+    texto html_dashboard = ui_reactiva_ui_renderizar_html(card_metricas);
+    imprimir(html_dashboard);
+
+    // 4. Sistema de Actores en Background para Actualización Reactiva
+    imprimir("4. ACTORES OTP EN SEGUNDO PLANO:");
+    actor_Actor telemetria_worker = actor_crear("telemetria-1", "colector", "EN_LINEA");
+    telemetria_worker = actor_enviar(telemetria_worker, "PING", "heartbeat", "dashboard");
+    telemetria_worker = actor_procesar(telemetria_worker);
+    imprimir("   • Actor de Telemetría Estado:", telemetria_worker.estado);
+
+    imprimir("\n✓ Dashboard Reactivo Multiplataforma verificado con éxito.");
+}
+
+principal();

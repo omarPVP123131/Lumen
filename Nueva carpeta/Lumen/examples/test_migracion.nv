@@ -1,0 +1,26 @@
+importar "testing.nv";
+importar "csv.nv";
+importar "fecha.nv";
+
+imprimir("=== Testing Pure LÚMEN ===");
+
+// Assert
+imprimir("assert_true: ", testing_afirmar_verdadero(verdadero));
+imprimir("assert_eq: ", testing_afirmar_igual(42, 42));
+imprimir("assert_neq: ", testing_afirmar_distinto(1, 2));
+imprimir("assert_true (en): ", testing_assert_true(verdadero));
+imprimir("assert_eq (en): ", testing_assert_eq("hola", "hola"));
+
+// CSV
+sea csv_data = "nombre,edad\nAna,30\nLuis,25";
+sea parsed = csv_parsear(csv_data);
+imprimir("csv parsed filas: ", __map_claves(parsed).largo());
+sea back = csv_serializar(parsed);
+imprimir("csv back: ", back);
+
+// Calendar
+sea ts = __tiempo_ahora();
+imprimir("hijri: ", fecha_calendario_hijri(ts));
+imprimir("persa: ", fecha_calendario_persa(ts));
+
+imprimir("--- FIN ---");

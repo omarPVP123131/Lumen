@@ -1,0 +1,162 @@
+// Módulo coleccion — funciones para colecciones de datos
+// Uso: importar "coleccion.nv"
+
+// --- Listas ---
+
+funcion lista<numero> invertir(lista<numero> items) {
+    retornar __lista_invertir(items);
+}
+
+funcion lista<texto> invertir_textos(lista<texto> items) {
+    retornar __lista_invertir(items);
+}
+
+funcion lista<numero> ordenar(lista<numero> items) {
+    retornar __lista_ordenar(items);
+}
+
+funcion numero primero(lista<numero> items) {
+    retornar items[0];
+}
+
+funcion numero ultimo(lista<numero> items) {
+    retornar items[items.largo() - 1];
+}
+
+funcion entero contar(lista<numero> items, numero valor) {
+    entero total = 0;
+    entero i = items.largo() - 1;
+    mientras (i >= 0) {
+        si (items[i] == valor) {
+            total = total + 1;
+        }
+        i = i - 1;
+    }
+    retornar total;
+}
+
+// --- Diccionario (HashMap) ---
+
+funcion T mapa_nuevo<T>() {
+    retornar __map_nuevo();
+}
+
+funcion T mapa_poner<T>(T m, T clave, T valor) {
+    retornar __map_poner(m, clave, valor);
+}
+
+funcion T mapa_obtener<T>(T m, T clave) {
+    retornar __map_obtener(m, clave);
+}
+
+funcion entero mapa_longitud<T>(T m) {
+    retornar __map_longitud(m);
+}
+
+funcion T mapa_claves<T>(T m) {
+    retornar __map_claves(m);
+}
+
+funcion booleano mapa_contiene<T>(T m, T clave) {
+    retornar __map_contiene(m, clave);
+}
+
+// --- Conjunto (HashSet) ---
+
+funcion T conjunto_nuevo<T>() {
+    retornar __conjunto_nuevo();
+}
+
+funcion T conjunto_agregar<T>(T s, T item) {
+    retornar __conjunto_agregar(s, item);
+}
+
+funcion booleano conjunto_tiene<T>(T s, T item) {
+    retornar __conjunto_tiene(s, item);
+}
+
+funcion T conjunto_unir<T>(T a, T b) {
+    retornar __conjunto_unir(a, b);
+}
+
+funcion T conjunto_interseccion<T>(T a, T b) {
+    retornar __conjunto_interseccion(a, b);
+}
+
+funcion T conjunto_diferencia<T>(T a, T b) {
+    retornar __conjunto_diferencia(a, b);
+}
+
+// --- Deque (VecDeque) ---
+
+funcion T deque_nuevo<T>() {
+    retornar __deque_nuevo();
+}
+
+funcion T deque_agregar_frente<T>(T d, T item) {
+    retornar __deque_agregar_frente(d, item);
+}
+
+funcion T deque_agregar_final<T>(T d, T item) {
+    retornar __deque_agregar_final(d, item);
+}
+
+funcion T deque_quitar_frente<T>(T d) {
+    retornar __deque_quitar_frente(d);
+}
+
+funcion T deque_quitar_final<T>(T d) {
+    retornar __deque_quitar_final(d);
+}
+
+funcion entero deque_longitud<T>(T d) {
+    retornar __deque_longitud(d);
+}
+
+// --- Montículo Binario (BinaryHeap) ---
+
+funcion T monticulo_nuevo<T>() {
+    retornar __monticulo_nuevo();
+}
+
+funcion T monticulo_agregar<T>(T h, T item) {
+    retornar __monticulo_agregar(h, item);
+}
+
+funcion T monticulo_quitar<T>(T h) {
+    retornar __monticulo_quitar(h);
+}
+
+funcion T monticulo_ver<T>(T h) {
+    retornar __monticulo_ver(h);
+}
+
+funcion entero monticulo_longitud<T>(T h) {
+    retornar __monticulo_longitud(h);
+}
+
+// --- Lista Enlazada (LinkedList) ---
+
+funcion T enlazada_nuevo<T>() {
+    retornar __enlazada_nuevo();
+}
+
+funcion T enlazada_agregar_frente<T>(T l, T item) {
+    retornar __enlazada_agregar_frente(l, item);
+}
+
+funcion T enlazada_agregar_final<T>(T l, T item) {
+    retornar __enlazada_agregar_final(l, item);
+}
+
+funcion T enlazada_quitar_frente<T>(T l) {
+    retornar __enlazada_quitar_frente(l);
+}
+
+funcion T enlazada_quitar_final<T>(T l) {
+    retornar __enlazada_quitar_final(l);
+}
+
+funcion entero enlazada_longitud<T>(T l) {
+    retornar __enlazada_longitud(l);
+}

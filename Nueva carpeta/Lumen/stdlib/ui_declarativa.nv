@@ -1,0 +1,152 @@
+// ============================================================================
+// Módulo ui_declarativa — Framework de UI Declarativa y Reactiva para LÚMEN
+// Declarative & Reactive Component UI Framework (SwiftUI / Flutter style)
+// Uso: importar "ui_declarativa.nv"
+// ============================================================================
+
+estructura ElementoUI {
+    tipo_nodo: texto,
+    texto_contenido: texto,
+    hijos: cualquiera,
+    accion: texto,
+    estilo: texto
+}
+
+funcion ElementoUI ui_texto(texto contenido, texto estilo = "") {
+    retornar ElementoUI {
+        tipo_nodo: "Texto",
+        texto_contenido: contenido,
+        hijos: [],
+        accion: "",
+        estilo: estilo
+    };
+}
+
+funcion ElementoUI ui_boton(texto titulo, texto accion_id = "", texto estilo = "") {
+    retornar ElementoUI {
+        tipo_nodo: "Boton",
+        texto_contenido: titulo,
+        hijos: [],
+        accion: accion_id,
+        estilo: estilo
+    };
+}
+
+funcion ElementoUI ui_columna(cualquiera hijos, texto estilo = "") {
+    retornar ElementoUI {
+        tipo_nodo: "Columna",
+        texto_contenido: "",
+        hijos: hijos,
+        accion: "",
+        estilo: estilo
+    };
+}
+
+funcion ElementoUI ui_fila(cualquiera hijos, texto estilo = "") {
+    retornar ElementoUI {
+        tipo_nodo: "Fila",
+        texto_contenido: "",
+        hijos: hijos,
+        accion: "",
+        estilo: estilo
+    };
+}
+
+funcion ElementoUI ui_contenedor(ElementoUI hijo, texto estilo = "padding: 10px; border: 1px solid #ccc;") {
+    retornar ElementoUI {
+        tipo_nodo: "Contenedor",
+        texto_contenido: "",
+        hijos: [hijo],
+        accion: "",
+        estilo: estilo
+    };
+}
+
+// Renderizador a HTML / Virtual DOM
+funcion texto ui_renderizar_html(ElementoUI el) {
+    si el.tipo_nodo == "Texto" {
+        retornar "<span class=\"lumen-texto\" style=\"" + el.estilo + "\">" + el.texto_contenido + "</span>";
+    } sino si el.tipo_nodo == "Boton" {
+        retornar "<button class=\"lumen-btn\" data-action=\"" + el.accion + "\" style=\"" + el.estilo + "\">" + el.texto_contenido + "</button>";
+    } sino si el.tipo_nodo == "Columna" {
+        texto inner = "";
+        para (entero i = 0; i < largo(el.hijos); i = i + 1) {
+            ElementoUI h = el.hijos[i];
+            inner = inner + ui_renderizar_html(h);
+        }
+        retornar "<div class=\"lumen-col\" style=\"display:flex;flex-direction:column;gap:8px;" + el.estilo + "\">" + inner + "</div>";
+    } sino si el.tipo_nodo == "Fila" {
+        texto inner = "";
+        para (entero j = 0; j < largo(el.hijos); j = j + 1) {
+            ElementoUI h2 = el.hijos[j];
+            inner = inner + ui_renderizar_html(h2);
+        }
+        retornar "<div class=\"lumen-row\" style=\"display:flex;flex-direction:row;gap:8px;" + el.estilo + "\">" + inner + "</div>";
+    } sino si el.tipo_nodo == "Contenedor" {
+        texto child = "";
+        si largo(el.hijos) > 0 {
+            ElementoUI h3 = el.hijos[0];
+            child = ui_renderizar_html(h3);
+        }
+        retornar "<div class=\"lumen-box\" style=\"" + el.estilo + "\">" + child + "</div>";
+    }
+    retornar "";
+}
+
+// Renderizador en Terminal TUI (ASCII Art)
+funcion texto ui_renderizar_tui(ElementoUI el, entero indent = 0) {
+    texto prefijo = "";
+    para (entero k = 0; k < indent; k = k + 1) {
+        prefijo = prefijo + "  ";
+    }
+    si el.tipo_nodo == "Texto" {
+        retornar prefijo + "📝 " + el.texto_contenido + "\n";
+    } sino si el.tipo_nodo == "Boton" {
+        retornar prefijo + "🔘 [" + el.texto_contenido + "]\n";
+    } sino si el.tipo_nodo == "Columna" {
+        texto out = prefijo + "┌─ 📦 Columna\n";
+        para (entero i = 0; i < largo(el.hijos); i = i + 1) {
+            ElementoUI h = el.hijos[i];
+            out = out + ui_renderizar_tui(h, indent + 1);
+        }
+        retornar out;
+    } sino si el.tipo_nodo == "Fila" {
+        texto out = prefijo + "├─ ↔️  Fila\n";
+        para (entero j = 0; j < largo(el.hijos); j = j + 1) {
+            ElementoUI h2 = el.hijos[j];
+            out = out + ui_renderizar_tui(h2, indent + 1);
+        }
+        retornar out;
+    } sino si el.tipo_nodo == "Contenedor" {
+        si largo(el.hijos) > 0 {
+            ElementoUI h3 = el.hijos[0];
+            retornar ui_renderizar_tui(h3, indent);
+        }
+    }
+    retornar "";
+}
+
+// Renderizador Interactivo a Canvas 2D / WebAssembly
+funcion texto ui_renderizar_canvas_2d(ElementoUI el, texto canvas_id = "lumen_canvas", entero x = 10, entero y = 10) {
+    texto script = f"// Renderizado en Canvas 2D [{canvas_id}]\n";
+    si el.tipo_nodo == "Texto" {
+        script = script + f"ctx.font = '16px Inter, sans-serif'; ctx.fillText('{el.texto_contenido}', {x}, {y});\n";
+    } sino si el.tipo_nodo == "Boton" {
+        script = script + f"ctx.fillStyle = '#89b4fa'; ctx.fillRect({x}, {y}, 140, 36); ctx.fillStyle = '#11111b'; ctx.fillText('{el.texto_contenido}', {x + 10}, {y + 24});\n";
+    } sino si el.tipo_nodo == "Columna" {
+        entero curr_y = y;
+        para (entero i = 0; i < largo(el.hijos); i = i + 1) {
+            ElementoUI h = el.hijos[i];
+            script = script + ui_renderizar_canvas_2d(h, canvas_id, x, curr_y);
+            curr_y = curr_y + 40;
+        }
+    } sino si el.tipo_nodo == "Fila" {
+        entero curr_x = x;
+        para (entero j = 0; j < largo(el.hijos); j = j + 1) {
+            ElementoUI h2 = el.hijos[j];
+            script = script + ui_renderizar_canvas_2d(h2, canvas_id, curr_x, y);
+            curr_x = curr_x + 150;
+        }
+    }
+    retornar script;
+}

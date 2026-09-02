@@ -1,0 +1,53 @@
+[package]
+name = "lumen-vm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Máquina virtual stack-based para el lenguaje LÚMEN — ejecuta bytecode .nvc"
+keywords = ["lumen", "language", "vm", "virtual-machine", "educational"]
+
+[features]
+default = ["full"]
+# "extra": builtins puros que SÍ compilan en wasm32 (hash, jwt, aes, tiempo,
+# corutinas, streams, generadores). "full" añade los que requieren SO
+# (reqwest/libloading — NO compilan en wasm32-unknown-unknown).
+extra = ["base64", "hmac", "sha2", "hex"]
+full = ["extra", "ureq", "libloading", "aot"]
+aot = ["lumen-aot", "cranelift", "cranelift-jit", "cranelift-module", "cranelift-native"]
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("full", "extra"))'] }
+
+[dependencies]
+lumen-codegen = { path = "../lumen-codegen" }
+serde_json.workspace = true
+thiserror.workspace = true
+regex = "1"
+chrono = "0.4"
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
+lumen-aot = { path = "../lumen-aot", optional = true }
+ureq = { version = "2.10", optional = true }
+unicode-normalization = "0.1"
+libloading = { version = "0.8", optional = true }
+base64 = { version = "0.22", optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
+im = "15"
+cranelift = { version = "0.132", features = ["frontend"], optional = true }
+cranelift-jit = { version = "0.132", optional = true }
+cranelift-module = { version = "0.132", optional = true }
+cranelift-native = { version = "0.132", optional = true }
+
+[dev-dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
+lumen-aot = { path = "../lumen-aot" }
+lumen-fmt = { path = "../lumen-fmt" }

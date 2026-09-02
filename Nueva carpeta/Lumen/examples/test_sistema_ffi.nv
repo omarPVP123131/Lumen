@@ -1,0 +1,31 @@
+importar "sistema.nv";
+importar "texto.nv";
+
+imprimir("=== Sistema Test via FFI ===");
+
+// Proceso
+sea r = sistema_ejecutar("echo Hola");
+imprimir("ejecutar: ", r);
+
+// Env
+sea path = sistema_env_obtener("PATH");
+imprimir("PATH (primeros 30): ", texto_hasta(path, 30));
+
+sistema_env_asignar("LUMEN_TEST", "funciona");
+sea val = sistema_env_obtener("LUMEN_TEST");
+imprimir("LUMEN_TEST: ", val);
+
+// Path (pure string ops)
+sea unido = sistema_path_unir("carpeta", "archivo.txt");
+imprimir("unido: ", unido);
+
+sea ext = sistema_path_extension("documento.pdf");
+imprimir("extension: ", ext);
+
+sea nom = sistema_path_nombre_archivo("carpeta/sub/archivo.txt");
+imprimir("nombre: ", nom);
+
+sea padre = sistema_path_padre("carpeta/sub/archivo.txt");
+imprimir("padre: ", padre);
+
+imprimir("--- FIN ---");

@@ -1,0 +1,12 @@
+// Benchmark — strings unicode: largo() y acceso por índice
+funcion entero principal() {
+    texto s = "héllo wörld 🚀 café";
+    entero total = 0;
+    entero i = 0;
+    mientras (i < 200000) {
+        total = total + s.largo() + s[2].largo();
+        i = i + 1;
+    }
+    imprimir("unicode:" + a_texto(total));
+    retornar 0;
+}

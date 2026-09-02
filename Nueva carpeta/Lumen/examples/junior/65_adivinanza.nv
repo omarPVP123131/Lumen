@@ -1,0 +1,17 @@
+importar ingles;
+
+function string adivinar_numero(integer secreto, integer intento) {
+    if (intento == secreto) {
+        return "Correcto";
+    } else {
+        if (intento < secreto) {
+            return "Muy bajo";
+        } else {
+            return "Muy alto";
+        }
+    }
+}
+
+print(adivinar_numero(42, 50));
+print(adivinar_numero(42, 30));
+print(adivinar_numero(42, 42));

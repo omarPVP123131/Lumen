@@ -1,0 +1,61 @@
+// @expected_failure: Add requires numbers - sistema_temp_archivo
+// ==========================================
+// sistema_sr.nv — System operations (senior)
+// Uso: lumen run -L stdlib/ examples/sr/sistema_sr.nv
+// ==========================================
+importar "sistema.nv";
+
+imprimir("=== Sistema SR: Path Manipulation, Temp Files & Commands ===");
+
+// ── Example 1: Path Manipulation ──
+imprimir("--- Ej 1: Path Manipulation ---");
+sea ruta = "C:\\Users\\Omar\\Documents\\archivo.txt";
+
+sea ext = sistema_path_extension(ruta);
+imprimir("Extension:  ", ext);
+
+sea nombre = sistema_path_nombre_archivo(ruta);
+imprimir("Filename:   ", nombre);
+
+sea padre = sistema_path_padre(ruta);
+imprimir("Parent dir: ", padre);
+
+// English aliases
+sea ext_en = "C:\\data\\imagen.png";
+imprimir("ext_en:     ", sistema_path_extension(ext_en));
+imprimir("filename_en:", sistema_path_filename("/usr/local/bin/script.sh"));
+imprimir("parent_en:  ", sistema_path_parent("/home/user/docs/file.txt"));
+
+// ── Example 2: Temporary Files ──
+imprimir("--- Ej 2: Temp Files ---");
+sea tmp_dir = sistema_temp_directorio();
+imprimir("Temp dir: ", tmp_dir);
+
+sea tmp_file = sistema_temp_archivo();
+imprimir("Temp file:", tmp_file);
+
+// English alias
+sea en_dir = sistema_temp_dir();
+sea en_file = sistema_temp_file();
+imprimir("Temp dir EN:  ", en_dir);
+imprimir("Temp file EN: ", en_file);
+
+// ── Example 3: Run System Command ──
+imprimir("--- Ej 3: Run Command ---");
+sea echo_res = sistema_ejecutar("echo Hello from Lumen");
+imprimir("echo result: ", echo_res);
+
+sea dir_res = sistema_run("dir /B 2>nul");
+imprimir("dir result:  ", dir_res);
+
+// ── Example 4: Environment Set ──
+imprimir("--- Ej 4: Env Set ---");
+sistema_env_asignar("LUMEN_SR_KEY", "senior-value-42");
+sea val = sistema_env_obtener("LUMEN_SR_KEY");
+imprimir("Set & get: ", val);
+
+// English alias
+sistema_env_set("LUMEN_EN_KEY", "english-value");
+imprimir("EN set:    ", sistema_env_get("LUMEN_EN_KEY"));
+
+imprimir("--- FIN SISTEMA SR ---");

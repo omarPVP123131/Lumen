@@ -1,0 +1,43 @@
+// @expected_failure: Mod requires numbers - Windows ws2_32 only, no network
+// @interactive: requires network, connect may timeout 8s
+imprimir("=== Quick Connect Test ===");
+
+// Try to connect to a localhost HTTP server or any reachable host
+// Using google.com's IP as a test
+sea w = __ffi_cargar("ws2_32.dll");
+sea wsa = __ffi_asignar(400);
+__ffi_llamar(w, "WSAStartup", "entero,entero", [514, wsa], "entero");
+__ffi_liberar(wsa, 400);
+
+sea fd = __ffi_llamar(w, "socket", "entero,entero,entero", [2, 1, 0], "entero");
+imprimir("socket: ", fd);
+
+// Resolve hostname with getaddrinfo
+sea rh = __ffi_llamar(w, "gethostbyname", "texto", ["google.com"], "entero");
+imprimir("gethostbyname: ", rh);
+
+// Try direct IP 8.8.8.8:53 (Google DNS)
+sea addr = __ffi_asignar(16);
+__ffi_poke(addr, 0, 2); __ffi_poke(addr, 1, 0);  // AF_INET
+__ffi_poke(addr, 2, 0); __ffi_poke(addr, 3, 53); // port 53 DNS
+sea ip = __ffi_llamar(w, "inet_addr", "texto", ["8.8.8.8"], "entero");
+imprimir("inet_addr 8.8.8.8: ", ip);
+__ffi_poke(addr, 4, ip % 256);
+__ffi_poke(addr, 5, (ip / 256) % 256);
+__ffi_poke(addr, 6, (ip / 65536) % 256);
+__ffi_poke(addr, 7, (ip / 16777216) % 256);
+entero i = 8; mientras i < 16 { __ffi_poke(addr, i, 0); i = i + 1; }
+
+sea cr = __ffi_llamar(w, "connect", "entero,entero,entero", [fd, addr, 16], "entero");
+imprimir("connect: ", cr);
+__ffi_liberar(addr, 16);
+
+si cr == 0 {
+    imprimir("CONECTADO!");
+    __ffi_llamar(w, "closesocket", "entero", [fd], "entero");
+} sino {
+    sea e = __ffi_llamar(w, "WSAGetLastError", "", [], "entero");
+    imprimir("error: ", e);
+}
+
+imprimir("--- FIN ---");

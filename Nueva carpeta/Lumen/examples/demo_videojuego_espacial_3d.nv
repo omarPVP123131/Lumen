@@ -1,0 +1,67 @@
+// ============================================================================
+// LÚMEN v2.4.6 — DEMO: SIMULADOR ESPACIAL 3D & FÍSICA SAT
+// Combina: motor_grafico.nv + gpu.nv
+// ============================================================================
+
+importar "motor_grafico.nv";
+importar "gpu.nv";
+
+funcion vacio principal() {
+    imprimir("╔══════════════════════════════════════════════════════════════════╗");
+    imprimir("║   LÚMEN v2.4.6 — SIMULADOR ESPACIAL 3D & FÍSICA GPU              ║");
+    imprimir("╚══════════════════════════════════════════════════════════════════╝\n");
+
+    // 1. Inicialización de la Cámara 3D Orbital
+    imprimir("1. CONFIGURANDO CÁMARA 3D ORBITAL (LOOKAT & PERSPECTIVA):");
+    motor_grafico_Vector3D pos_nave = motor_grafico_vec3(0.0, 15.0, -35.0);
+    motor_grafico_Vector3D estacion_espacial = motor_grafico_vec3(0.0, 0.0, 0.0);
+    motor_grafico_Camara3D cam = motor_grafico_camara3d_crear(pos_nave, estacion_espacial, 75.0, 1.777);
+    motor_grafico_Matriz4x4 matriz_vista = motor_grafico_camara3d_matriz_vista(cam);
+    
+    imprimir("   • Posición de la nave: [x:", pos_nave.x, ", y:", pos_nave.y, ", z:", pos_nave.z, "]");
+    imprimir("   • Matriz LookAt 4x4 calculada: 16 componentes float.");
+
+    // 2. Sprite Batcher GPU (Enjambre de 1,000 asteroides en 1 solo Draw Call)
+    imprimir("\n2. SPRITE BATCHER GPU PARA ENJAMBRE DE ASTEROIDES:");
+    motor_grafico_SpriteBatcher batch = motor_grafico_batcher_crear(10000);
+    
+    para (entero i = 0; i < 1000; i = i + 1) {
+        decimal x_pos = (i % 50) * 12.0 - 300.0;
+        decimal y_pos = (i / 50) * 12.0 - 120.0;
+        batch = motor_grafico_batcher_dibujar(batch, 101, x_pos, y_pos, 8.0, 8.0, 0.8, 0.7, 0.6);
+    }
+    imprimir("   • Asteroides encolados en el buffer:", largo(batch.sprites));
+    batch = motor_grafico_batcher_flush(batch);
+    imprimir("   • Batcher Flush -> Draw Calls emitidos a GPU:", batch.draw_calls_emitidos, "(Reducción: 1000x sobrecarga evitada).");
+
+    // 3. Detección de Colisiones AABB / SAT
+    imprimir("\n3. DETECCIÓN DE COLISIONES ESPACIALES:");
+    motor_grafico_CajaAABB nave_hitbox = motor_grafico_CajaAABB { min_x: -5.0, min_y: -2.0, max_x: 5.0, max_y: 2.0 };
+    motor_grafico_CajaAABB asteroide_hitbox = motor_grafico_CajaAABB { min_x: 2.0, min_y: 0.0, max_x: 8.0, max_y: 6.0 };
+    
+    booleano impacto_nave = motor_grafico_colision_aabb(nave_hitbox, asteroide_hitbox);
+    imprimir("   • Colisión Nave-Asteroide detectada:", impacto_nave);
+
+    // 4. Raycasting 3D de Sistema de Guiado Láser
+    imprimir("\n4. SISTEMA DE GUIADO LÁSER & RAYCASTING 3D:");
+    motor_grafico_Rayo3D laser = motor_grafico_Rayo3D {
+        origen: motor_grafico_vec3(0.0, 0.0, -35.0),
+        direccion: motor_grafico_vec3(0.0, 0.0, 1.0)
+    };
+    motor_grafico_Esfera3D escudo_estacion = motor_grafico_Esfera3D {
+        centro: motor_grafico_vec3(0.0, 0.0, 0.0),
+        radio: 10.0
+    };
+    
+    decimal dist_laser = motor_grafico_raycast_impacto_esfera(laser, escudo_estacion);
+    imprimir("   • Láser impactó en escudo de la estación a una distancia de:", dist_laser, "unidades.");
+
+    // 5. Shader GPU de Partículas
+    imprimir("\n5. PIPELINE DE SHADER GPU (WEBGPU WGSL):");
+    texto shader_wgsl = gpu_generar_wgsl_matmul(128, 128, 32);
+    imprimir("   • Compute Shader WGSL generado:", largo(shader_wgsl), "caracteres listos para compilar en GPU.");
+
+    imprimir("\n✓ Simulación Espacial 3D ejecutada con éxito.");
+}
+
+principal();

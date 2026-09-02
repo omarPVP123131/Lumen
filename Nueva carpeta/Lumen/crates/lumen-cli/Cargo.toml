@@ -1,0 +1,30 @@
+[package]
+name = "lumen-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CLI del lenguaje LÚMEN — run, build, check, disasm"
+keywords = ["lumen", "language", "cli", "compiler", "educational"]
+
+[[bin]]
+name = "lumen"
+path = "src/main.rs"
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+lumen-ir = { path = "../lumen-ir" }
+lumen-codegen = { path = "../lumen-codegen" }
+lumen-vm = { path = "../lumen-vm" }
+lumen-fmt = { path = "../lumen-fmt" }
+lumen-repl = { path = "../lumen-repl" }
+lumen-project = { path = "../lumen-project" }
+lumen-aot = { path = "../lumen-aot" }
+lumen-doc = { path = "../lumen-doc" }
+lumen-lsp = { path = "../lumen-lsp" }
+lumen-pkg = { path = "../lumen-pkg" }
+chrono = "0.4"
+mimalloc = { version = "0.1", default-features = false }

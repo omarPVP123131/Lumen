@@ -1,0 +1,12 @@
+// Test de red.nv - API actual
+importar "red.nv";
+
+imprimir("=== Red.nv Simple Test ===");
+
+booleano fd = red_tcp_conectar("127.0.0.1:9"); // puerto 9 (discard) -> conexion rechazada
+imprimir("conectar: ", fd);
+
+booleano esc = red_tcp_escuchar("127.0.0.1:0"); // puerto efimero
+imprimir("escuchar: ", esc);
+
+imprimir("--- FIN ---");

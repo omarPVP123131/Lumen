@@ -1,0 +1,10 @@
+funcion entero primero<T>(lista<T> xs) { retornar xs[0]; }
+funcion vacio tocar(prestado mut lista<entero> xs) { xs.agregar(99); }
+funcion vacio main() {
+    imprimir(primero([7, 8]));
+    sea xs = [1];
+    tocar(xs);
+    imprimir(xs[1]);
+    sea nombre = "mundo";
+    imprimir("hola " + nombre + "!");
+}

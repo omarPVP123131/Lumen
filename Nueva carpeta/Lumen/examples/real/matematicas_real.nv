@@ -1,0 +1,118 @@
+// @interactive: expected timeout - heavy compute
+// ==========================================
+// matematicas_real.nv — Math operations (real-world)
+// Uso: lumen run -L stdlib/ examples/real/matematicas_real.nv
+// ==========================================
+importar "matematicas.nv";
+// Headless/CI guard — demo requiere display/SDL2/consola interactiva
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo omitida (requiere display)");
+    retornar;
+}
+
+imprimir("=== Matematicas REAL: Real-World Math ===");
+
+// ── Example 1: Statistics (Mean & Standard Deviation) ──
+imprimir("--- Ej 1: Estadísticas (Media y Desviación) ---");
+
+funcion numero calcular_media(lista<numero> datos) {
+    numero suma = 0;
+    entero i = 0;
+    mientras i < datos.largo() {
+        suma = suma + datos[i];
+        i = i + 1;
+    }
+    retornar suma / datos.largo();
+}
+
+funcion numero calcular_desviacion(lista<numero> datos) {
+    numero media = calcular_media(datos);
+    numero suma_cuadrados = 0;
+    entero i = 0;
+    mientras i < datos.largo() {
+        numero diff = datos[i] - media;
+        suma_cuadrados = suma_cuadrados + matematicas_potencia(diff, 2);
+        i = i + 1;
+    }
+    retornar matematicas_raiz(suma_cuadrados / datos.largo());
+}
+
+lista<numero> calificaciones = [85, 92, 78, 95, 88, 90, 82, 97];
+imprimir("datos:      ", calificaciones[0], ", ", calificaciones[1], ", ..., ", calificaciones[calificaciones.largo() - 1]);
+imprimir("media:      ", calcular_media(calificaciones));
+imprimir("desviación: ", calcular_desviacion(calificaciones));
+
+// ── Example 2: Compound Interest ──
+imprimir("--- Ej 2: Interés Compuesto ---");
+// A = P * (1 + r/n)^(n*t)
+
+funcion numero interes_compuesto(numero principal, numero tasa, entero periodos, entero anios) {
+    numero factor = 1 + tasa / periodos;
+    numero exponente = matematicas_potencia(factor, periodos * anios);
+    retornar principal * exponente;
+}
+
+numero inversion = 10000;
+numero tasa_anual = 0.08;  // 8%
+entero capitalizaciones = 12;  // monthly
+entero anios = 5;
+
+imprimir("Principal:          $", inversion);
+imprimir("Tasa anual:          ", tasa_anual * 100, "%");
+imprimir("Capitalización:      mensual");
+imprimir("Años:                ", anios);
+
+numero monto = interes_compuesto(inversion, tasa_anual, capitalizaciones, anios);
+imprimir("Monto final:        $", monto);
+imprimir("Ganancia:           $", monto - inversion);
+
+// Compare different compounding frequencies
+numero diario = interes_compuesto(inversion, tasa_anual, 365, anios);
+numero trimestral = interes_compuesto(inversion, tasa_anual, 4, anios);
+numero anual = interes_compuesto(inversion, tasa_anual, 1, anios);
+imprimir("Diario:             $", diario);
+imprimir("Trimestral:         $", trimestral);
+imprimir("Anual:              $", anual);
+
+// ── Example 3: Projectile Trajectory ──
+imprimir("--- Ej 3: Trayectoria de Proyectil ---");
+
+funcion numero altura_proyectil(numero v0, numero angulo, numero t) {
+    // y(t) = v0*sin(θ)*t - 0.5*g*t²
+    // g ≈ 9.8 m/s²
+    numero g = 9.8;
+    numero v0y = v0 * matematicas_seno(angulo);
+    retornar v0y * t - 0.5 * g * matematicas_potencia(t, 2);
+}
+
+funcion numero alcance_maximo(numero v0, numero angulo) {
+    // R = v0² * sin(2θ) / g
+    numero g = 9.8;
+    retornar matematicas_potencia(v0, 2) * matematicas_seno(2 * angulo) / g;
+}
+
+funcion numero tiempo_vuelo(numero v0, numero angulo) {
+    // T = 2 * v0 * sin(θ) / g
+    numero g = 9.8;
+    retornar 2 * v0 * matematicas_seno(angulo) / g;
+}
+
+// 30 m/s at 45° angle
+numero vel_inicial = 30;
+numero ang_rad = 0.785;  // ~45° in radians
+
+imprimir("Velocidad inicial:   ", vel_inicial, " m/s");
+imprimir("Ángulo:              ", ang_rad, " rad (~45°)");
+imprimir("Alcance máximo:      ", alcance_maximo(vel_inicial, ang_rad), " m");
+imprimir("Tiempo de vuelo:     ", tiempo_vuelo(vel_inicial, ang_rad), " s");
+
+// Heights at different times
+imprimir("Altura a t=0.5s:     ", altura_proyectil(vel_inicial, ang_rad, 0.5), " m");
+imprimir("Altura a t=1.0s:     ", altura_proyectil(vel_inicial, ang_rad, 1.0), " m");
+imprimir("Altura a t=2.0s:     ", altura_proyectil(vel_inicial, ang_rad, 2.0), " m");
+imprimir("Altura máxima aprox: ", altura_proyectil(vel_inicial, ang_rad, tiempo_vuelo(vel_inicial, ang_rad) / 2), " m");
+
+imprimir("--- FIN MATEMATICAS REAL ---");

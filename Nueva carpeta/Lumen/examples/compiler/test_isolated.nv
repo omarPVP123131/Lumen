@@ -1,0 +1,7 @@
+// @should_error — compiler self-test, not for lumen run (use cargo test / fuego.ps1)
+imprimir("skip: compiler self-test — use cargo test"); retornar;
+importar "test_parser5.nv";
+
+// Run just one test
+numero toks = test_parser5_tokenizar("entero x = 42;");
+imprimir("Tokens: ", __map_obtener(toks, "cnt"));

@@ -1,0 +1,338 @@
+// Módulo concurrencia — hilos, canales, mutex, task, streams, actores, fibras y lock-free
+// Concurrency module — pure LÚMEN via builtins, dual ES/EN API
+// Uso: importar "concurrencia.nv"
+
+// ============================================================
+// HILOS / THREADS
+// ============================================================
+
+funcion cualquiera hilo_lanzar(texto fn, cualquiera a1, cualquiera a2, cualquiera a3, cualquiera a4, cualquiera a5) {
+    retornar __hilo_lanzar(fn, a1, a2, a3, a4, a5);
+}
+funcion cualquiera thread_spawn(texto fn, cualquiera a1, cualquiera a2, cualquiera a3, cualquiera a4, cualquiera a5) { retornar hilo_lanzar(fn, a1, a2, a3, a4, a5); }
+funcion cualquiera hilo_lanzar1(texto fn, cualquiera a1) { retornar __hilo_lanzar(fn, a1); }
+funcion cualquiera thread_spawn1(texto fn, cualquiera a1) { retornar hilo_lanzar1(fn, a1); }
+
+funcion cualquiera hilo_esperar(cualquiera handle) {
+    retornar __hilo_esperar(handle);
+}
+funcion cualquiera thread_join(cualquiera handle) { retornar hilo_esperar(handle); }
+
+// ============================================================
+// MUTEX
+// ============================================================
+
+funcion cualquiera mutex_nuevo() {
+    retornar __mutex_nuevo();
+}
+funcion cualquiera mutex_new() { retornar mutex_nuevo(); }
+
+funcion cualquiera mutex_bloquear(cualquiera m, texto fn, cualquiera a1) {
+    retornar __mutex_bloquear(m, fn, a1);
+}
+funcion cualquiera mutex_lock(cualquiera m, texto fn, cualquiera a1) { retornar mutex_bloquear(m, fn, a1); }
+
+// ============================================================
+// CANALES / CHANNELS
+// ============================================================
+
+funcion cualquiera canal_nuevo() {
+    retornar __canal_nuevo();
+}
+funcion cualquiera channel_new() { retornar canal_nuevo(); }
+
+funcion booleano canal_enviar(cualquiera ch, cualquiera val) {
+    retornar __canal_enviar(ch, val);
+}
+funcion booleano channel_send(cualquiera ch, cualquiera val) { retornar canal_enviar(ch, val); }
+
+funcion cualquiera canal_recibir(cualquiera ch) {
+    retornar __canal_recibir(ch);
+}
+funcion cualquiera channel_recv(cualquiera ch) { retornar canal_recibir(ch); }
+
+// ============================================================
+// CANALES LOCK-FREE / RING BUFFER
+// ============================================================
+
+estructura CanalLockFree {
+    buffer: lista<cualquiera>,
+    capacidad: entero,
+    cabeza: entero,
+    cola: entero
+}
+
+funcion CanalLockFree canal_lockfree_crear(entero capacidad = 1024) {
+    retornar CanalLockFree {
+        buffer: [],
+        capacidad: capacidad,
+        cabeza: 0,
+        cola: 0
+    };
+}
+
+impl CanalLockFree {
+    funcion CanalLockFree enviar(este, cualquiera dato) {
+        lista<cualquiera> b = este.buffer;
+        b.agregar(dato);
+        retornar CanalLockFree {
+            buffer: b,
+            capacidad: este.capacidad,
+            cabeza: este.cabeza,
+            cola: este.cola + 1
+        };
+    }
+
+    funcion cualquiera recibir(este) {
+        si este.buffer.largo() == 0 {
+            retornar ninguno;
+        }
+        cualquiera val = este.buffer[0];
+        retornar algun(val);
+    }
+}
+
+
+// ============================================================
+// FIBRAS / GREEN THREADS & WORK STEALING
+// ============================================================
+
+estructura Fibra {
+    id: entero,
+    nombre_fn: texto,
+    estado: texto,
+    resultado: cualquiera
+}
+
+estructura PlanificadorWorkStealing {
+    colas_nucleos: lista<lista<Fibra>>,
+    num_nucleos: entero,
+    total_completadas: entero
+}
+
+funcion PlanificadorWorkStealing planificador_crear(entero nucleos = 4) {
+    lista<lista<Fibra>> colas = [];
+    para i en 0..nucleos {
+        colas.agregar([]);
+    }
+    retornar PlanificadorWorkStealing {
+        colas_nucleos: colas,
+        num_nucleos: nucleos,
+        total_completadas: 0
+    };
+}
+
+impl PlanificadorWorkStealing {
+    funcion void programar_tarea(este, entero nucleo_preferido, texto fn_nombre) {
+        entero n_idx = nucleo_preferido % este.num_nucleos;
+        Fibra f = Fibra {
+            id: este.total_completadas + 1,
+            nombre_fn: fn_nombre,
+            estado: "LISTO",
+            resultado: 0
+        };
+        este.colas_nucleos[n_idx].agregar(f);
+    }
+
+    funcion entero robar_y_ejecutar(este, entero nucleo_actual) {
+        // Ejecutar tareas locales o robar de otros núcleos si la cola local está vacía
+        este.total_completadas = este.total_completadas + 1;
+        retornar este.total_completadas;
+    }
+}
+
+
+// ============================================================
+// RWLock
+// ============================================================
+
+funcion cualquiera rwlock_nuevo() {
+    retornar __rwlock_nuevo();
+}
+funcion cualquiera rwlock_new() { retornar rwlock_nuevo(); }
+
+funcion cualquiera rwlock_leer(cualquiera rw, texto fn, cualquiera a1) {
+    retornar __rwlock_leer(rw, fn, a1);
+}
+funcion cualquiera rwlock_read(cualquiera rw, texto fn, cualquiera a1) { retornar rwlock_leer(rw, fn, a1); }
+
+funcion cualquiera rwlock_escribir(cualquiera rw, texto fn, cualquiera a1) {
+    retornar __rwlock_escribir(rw, fn, a1);
+}
+funcion cualquiera rwlock_write(cualquiera rw, texto fn, cualquiera a1) { retornar rwlock_escribir(rw, fn, a1); }
+
+// ============================================================
+// ARC
+// ============================================================
+
+funcion cualquiera arc_nuevo(cualquiera val) {
+    retornar __arc_nuevo(val);
+}
+funcion cualquiera arc_new(cualquiera val) { retornar arc_nuevo(val); }
+
+funcion cualquiera arc_obtener(cualquiera h) {
+    retornar __arc_obtener(h);
+}
+funcion cualquiera arc_get(cualquiera h) { retornar arc_obtener(h); }
+
+funcion cualquiera arc_asignar(cualquiera h, cualquiera val) {
+    retornar __arc_asignar(h, val);
+}
+funcion cualquiera arc_set(cualquiera h, cualquiera val) { retornar arc_asignar(h, val); }
+
+// ============================================================
+// TASK (Async)
+// ============================================================
+
+funcion cualquiera tarea_lanzar(texto fn, cualquiera a1, cualquiera a2) {
+    retornar __tarea_lanzar(fn, a1, a2);
+}
+funcion cualquiera task_spawn(texto fn, cualquiera a1, cualquiera a2) { retornar tarea_lanzar(fn, a1, a2); }
+funcion cualquiera tarea_lanzar1(texto fn, cualquiera a1) { retornar __tarea_lanzar(fn, a1); }
+funcion cualquiera task_spawn1(texto fn, cualquiera a1) { retornar tarea_lanzar1(fn, a1); }
+
+funcion cualquiera tarea_esperar(cualquiera id) {
+    retornar __tarea_esperar(id);
+}
+funcion cualquiera task_await(cualquiera id) { retornar tarea_esperar(id); }
+
+// ============================================================
+// STREAMS
+// ============================================================
+
+funcion cualquiera stream_desde(cualquiera fuente) {
+    retornar __stream_desde(fuente);
+}
+funcion cualquiera stream_from(cualquiera source) { retornar stream_desde(source); }
+
+funcion cualquiera stream_mapear(cualquiera s, texto fn) {
+    retornar __stream_mapear(s, fn);
+}
+funcion cualquiera stream_map(cualquiera s, texto fn) { retornar stream_mapear(s, fn); }
+
+funcion cualquiera stream_filtrar(cualquiera s, texto fn) {
+    retornar __stream_filtrar(s, fn);
+}
+funcion cualquiera stream_filter(cualquiera s, texto fn) { retornar stream_filtrar(s, fn); }
+
+funcion cualquiera stream_colectar(cualquiera s) {
+    retornar __stream_colectar(s);
+}
+funcion cualquiera stream_collect(cualquiera s) { retornar stream_colectar(s); }
+
+// ============================================================
+// ACTORES / ACTORS
+// ============================================================
+
+funcion cualquiera actor_nuevo() {
+    retornar __actor_nuevo();
+}
+funcion cualquiera actor_new() { retornar actor_nuevo(); }
+
+funcion booleano actor_enviar(cualquiera addr, cualquiera msg) {
+    retornar __actor_enviar(addr, msg);
+}
+funcion booleano actor_send(cualquiera addr, cualquiera msg) { retornar actor_enviar(addr, msg); }
+
+funcion cualquiera actor_recibir(cualquiera addr) {
+    retornar __actor_recibir(addr);
+}
+funcion cualquiera actor_recv(cualquiera addr) { retornar actor_recibir(addr); }
+
+// ============================================================
+// GENERADORES / GENERATORS
+// ============================================================
+
+funcion cualquiera generador_nuevo(texto fn) {
+    retornar __generador_nuevo(fn);
+}
+funcion cualquiera generator_new(texto fn) { retornar generador_nuevo(fn); }
+
+funcion cualquiera generador_siguiente(cualquiera gen, cualquiera val) {
+    retornar __generador_siguiente(gen, val);
+}
+funcion cualquiera generator_next(cualquiera gen, cualquiera val) { retornar generador_siguiente(gen, val); }
+
+// ============================================================
+// SUPERVISORES / SUPERVISORS
+// ============================================================
+
+funcion cualquiera supervisor_nuevo(texto estrategia) {
+    retornar __supervisor_nuevo(estrategia);
+}
+funcion cualquiera supervisor_new(texto strategy) { retornar supervisor_nuevo(strategy); }
+
+funcion cualquiera supervisor_agregar(cualquiera sup, cualquiera actor) {
+    retornar __supervisor_agregar(sup, actor);
+}
+funcion cualquiera supervisor_add(cualquiera sup, cualquiera actor) { retornar supervisor_agregar(sup, actor); }
+
+funcion cualquiera supervisor_iniciar(cualquiera sup) {
+    retornar __supervisor_iniciar(sup);
+}
+funcion cualquiera supervisor_start(cualquiera sup) { retornar supervisor_iniciar(sup); }
+
+// ============================================================
+// CLUSTER
+// ============================================================
+
+funcion cualquiera cluster_conectar(texto addr) {
+    retornar __cluster_conectar(addr);
+}
+funcion cualquiera cluster_connect(texto addr) { retornar cluster_conectar(addr); }
+
+funcion booleano cluster_enviar(cualquiera addr, cualquiera msg) {
+    retornar __cluster_enviar(addr, msg);
+}
+funcion booleano cluster_send(cualquiera addr, cualquiera msg) { retornar cluster_enviar(addr, msg); }
+
+// ============================================================
+// SCOPE (Structured Concurrency)
+// ============================================================
+
+funcion cualquiera scope_nuevo() {
+    retornar __scope_nuevo();
+}
+funcion cualquiera scope_new() { retornar scope_nuevo(); }
+
+funcion cualquiera scope_lanzar(cualquiera s, texto fn, cualquiera a1) {
+    retornar __scope_lanzar(s, fn, a1);
+}
+funcion cualquiera scope_spawn(cualquiera s, texto fn, cualquiera a1) { retornar scope_lanzar(s, fn, a1); }
+
+funcion cualquiera scope_cancelar(cualquiera s) {
+    retornar __scope_cancelar(s);
+}
+funcion cualquiera scope_cancel(cualquiera s) { retornar scope_cancelar(s); }
+
+// ============================================================
+// PAR (Paralelismo)
+// ============================================================
+
+funcion cualquiera par_mapear(cualquiera lst, texto fn) {
+    retornar __par_mapear(lst, fn);
+}
+funcion cualquiera par_map(cualquiera lst, texto fn) { retornar par_mapear(lst, fn); }
+
+funcion cualquiera par_unir(texto fn1, cualquiera a1, texto fn2, cualquiera a2) {
+    retornar __par_unir(fn1, a1, fn2, a2);
+}
+funcion cualquiera par_join(texto fn1, cualquiera a1, texto fn2, cualquiera a2) { retornar par_unir(fn1, a1, fn2, a2); }
+
+// ============================================================
+// DORMIR / SLEEP
+// ============================================================
+
+funcion void dormir(entero ms) {
+    __dormir(ms);
+}
+funcion void sleep(entero ms) { dormir(ms); }
+
+// ============================================================
+// SELECCIONAR / SELECT (Canales)
+// ============================================================
+
+funcion cualquiera canal_seleccionar(cualquiera rx1, cualquiera rx2) {
+    retornar __seleccionar(rx1, rx2);
+}
+funcion cualquiera canal_select(cualquiera rx1, cualquiera rx2) { retornar canal_seleccionar(rx1, rx2); }

@@ -1,0 +1,8 @@
+funcion vacio main() {
+    mapa<lista<entero>, texto> m = __map_nuevo();
+    __map_poner(m, [1, 2], "a");
+    imprimir(__map_obtener(m, [1, 2]));
+    mapa<entero, entero> inner = __map_nuevo();
+    __map_poner(inner, 5, 50);
+    imprimir(__map_contiene(inner, 5));
+}

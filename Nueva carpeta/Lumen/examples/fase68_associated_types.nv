@@ -1,0 +1,11 @@
+// Fase 68 — Associated Types: un tipo asociado en un rasgo
+rasgo Coleccion {
+    tipo Item;
+    funcion entero contar(este);
+    funcion Item primero(este);
+}
+
+funcion entero principal() {
+    imprimir("rasgo con tipo asociado 'Item'");
+    retornar 0;
+}

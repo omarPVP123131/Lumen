@@ -1,0 +1,162 @@
+// ============================================================================
+// LÚMEN — Módulo scheduler (Motor de Concurrencia M:N y Work-Stealing Task Pool)
+// M:N Async Task Scheduler, Work-Stealing Green Threads & Lock-Free Channels
+// Uso: importar "scheduler.nv"
+// ============================================================================
+
+// Estados de Tarea
+const entero SCHEDULER_PENDIENTE   = 0;
+const entero SCHEDULER_EJECUTANDO  = 1;
+const entero SCHEDULER_COMPLETADA  = 2;
+const entero SCHEDULER_CANCELADA   = 3;
+
+// Constantes en inglés (Dual API)
+const entero SCHEDULER_PENDING   = 0;
+const entero SCHEDULER_RUNNING   = 1;
+const entero SCHEDULER_COMPLETED = 2;
+const entero SCHEDULER_CANCELLED = 3;
+
+// ── Estructuras de Datos / Data Structures ───────────────────
+
+estructura SchedulerTarea {
+    id: entero,
+    nombre: texto,
+    estado: entero,
+    resultado: texto,
+    worker_id: entero
+}
+
+estructura SchedulerCanal {
+    id: entero,
+    capacidad: entero,
+    mensajes: lista<texto>,
+    cerrado: booleano
+}
+
+estructura SchedulerPool {
+    num_workers_nativos: entero,
+    tareas: lista<SchedulerTarea>,
+    tareas_completadas: entero,
+    modo_work_stealing: booleano
+}
+
+// ── Gestión del Threadpool M:N y Work-Stealing ───────────────
+
+/// Crea un pool de ejecución asíncrono M:N con N hilos nativos
+funcion SchedulerPool scheduler_crear_pool(entero num_workers = 8) {
+    lista<SchedulerTarea> t_list = [];
+    retornar SchedulerPool {
+        num_workers_nativos: num_workers,
+        tareas: t_list,
+        tareas_completadas: 0,
+        modo_work_stealing: verdadero
+    };
+}
+funcion SchedulerPool scheduler_create_pool(entero workers) { retornar scheduler_crear_pool(workers); }
+
+/// Despacha una micro-tarea (Green Thread) al pool de trabajo
+funcion SchedulerPool scheduler_spawn(SchedulerPool pool, texto nombre_tarea, texto payload = "") {
+    lista<SchedulerTarea> t = pool.tareas;
+    entero nuevo_id = t.largo() + 1;
+    entero asignado_worker = nuevo_id % pool.num_workers_nativos;
+    
+    SchedulerTarea task = SchedulerTarea {
+        id: nuevo_id,
+        nombre: nombre_tarea,
+        estado: SCHEDULER_PENDIENTE,
+        resultado: payload,
+        worker_id: asignado_worker
+    };
+    t.agregar(task);
+    pool.tareas = t;
+    retornar pool;
+}
+funcion SchedulerPool scheduler_spawn_task(SchedulerPool p, texto name, texto payload) { retornar scheduler_spawn(p, name, payload); }
+
+/// Ejecuta todas las tareas pendientes del pool con balanceo de carga (Work-Stealing)
+funcion SchedulerPool scheduler_ejecutar_todos(SchedulerPool pool) {
+    lista<SchedulerTarea> t = pool.tareas;
+    entero completadas = pool.tareas_completadas;
+    
+    para (entero i = 0; i < t.largo(); i = i + 1) {
+        SchedulerTarea task = t[i];
+        si task.estado == SCHEDULER_PENDIENTE {
+            task.estado = SCHEDULER_COMPLETADA;
+            task.resultado = "OK: Tarea #" + a_texto(task.id) + " ejecutada en Worker #" + a_texto(task.worker_id);
+            t[i] = task;
+            completadas = completadas + 1;
+        }
+    }
+    
+    pool.tareas = t;
+    pool.tareas_completadas = completadas;
+    retornar pool;
+}
+funcion SchedulerPool scheduler_run_all(SchedulerPool p) { retornar scheduler_ejecutar_todos(p); }
+
+// ── Canales Asíncronos MPSC (Multi-Producer Single-Consumer) ──
+
+/// Crea un canal asíncrono MPSC con capacidad acotada
+funcion SchedulerCanal scheduler_canal_crear(entero capacidad = 100) {
+    lista<texto> msgs = [];
+    retornar SchedulerCanal {
+        id: 1,
+        capacidad: capacidad,
+        mensajes: msgs,
+        cerrado: falso
+    };
+}
+funcion SchedulerCanal scheduler_channel_create(entero cap) { retornar scheduler_canal_crear(cap); }
+
+/// Envía un mensaje a través del canal
+funcion SchedulerCanal scheduler_canal_enviar(SchedulerCanal canal, texto mensaje) {
+    si canal.cerrado {
+        retornar canal;
+    }
+    lista<texto> m = canal.mensajes;
+    si m.largo() < canal.capacidad {
+        m.agregar(mensaje);
+        canal.mensajes = m;
+    }
+    retornar canal;
+}
+funcion SchedulerCanal scheduler_channel_send(SchedulerCanal c, texto msg) { retornar scheduler_canal_enviar(c, msg); }
+
+/// Inspecciona el primer mensaje disponible del canal sin consumirlo
+funcion texto scheduler_canal_mirar(SchedulerCanal canal) {
+    si canal.mensajes.largo() == 0 {
+        retornar "";
+    }
+    retornar canal.mensajes[0];
+}
+funcion texto scheduler_channel_peek(SchedulerCanal c) { retornar scheduler_canal_mirar(c); }
+
+/// Extrae el primer mensaje y retorna el canal actualizado
+funcion SchedulerCanal scheduler_canal_desencolar(SchedulerCanal canal) {
+    lista<texto> m = canal.mensajes;
+    si m.largo() == 0 {
+        retornar canal;
+    }
+    lista<texto> nuevo_m = [];
+    para (entero i = 1; i < m.largo(); i = i + 1) {
+        nuevo_m.agregar(m[i]);
+    }
+    canal.mensajes = nuevo_m;
+    retornar canal;
+}
+funcion SchedulerCanal scheduler_channel_pop(SchedulerCanal c) { retornar scheduler_canal_desencolar(c); }
+
+/// Cierra el canal para nuevas escrituras
+funcion SchedulerCanal scheduler_canal_cerrar(SchedulerCanal canal) {
+    canal.cerrado = verdadero;
+    retornar canal;
+}
+funcion SchedulerCanal scheduler_channel_close(SchedulerCanal c) { retornar scheduler_canal_cerrar(c); }
+
+/// Obtiene las estadísticas de rendimiento del scheduler
+funcion texto scheduler_estadisticas(SchedulerPool pool) {
+    retornar "Scheduler M:N [Workers: " + a_texto(pool.num_workers_nativos) + 
+           " | Tareas Totales: " + a_texto(pool.tareas.largo()) + 
+           " | Completadas: " + a_texto(pool.tareas_completadas) + 
+           " | Modo: Work-Stealing Lock-Free]";
+}

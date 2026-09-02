@@ -1,0 +1,27 @@
+// v3.5.17 — Hilos reales: VM vs C vs Cranelift deben imprimir lo mismo.
+// Resultado determinista (independiente del intercalado de hilos):
+//   trabajo(a,b) = 50000*(a+b) + a*b
+//   h1: a=11, b=22  -> 1650242
+//   h2: a=33, b=44  -> 3851452
+//   h3: a=55, b=66  -> 6053630
+//   texto: "H1=1650242 | H2=3851452 | H3=6053630 | TOTAL=11555324"
+
+funcion entero trabajo(entero a, entero b) {
+    sea acc = a * b;
+    entero i = 0;
+    mientras (i < 50000) {
+        acc = acc + a + b;
+        i = i + 1;
+    }
+    retornar acc;
+}
+
+imprimir("inicio hilos");
+sea h1 = __hilo_lanzar("trabajo", 11, 22);
+sea h2 = __hilo_lanzar("trabajo", 33, 44);
+sea h3 = __hilo_lanzar("trabajo", 55, 66);
+sea r1 = __hilo_esperar(h1);
+sea r2 = __hilo_esperar(h2);
+sea r3 = __hilo_esperar(h3);
+imprimir("H1=" + r1 + " | H2=" + r2 + " | H3=" + r3);
+imprimir("TOTAL=" + (r1 + r2 + r3));

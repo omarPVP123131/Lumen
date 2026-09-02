@@ -1,0 +1,11 @@
+importar ingles;
+
+string s = "Hola Mundo";
+array<string> partes = __str_dividir(s, " ");
+
+print(partes[0]);
+print(partes[1]);
+
+print(__str_mayusculas(s));
+print(__str_minusculas(s));
+print(__str_contiene(s, "Mun"));

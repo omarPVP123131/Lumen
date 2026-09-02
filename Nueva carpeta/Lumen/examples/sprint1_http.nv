@@ -1,0 +1,20 @@
+// Test HTTP - GET y POST via red.nv
+importar "red.nv";
+// Headless/CI guard — test de red, omitido en CI (requiere red/httpbin)
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — test de red omitido");
+    retornar;
+}
+
+imprimir("=== HTTP Test ===");
+
+resultado<texto, texto> body = red_http_obtener("http://example.com/");
+imprimir("GET status: ", body);
+
+resultado<texto, texto> body2 = red_http_enviar("http://example.com/", "{\"test\":42}");
+imprimir("POST status: ", body2);
+
+imprimir("--- FIN ---");

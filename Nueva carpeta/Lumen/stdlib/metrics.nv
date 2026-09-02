@@ -1,0 +1,126 @@
+// Modulo de metricas para LUMEN
+// Metrics module for LUMEN - dual ES/EN API
+// Uso: importar "metrics.nv"
+
+// Almacenamiento interno de metricas / Internal metrics storage
+cualquiera _metricas = __map_nuevo();
+
+// ── Contadores / Counters ──
+
+// Incrementa un contador / Increment a counter
+funcion void contador_incrementar(texto nombre) {
+    cualquiera actual = __map_obtener(_metricas, nombre + "_counter");
+    entero valor = 0;
+    si actual != ninguno {
+        valor = actual como entero;
+    }
+    valor = valor + 1;
+    _metricas = __map_poner(_metricas, nombre + "_counter", valor);
+}
+funcion void counter_inc(texto name) { contador_incrementar(name); }
+
+// Decrementa un contador / Decrement a counter
+funcion void contador_decrementar(texto nombre) {
+    cualquiera actual = __map_obtener(_metricas, nombre + "_counter");
+    entero valor = 0;
+    si actual != ninguno {
+        valor = actual como entero;
+    }
+    valor = valor - 1;
+    _metricas = __map_poner(_metricas, nombre + "_counter", valor);
+}
+funcion void counter_dec(texto name) { contador_decrementar(name); }
+
+// Obtiene el valor de un contador / Get counter value
+funcion entero contador_obtener(texto nombre) {
+    cualquiera actual = __map_obtener(_metricas, nombre + "_counter");
+    si actual != ninguno {
+        retornar actual como entero;
+    }
+    retornar 0;
+}
+funcion entero counter_get(texto name) { retornar contador_obtener(name); }
+
+// ── Medidores / Gauges ──
+
+// Establece el valor de un medidor / Set a gauge value
+funcion void medidor_asignar(texto nombre, decimal valor) {
+    _metricas = __map_poner(_metricas, nombre + "_gauge", valor);
+}
+funcion void gauge_set(texto name, decimal value) { medidor_asignar(name, value); }
+
+// Obtiene el valor de un medidor / Get a gauge value
+funcion decimal medidor_obtener(texto nombre) {
+    cualquiera actual = __map_obtener(_metricas, nombre + "_gauge");
+    si actual != ninguno {
+        retornar actual como decimal;
+    }
+    retornar 0.0;
+}
+funcion decimal gauge_get(texto name) { retornar medidor_obtener(name); }
+
+// ── Temporizadores / Timers ──
+
+// Registra una duracion en milisegundos / Record a duration in milliseconds
+funcion void temporizador_registrar(texto nombre, entero ms) {
+    // Guardar en una lista de valores para calcular promedio, min, max
+    // Store in a list of values to calculate avg, min, max
+    cualquiera clave = nombre + "_timer_values";
+    cualquiera actual = __map_obtener(_metricas, clave);
+    lista<entero> valores = [];
+    // TODO: handle list retrieval from map
+    valores.agregar(ms);
+    _metricas = __map_poner(_metricas, clave, valores);
+
+    // Actualizar contador de llamadas / Update call count
+    cualquiera cuenta_actual = __map_obtener(_metricas, nombre + "_timer_count");
+    entero cuenta = 0;
+    si cuenta_actual != ninguno {
+        cuenta = cuenta_actual como entero;
+    }
+    cuenta = cuenta + 1;
+    _metricas = __map_poner(_metricas, nombre + "_timer_count", cuenta);
+
+    // Actualizar total acumulado / Update accumulated total
+    cualquiera total_actual = __map_obtener(_metricas, nombre + "_timer_total");
+    entero total = 0;
+    si total_actual != ninguno {
+        total = total_actual como entero;
+    }
+    total = total + ms;
+    _metricas = __map_poner(_metricas, nombre + "_timer_total", total);
+}
+funcion void timer_record(texto name, entero ms) { temporizador_registrar(name, ms); }
+
+// Obtiene el promedio de un temporizador / Get timer average
+funcion decimal temporizador_promedio(texto nombre) {
+    cualquiera total_actual = __map_obtener(_metricas, nombre + "_timer_total");
+    cualquiera cuenta_actual = __map_obtener(_metricas, nombre + "_timer_count");
+    entero total = 0;
+    entero cuenta = 0;
+    si total_actual != ninguno { total = total_actual como entero; }
+    si cuenta_actual != ninguno { cuenta = cuenta_actual como entero; }
+    si cuenta == 0 { retornar 0.0; }
+    retornar (total como decimal) / (cuenta como decimal);
+}
+funcion decimal timer_avg(texto name) { retornar temporizador_promedio(name); }
+
+// ── Consulta de metricas / Metrics query ──
+
+// Obtiene todas las metricas como mapa / Get all metrics as a map
+funcion cualquiera metricas_obtener() {
+    retornar _metricas;
+}
+funcion cualquiera metrics_get() { retornar metricas_obtener(); }
+
+// Obtiene el numero de metricas registradas / Get number of registered metrics
+funcion entero metricas_contar() {
+    retornar __map_longitud(_metricas);
+}
+funcion entero metrics_count() { retornar metricas_contar(); }
+
+// Reinicia todas las metricas / Reset all metrics
+funcion void metricas_reiniciar() {
+    _metricas = __map_nuevo();
+}
+funcion void metrics_reset() { metricas_reiniciar(); }

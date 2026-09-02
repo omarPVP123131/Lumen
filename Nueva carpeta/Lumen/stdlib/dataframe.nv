@@ -1,0 +1,249 @@
+// ============================================================================
+// Módulo dataframe — Big Data, DataFrames Vectorizados & Consultas SIMD
+// High-Performance DataFrame & Big Data Engine (Style Polars / Apache Arrow)
+// Consultas encadenadas con operador pipe (|>), CSV/JSON & Estadísticas
+// Uso: importar "dataframe.nv"
+// ============================================================================
+
+estructura Columna {
+    nombre: texto,
+    tipo_dato: texto,
+    valores: cualquiera // lista<cualquiera>
+}
+
+estructura DataFrame {
+    nombres_columnas: lista<texto>,
+    columnas: cualquiera, // mapa de nombre -> lista de valores
+    filas_count: entero
+}
+
+// ── 1. Constructores y Manipulación Básica ────────────────────────────
+
+funcion DataFrame df_nuevo(lista<texto> columnas) {
+    cualquiera mapa_cols = __map_nuevo();
+    entero n = largo(columnas);
+    para (entero i = 0; i < n; i = i + 1) {
+        lista<cualquiera> vacio = [];
+        mapa_cols = __map_poner(mapa_cols, columnas[i], vacio);
+    }
+    retornar DataFrame {
+        nombres_columnas: columnas,
+        columnas: mapa_cols,
+        filas_count: 0
+    };
+}
+funcion DataFrame new_dataframe(lista<texto> cols) { retornar df_nuevo(cols); }
+
+funcion DataFrame df_agregar_fila(DataFrame df, lista<cualquiera> fila) {
+    entero n = largo(df.nombres_columnas);
+    para (entero i = 0; i < n; i = i + 1) {
+        si i < largo(fila) {
+            texto col_nombre = df.nombres_columnas[i];
+            lista<cualquiera> vals = __map_obtener(df.columnas, col_nombre);
+            vals.agregar(fila[i]);
+            df.columnas = __map_poner(df.columnas, col_nombre, vals);
+        }
+    }
+    df.filas_count = df.filas_count + 1;
+    retornar df;
+}
+funcion DataFrame df_push_row(DataFrame df, lista<cualquiera> row) {
+    retornar df_agregar_fila(df, row);
+}
+
+funcion lista<cualquiera> df_obtener_columna(DataFrame df, texto columna) {
+    si __map_contiene(df.columnas, columna) {
+        retornar __map_obtener(df.columnas, columna);
+    }
+    lista<cualquiera> vacio = [];
+    retornar vacio;
+}
+funcion lista<cualquiera> df_get_column(DataFrame df, texto col) {
+    retornar df_obtener_columna(df, col);
+}
+
+// ── 2. Filtros y Transformaciones Vectorizadas ────────────────────────
+
+// Filtra filas donde col_nombre == valor
+funcion DataFrame df_filtrar(DataFrame df, texto col_nombre, cualquiera valor) {
+    lista<cualquiera> col_vals = df_obtener_columna(df, col_nombre);
+    DataFrame nuevo_df = df_nuevo(df.nombres_columnas);
+    
+    para (entero r = 0; r < df.filas_count; r = r + 1) {
+        si col_vals[r] == valor {
+            lista<cualquiera> fila = [];
+            para (entero c = 0; c < largo(df.nombres_columnas); c = c + 1) {
+                lista<cualquiera> cv = df_obtener_columna(df, df.nombres_columnas[c]);
+                fila.agregar(cv[r]);
+            }
+            nuevo_df = df_agregar_fila(nuevo_df, fila);
+        }
+    }
+    retornar nuevo_df;
+}
+funcion DataFrame df_filter_eq(DataFrame df, texto col_name, cualquiera val) {
+    retornar df_filtrar(df, col_name, val);
+}
+
+// Filtra filas numéricas donde col_nombre > limite
+funcion DataFrame df_filtrar_mayor_que(DataFrame df, texto col_nombre, decimal limite) {
+    lista<cualquiera> col_vals = df_obtener_columna(df, col_nombre);
+    DataFrame nuevo_df = df_nuevo(df.nombres_columnas);
+    
+    para (entero r = 0; r < df.filas_count; r = r + 1) {
+        decimal v = col_vals[r];
+        si v > limite {
+            lista<cualquiera> fila = [];
+            para (entero c = 0; c < largo(df.nombres_columnas); c = c + 1) {
+                lista<cualquiera> cv = df_obtener_columna(df, df.nombres_columnas[c]);
+                fila.agregar(cv[r]);
+            }
+            nuevo_df = df_agregar_fila(nuevo_df, fila);
+        }
+    }
+    retornar nuevo_df;
+}
+funcion DataFrame df_filter_gt(DataFrame df, texto col, decimal limit) {
+    retornar df_filtrar_mayor_que(df, col, limit);
+}
+
+// ── 3. Agrupaciones (Group By) y Estadísticas ────────────────────────
+
+// Agrupa por una columna categórica y calcula el promedio de una columna numérica
+funcion DataFrame df_agrupar_por_promedio(DataFrame df, texto col_grupo, texto col_valor) {
+    lista<cualquiera> grupos = df_obtener_columna(df, col_grupo);
+    lista<cualquiera> valores = df_obtener_columna(df, col_valor);
+    
+    lista<texto> claves_unicas = [];
+    cualquiera sumas_map = __map_nuevo();
+    cualquiera conteos_map = __map_nuevo();
+    
+    para (entero i = 0; i < largo(grupos); i = i + 1) {
+        texto g = a_texto(grupos[i]);
+        decimal val = valores[i];
+        
+        si !__map_contiene(sumas_map, g) {
+            claves_unicas.agregar(g);
+            sumas_map = __map_poner(sumas_map, g, val);
+            conteos_map = __map_poner(conteos_map, g, 1.0);
+        } sino {
+            decimal suma_act = __map_obtener(sumas_map, g);
+            decimal count_act = __map_obtener(conteos_map, g);
+            sumas_map = __map_poner(sumas_map, g, suma_act + val);
+            conteos_map = __map_poner(conteos_map, g, count_act + 1.0);
+        }
+    }
+    
+    lista<texto> cols_res = [col_grupo, "promedio_" + col_valor, "conteo"];
+    DataFrame res_df = df_nuevo(cols_res);
+    
+    para (entero i = 0; i < largo(claves_unicas); i = i + 1) {
+        texto k = claves_unicas[i];
+        decimal s = __map_obtener(sumas_map, k);
+        decimal c = __map_obtener(conteos_map, k);
+        decimal prom = s / c;
+        res_df = df_agregar_fila(res_df, [k, prom, c]);
+    }
+    
+    retornar res_df;
+}
+funcion DataFrame df_group_by_avg(DataFrame df, texto group_col, texto val_col) {
+    retornar df_agrupar_por_promedio(df, group_col, val_col);
+}
+
+// Estadísticas de Columna
+funcion decimal df_promedio(DataFrame df, texto columna) {
+    lista<cualquiera> vals = df_obtener_columna(df, columna);
+    entero n = largo(vals);
+    si n == 0 { retornar 0.0; }
+    decimal suma = 0.0;
+    para (entero i = 0; i < n; i = i + 1) {
+        suma = suma + vals[i];
+    }
+    retornar suma / (n * 1.0);
+}
+
+funcion decimal df_suma(DataFrame df, texto columna) {
+    lista<cualquiera> vals = df_obtener_columna(df, columna);
+    decimal suma = 0.0;
+    para (entero i = 0; i < largo(vals); i = i + 1) {
+        suma = suma + vals[i];
+    }
+    retornar suma;
+}
+
+funcion decimal df_max(DataFrame df, texto columna) {
+    lista<cualquiera> vals = df_obtener_columna(df, columna);
+    si largo(vals) == 0 { retornar 0.0; }
+    decimal m = vals[0];
+    para (entero i = 1; i < largo(vals); i = i + 1) {
+        si vals[i] > m { m = vals[i]; }
+    }
+    retornar m;
+}
+
+funcion decimal df_min(DataFrame df, texto columna) {
+    lista<cualquiera> vals = df_obtener_columna(df, columna);
+    si largo(vals) == 0 { retornar 0.0; }
+    decimal m = vals[0];
+    para (entero i = 1; i < largo(vals); i = i + 1) {
+        si vals[i] < m { m = vals[i]; }
+    }
+    retornar m;
+}
+
+// ── 4. Serialización y Conversión CSV / JSON ──────────────────────────
+
+funcion texto df_a_csv(DataFrame df) {
+    texto csv = "";
+    // Cabecera
+    para (entero i = 0; i < largo(df.nombres_columnas); i = i + 1) {
+        csv = csv + df.nombres_columnas[i];
+        si i < largo(df.nombres_columnas) - 1 { csv = csv + ","; }
+    }
+    csv = csv + "\n";
+    
+    // Filas
+    para (entero r = 0; r < df.filas_count; r = r + 1) {
+        para (entero c = 0; c < largo(df.nombres_columnas); c = c + 1) {
+            lista<cualquiera> col = df_obtener_columna(df, df.nombres_columnas[c]);
+            csv = csv + a_texto(col[r]);
+            si c < largo(df.nombres_columnas) - 1 { csv = csv + ","; }
+        }
+        csv = csv + "\n";
+    }
+    retornar csv;
+}
+
+funcion texto df_a_json(DataFrame df) {
+    texto json = "[\n";
+    para (entero r = 0; r < df.filas_count; r = r + 1) {
+        json = json + "  {";
+        para (entero c = 0; c < largo(df.nombres_columnas); c = c + 1) {
+            texto col_name = df.nombres_columnas[c];
+            lista<cualquiera> col = df_obtener_columna(df, col_name);
+            json = json + "\"" + col_name + "\": \"" + a_texto(col[r]) + "\"";
+            si c < largo(df.nombres_columnas) - 1 { json = json + ", "; }
+        }
+        json = json + "}" + (r < df.filas_count - 1 ? ",\n" : "\n");
+    }
+    json = json + "]";
+    retornar json;
+}
+
+funcion vacio df_describir(DataFrame df) {
+    imprimir("╔══════════════════════════════════════════════════════════════╗");
+    imprimir("║ DATAFRAME: " + a_texto(df.filas_count) + " filas x " + a_texto(largo(df.nombres_columnas)) + " columnas");
+    imprimir("╠══════════════════════════════════════════════════════════════╣");
+    para (entero i = 0; i < largo(df.nombres_columnas); i = i + 1) {
+        texto col = df.nombres_columnas[i];
+        lista<cualquiera> vals = df_obtener_columna(df, col);
+        si largo(vals) > 0 {
+            decimal media = df_promedio(df, col);
+            decimal minimo = df_min(df, col);
+            decimal maximo = df_max(df, col);
+            imprimir("║ • " + col + ": min=" + a_texto(minimo) + ", max=" + a_texto(maximo) + ", media=" + a_texto(media));
+        }
+    }
+    imprimir("╚══════════════════════════════════════════════════════════════╝\n");
+}

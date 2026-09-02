@@ -1,0 +1,67 @@
+// ============================================================================
+// LÚMEN Standard Library — Pipeline & Functional Processing
+// stdlib/pipeline.nv
+// ============================================================================
+
+funcion lista<entero> pipe_filtrar_pares(lista<entero> nums) {
+    retornar [x para x en nums si x % 2 == 0];
+}
+
+funcion lista<entero> pipe_filtrar_impares(lista<entero> nums) {
+    retornar [x para x en nums si x % 2 != 0];
+}
+
+funcion lista<entero> pipe_multiplicar(lista<entero> nums, entero factor) {
+    retornar [x * factor para x en nums];
+}
+
+funcion lista<entero> pipe_sumar_constante(lista<entero> nums, entero c) {
+    retornar [x + c para x en nums];
+}
+
+funcion entero pipe_sumar_todos(lista<entero> nums) {
+    entero suma = 0;
+    para (entero i = 0; i < nums.largo(); i = i + 1) {
+        suma = suma + nums[i];
+    }
+    retornar suma;
+}
+
+funcion entero pipe_maximo(lista<entero> nums) {
+    si nums.largo() == 0 { retornar 0; }
+    entero m = nums[0];
+    para (entero i = 1; i < nums.largo(); i = i + 1) {
+        si nums[i] > m {
+            m = nums[i];
+        }
+    }
+    retornar m;
+}
+
+funcion entero pipe_minimo(lista<entero> nums) {
+    si nums.largo() == 0 { retornar 0; }
+    entero m = nums[0];
+    para (entero i = 1; i < nums.largo(); i = i + 1) {
+        si nums[i] < m {
+            m = nums[i];
+        }
+    }
+    retornar m;
+}
+
+// English aliases
+funcion array<integer> pipe_filter_even(array<integer> nums) {
+    retornar pipe_filtrar_pares(nums);
+}
+
+funcion array<integer> pipe_filter_odd(array<integer> nums) {
+    retornar pipe_filtrar_impares(nums);
+}
+
+funcion array<integer> pipe_multiply(array<integer> nums, integer factor) {
+    retornar pipe_multiplicar(nums, factor);
+}
+
+funcion integer pipe_sum_all(array<integer> nums) {
+    retornar pipe_sumar_todos(nums);
+}

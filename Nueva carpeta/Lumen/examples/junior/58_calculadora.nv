@@ -1,0 +1,25 @@
+importar ingles;
+
+function integer sumar(integer a, integer b) {
+    return a + b;
+}
+
+function integer restar(integer a, integer b) {
+    return a - b;
+}
+
+function integer multiplicar(integer a, integer b) {
+    return a * b;
+}
+
+function integer dividir(integer a, integer b) {
+    if (b == 0) {
+        return 0;
+    }
+    return a / b;
+}
+
+print(sumar(10, 5));
+print(restar(10, 5));
+print(multiplicar(10, 5));
+print(dividir(10, 5));

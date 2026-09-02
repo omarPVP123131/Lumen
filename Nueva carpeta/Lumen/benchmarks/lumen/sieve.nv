@@ -1,0 +1,33 @@
+// Suite variada 3 — Criba de Eratóstenes hasta 1M (conteo de primos).
+// Marca múltiplos con `criba[m] = 0` (ArraySetVar, v3.5.40 — escritura
+// por índice O(1); antes de ese fix este benchmark no terminaba: cada
+// escritura clonaba el Vec entero). Golden: 78498.
+
+funcion numero bench_sieve(entero lim) {
+    sea criba = [];
+    entero i = 0;
+    mientras (i <= lim) {
+        criba.agregar(1);
+        i = i + 1;
+    }
+    entero p = 2;
+    mientras (p * p <= lim) {
+        si (criba[p] == 1) {
+            entero m = p * p;
+            mientras (m <= lim) {
+                criba[m] = 0;
+                m = m + p;
+            }
+        }
+        p = p + 1;
+    }
+    numero cuenta = 0;
+    entero q = 2;
+    mientras (q <= lim) {
+        cuenta = cuenta + criba[q];
+        q = q + 1;
+    }
+    retornar cuenta;
+}
+
+imprimir("sieve:" + bench_sieve(1000000));

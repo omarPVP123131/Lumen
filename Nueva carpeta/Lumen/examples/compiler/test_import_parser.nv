@@ -1,0 +1,11 @@
+// @should_error — compiler self-test, not for lumen run (use cargo test / fuego.ps1)
+imprimir("skip: compiler self-test — use cargo test"); retornar;
+// Very minimal test: just parser_parse on var decl
+importar "test_parser_final.nv";
+
+imprimir("START");
+numero toks = test_parser_final_tokenizar("entero x = 42;");
+imprimir("TK: ", __map_obtener(toks, "cnt"));
+numero ast = test_parser_final_parser_parse(toks);
+imprimir("AST: ", __map_obtener(ast, "tipo"));
+imprimir("DONE");

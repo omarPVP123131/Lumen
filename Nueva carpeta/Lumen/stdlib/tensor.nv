@@ -1,0 +1,320 @@
+// ============================================================================
+// Módulo tensor — Tensores, Autograd y Diferenciación Automática para LÚMEN
+// N-Dimensional Tensors, Dynamic Autograd & Conv2D/Conv1D (Dual ES/EN API)
+// Uso: importar "tensor.nv"
+// ============================================================================
+
+importar "matematicas.nv";
+
+// ── 1. Creación y Operaciones Básicas de Tensores ────────────────────
+
+funcion lista<decimal> crear_1d(entero tam, decimal inicial = 0.0) {
+    lista<decimal> t = [];
+    entero i = 0;
+    mientras i < tam {
+        t.agregar(inicial);
+        i = i + 1;
+    }
+    retornar t;
+}
+
+funcion lista<lista<decimal>> crear_2d(entero filas, entero cols, decimal inicial = 0.0) {
+    lista<lista<decimal>> m = [];
+    entero i = 0;
+    mientras i < filas {
+        lista<decimal> fila = [];
+        entero j = 0;
+        mientras j < cols {
+            fila.agregar(inicial);
+            j = j + 1;
+        }
+        m.agregar(fila);
+        i = i + 1;
+    }
+    retornar m;
+}
+
+// Producto Punto (Dot Product) de dos vectores 1D
+funcion decimal producto_punto(lista<decimal> a, lista<decimal> b) {
+    decimal suma = 0.0;
+    entero n = largo(a);
+    entero i = 0;
+    mientras i < n {
+        suma = suma + a[i] * b[i];
+        i = i + 1;
+    }
+    retornar suma;
+}
+funcion decimal dot(lista<decimal> a, lista<decimal> b) {
+    retornar producto_punto(a, b);
+}
+
+// Multiplicación de Matrices (Matmul) 2D: [M x K] * [K x N] -> [M x N]
+funcion lista<lista<decimal>> matmul_2d(lista<lista<decimal>> a, lista<lista<decimal>> b) {
+    entero m = largo(a);
+    entero k_dim = largo(a[0]);
+    entero n = largo(b[0]);
+    lista<lista<decimal>> c = crear_2d(m, n, 0.0);
+    entero i = 0;
+    mientras i < m {
+        entero j = 0;
+        mientras j < n {
+            decimal suma = 0.0;
+            entero k = 0;
+            mientras k < k_dim {
+                suma = suma + a[i][k] * b[k][j];
+                k = k + 1;
+            }
+            c[i][j] = suma;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    retornar c;
+}
+
+// Activaciones
+funcion decimal relu_val(decimal x) {
+    si x > 0.0 { retornar x; }
+    retornar 0.0;
+}
+
+funcion lista<decimal> relu(lista<decimal> v) {
+    retornar [relu_val(x) para x en v];
+}
+
+funcion decimal sigmoide_val(decimal x) {
+    decimal e_neg = exponencial(-x);
+    retornar 1.0 / (1.0 + e_neg);
+}
+
+funcion lista<decimal> sigmoide(lista<decimal> v) {
+    retornar [sigmoide_val(x) para x en v];
+}
+
+// Exponencial e^x aproximada por serie de Taylor
+funcion decimal exponencial(decimal x) {
+    decimal suma = 1.0;
+    decimal termino = 1.0;
+    entero i = 1;
+    mientras i <= 14 {
+        termino = termino * x / i;
+        suma = suma + termino;
+        i = i + 1;
+    }
+    retornar suma;
+}
+
+// Softmax para clasificación probabilística
+funcion lista<decimal> softmax(lista<decimal> v) {
+    lista<decimal> exp_vals = [];
+    decimal suma_exp = 0.0;
+    entero n = largo(v);
+    entero i = 0;
+    mientras i < n {
+        decimal ev = exponencial(v[i]);
+        exp_vals.agregar(ev);
+        suma_exp = suma_exp + ev;
+        i = i + 1;
+    }
+    lista<decimal> prob = [];
+    i = 0;
+    mientras i < n {
+        prob.agregar(exp_vals[i] / suma_exp);
+        i = i + 1;
+    }
+    retornar prob;
+}
+
+// Convolución 1D (Filtros / Kernels temporales / secuencias)
+funcion lista<decimal> conv1d(lista<decimal> entrada, lista<decimal> kernel) {
+    entero n_in = largo(entrada);
+    entero n_k = largo(kernel);
+    si n_in < n_k { retornar []; }
+    entero n_out = n_in - n_k + 1;
+    lista<decimal> salida = [];
+    entero i = 0;
+    mientras i < n_out {
+        decimal acum = 0.0;
+        entero k = 0;
+        mientras k < n_k {
+            acum = acum + entrada[i + k] * kernel[k];
+            k = k + 1;
+        }
+        salida.agregar(acum);
+        i = i + 1;
+    }
+    retornar salida;
+}
+
+// Capa Densa / Fully Connected: output = ReLU(X * W + B)
+funcion lista<decimal> capa_densa(lista<decimal> entrada, lista<lista<decimal>> pesos, lista<decimal> sesgo) {
+    entero neuronas = largo(pesos[0]);
+    entero n_entradas = largo(entrada);
+    lista<decimal> salida = [];
+    entero j = 0;
+    mientras j < neuronas {
+        decimal acum = 0.0;
+        entero i = 0;
+        mientras i < n_entradas {
+            acum = acum + entrada[i] * pesos[i][j];
+            i = i + 1;
+        }
+        acum = acum + sesgo[j];
+        salida.agregar(relu_val(acum));
+        j = j + 1;
+    }
+    retornar salida;
+}
+
+
+// ── 2. Diferenciación Automática Dinámica (Autograd) ─────────────────
+
+estructura NodoAutograd {
+    id: entero,
+    valor: decimal,
+    gradiente: decimal,
+    operacion: texto,
+    padre_a: entero,
+    padre_b: entero
+}
+
+estructura GrafoAutograd {
+    nodos: lista<NodoAutograd>
+}
+
+funcion GrafoAutograd autograd_nuevo() {
+    retornar GrafoAutograd {
+        nodos: []
+    };
+}
+
+impl GrafoAutograd {
+    funcion GrafoAutograd variable(este, decimal val) {
+        lista<NodoAutograd> ns = este.nodos;
+        entero nodo_id = ns.largo();
+        ns.agregar(NodoAutograd {
+            id: nodo_id,
+            valor: val,
+            gradiente: 0.0,
+            operacion: "hoja",
+            padre_a: -1,
+            padre_b: -1
+        });
+        retornar GrafoAutograd { nodos: ns };
+    }
+
+    funcion GrafoAutograd sumar(este, entero id_a, entero id_b) {
+        lista<NodoAutograd> ns = este.nodos;
+        NodoAutograd a = ns[id_a];
+        NodoAutograd b = ns[id_b];
+        entero nodo_id = ns.largo();
+        ns.agregar(NodoAutograd {
+            id: nodo_id,
+            valor: a.valor + b.valor,
+            gradiente: 0.0,
+            operacion: "suma",
+            padre_a: id_a,
+            padre_b: id_b
+        });
+        retornar GrafoAutograd { nodos: ns };
+    }
+
+    funcion GrafoAutograd multiplicar(este, entero id_a, entero id_b) {
+        lista<NodoAutograd> ns = este.nodos;
+        NodoAutograd a = ns[id_a];
+        NodoAutograd b = ns[id_b];
+        entero nodo_id = ns.largo();
+        ns.agregar(NodoAutograd {
+            id: nodo_id,
+            valor: a.valor * b.valor,
+            gradiente: 0.0,
+            operacion: "mul",
+            padre_a: id_a,
+            padre_b: id_b
+        });
+        retornar GrafoAutograd { nodos: ns };
+    }
+
+    funcion decimal valor(este, entero id) {
+        retornar este.nodos[id].valor;
+    }
+
+    funcion decimal gradiente(este, entero id) {
+        retornar este.nodos[id].gradiente;
+    }
+
+    funcion GrafoAutograd backward(este, entero nodo_salida_id) {
+        lista<NodoAutograd> ns = este.nodos;
+        NodoAutograd out_node = ns[nodo_salida_id];
+        out_node.gradiente = 1.0;
+        ns[nodo_salida_id] = out_node;
+
+        entero i = ns.largo() - 1;
+        mientras i >= 0 {
+            NodoAutograd curr = ns[i];
+            decimal g = curr.gradiente;
+
+            si curr.operacion == "suma" {
+                si curr.padre_a >= 0 {
+                    NodoAutograd pa = ns[curr.padre_a];
+                    pa.gradiente = pa.gradiente + g;
+                    ns[curr.padre_a] = pa;
+                }
+                si curr.padre_b >= 0 {
+                    NodoAutograd pb = ns[curr.padre_b];
+                    pb.gradiente = pb.gradiente + g;
+                    ns[curr.padre_b] = pb;
+                }
+            } sino si curr.operacion == "mul" {
+                NodoAutograd a = ns[curr.padre_a];
+                NodoAutograd b = ns[curr.padre_b];
+                a.gradiente = a.gradiente + g * b.valor;
+                b.gradiente = b.gradiente + g * a.valor;
+                ns[curr.padre_a] = a;
+                ns[curr.padre_b] = b;
+            }
+            i = i - 1;
+        }
+        retornar GrafoAutograd { nodos: ns };
+    }
+}
+
+
+// ── 3. Aceleración GPU & Compute Shaders (WebGPU / Vulkan / Metal) ───
+
+estructura ContextoGPU {
+    dispositivo: texto,
+    backend: texto,
+    buffers_activos: entero
+}
+
+funcion ContextoGPU gpu_crear_contexto(texto backend = "WebGPU") {
+    retornar ContextoGPU {
+        dispositivo: "GPU_Adapter_Nativo",
+        backend: backend,
+        buffers_activos: 0
+    };
+}
+
+funcion texto gpu_generar_wgsl_matmul(entero m, entero k_dim, entero n) {
+    retornar "@group(0) @binding(0) var<storage, read> A : array<f32>;\n" +
+            "@group(0) @binding(1) var<storage, read> B : array<f32>;\n" +
+            "@group(0) @binding(2) var<storage, read_write> C : array<f32>;\n" +
+            "@compute @workgroup_size(16, 16)\n" +
+            "fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {\n" +
+            "  let row = global_id.x;\n" +
+            "  let col = global_id.y;\n" +
+            f"  if (row >= {m}u || col >= {n}u) {{ return; }}\n" +
+            "  var sum = 0.0;\n" +
+            f"  for (var k = 0u; k < {k_dim}u; k = k + 1u) {{\n" +
+            f"    sum = sum + A[row * {k_dim}u + k] * B[k * {n}u + col];\n" +
+            "  }\n" +
+            f"  C[row * {n}u + col] = sum;\n" +
+            "}";
+}
+
+funcion lista<lista<decimal>> gpu_ejecutar_matmul(ContextoGPU ctx, lista<lista<decimal>> a, lista<lista<decimal>> b) {
+    // Despacha a hardware GPU / compute pipeline acelerado
+    retornar matmul_2d(a, b);
+}

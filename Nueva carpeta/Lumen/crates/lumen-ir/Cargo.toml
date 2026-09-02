@@ -1,0 +1,16 @@
+[package]
+name = "lumen-ir"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "IR (Intermediate Representation) del compilador LÚMEN — three-address code + optimizaciones"
+keywords = ["lumen", "language", "ir", "optimization", "educational"]
+
+[dependencies]
+lumen-lexer = { path = "../lumen-lexer" }
+lumen-parser = { path = "../lumen-parser" }
+lumen-sema = { path = "../lumen-sema" }
+serde.workspace = true
+thiserror.workspace = true

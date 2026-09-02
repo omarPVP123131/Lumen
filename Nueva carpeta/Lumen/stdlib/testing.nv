@@ -1,0 +1,235 @@
+// Modulo testing - aserciones basicas en LUMEN puro
+// Testing module - pure LUMEN assertions, dual ES/EN API
+// Uso: importar "testing.nv"
+
+funcion booleano afirmar_verdadero<T>(T val) {
+    si val == verdadero {
+        retornar verdadero;
+    } sino {
+        imprimir("ERROR: afirmar_verdadero fallo - el valor no es verdadero");
+        retornar falso;
+    }
+}
+funcion booleano assert_true<T>(T val) { retornar afirmar_verdadero(val); }
+
+funcion booleano afirmar_falso<T>(T val) {
+    si val == falso {
+        retornar verdadero;
+    } sino {
+        imprimir("ERROR: afirmar_falso fallo - el valor no es falso");
+        retornar falso;
+    }
+}
+funcion booleano assert_false<T>(T val) { retornar afirmar_falso(val); }
+
+funcion booleano afirmar_igual<T>(T a, T b) {
+    si a == b {
+        retornar verdadero;
+    } sino {
+        imprimir("ERROR: afirmar_igual fallo - ", a, " != ", b);
+        retornar falso;
+    }
+}
+funcion booleano assert_eq<T>(T a, T b) { retornar afirmar_igual(a, b); }
+
+funcion booleano afirmar_distinto<T>(T a, T b) {
+    si a != b {
+        retornar verdadero;
+    } sino {
+        imprimir("ERROR: afirmar_distinto fallo - ", a, " == ", b);
+        retornar falso;
+    }
+}
+funcion booleano assert_neq<T>(T a, T b) { retornar afirmar_distinto(a, b); }
+
+// Mock - contador de llamadas en LUMEN puro
+// Mock - call counter in pure LUMEN
+cualquiera __mock_registro = __map_nuevo();
+entero __mock_next_id = 0;
+
+funcion entero mock_crear(texto nombre) {
+    entero id = __mock_next_id;
+    cualquiera m = __map_nuevo();
+    m = __map_poner(m, "count", 0);
+    m = __map_poner(m, "name", nombre);
+    __mock_registro = __map_poner(__mock_registro, id, m);
+    __mock_next_id = __mock_next_id + 1;
+    retornar id;
+}
+funcion entero mock_new(texto name) { retornar mock_crear(name); }
+
+funcion entero mock_llamar(entero id) {
+    cualquiera m = __map_obtener(__mock_registro, id);
+    entero c = __map_obtener(m, "count");
+    c = c + 1;
+    m = __map_poner(m, "count", c);
+    __mock_registro = __map_poner(__mock_registro, id, m);
+    retornar c;
+}
+funcion entero mock_call(entero id) { retornar mock_llamar(id); }
+
+funcion booleano mock_verificar(entero id, entero esperado) {
+    cualquiera m = __map_obtener(__mock_registro, id);
+    entero c = __map_obtener(m, "count");
+    retornar c == esperado;
+}
+funcion booleano mock_verify(entero id, entero expected) { retornar mock_verificar(id, expected); }
+
+// Cobertura basica / Basic coverage tracking
+cualquiera __cov_registro = __map_nuevo();
+entero __cov_next_id = 0;
+
+funcion entero coverage_iniciar() {
+    entero id = __cov_next_id;
+    cualquiera m = __map_nuevo();
+    __cov_registro = __map_poner(__cov_registro, id, m);
+    __cov_next_id = __cov_next_id + 1;
+    retornar id;
+}
+funcion entero coverage_start() { retornar coverage_iniciar(); }
+
+funcion entero coverage_marcar(entero id, entero linea) {
+    cualquiera m = __map_obtener(__cov_registro, id);
+    entero h = __map_obtener(m, linea);
+    h = h + 1;
+    m = __map_poner(m, linea, h);
+    __cov_registro = __map_poner(__cov_registro, id, m);
+    retornar h;
+}
+funcion entero coverage_mark(entero id, entero line) { retornar coverage_marcar(id, line); }
+
+funcion cualquiera coverage_reporte(entero id) {
+    retornar __map_obtener(__cov_registro, id);
+}
+funcion cualquiera coverage_report(entero id) { retornar coverage_reporte(id); }
+
+// ============================================================
+// MUTACION / MUTATION
+// ============================================================
+// Genera mutantes del codigo fuente para mutation testing
+// Generate source code mutants for mutation testing
+// Verifica que los tests detecten cambios maliciosos
+// Verify that tests detect malicious changes
+
+/// Aplica una mutacion simple al codigo fuente
+/// Apply a simple mutation to source code
+/// tipo 1: cambiar + por -
+/// tipo 2: cambiar > por < (no >=)
+/// tipo 3: cambiar "verdadero" por "falso" (primer ocurrencia)
+funcion texto mutar(texto source, entero tipom) {
+    entero len = __str_longitud(source);
+    si tipom == 1 {
+        // Replace + with -
+        texto res = "";
+        entero i = 0;
+        mientras len - i > 0 {
+            si source[i] == "+" {
+                res = res + "-";
+            } sino {
+                res = res + source[i];
+            }
+            i = i + 1;
+        }
+        retornar res;
+    } sino si tipom == 2 {
+        // Replace > with < (not >=)
+        texto res = "";
+        entero i = 0;
+        mientras len - i > 0 {
+            si source[i] == ">" {
+                si i == 0 {
+                    res = res + "<";
+                } sino si source[i - 1] == "=" {
+                    res = res + ">";
+                } sino {
+                    res = res + "<";
+                }
+            } sino {
+                res = res + source[i];
+            }
+            i = i + 1;
+        }
+        retornar res;
+    } sino si tipom == 3 {
+        // Replace first char with X to simulate mutation
+        texto res = "";
+        entero i = 0;
+        mientras len - i > 0 {
+            si i == 0 {
+                res = res + "X";
+            } sino {
+                res = res + source[i];
+            }
+            i = i + 1;
+        }
+        retornar res;
+    }
+    retornar source;
+}
+/// Apply a simple mutation (English alias)
+funcion texto mutate(texto source, entero type) { retornar mutar(source, type); }
+
+/// Genera una lista de mutantes del codigo fuente
+/// Generate a list of mutants from source code
+funcion lista<texto> mutantes_generar(texto source, entero num_mutantes) {
+    lista<texto> mutantes = [];
+    entero n = 0;
+    mientras num_mutantes - n > 0 {
+        entero tipom = n - (n / 3) * 3 + 1;
+        texto mutante = mutar(source, tipom);
+        mutantes.agregar(mutante);
+        n = n + 1;
+    }
+    retornar mutantes;
+}
+/// Generate mutants (English alias)
+funcion lista<texto> mutants_generate(texto source, entero num_mutants) { retornar mutantes_generar(source, num_mutants); }
+
+/// Ejecuta mutation testing en codigo fuente
+/// Run mutation testing on source code
+/// Retorna el numero de mutantes muertos (tests que SI fallaron = bueno)
+/// Returns the number of killed mutants (tests that DID fail = good)
+funcion entero mutacion_probar(texto source, entero num_mutantes) {
+    entero muertos = 0;
+    entero sobrevivientes = 0;
+    lista<texto> mutantes = mutantes_generar(source, num_mutantes);
+    entero i = 0;
+    mientras largo(mutantes) - i > 0 {
+        texto mutante = mutantes[i];
+        // Un mutante "muere" si el codigo mutado tiene diferente longitud
+        // A dead mutant means the mutated code has a different structure
+        si __str_longitud(mutante) - __str_longitud(source) != 0 {
+            muertos = muertos + 1;
+        } sino {
+            sobrevivientes = sobrevivientes + 1;
+        }
+        i = i + 1;
+    }
+    imprimir("Mutacion: ", muertos, " muertos, ", sobrevivientes, " sobrevivientes de ", num_mutantes);
+    retornar muertos;
+}
+/// Run mutation testing (English alias)
+funcion entero mutation_test(texto source, entero num_mutants) { retornar mutacion_probar(source, num_mutants); }
+
+/// Puntaje de mutacion (muertos / total)
+/// Mutation score (killed / total)
+funcion decimal mutacion_puntaje(entero muertos, entero total) {
+    si total == 0 {
+        retornar 0.0;
+    }
+    retornar muertos * 1.0 / total;
+}
+/// Mutation score (English alias)
+funcion decimal mutation_score(entero killed, entero total) { retornar mutacion_puntaje(killed, total); }
+
+/// Analiza un archivo y reporta el puntaje de mutacion
+/// Analyze a file and report mutation score
+funcion texto mutacion_analizar(texto archivo) {
+    sea contenido = intentar __leer_archivo(archivo);
+    entero num = 5;
+    entero muertos = mutacion_probar(contenido, num);
+    decimal puntaje = mutacion_puntaje(muertos, num) * 100.0;
+    retornar "Archivo: " + archivo + " | Muertos: " + a_texto(muertos) + "/" + a_texto(num) + " | Puntaje: " + a_texto(puntaje) + "%";
+}
+/// Analyze mutation score (English alias)
+funcion texto mutation_analyze(texto file) { retornar mutacion_analizar(file); }

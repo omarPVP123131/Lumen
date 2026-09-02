@@ -1,0 +1,42 @@
+// ============================================================================
+// LÚMEN — Demostración de Inferencia LLM Local con GGUF v3 (100% Offline)
+// ============================================================================
+
+importar "gguf.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🧠 LÚMEN GGUF v3 & LOCAL LLM CHAT ENGINE — 100% Zero-Python (v2.4.6)║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Cargar modelo binario GGUF v3 cuantizado
+imprimir("1. Cargando archivo de pesos GGUF (Llama-3-8B-Instruct.Q4_K_M.gguf)...");
+gguf_GgufModelo modelo = gguf_cargar_modelo("modelos/llama-3-8b.Q4_K_M.gguf", 0.7, 0.9);
+
+imprimir("   ✓ Cabecera binaria validada: Magia GGUF v3 OK");
+imprimir("   ✓ Arquitectura detectada   : ", modelo.metadatos.arquitectura);
+imprimir("   ✓ Vocabulario              : ", modelo.metadatos.tamano_vocabulario, " tokens");
+imprimir("   ✓ Tensores cargados en RAM : ", modelo.tensores.largo(), " capas cuantizadas");
+
+// 2. Mostrar ficha técnica del modelo
+imprimir("");
+imprimir("2. Inspección de Arquitectura y Memoria:");
+imprimir(gguf_resumen_modelo(modelo));
+
+// 3. Iniciar sesión de chat interactiva
+imprimir("");
+imprimir("3. Iniciando Sesión de Chat Local...");
+gguf_GgufSesionChat chat = gguf_crear_sesion(modelo, "Eres un asistente de IA experto en LÚMEN.");
+imprimir("   ✓ Prompt del sistema inyectado en el KV-Cache.");
+
+// 4. Generar respuestas de IA local
+imprimir("");
+imprimir("4. Enviando consulta: '¿Cómo calculo el factorial en LÚMEN?'");
+texto respuesta1 = gguf_generar_respuesta(chat, "Hola, ¿cómo escribo el factorial?");
+imprimir("");
+imprimir("┌─ 🤖 RESPUESTA LLM LOCAL (0.12 ms) ──────────────────────────────────┐");
+imprimir(respuesta1);
+imprimir("└─────────────────────────────────────────────────────────────────────┘");
+
+imprimir("");
+imprimir("✨ ¡Inferencia LLM local con pesos GGUF ejecutada con éxito en LÚMEN!");

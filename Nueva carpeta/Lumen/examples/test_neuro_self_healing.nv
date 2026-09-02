@@ -1,0 +1,50 @@
+// ============================================================================
+// Prueba del Compilador Neuro-Simbólico & Runtime Self-Healing en LÚMEN
+// ============================================================================
+
+importar "neuro_opt.nv";
+importar "self_healing.nv";
+
+funcion vacio principal() {
+    imprimir("── TEST: COMPILADOR NEURO-SIMBÓLICO & RUNTIME SELF-HEALING ──\n");
+
+    // 1. Optimizador Neuro-Simbólico en Pipeline IR
+    imprimir("1. OPTIMIZADOR NEURO-SIMBÓLICO EN PIPELINE IR:");
+    neuro_opt_AnalizadorNeuroSimbilico opt = neuro_opt_crear();
+    imprimir("   • Reglas de superoptimización activas:", largo(opt.reglas_activas));
+    imprimir("   • Instrucciones eliminadas / fusionadas:", opt.instrucciones_eliminadas);
+    imprimir("   • Aceleración SIMD estimada:", opt.aceleracion_simd_estimada, "x vs GCC -O3");
+    
+    texto evaluacion = neuro_opt_evaluar_superoptimizacion(opt, "algoritmo_matmul_atencion");
+    imprimir("   • Reporte:", evaluacion);
+
+    // 2. Runtime Autorregenerativo & Hot-Patching en Producción
+    imprimir("\n2. RUNTIME AUTORREGENERATIVO & HOT-PATCHING EN PRODUCCIÓN:");
+    self_healing_MotorSelfHealing motor = self_healing_iniciar();
+    
+    // Registrar un hot-patch para una función de procesamiento de pagos
+    motor = self_healing_registrar_parche(
+        motor, 
+        "procesar_pago_stripe", 
+        "procesar_pago_stripe_v2_sanitizado", 
+        "Auto-reparación ante payload JSON corrupto con división imprevista"
+    );
+    imprimir("   • Hot-Patch registrado dinámicamente en tabla de despacho (0 segundos de downtime).");
+
+    // Transacción 1: Flujo normal
+    motor = self_healing_ejecutar_transaccion(motor, "procesar_pago_stripe", falso);
+    imprimir("   • Transacción 1 (Normal):", motor.ultimo_resultado);
+
+    // Transacción 2: Falla crítica imprevista (simulación de datos corruptos / fallo de hardware)
+    motor = self_healing_ejecutar_transaccion(motor, "procesar_pago_stripe", verdadero);
+    imprimir("   • Transacción 2 (Falla Crítica Interceptada):", motor.ultimo_resultado);
+
+    // Métricas del servidor
+    texto metricas = self_healing_obtener_metricas(motor);
+    imprimir("\n• Estado del Servidor LÚMEN:");
+    imprimir("  ", metricas);
+
+    imprimir("\n✓ Compilador Neuro-Simbólico & Runtime Self-Healing verificados con éxito.");
+}
+
+principal();

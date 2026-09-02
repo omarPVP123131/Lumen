@@ -1,0 +1,179 @@
+(* LÚMEN Grammar v2.5 - EBNF Specification *)
+
+(* --- Top Level --- *)
+program = { declaration | statement } ;
+
+(* --- Declarations --- *)
+declaration = variable_decl
+            | function_decl
+            | struct_decl
+            | enum_decl
+            | trait_decl
+            | impl_decl
+            | const_decl
+            | import_decl ;
+
+variable_decl = type_annotation , identifier , [ "=" , expression ] , ";" ;
+
+function_decl = ["async"] , "funcion" , type_annotation , identifier
+              , [ "<" , type_params , ">" ]
+              , "(" , [ parameter_list ] , ")"
+              , [ "->" , type_annotation ]
+              , block ;
+
+parameter_list = parameter , { "," , parameter } ;
+parameter = type_annotation , identifier , [ "=" , expression ] ;
+
+struct_decl = "estructura" , identifier , [ "<" , type_params , ">" ]
+            , "{" , { field_decl } , "}" ;
+field_decl = type_annotation , identifier , ";" ;
+
+enum_decl = "enum" , identifier , [ "<" , type_params , ">" ]
+          , "{" , { variant_decl } , "}" ;
+variant_decl = identifier , [ "(" , type_annotation , { "," , type_annotation } , ")" ] , ";" ;
+
+trait_decl = "rasgo" , identifier , "{" , { assoc_type_decl | trait_method_decl } , "}" ;
+assoc_type_decl = "tipo" , identifier , [ "=" , type_annotation ] , ";" ;
+trait_method_decl = "funcion" , type_annotation , identifier , "(" , [ parameter_list ] , ")" , ";" ;
+
+impl_decl = "impl" , [ type_annotation , "para" ] , type_annotation
+          , [ "<" , type_params , ">" ]
+          , "{" , { assoc_type_impl | function_decl } , "}" ;
+assoc_type_impl = "tipo" , identifier , "=" , type_annotation , ";" ;
+
+const_decl = "const" , identifier , "=" , expression , ";" ;
+
+import_decl = "importar" , string_literal , ";" ;
+
+type_params = identifier , [ ":" , identifier ] , { "," , identifier , [ ":" , identifier ] } ;
+
+(* --- Statements --- *)
+statement = variable_decl
+          | assignment
+          | if_stmt
+          | while_stmt
+          | for_stmt
+          | foreach_stmt
+          | match_stmt
+          | return_stmt
+          | break_stmt
+          | continue_stmt
+          | guard_let
+          | if_let
+          | expr_stmt
+          | block ;
+
+assignment = identifier , ("=" | "+=" | "-=" | "*=" | "/=") , expression , ";" ;
+
+if_stmt = "si" , expression , block
+        , { "sino" , "si" , expression , block }
+        , [ "sino" , block ] ;
+
+while_stmt = "mientras" , expression , block ;
+
+for_stmt = "para" , "(" , [ variable_decl ] , ";" , [ expression ] , ";" , [ expression ] , ")" , block ;
+foreach_stmt = "para" , identifier , "en" , expression , block ;
+
+match_stmt = "elegir" , "(" , expression , ")" , "{" , { match_arm } , "}" ;
+match_arm = "caso" , pattern , ":" , statement ;
+pattern = literal
+        | identifier
+        | identifier , "(" , pattern , { "," , pattern } , ")"
+        | pattern , "|" , pattern
+        | pattern , ".." , pattern
+        | pattern , "..=" , pattern ;
+
+return_stmt = "retornar" , [ expression ] , ";" ;
+break_stmt = "romper" , [ identifier ] , ";" ;
+continue_stmt = "continuar" , [ identifier ] , ";" ;
+
+guard_let = "sea" , pattern , "=" , expression , "sino" , block ;
+if_let = "si" , "sea" , pattern , "=" , expression , block , [ "sino" , block ] ;
+
+expr_stmt = expression , ";" ;
+
+block = "{" , { declaration | statement } , "}" ;
+
+(* --- Expressions (Pratt parsing - precedence levels) --- *)
+expression = ternary ;
+
+ternary = logical_or , [ "?" , expression , ":" , expression ] ;
+
+logical_or = logical_and , { "||" , logical_and } ;
+logical_and = comparison , { "&&" , comparison } ;
+
+comparison = addition , [ comparison_op , addition ] ;
+comparison_op = "==" | "!=" | "<" | "<=" | ">" | ">=" ;
+
+addition = multiplication , { ("+" | "-") , multiplication } ;
+multiplication = unary , { ("*" | "/" | "%") , unary } ;
+
+unary = [ ("-" | "!") ] , postfix ;
+postfix = primary , { "[" , expression , "]"
+                    | "." , ( identifier | numeric_literal )
+                    | "(" , [ argument_list ] , ")"
+                    } ;
+
+primary = literal
+        | "algun" , "(" , expression , ")"
+        | "ninguno"
+        | "exito" , "(" , expression , ")"
+        | "error" , "(" , expression , ")"
+        | identifier [ "::" , identifier ]
+        , [ "<" , type_annotation_list , ">" ]
+        , [ "(" , [ argument_list ] , ")" ]
+        | identifier , "{" , [ field_init_list ] , "}"
+        | "(" , expression , ")"
+        | "[" , [ expression_list ] , "]"
+        | "{" , [ field_init_list ] , "}"
+        , [ "(" , expression , ")" ]
+        | "intentar" , expression ;
+
+argument_list = expression , { "," , expression } ;
+expression_list = expression , { "," , expression } ;
+field_init_list = identifier , ":" , expression , { "," , identifier , ":" , expression } ;
+
+(* --- Types --- *)
+type_annotation = "numero" | "entero" | "decimal" | "texto" | "booleano" | "void"
+                | "lista" | "array" , "<" , type_annotation , ">"
+                | "diccionario" , "<" , type_annotation , "," , type_annotation , ">"
+                | "opcion" | "option" , "<" , type_annotation , ">"
+                | "resultado" | "result" , "<" , type_annotation , "," , type_annotation , ">"
+                | "(" , type_annotation , { "," , type_annotation } , ")"
+                | identifier [ "<" , type_annotation_list , ">" ]
+                | "impl" , identifier ;
+
+type_annotation_list = type_annotation , { "," , type_annotation } ;
+
+(* --- Literals --- *)
+literal = numeric_literal | string_literal | boolean_literal | range_literal ;
+
+range_literal = expression , ".." , expression
+              | expression , "..=" , expression ;
+numeric_literal = digit , { digit } , [ "." , digit , { digit } ] ;
+string_literal = "\"" , { character | "{" , expression , "}" } , "\"" ;
+boolean_literal = "verdadero" | "falso" ;
+
+identifier = ( letter | "_" ) , { letter | digit | "_" } ;
+
+(* --- Character Classes --- *)
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+       | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+       | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
+       | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" ;
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+(* Keywords (partial list - handled by lexer) *)
+keyword = "si" | "sino" | "mientras" | "para" | "funcion" | "retornar"
+        | "romper" | "continuar" | "importar" | "entero" | "decimal"
+        | "texto" | "booleano" | "numero" | "lista" | "opcion"
+        | "resultado" | "elegir" | "caso" | "defecto" | "verdadero"
+        | "falso" | "estructura" | "enum" | "rasgo" | "impl" | "const"
+        | "async" | "esperar" | "intentar" | "exito" | "error"
+        | "algun" | "ninguno" | "sea" | "void" | "diccionario"
+        | "imprimir" | "leer" ;
+
+(* Comments *)
+comment_line = "//" , { character } , newline ;
+comment_block = "/*" , { character } , "*/" ;

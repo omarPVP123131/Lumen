@@ -1,0 +1,569 @@
+// EJEMPLO TILEMAP — Motor de mapas de baldosas con física de plataformas
+// Tilemap Demo — Tile-based map engine with platformer physics
+// Uso: lumen run examples/tilemap_demo.nv
+// Requiere: SDL2.dll en el PATH
+//
+// Controles:
+//   [FLECHAS]    Mover cámara manualmente
+//   [W/A/S/D]    Mover personaje (o flechas)
+//   [ESPACIO]    Saltar
+//   [F]          Alternar seguimiento de cámara al personaje
+//   [R]          Reiniciar nivel
+//   [ESC]        Salir
+
+importar "graficos.nv";
+importar "graficos_tilemap.nv";
+// Headless/CI guard — demo requiere red/GPU intensiva, omitida en CI
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo omitida");
+    retornar;
+}
+
+// ============================================================
+// CONSTANTES SDL2 / SDL2 CONSTANTS
+// ============================================================
+
+const entero SDL_INIT_VIDEO = 32;
+const entero SDL_SCANCODE_ESC = 41;
+const entero SDL_SCANCODE_SPACE = 44;
+const entero SDL_SCANCODE_UP = 82;
+const entero SDL_SCANCODE_DOWN = 81;
+const entero SDL_SCANCODE_LEFT = 80;
+const entero SDL_SCANCODE_RIGHT = 79;
+const entero SDL_SCANCODE_W = 26;
+const entero SDL_SCANCODE_A = 4;
+const entero SDL_SCANCODE_S = 22;
+const entero SDL_SCANCODE_D = 7;
+const entero SDL_SCANCODE_F = 9;
+const entero SDL_SCANCODE_R = 21;
+
+// ============================================================
+// CONSTANTES DEL JUEGO / GAME CONSTANTS
+// ============================================================
+
+const entero TILE_W = 40;
+const entero TILE_H = 40;
+const entero MAP_ANCHO = 20;
+const entero MAP_ALTO = 15;
+const entero SCR_ANCHO = 800;
+const entero SCR_ALTO = 600;
+const entero PLAYER_W = 30;
+const entero PLAYER_H = 38;
+const decimal GRAVEDAD = 0.6;
+const decimal VEL_SALTO = -10.5;
+const decimal VEL_MOV = 4.5;
+
+// ============================================================
+// INICIALIZACIÓN SDL2 / SDL2 INIT
+// ============================================================
+
+imprimir("=== Tilemap Demo LÚMEN ===");
+
+si !graficos_iniciar(SDL_INIT_VIDEO) {
+    imprimir("ERROR: No se pudo iniciar SDL2");
+    retornar;
+}
+
+entero win = graficos_ventana("LÚMEN — Tilemap", 100, 100, SCR_ANCHO, SCR_ALTO, 0);
+si win == 0 {
+    imprimir("ERROR: No se pudo crear ventana");
+    graficos_salir();
+    retornar;
+}
+
+entero ren = graficos_renderizador(win, -1, 0);
+si ren == 0 {
+    imprimir("ERROR: No se pudo crear renderer");
+    graficos_cerrar_ventana(win);
+    graficos_salir();
+    retornar;
+}
+
+// Inicializar módulo tilemap
+graficos_tilemap_iniciar(ren);
+
+// ============================================================
+// NIVEL / LEVEL (20x15)
+// ============================================================
+// Leyenda:  . = vacío   # = tierra   G = césped
+//           S = piedra  W = agua     M = madera
+
+lista<texto> mapa_bruto = [
+    "....................",  // 0
+    "....................",  // 1
+    "....................",  // 2
+    "....................",  // 3
+    "....................",  // 4
+    "....................",  // 5
+    ".......MMM.........",  // 6  — plataforma flotante
+    ".......MMM.........",  // 7
+    "....................",  // 8
+    "..MMM......MMM.....",  // 9  — escalones
+    "....................",  // 10
+    ".SSSS..SSSS..SSSS..",  // 11 — puente de piedra
+    "GGGGGGGGGGCGGGGGGGG",  // 12 — césped
+    "########W##########",  // 13 — tierra con agua
+    "###################",  // 14 — fondo sólido
+];
+
+// ============================================================
+// ESTADO DEL JUEGO / GAME STATE
+// ============================================================
+
+entero tm_id = 0;           // ID del tilemap
+decimal jugador_x = 60.0;   // posición X del jugador
+decimal jugador_y = 440.0;  // posición Y del jugador
+decimal jugador_vx = 0.0;   // velocidad X
+decimal jugador_vy = 0.0;   // velocidad Y
+booleano en_suelo = falso;  // ¿está en el suelo?
+booleano seguir = verdadero; // ¿cámara sigue al jugador?
+entero cam_x = 0;           // posición de cámara X
+entero cam_y = 0;           // posición de cámara Y
+entero frames = 0;
+entero fps_contador = 0;
+entero fps_ultimo = 0;
+entero fps_valor = 0;
+entero prev_space = 0;
+entero prev_r = 0;
+entero prev_f = 0;
+booleano vivo = verdadero;
+entero tiempo_inicio = 0;
+
+// Colores del jugador
+entero jugador_r = 255;
+entero jugador_g = 220;
+entero jugador_b = 80;
+
+// ============================================================
+// FUNCIONES AUXILIARES / HELPER FUNCTIONS
+// ============================================================
+
+/// Convierte carácter del nivel a tile_id
+funcion entero char_a_tile(texto ch) {
+    si ch == "." { retornar 0; }
+    si ch == "#" { retornar 1; }
+    si ch == "G" || ch == "C" { retornar 2; }
+    si ch == "S" { retornar 3; }
+    si ch == "W" { retornar 4; }
+    si ch == "M" { retornar 5; }
+    retornar 0;
+}
+
+/// Construye el nivel en el tilemap
+funcion void construir_nivel() {
+    // Crear tilemap (sin textura, usa colores)
+    tm_id = graficos_tilemap_tilemap_crear(MAP_ANCHO, MAP_ALTO,
+        TILE_W, TILE_H, "");
+
+    si tm_id == 0 {
+        imprimir("ERROR: No se pudo crear tilemap");
+        retornar;
+    }
+
+    // Poblar el nivel desde el mapa_bruto
+    entero y = 0;
+    mientras y < MAP_ALTO {
+        entero x = 0;
+        mientras x < MAP_ANCHO {
+            texto ch = mapa_bruto[y][x];
+            entero tile_id = char_a_tile(ch);
+            graficos_tilemap_tilemap_poner(tm_id, x, y, tile_id);
+            x = x + 1;
+        }
+        y = y + 1;
+    }
+
+    imprimir("Nivel construido. ID tilemap: ", tm_id);
+}
+
+/// Verifica colisión AABB contra tiles sólidos
+/// Retorna verdadero si la caja (rx,ry,rw,rh) toca algún tile sólido
+funcion booleano colision_aabb(decimal rx, decimal ry, entero rw, entero rh) {
+    entero tx1 = (rx / (TILE_W como decimal)) como entero;
+    entero ty1 = (ry / (TILE_H como decimal)) como entero;
+    entero tx2 = ((rx + (rw - 1) como decimal) / (TILE_W como decimal)) como entero;
+    entero ty2 = ((ry + (rh - 1) como decimal) / (TILE_H como decimal)) como entero;
+
+    si tx1 < 0 { tx1 = 0; }
+    si ty1 < 0 { ty1 = 0; }
+    si tx2 >= MAP_ANCHO { tx2 = MAP_ANCHO - 1; }
+    si ty2 >= MAP_ALTO { ty2 = MAP_ALTO - 1; }
+
+    entero ty = ty1;
+    mientras ty <= ty2 {
+        entero tx = tx1;
+        mientras tx <= tx2 {
+            entero tile = graficos_tilemap_tilemap_obtener(tm_id, tx, ty);
+            si tile > 0 { retornar verdadero; }  // tile sólido
+            tx = tx + 1;
+        }
+        ty = ty + 1;
+    }
+    retornar falso;
+}
+
+/// Resuelve colisión en el eje X
+funcion void resolver_x() {
+    // Intentar mover en X
+    decimal nueva_x = jugador_x + jugador_vx;
+    si !colision_aabb(nueva_x, jugador_y, PLAYER_W, PLAYER_H) {
+        jugador_x = nueva_x;
+        retornar;
+    }
+
+    // Hay colisión: resolver
+    si jugador_vx > 0 {
+        // Mover derecha → alinear al borde izquierdo del tile
+        entero tile_x = ((jugador_x + jugador_vx + (PLAYER_W - 1) como decimal) / (TILE_W como decimal)) como entero;
+        jugador_x = (tile_x * TILE_W - PLAYER_W) como decimal;
+    } sino si jugador_vx < 0 {
+        // Mover izquierda → alinear al borde derecho del tile
+        entero tile_x = ((jugador_x + jugador_vx) / (TILE_W como decimal)) como entero;
+        jugador_x = ((tile_x + 1) * TILE_W) como decimal;
+    }
+    jugador_vx = 0.0;
+}
+
+/// Resuelve colisión en el eje Y
+funcion void resolver_y() {
+    decimal nueva_y = jugador_y + jugador_vy;
+    si !colision_aabb(jugador_x, nueva_y, PLAYER_W, PLAYER_H) {
+        jugador_y = nueva_y;
+        en_suelo = falso;
+        retornar;
+    }
+
+    // Hay colisión: resolver
+    si jugador_vy > 0 {
+        // Cayendo → alinear al borde superior del tile
+        entero tile_y = ((jugador_y + jugador_vy + (PLAYER_H - 1) como decimal) / (TILE_H como decimal)) como entero;
+        jugador_y = (tile_y * TILE_H - PLAYER_H) como decimal;
+        en_suelo = verdadero;
+    } sino si jugador_vy < 0 {
+        // Saltando → alinear al borde inferior del tile
+        entero tile_y = ((jugador_y + jugador_vy) / (TILE_H como decimal)) como entero;
+        jugador_y = ((tile_y + 1) * TILE_H) como decimal;
+    }
+    jugador_vy = 0.0;
+}
+
+/// Actualiza la cámara
+funcion void actualizar_camara() {
+    si seguir {
+        // Cámara centrada en el jugador
+        entero target_cx = (jugador_x + (PLAYER_W / 2) como decimal - (SCR_ANCHO / 2) como decimal) como entero;
+        entero target_cy = (jugador_y + (PLAYER_H / 2) como decimal - (SCR_ALTO / 2) como decimal) como entero;
+
+        // Suavizado (interpolación lineal)
+        cam_x = cam_x + (target_cx - cam_x) / 8;
+        cam_y = cam_y + (target_cy - cam_y) / 8;
+    }
+
+    // Clampear cámara al mundo
+    entero mundo_w = MAP_ANCHO * TILE_W;
+    entero mundo_h = MAP_ALTO * TILE_H;
+    si cam_x < 0 { cam_x = 0; }
+    si cam_y < 0 { cam_y = 0; }
+    si cam_x > mundo_w - SCR_ANCHO { cam_x = mundo_w - SCR_ANCHO; }
+    si cam_y > mundo_h - SCR_ALTO { cam_y = mundo_h - SCR_ALTO; }
+    si cam_x < 0 { cam_x = 0; }
+    si cam_y < 0 { cam_y = 0; }
+}
+
+// ============================================================
+// INICIO / START
+// ============================================================
+
+construir_nivel();
+si tm_id == 0 {
+    graficos_cerrar_ventana(win);
+    graficos_salir();
+    retornar;
+}
+
+// Posición inicial del jugador (sobre el césped en x=60)
+jugador_x = 60.0;
+jugador_y = ((14 * TILE_H) como decimal) - (PLAYER_H como decimal) - 1.0;
+tiempo_inicio = 0;
+
+imprimir("=== Controles ===");
+imprimir("  [FLECHAS/WASD] Mover personaje");
+imprimir("  [ESPACIO] Saltar");
+imprimir("  [F] Alternar seguimiento de cámara");
+imprimir("  [R] Reiniciar nivel");
+imprimir("  [ESC] Salir");
+
+// ============================================================
+// BUCLE PRINCIPAL / MAIN LOOP
+// ============================================================
+
+entero evt_buf = __ffi_asignar(64);
+
+mientras vivo {
+    // --- Leer eventos SDL ---
+    texto evt = graficos_leer_evento(evt_buf);
+    si evt == "QUIT" { romper; }
+
+    // --- Teclado en tiempo real ---
+    entero kb = graficos_teclado();
+    si kb == 0 { graficos_dormir(16); continuar; }
+
+    // ESC → salir
+    si graficos_tecla_presionada(kb, SDL_SCANCODE_ESC) { romper; }
+
+    // F → alternar seguimiento (flanco de subida)
+    entero f_down = 0;
+    si graficos_tecla_presionada(kb, SDL_SCANCODE_F) { f_down = 1; }
+    si f_down == 1 && prev_f == 0 {
+        seguir = !seguir;
+        si seguir { imprimir("Cámara: seguir jugador"); }
+        sino { imprimir("Cámara: manual"); }
+    }
+    prev_f = f_down;
+
+    // R → reiniciar (flanco de subida)
+    entero r_down = 0;
+    si graficos_tecla_presionada(kb, SDL_SCANCODE_R) { r_down = 1; }
+    si r_down == 1 && prev_r == 0 {
+        jugador_x = 60.0;
+        jugador_y = ((14 * TILE_H) como decimal) - (PLAYER_H como decimal) - 1.0;
+        jugador_vx = 0.0;
+        jugador_vy = 0.0;
+        en_suelo = falso;
+        cam_x = 0;
+        cam_y = 0;
+        tiempo_inicio = frames;
+        imprimir("Nivel reiniciado");
+    }
+    prev_r = r_down;
+
+    // --- Movimiento del jugador ---
+    decimal mov_x = 0.0;
+    si graficos_tecla_presionada(kb, SDL_SCANCODE_LEFT) ||
+       graficos_tecla_presionada(kb, SDL_SCANCODE_A) {
+        mov_x = -VEL_MOV;
+    }
+    si graficos_tecla_presionada(kb, SDL_SCANCODE_RIGHT) ||
+       graficos_tecla_presionada(kb, SDL_SCANCODE_D) {
+        mov_x = VEL_MOV;
+    }
+
+    // Saltar
+    entero sp_down = 0;
+    si graficos_tecla_presionada(kb, SDL_SCANCODE_SPACE) { sp_down = 1; }
+    si graficos_tecla_presionada(kb, SDL_SCANCODE_UP) ||
+       graficos_tecla_presionada(kb, SDL_SCANCODE_W) {
+        sp_down = 1;
+    }
+    si sp_down == 1 && prev_space == 0 && en_suelo {
+        jugador_vy = VEL_SALTO;
+        en_suelo = falso;
+    }
+    prev_space = sp_down;
+
+    // --- Cámara manual (cuando no sigue al jugador) ---
+    si !seguir {
+        entero vel_cam = 6;
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_LEFT) { cam_x = cam_x - vel_cam; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_RIGHT) { cam_x = cam_x + vel_cam; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_UP) { cam_y = cam_y - vel_cam; }
+        si graficos_tecla_presionada(kb, SDL_SCANCODE_DOWN) { cam_y = cam_y + vel_cam; }
+    }
+
+    // --- FÍSICA DEL JUGADOR ---
+
+    // Gravedad
+    jugador_vy = jugador_vy + GRAVEDAD;
+    si jugador_vy > 15.0 { jugador_vy = 15.0; }
+
+    // Velocidad horizontal
+    jugador_vx = mov_x;
+
+    // Resolver eje X primero
+    resolver_x();
+
+    // Resolver eje Y después
+    resolver_y();
+
+    // Evitar que el jugador se salga del mundo
+    si jugador_x < 0.0 { jugador_x = 0.0; }
+    si jugador_x > ((MAP_ANCHO * TILE_W - PLAYER_W) como decimal) {
+        jugador_x = ((MAP_ANCHO * TILE_W - PLAYER_W) como decimal);
+    }
+    si jugador_y > ((MAP_ALTO * TILE_H) como decimal) {
+        // Caer al vacío — reiniciar
+        jugador_x = 60.0;
+        jugador_y = 60.0;
+        jugador_vy = 0.0;
+        en_suelo = falso;
+    }
+
+    // --- Actualizar cámara ---
+    actualizar_camara();
+
+    // ============================================================
+    // DIBUJADO / RENDERING
+    // ============================================================
+
+    // Fondo
+    graficos_color_render(ren, 20, 25, 40, 255);
+    graficos_limpiar_render(ren);
+
+    // --- Dibujar tilemap ---
+    graficos_tilemap_tilemap_dibujar(tm_id, cam_x, cam_y);
+
+    // --- Dibujar jugador ---
+    entero scr_jug_x = (jugador_x - (cam_x como decimal)) como entero;
+    entero scr_jug_y = (jugador_y - (cam_y como decimal)) como entero;
+
+    // Sombra del jugador
+    graficos_color_render(ren, 0, 0, 0, 80);
+    graficos_rectangulo(ren, scr_jug_x + 3, scr_jug_y + 3, PLAYER_W, PLAYER_H);
+
+    // Cuerpo del jugador
+    graficos_color_render(ren, jugador_r, jugador_g, jugador_b, 255);
+    graficos_rectangulo(ren, scr_jug_x, scr_jug_y, PLAYER_W, PLAYER_H);
+
+    // Ojos del jugador (dos cuadrados blancos pequeños)
+    graficos_color_render(ren, 255, 255, 255, 255);
+    graficos_rectangulo(ren, scr_jug_x + 6, scr_jug_y + 8, 6, 6);
+    graficos_rectangulo(ren, scr_jug_x + 18, scr_jug_y + 8, 6, 6);
+
+    // Pupilas (miran en dirección del movimiento)
+    graficos_color_render(ren, 30, 30, 30, 255);
+    entero ojo_offset = 0;
+    si jugador_vx > 0.5 { ojo_offset = 2; }
+    sino si jugador_vx < -0.5 { ojo_offset = 0; }
+    sino { ojo_offset = 1; }
+    graficos_rectangulo(ren, scr_jug_x + 6 + ojo_offset, scr_jug_y + 10, 3, 3);
+    graficos_rectangulo(ren, scr_jug_x + 18 + ojo_offset, scr_jug_y + 10, 3, 3);
+
+    // --- HUD ---
+    // Fondo semi-transparente
+    graficos_color_render(ren, 0, 0, 0, 170);
+    graficos_rectangulo(ren, 5, 5, 250, 80);
+
+    // FPS
+    graficos_color_render(ren, 100, 255, 100, 255);
+    graficos_rectangulo(ren, 10, 10, 60, 4);  // "FPS: XX"
+
+    // Posición del jugador
+    graficos_color_render(ren, 200, 200, 220, 255);
+    graficos_rectangulo(ren, 10, 22, 120, 4);  // "Pos: (xx, yy)"
+
+    // Tile actual bajo los pies
+    entero tile_bajo = graficos_tilemap_tilemap_obtener(tm_id,
+        (jugador_x / (TILE_W como decimal) + 0.5) como entero,
+        ((jugador_y + (PLAYER_H como decimal)) / (TILE_H como decimal)) como entero);
+    texto nombre_tile = "---";
+    si tile_bajo == 1 { nombre_tile = "Tierra"; }
+    sino si tile_bajo == 2 { nombre_tile = "Cesped"; }
+    sino si tile_bajo == 3 { nombre_tile = "Piedra"; }
+    sino si tile_bajo == 4 { nombre_tile = "Agua"; }
+    sino si tile_bajo == 5 { nombre_tile = "Madera"; }
+
+    graficos_color_render(ren, 200, 220, 255, 200);
+    graficos_rectangulo(ren, 10, 34, 100, 4);  // "Tile: nombre"
+
+    // Indicador de cámara
+    texto cam_str = "";
+    si seguir { cam_str = "AUTO"; } sino { cam_str = "MANUAL"; }
+    graficos_color_render(ren, 255, 220, 100, 200);
+    graficos_rectangulo(ren, 10, 46, 80, 4);  // "Cam: AUTO/MANUAL"
+
+    // Indicador en suelo
+    si en_suelo {
+        graficos_color_render(ren, 100, 255, 100, 150);
+        graficos_rectangulo(ren, 10, 58, 60, 3);  // "En suelo"
+    } sino {
+        graficos_color_render(ren, 255, 100, 100, 150);
+        graficos_rectangulo(ren, 10, 58, 50, 3);  // "En aire"
+    }
+
+    // --- Mini-mapa ---
+    // Esquina superior derecha
+    entero mm_x = SCR_ANCHO - 120;
+    entero mm_y = 10;
+    entero mm_ancho = 110;
+    entero mm_alto = 80;
+    decimal mm_escala_x = (mm_ancho como decimal) / (MAP_ANCHO * TILE_W) como decimal;
+    decimal mm_escala_y = (mm_alto como decimal) / (MAP_ALTO * TILE_H) como decimal;
+
+    // Fondo del mini-mapa
+    graficos_color_render(ren, 10, 10, 20, 200);
+    graficos_rectangulo(ren, mm_x - 2, mm_y - 2, mm_ancho + 4, mm_alto + 4);
+
+    // Dibujar tiles en miniatura (cada 2x2 píxeles)
+    entero my = 0;
+    mientras my < MAP_ALTO {
+        entero mx = 0;
+        mientras mx < MAP_ANCHO {
+            entero tile = graficos_tilemap_tilemap_obtener(tm_id, mx, my);
+            si tile > 0 {
+                entero cr_i = 0; entero cg_i = 0; entero cb_i = 0;
+                si tile == 1 { cr_i = 139; cg_i = 69; cb_i = 19; }
+                sino si tile == 2 { cr_i = 34; cg_i = 139; cb_i = 34; }
+                sino si tile == 3 { cr_i = 128; cg_i = 128; cb_i = 128; }
+                sino si tile == 4 { cr_i = 65; cg_i = 105; cb_i = 225; }
+                sino si tile == 5 { cr_i = 101; cg_i = 67; cb_i = 33; }
+                sino { cr_i = 200; cg_i = 200; cb_i = 200; }
+
+                graficos_color_render(ren, cr_i, cg_i, cb_i, 200);
+                entero px = (mx * TILE_W * mm_escala_x) como entero;
+                entero py = (my * TILE_H * mm_escala_y) como entero;
+                graficos_rectangulo(ren, mm_x + px, mm_y + py, 2, 2);
+            }
+            mx = mx + 1;
+        }
+        my = my + 1;
+    }
+
+    // Posición del jugador en el mini-mapa
+    entero mm_jug_x = ((jugador_x * mm_escala_x) como entero) + mm_x;
+    entero mm_jug_y = ((jugador_y * mm_escala_y) como entero) + mm_y;
+    graficos_color_render(ren, jugador_r, jugador_g, jugador_b, 255);
+    graficos_rectangulo(ren, mm_jug_x - 1, mm_jug_y - 1, 4, 4);
+
+    // Área visible de cámara en mini-mapa
+    entero mm_cam_x = ((cam_x como decimal) * mm_escala_x) como entero;
+    entero mm_cam_y = ((cam_y como decimal) * mm_escala_y) como entero;
+    entero mm_cam_w = (SCR_ANCHO * mm_escala_x) como entero;
+    entero mm_cam_h = (SCR_ALTO * mm_escala_y) como entero;
+    graficos_color_render(ren, 255, 255, 255, 60);
+    graficos_rectangulo(ren, mm_x + mm_cam_x, mm_y + mm_cam_y, mm_cam_w, mm_cam_h);
+
+    // --- Leyenda de controles en la parte inferior ---
+    graficos_color_render(ren, 0, 0, 0, 160);
+    graficos_rectangulo(ren, 5, SCR_ALTO - 22, 400, 18);
+    graficos_color_render(ren, 150, 150, 180, 200);
+    graficos_rectangulo(ren, 10, SCR_ALTO - 18, 380, 3);
+
+    // --- Presentar ---
+    graficos_presentar(ren);
+
+    // --- FPS tracking ---
+    frames = frames + 1;
+    fps_contador = fps_contador + 1;
+    si frames - fps_ultimo >= 60 {
+        fps_valor = fps_contador;
+        fps_contador = 0;
+        fps_ultimo = frames;
+    }
+
+    graficos_dormir(16);
+}
+
+// ============================================================
+// LIMPIEZA / CLEANUP
+// ============================================================
+
+imprimir("Limpiando recursos...");
+graficos_tilemap_tilemap_liberar(tm_id);
+__ffi_liberar(evt_buf, 64);
+graficos_cerrar_ventana(win);
+graficos_salir();
+imprimir("=== Tilemap Demo finalizada ===");
+imprimir("Frames totales: ", frames);

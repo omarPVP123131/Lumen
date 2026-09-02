@@ -1,0 +1,10 @@
+importar ingles;
+
+array<integer> nums = [10, 20, 30, 40];
+integer total = 0;
+
+for n in nums {
+    total = total + n;
+    print(n);
+}
+print(total);

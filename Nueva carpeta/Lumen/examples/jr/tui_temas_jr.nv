@@ -1,0 +1,60 @@
+// ==========================================
+// tui_temas_jr.nv — TUI Themes (junior)
+// Tests: default theme, theme names, color access
+// Uso: lumen run -L stdlib/ examples/jr/tui_temas_jr.nv
+// ==========================================
+
+imprimir("=== TUI Temas JR: Theme Basics ===");
+
+// ── Ej 1: Default Theme Definition ──
+// Ej 1: Define a simple theme structure
+imprimir("--- Ej 1: Tema Predeterminado ---");
+// Theme color fields
+funcion lista<entero> tema_default() {
+    // [bg, text, border, title, selection, sel_text, button, btn_text, error, success, warn, info]
+    retornar [17, 255, 33, 214, 27, 231, 240, 255, 196, 46, 214, 33];
+}
+lista<entero> tema = tema_default();
+lista<texto> nombres_campos = ["fondo", "texto", "borde", "titulo", "seleccion", "sel_texto", "boton", "btn_texto", "error", "exito", "warn", "info"];
+imprimir("Tema predeterminado (Catppuccin Mocha):");
+entero i = 0;
+mientras i < largo(nombres_campos) {
+    imprimir("  ", nombres_campos[i], " = ANSI ", tema[i]);
+    i = i + 1;
+}
+
+// ── Ej 2: Theme Name Registry ──
+// Ej 2: List and validate theme names
+imprimir("--- Ej 2: Nombres de Temas ---");
+lista<texto> nombres_temas = ["Predeterminado", "Claro", "Oscuro", "Alto Contraste"];
+imprimir("Temas disponibles:");
+entero ti = 0;
+mientras ti < largo(nombres_temas) {
+    imprimir("  ", ti, " = ", nombres_temas[ti]);
+    ti = ti + 1;
+}
+// Validate theme names
+funcion booleano nombre_valido(texto n) {
+    si n.largo() < 1 { retornar falso; }
+    retornar verdadero;
+}
+imprimir("'Predeterminado' valido? ", nombre_valido("Predeterminado"));
+imprimir("'' valido?              ", nombre_valido(""));
+
+// ── Ej 3: Color Access Helper ──
+// Ej 3: Extract color values from theme
+imprimir("--- Ej 3: Acceso a Colores ---");
+funcion entero color_tema(lista<entero> t, entero idx) {
+    si idx < 0 { retornar 0; }
+    si idx > largo(t) - 1 { retornar 0; }
+    retornar t[idx];
+}
+imprimir("fondo del tema = ", color_tema(tema, 0));
+imprimir("texto del tema = ", color_tema(tema, 1));
+imprimir("error del tema = ", color_tema(tema, 8));
+imprimir("exito del tema = ", color_tema(tema, 9));
+// Invalid index handling
+imprimir("indice -1 = ", color_tema(tema, -1));
+imprimir("indice 99 = ", color_tema(tema, 99));
+
+imprimir("--- FIN TUI TEMAS JR ---");

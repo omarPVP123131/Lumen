@@ -1,0 +1,39 @@
+// EJEMPLO SR: cálculos de fecha avanzados
+// Uso: lumen run examples/sr_fecha.nv
+
+importar "fecha.nv";
+
+imprimir("=== Fecha SR ===");
+
+// Semana actual
+sea ahora = fecha_ahora();
+sea dia_semana = fecha_formatear(ahora, "%A");
+sea mes = fecha_formatear(ahora, "%B");
+sea anio = fecha_formatear(ahora, "%Y");
+imprimir("hoy es: ", dia_semana, ", ", mes, " ", anio);
+
+// Primer y último día del mes actual
+sea anio_num = fecha_parsear(fecha_formatear(ahora, "%Y-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S");
+sea prox_anio = fecha_parsear(fecha_formatear(ahora + 400*86400, "%Y-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S");
+sea dias_restantes = fecha_diferencia(prox_anio, ahora) / 86400;
+imprimir("días hasta año nuevo: ", dias_restantes);
+
+// Diferencia entre dos fechas específicas
+sea inicio = fecha_parsear("2026-06-01 00:00:00", "%Y-%m-%d %H:%M:%S");
+sea final = fecha_parsear("2026-08-15 00:00:00", "%Y-%m-%d %H:%M:%S");
+sea total_dias = fecha_diferencia(final, inicio) / 86400;
+imprimir("días entre 2026-06-01 y 2026-08-15: ", total_dias);
+
+// Calcular edad exacta
+sea nacimiento = fecha_parsear("1990-03-20 00:00:00", "%Y-%m-%d %H:%M:%S");
+sea edad_segs = fecha_diferencia(ahora, nacimiento);
+sea edad_anios = edad_segs / (365 * 86400);
+sea dias_extra = (edad_segs % (365 * 86400)) / 86400;
+imprimir("edad: ", edad_anios, " años y ", dias_extra, " días");
+
+// Timestamp actual en diferentes formatos
+imprimir("ISO 8601: ", fecha_formatear(ahora, "%Y-%m-%dT%H:%M:%S"));
+imprimir("fecha corta: ", fecha_formatear(ahora, "%d/%m/%Y"));
+imprimir("hora 12h: ", fecha_formatear(ahora, "%I:%M %p"));
+
+imprimir("--- FIN SR ---");

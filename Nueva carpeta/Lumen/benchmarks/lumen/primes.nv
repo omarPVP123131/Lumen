@@ -1,0 +1,24 @@
+// Benchmark 3 — primos menores a 20000 por división de prueba por división de prueba
+funcion booleano es_primo(entero n) {
+    si (n < 2) { retornar falso; }
+    si (n == 2) { retornar verdadero; }
+    si (n % 2 == 0) { retornar falso; }
+    entero i = 3;
+    mientras (i * i <= n) {
+        si (n % i == 0) { retornar falso; }
+        i = i + 2;
+    }
+    retornar verdadero;
+}
+
+funcion entero contar_primos(entero lim) {
+    sea c = 0;
+    entero k = 2;
+    mientras (k < lim) {
+        si (es_primo(k)) { c = c + 1; }
+        k = k + 1;
+    }
+    retornar c;
+}
+
+imprimir("primes:" + contar_primos(20000));

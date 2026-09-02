@@ -1,0 +1,731 @@
+// Módulo canvas — primitivas de dibujo 2D vía SDL2 FFI
+// Canvas module — 2D drawing primitives via SDL2 FFI
+// Uso: importar "graficos_canvas.nv"
+// Requiere: graficos_iniciar() y ventana/render ya creados
+//           Luego llamar graficos_canvas_iniciar(renderer)
+//
+// Funciones principales (ES/EN):
+//   pixel / pixel           — dibujar un punto
+//   linea / line            — línea recta
+//   circulo / circle        — círculo hueco
+//   circulo_relleno / fill_circle — círculo relleno
+//   triangulo / triangle    — triángulo hueco
+//   triangulo_relleno / fill_triangle — triángulo relleno
+//   rectangulo_redondeado / round_rect — rectángulo redondeado
+//   rectangulo_gradiente / gradient_rect — rectángulo con degradado
+//   arco / arc              — arco de círculo
+//   sector / pie_sector     — sector de pastel relleno
+//   modo_mezcla / blend_mode — modo de mezcla alfa
+//   limpiar_pantalla / clear_screen — limpiar con color
+//   texto / text            — texto bitmap 5x7
+
+importar "matematicas.nv";
+
+// ============================================================
+// ESTADO INTERNO / INTERNAL STATE
+// ============================================================
+
+cualquiera __sdl = ninguno;
+entero __ren = 0;
+
+// ============================================================
+// CARGA DE SDL2 / SDL2 LOADING
+// ============================================================
+
+/// Carga SDL2.dll bajo demanda
+funcion booleano __cargar() {
+    si __tipo_de(__sdl) == "texto" { retornar verdadero; }
+    __sdl = __ffi_cargar("SDL2.dll");
+    si __tipo_de(__sdl) != "texto" {
+        __sdl = __ffi_cargar("libSDL2.so");
+    }
+    si __tipo_de(__sdl) != "texto" {
+        __sdl = __ffi_cargar("libSDL2.dylib");
+    }
+    retornar __tipo_de(__sdl) == "texto";
+}
+
+/// Obtiene mensaje de error SDL2
+funcion texto __err() {
+    retornar __ffi_llamar(__sdl, "SDL_GetError", "", [], "texto");
+}
+
+// ============================================================
+// INICIALIZACIÓN / INIT
+// ============================================================
+
+/// Establece el renderer para todas las operaciones de dibujo
+/// Debe llamarse después de crear el renderer con graficos_renderizador()
+funcion void iniciar(entero renderer) {
+    __ren = renderer;
+    __cargar();
+}
+/// Set the renderer for all drawing operations
+funcion void init(entero renderer) { iniciar(renderer); }
+
+// ============================================================
+// AUXILIARES / HELPERS
+// ============================================================
+
+/// Escribe un entero 32-bit little-endian en un buffer
+funcion entero __i32_le(entero val, entero buf, entero off) {
+    __ffi_poke(buf, off, val & 255);
+    __ffi_poke(buf, off + 1, (val >> 8) & 255);
+    __ffi_poke(buf, off + 2, (val >> 16) & 255);
+    __ffi_poke(buf, off + 3, (val >> 24) & 255);
+    retornar 0;
+}
+
+/// Lee un entero 32-bit little-endian de un buffer
+funcion entero __read_u32(entero buf, entero off) {
+    entero b0 = __ffi_peek(buf, off);
+    entero b1 = __ffi_peek(buf, off + 1);
+    entero b2 = __ffi_peek(buf, off + 2);
+    entero b3 = __ffi_peek(buf, off + 3);
+    retornar b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+
+/// Asigna un buffer y llena un SDL_Rect{x,y,w,h} (16 bytes)
+funcion entero __rect_alloc(entero x, entero y, entero w, entero h) {
+    entero buf = __ffi_asignar(16);
+    __i32_le(x, buf, 0);
+    __i32_le(y, buf, 4);
+    __i32_le(w, buf, 8);
+    __i32_le(h, buf, 12);
+    retornar buf;
+}
+
+/// Raíz cuadrada entera positiva (método de Newton)
+funcion entero __isqrt(entero n) {
+    si n <= 0 { retornar 0; }
+    entero x = n;
+    entero y = (x + 1) / 2;
+    mientras y < x {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    retornar x;
+}
+
+/// Establece el color de dibujo sin verificar errores
+funcion void __set_color(entero r, entero g, entero b, entero a) {
+    __ffi_llamar(__sdl, "SDL_SetRenderDrawColor", "entero,entero,entero,entero,entero",
+        [__ren, r, g, b, a], "entero");
+}
+
+/// Dibuja una línea sin verificar errores
+funcion void __raw_line(entero x1, entero y1, entero x2, entero y2) {
+    __ffi_llamar(__sdl, "SDL_RenderDrawLine", "entero,entero,entero,entero,entero",
+        [__ren, x1, y1, x2, y2], "entero");
+}
+
+/// Dibuja un punto sin verificar errores
+funcion void __raw_pixel(entero x, entero y) {
+    __ffi_llamar(__sdl, "SDL_RenderDrawPoint", "entero,entero,entero",
+        [__ren, x, y], "entero");
+}
+
+// ============================================================
+// PIXEL
+// ============================================================
+
+/// Dibuja un solo píxel en (x, y) con el color (r, g, b, a)
+funcion void pixel(entero x, entero y, entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    __set_color(r, g, b, a);
+    __raw_pixel(x, y);
+}
+/// Draw a single pixel at (x, y) with color (r, g, b, a)
+funcion void pixel_en(entero x, entero y, entero r, entero g, entero b, entero a) {
+    pixel(x, y, r, g, b, a);
+}
+
+// ============================================================
+// LÍNEA / LINE
+// ============================================================
+
+/// Dibuja una línea desde (x1,y1) hasta (x2,y2)
+funcion void linea(entero x1, entero y1, entero x2, entero y2,
+        entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    __set_color(r, g, b, a);
+    __raw_line(x1, y1, x2, y2);
+}
+/// Draw a line from (x1,y1) to (x2,y2)
+funcion void line(entero x1, entero y1, entero x2, entero y2,
+        entero r, entero g, entero b, entero a) {
+    linea(x1, y1, x2, y2, r, g, b, a);
+}
+
+// ============================================================
+// CÍRCULO / CIRCLE (Midpoint Algorithm)
+// ============================================================
+
+/// Dibuja un círculo hueco centrado en (cx,cy) con radio dado
+funcion void circulo(entero cx, entero cy, entero radio,
+        entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    si radio <= 0 { retornar; }
+
+    __set_color(r, g, b, a);
+
+    entero x = 0;
+    entero y = radio;
+    entero d = 3 - 2 * radio;
+
+    mientras y >= x {
+        // 8 puntos simétricos del círculo (Midpoint)
+        __raw_pixel(cx + x, cy + y);
+        __raw_pixel(cx - x, cy + y);
+        __raw_pixel(cx + x, cy - y);
+        __raw_pixel(cx - x, cy - y);
+        __raw_pixel(cx + y, cy + x);
+        __raw_pixel(cx - y, cy + x);
+        __raw_pixel(cx + y, cy - x);
+        __raw_pixel(cx - y, cy - x);
+
+        si d > 0 {
+            y = y - 1;
+            d = d + 4 * (x - y) + 10;
+        } sino {
+            d = d + 4 * x + 6;
+        }
+        x = x + 1;
+    }
+}
+/// Draw a hollow circle centered at (cx,cy) with given radius
+funcion void circle(entero cx, entero cy, entero radius,
+        entero r, entero g, entero b, entero a) {
+    circulo(cx, cy, radius, r, g, b, a);
+}
+
+// ============================================================
+// CÍRCULO RELLENO / FILL CIRCLE
+// ============================================================
+
+/// Dibuja un círculo relleno centrado en (cx,cy) con radio dado
+/// Usa scanlines horizontales para máximo rendimiento
+funcion void circulo_relleno(entero cx, entero cy, entero radio,
+        entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    si radio <= 0 { retornar; }
+
+    __set_color(r, g, b, a);
+
+    // Dibujar líneas horizontales por scanline: x² + y² ≤ r²
+    entero y = 0;
+    mientras y <= radio {
+        entero half = __isqrt(radio * radio - y * y);
+        __raw_line(cx - half, cy + y, cx + half, cy + y);
+        si y != 0 {
+            __raw_line(cx - half, cy - y, cx + half, cy - y);
+        }
+        y = y + 1;
+    }
+}
+/// Draw a filled circle centered at (cx,cy) with given radius
+funcion void fill_circle(entero cx, entero cy, entero radius,
+        entero r, entero g, entero b, entero a) {
+    circulo_relleno(cx, cy, radius, r, g, b, a);
+}
+
+// ============================================================
+// TRIÁNGULO / TRIANGLE
+// ============================================================
+
+/// Dibuja un triángulo hueco con 3 vértices
+funcion void triangulo(entero x1, entero y1, entero x2, entero y2,
+        entero x3, entero y3, entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+
+    __set_color(r, g, b, a);
+    __raw_line(x1, y1, x2, y2);
+    __raw_line(x2, y2, x3, y3);
+    __raw_line(x3, y3, x1, y1);
+}
+/// Draw a hollow triangle with 3 vertices
+funcion void triangle(entero x1, entero y1, entero x2, entero y2,
+        entero x3, entero y3, entero r, entero g, entero b, entero a) {
+    triangulo(x1, y1, x2, y2, x3, y3, r, g, b, a);
+}
+
+// ============================================================
+// TRIÁNGULO RELLENO / FILL TRIANGLE (Scanline Edge-Walk)
+// ============================================================
+
+/// Dibuja un triángulo relleno con 3 vértices
+/// Algoritmo: scanline con interpolación lineal de aristas
+funcion void triangulo_relleno(entero x1, entero y1, entero x2, entero y2,
+        entero x3, entero y3, entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    si (y1 == y2 && y2 == y3) { retornar; }  // línea plana
+
+    __set_color(r, g, b, a);
+
+    // Ordenar vértices por y ascendente (v0 <= v1 <= v2)
+    entero v0x = x1; entero v0y = y1;
+    entero v1x = x2; entero v1y = y2;
+    entero v2x = x3; entero v2y = y3;
+
+    // Intercambios manuales para ordenar por y
+    entero tx; entero ty;
+    si v0y > v1y {
+        tx = v0x; v0x = v1x; v1x = tx;
+        ty = v0y; v0y = v1y; v1y = ty;
+    }
+    si v1y > v2y {
+        tx = v1x; v1x = v2x; v2x = tx;
+        ty = v1y; v1y = v2y; v2y = ty;
+    }
+    si v0y > v1y {
+        tx = v0x; v0x = v1x; v1x = tx;
+        ty = v0y; v0y = v1y; v1y = ty;
+    }
+
+    // Interpolar x a lo largo de una arista: x = ax + (bx-ax)*(scan_y-ay)/(by-ay)
+    // Para cada scanline y desde v0y hasta v2y
+    entero scan_y = v0y;
+    mientras scan_y <= v2y {
+        // Arista v0→v2: siempre activa
+        entero x_left = 0;
+        entero x_right = 0;
+        booleano set = falso;
+
+        si v2y != v0y {
+            entero xn = v0x + ((v2x - v0x) * (scan_y - v0y)) / (v2y - v0y);
+            x_left = xn;
+            x_right = xn;
+            set = verdadero;
+        }
+
+        // Arista v0→v1: activa en mitad superior (entre v0.y y v1.y)
+        si scan_y <= v1y && v1y != v0y {
+            entero xn = v0x + ((v1x - v0x) * (scan_y - v0y)) / (v1y - v0y);
+            si !set { x_left = xn; x_right = xn; set = verdadero; }
+            sino {
+                si xn < x_left { x_left = xn; }
+                si xn > x_right { x_right = xn; }
+            }
+        }
+
+        // Arista v1→v2: activa en mitad inferior (entre v1.y y v2.y)
+        si scan_y > v1y && v2y != v1y {
+            entero xn = v1x + ((v2x - v1x) * (scan_y - v1y)) / (v2y - v1y);
+            si !set { x_left = xn; x_right = xn; set = verdadero; }
+            sino {
+                si xn < x_left { x_left = xn; }
+                si xn > x_right { x_right = xn; }
+            }
+        }
+
+        // Dibujar línea horizontal para esta scanline
+        si set && x_left <= x_right {
+            __raw_line(x_left, scan_y, x_right, scan_y);
+        }
+
+        scan_y = scan_y + 1;
+    }
+}
+/// Draw a filled triangle with 3 vertices (scanline algorithm)
+funcion void fill_triangle(entero x1, entero y1, entero x2, entero y2,
+        entero x3, entero y3, entero r, entero g, entero b, entero a) {
+    triangulo_relleno(x1, y1, x2, y2, x3, y3, r, g, b, a);
+}
+
+// ============================================================
+// RECTÁNGULO REDONDEADO / ROUND RECT
+// ============================================================
+
+/// Dibuja un rectángulo con esquinas redondeadas (borde solamente)
+/// Dibuja un rectángulo relleno (fill) por scanlines
+funcion void rectangulo_relleno(entero x, entero y, entero w, entero h,
+        entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    __set_color(r, g, b, a);
+    entero yy = 0;
+    mientras yy < h {
+        __raw_line(x, y + yy, x + w - 1, y + yy);
+        yy = yy + 1;
+    }
+}
+
+funcion void rectangulo_redondeado(entero x, entero y, entero w, entero h,
+        entero radio, entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    si radio < 1 { radio = 1; }
+    si radio > w / 2 { radio = w / 2; }
+    si radio > h / 2 { radio = h / 2; }
+    si radio < 1 { retornar; }
+
+    __set_color(r, g, b, a);
+
+    // 4 líneas rectas (lados del rectángulo, excluyendo esquinas)
+    __raw_line(x + radio, y, x + w - radio, y);               // superior
+    __raw_line(x + radio, y + h, x + w - radio, y + h);       // inferior
+    __raw_line(x, y + radio, x, y + h - radio);               // izquierda
+    __raw_line(x + w, y + radio, x + w, y + h - radio);       // derecha
+
+    // Centros de las 4 esquinas
+    entero cx1 = x + radio;  entero cy1 = y + radio;       // superior-izquierda
+    entero cx2 = x + w - radio;  entero cy2 = y + radio;   // superior-derecha
+    entero cx3 = x + w - radio;  entero cy3 = y + h - radio; // inferior-derecha
+    entero cx4 = x + radio;  entero cy4 = y + h - radio;     // inferior-izquierda
+
+    // Dibujar 4 cuartos de círculo usando Midpoint, filtrando por cuadrante
+    entero px = 0;
+    entero py = radio;
+    entero d = 3 - 2 * radio;
+
+    mientras py >= px {
+        // Superior-izquierda (dx <= 0, dy <= 0)
+        __raw_pixel(cx1 - py, cy1 - px);
+        __raw_pixel(cx1 - px, cy1 - py);
+
+        // Superior-derecha (dx >= 0, dy <= 0)
+        __raw_pixel(cx2 + px, cy2 - py);
+        __raw_pixel(cx2 + py, cy2 - px);
+
+        // Inferior-derecha (dx >= 0, dy >= 0)
+        __raw_pixel(cx3 + py, cy3 + px);
+        __raw_pixel(cx3 + px, cy3 + py);
+
+        // Inferior-izquierda (dx <= 0, dy >= 0)
+        __raw_pixel(cx4 - px, cy4 + py);
+        __raw_pixel(cx4 - py, cy4 + px);
+
+        si d > 0 {
+            py = py - 1;
+            d = d + 4 * (px - py) + 10;
+        } sino {
+            d = d + 4 * px + 6;
+        }
+        px = px + 1;
+    }
+}
+/// Draw a rectangle with rounded corners (outline only)
+funcion void round_rect(entero x, entero y, entero w, entero h,
+        entero radius, entero r, entero g, entero b, entero a) {
+    rectangulo_redondeado(x, y, w, h, radius, r, g, b, a);
+}
+
+// ============================================================
+// RECTÁNGULO CON DEGRADADO / GRADIENT RECT
+// ============================================================
+
+/// Dibuja un rectángulo con degradado vertical (interpolación por scanline)
+/// (r1,g1,b1) = color superior, (r2,g2,b2) = color inferior
+funcion void rectangulo_gradiente(entero x, entero y, entero w, entero h,
+        entero r1, entero g1, entero b1, entero r2, entero g2, entero b2) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    si h <= 0 { retornar; }
+
+    entero dy = 0;
+    mientras dy < h {
+        // t = dy / (h-1) : interpolar de 0.0 a 1.0
+        decimal t = (dy como decimal) / ((h - 1) como decimal);
+        entero cr = (r1 + ((r2 - r1) como decimal) * t) como entero;
+        entero cg = (g1 + ((g2 - g1) como decimal) * t) como entero;
+        entero cb = (b1 + ((b2 - b1) como decimal) * t) como entero;
+
+        __set_color(cr, cg, cb, 255);
+        __raw_line(x, y + dy, x + w - 1, y + dy);
+        dy = dy + 1;
+    }
+}
+/// Draw a rectangle with vertical gradient (top to bottom color)
+funcion void gradient_rect(entero x, entero y, entero w, entero h,
+        entero r1, entero g1, entero b1, entero r2, entero g2, entero b2) {
+    rectangulo_gradiente(x, y, w, h, r1, g1, b1, r2, g2, b2);
+}
+
+// ============================================================
+// ARCO Y SECTOR / ARC AND SECTOR (para gráficos de pastel)
+// ============================================================
+
+/// Dibuja un arco (borde circular) centrado en (cx,cy) con radio dado
+/// Ángulos en grados: 0°=derecha, 90°=abajo, 180°=izquierda, 270°=arriba
+funcion void arco(entero cx, entero cy, entero radio,
+        entero inicio, entero fin,
+        entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    si radio <= 0 { retornar; }
+
+    __set_color(r, g, b, a);
+
+    entero pasos = 36;
+    decimal ang_inc = ((fin - inicio) como decimal) * 0.0174533 / pasos como decimal;
+    decimal ang = inicio como decimal * 0.0174533;
+
+    entero i = 0;
+    mientras i < pasos {
+        decimal cos_a = matematicas_coseno(ang);
+        decimal sin_a = matematicas_seno(ang);
+        entero px = (cx como decimal + radio como decimal * cos_a) como entero;
+        entero py = (cy como decimal + radio como decimal * sin_a) como entero;
+        __raw_pixel(px, py);
+        ang = ang + ang_inc;
+        i = i + 1;
+    }
+}
+/// Draw an arc (circle outline segment) centered at (cx,cy)
+/// Angles in degrees: 0°=right, 90°=down, 180°=left, 270°=up
+funcion void arc(entero cx, entero cy, entero radius,
+        entero start, entero end,
+        entero r, entero g, entero b, entero a) {
+    arco(cx, cy, radius, start, end, r, g, b, a);
+}
+
+/// Dibuja un sector de pastel relleno (centro a arco)
+/// Divide el sector en pequeños triángulos para simular el relleno
+funcion void sector(entero cx, entero cy, entero radio,
+        entero inicio, entero fin,
+        entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    si radio <= 0 { retornar; }
+    si inicio == fin { retornar; }
+
+    __set_color(r, g, b, a);
+
+    entero pasos = 36;
+    decimal ang_inc = ((fin - inicio) como decimal) * 0.0174533 / pasos como decimal;
+    si ang_inc < 0.0 { ang_inc = -ang_inc; }
+    si ang_inc > 0.5 { ang_inc = 0.5; }  // limitar a ~28 grados por paso
+
+    decimal ang_a = inicio como decimal * 0.0174533;
+    entero i = 0;
+    mientras i < pasos {
+        decimal ang_b = ang_a + ang_inc;
+
+        entero xa = (cx como decimal + radio como decimal * matematicas_coseno(ang_a)) como entero;
+        entero ya = (cy como decimal + radio como decimal * matematicas_seno(ang_a)) como entero;
+        entero xb = (cx como decimal + radio como decimal * matematicas_coseno(ang_b)) como entero;
+        entero yb = (cy como decimal + radio como decimal * matematicas_seno(ang_b)) como entero;
+
+        // Dibujar triángulo relleno: centro → punto_a → punto_b
+        // Usamos raw_line para las 3 aristas del triángulo
+        __raw_line(cx, cy, xa, ya);
+        __raw_line(cx, cy, xb, yb);
+        __raw_line(xa, ya, xb, yb);
+
+        ang_a = ang_b;
+        i = i + 1;
+    }
+}
+/// Draw a filled pie sector (center to arc edge)
+/// Divides the sector into small triangles for filling
+funcion void pie_sector(entero cx, entero cy, entero radius,
+        entero start, entero end,
+        entero r, entero g, entero b, entero a) {
+    sector(cx, cy, radius, start, end, r, g, b, a);
+}
+
+// ============================================================
+// MODO DE MEZCLA / BLEND MODE
+// ============================================================
+
+/// Establece el modo de mezcla alfa del renderizador
+/// modo: 0 = ninguno, 1 = normal (blend), 2 = aditivo, 3 = modulación
+funcion void modo_mezcla(entero modo) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    __ffi_llamar(__sdl, "SDL_SetRenderDrawBlendMode", "entero,entero",
+        [__ren, modo], "entero");
+}
+/// Set the alpha blend mode for the renderer
+/// mode: 0 = none, 1 = blend, 2 = additive, 3 = modulate
+funcion void blend_mode(entero mode) {
+    modo_mezcla(mode);
+}
+
+// ============================================================
+// LIMPIAR PANTALLA / CLEAR SCREEN
+// ============================================================
+
+/// Limpia la pantalla (render target) con un color sólido
+funcion void limpiar_pantalla(entero r, entero g, entero b) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    __set_color(r, g, b, 255);
+    __ffi_llamar(__sdl, "SDL_RenderClear", "entero", [__ren], "entero");
+}
+/// Clear the screen (render target) with a solid color
+funcion void clear_screen(entero r, entero g, entero b) {
+    limpiar_pantalla(r, g, b);
+}
+
+/// Limpia la pantalla con color y canal alfa
+funcion void limpiar_pantalla_alfa(entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    __set_color(r, g, b, a);
+    __ffi_llamar(__sdl, "SDL_RenderClear", "entero", [__ren], "entero");
+}
+/// Clear screen with color and alpha channel
+funcion void clear_screen_alpha(entero r, entero g, entero b, entero a) {
+    limpiar_pantalla_alfa(r, g, b, a);
+}
+
+// ============================================================
+// TEXTO / TEXT — Fuente bitmap 5x7 para etiquetas y títulos
+// ============================================================
+
+// Datos de fuente bitmap 5x7 (ASCII 32-126)
+// Cada carácter = 7 enteros, bits: 5 columnas (bit4=izquierda, bit0=derecha)
+// Indice en lista = (codigo - 32) * 7
+
+funcion lista<entero> __font_data() {
+    retornar [
+        0,0,0,0,0,0,0,                    // 32 space
+        4,4,4,4,4,0,4,                    // 33 !
+        10,10,10,0,0,0,0,                 // 34 "
+        10,10,31,10,31,10,10,             // 35 #
+        4,15,20,14,5,30,4,                // 36 $
+        24,25,2,4,8,19,3,                 // 37 %
+        12,18,20,8,21,18,13,              // 38 &
+        4,4,4,0,0,0,0,                    // 39 '
+        2,4,8,8,8,4,2,                    // 40 (
+        8,4,2,2,2,4,8,                    // 41 )
+        0,4,21,14,21,4,0,                 // 42 *
+        0,4,4,31,4,4,0,                   // 43 +
+        0,0,0,0,0,4,8,                    // 44 ,
+        0,0,0,31,0,0,0,                   // 45 -
+        0,0,0,0,0,12,12,                  // 46 .
+        1,2,4,8,16,0,0,                   // 47 /
+        14,17,19,21,25,17,14,             // 48 0
+        4,12,4,4,4,4,14,                  // 49 1
+        14,17,1,2,4,8,31,                 // 50 2
+        14,17,1,6,1,17,14,                // 51 3
+        2,6,10,18,31,2,2,                 // 52 4
+        31,16,30,1,1,17,14,               // 53 5
+        14,16,30,17,17,17,14,             // 54 6
+        31,1,2,4,8,8,8,                   // 55 7
+        14,17,17,14,17,17,14,             // 56 8
+        14,17,17,15,1,2,12,               // 57 9
+        0,0,12,12,0,12,12,                // 58 :
+        0,0,12,12,0,4,8,                  // 59 ;
+        2,4,8,16,8,4,2,                   // 60 <
+        0,0,31,0,31,0,0,                  // 61 =
+        8,4,2,1,2,4,8,                    // 62 >
+        14,17,1,2,4,0,4,                  // 63 ?
+        14,17,23,21,23,16,14,             // 64 @
+        4,10,17,17,31,17,17,              // 65 A
+        30,17,17,30,17,17,30,             // 66 B
+        14,17,16,16,16,17,14,             // 67 C
+        30,17,17,17,17,17,30,             // 68 D
+        31,16,16,30,16,16,31,             // 69 E
+        31,16,16,30,16,16,16,             // 70 F
+        14,17,16,23,17,17,14,             // 71 G
+        17,17,17,31,17,17,17,             // 72 H
+        14,4,4,4,4,4,14,                  // 73 I
+        7,2,2,2,2,18,12,                  // 74 J
+        17,18,20,24,20,18,17,             // 75 K
+        16,16,16,16,16,16,31,             // 76 L
+        17,27,21,21,17,17,17,             // 77 M
+        17,25,21,21,19,17,17,             // 78 N
+        14,17,17,17,17,17,14,             // 79 O
+        30,17,17,30,16,16,16,             // 80 P
+        14,17,17,17,21,18,13,             // 81 Q
+        30,17,17,30,20,18,17,             // 82 R
+        15,16,16,14,1,1,30,               // 83 S
+        31,4,4,4,4,4,4,                   // 84 T
+        17,17,17,17,17,17,14,             // 85 U
+        17,17,17,10,10,4,4,               // 86 V
+        17,17,17,21,21,27,17,             // 87 W
+        17,17,10,4,10,17,17,              // 88 X
+        17,17,10,4,4,4,4,                 // 89 Y
+        31,1,2,4,8,16,31,                 // 90 Z
+        14,8,8,8,8,8,14,                  // 91 [
+        16,8,4,2,1,0,0,                   // 92 backslash
+        14,2,2,2,2,2,14,                  // 93 ]
+        4,10,17,0,0,0,0,                  // 94 ^
+        0,0,0,0,0,0,31,                   // 95 _
+        8,4,2,0,0,0,0,                    // 96 `
+        0,0,14,1,15,17,15,                // 97 a
+        16,16,30,17,17,17,30,             // 98 b
+        0,0,15,16,16,16,15,               // 99 c
+        1,1,15,17,17,17,15,               // 100 d
+        0,0,14,17,31,16,14,               // 101 e
+        6,9,8,30,8,8,8,                   // 102 f
+        0,0,15,17,17,15,1,                // 103 g
+        16,16,30,17,17,17,17,             // 104 h
+        4,0,12,4,4,4,14,                  // 105 i
+        2,0,6,2,2,18,12,                  // 106 j
+        16,16,18,20,24,20,18,             // 107 k
+        12,4,4,4,4,4,14,                  // 108 l
+        0,0,26,21,21,21,21,               // 109 m
+        0,0,30,17,17,17,17,               // 110 n
+        0,0,14,17,17,17,14,               // 111 o
+        0,0,30,17,17,30,16,               // 112 p
+        0,0,15,17,17,15,1,                // 113 q
+        0,0,22,25,16,16,16,               // 114 r
+        0,0,15,16,14,1,30,                // 115 s
+        8,8,30,8,8,9,6,                   // 116 t
+        0,0,17,17,17,17,15,               // 117 u
+        0,0,17,17,10,10,4,                // 118 v
+        0,0,17,21,21,21,10,               // 119 w
+        0,0,17,10,4,10,17,                // 120 x
+        0,0,17,17,17,15,1,                // 121 y
+        0,0,31,2,4,8,31,                  // 122 z
+        2,4,4,8,4,4,2,                    // 123 {
+        4,4,4,4,4,4,4,                    // 124 |
+        8,4,4,2,4,4,8,                    // 125 }
+        0,0,0,13,18,0,0,                  // 126 ~
+    ];
+}
+
+/// Dibuja texto en (x, y) con el color (r, g, b, a)
+/// Cada caracter mide 5x7 píxeles más 1 de separación horizontal
+funcion void texto(entero x, entero y, texto s,
+        entero r, entero g, entero b, entero a) {
+    si __ren == 0 { retornar; }
+    si !__cargar() { retornar; }
+    si s.largo() == 0 { retornar; }
+
+    lista<entero> font = __font_data();
+    __set_color(r, g, b, a);
+
+    entero i = 0;
+    mientras i < s.largo() {
+        entero ch = __str_ord(s[i])[0];
+        si ch < 32 { ch = 32; }
+        si ch > 126 { ch = 126; }
+        entero idx = (ch - 32) * 7;
+        entero row = 0;
+        mientras row < 7 {
+            entero bits = font[idx + row];
+            entero col = 0;
+            mientras col < 5 {
+                si ((bits >> (4 - col)) & 1) == 1 {
+                    __raw_pixel(x + i * 6 + col, y + row);
+                }
+                col = col + 1;
+            }
+            row = row + 1;
+        }
+        i = i + 1;
+    }
+}
+/// Draw text at (x, y) with color (r, g, b, a)
+/// Each character is 5x7 pixels plus 1 spacing
+funcion void text(entero x, entero y, texto s,
+        entero r, entero g, entero b, entero a) {
+    texto(x, y, s, r, g, b, a);
+}
+
+/// Ancho en píxeles de un texto (6 por caracter: 5 + 1 separación)
+funcion entero ancho_texto(texto s) {
+    retornar s.largo() * 6;
+}
+/// Pixel width of text (6 per character: 5 + 1 spacing)
+funcion entero text_width(texto s) { retornar ancho_texto(s); }

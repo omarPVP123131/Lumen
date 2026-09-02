@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# post-commit hook — Auto-creates release tag v{version} from Cargo.toml
+
+pwsh.exe -NoProfile -Command "
+\$toml = Join-Path (git rev-parse --show-toplevel) 'Cargo.toml';
+if (-not (Test-Path \$toml)) { exit 0 };
+\$line = Select-String -Path \$toml -Pattern '^version\s*=\s*\"([^\"]+)\"' | Select-Object -First 1;
+if (-not \$line) { exit 0 };
+\$ver = \$line.Matches.Groups[1].Value;
+\$tag = 'v' + \$ver;
+\$existing = git tag --list \$tag;
+if (\$existing) { exit 0 };
+\$commit = git rev-parse HEAD;
+git tag -a \$tag -m ('Release ' + \$tag) HEAD 2>&1 | Out-Null;
+if (\$LASTEXITCODE -eq 0) { Write-Host ('[auto-tag] Created tag ''' + \$tag + ''' on commit ' + \$commit.Substring(0,7)) }
+"

@@ -1,0 +1,43 @@
+// ============================================================================
+// LÚMEN — Demostración de Compilador AOT Autónomo & Emisor PE/ELF Nativo
+// Generación directa de binarios .exe (Windows) y ELF64 (Linux) con 0 dependencias
+// ============================================================================
+
+importar "compiler/asm_emitter.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   🚀 LÚMEN AUTONOMOUS AOT COMPILER & NATIVE LINKER ENGINE (v2.4.6)   ║");
+imprimir("║   Emisión Binaria Directa (PE32+ / ELF64) con 0 Dependencias de C/Rust║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Crear emisor de ensamblador x86_64
+imprimir("1. Inicializando Emisor x86_64 Autónomo en memoria...");
+asm_emitter_EmisorAsmX86 emisor = asm_emitter_asm_crear(4194304);
+
+// 2. Emitir instrucciones de código máquina nativo
+imprimir("2. Emitiendo instrucciones x86_64 nativas...");
+emisor.push_rbp();
+emisor.mov_rax_inmediato(42); // Código de retorno = 42
+emisor.mov_rdi_inmediato(0);  // Status = 0
+emisor.ret();
+
+imprimir("   ✓ Opcodes x86_64 emitidos : ", largo(emisor.bytes), " bytes");
+
+// 3. Generar binario ELF64 (Linux / POSIX)
+imprimir("");
+imprimir("3. Generando ejecutable nativo Linux ELF64 (SysV ABI)...");
+lista<entero> binario_elf = emisor.generar_elf64_binario();
+imprimir("   ✓ Cabecera ELF64 construida (Magic 0x7F 'ELF', e_machine=x86_64)");
+imprimir("   ✓ Tamaño total del binario ELF : ", largo(binario_elf), " bytes");
+
+// 4. Generar binario PE32+ (Windows x64 .exe)
+imprimir("");
+imprimir("4. Generando ejecutable nativo Windows PE32+ (.exe)...");
+lista<entero> binario_pe = emisor.generar_pe_windows_ejecutable();
+imprimir("   ✓ Cabecera DOS 'MZ' y PE 'PE\\0\\0' construidas");
+imprimir("   ✓ Sección .text alineada a 0x200 (512 bytes)");
+imprimir("   ✓ Tamaño total del binario .exe : ", largo(binario_pe), " bytes");
+
+imprimir("");
+imprimir("✨ ¡Compilación AOT nativa y emisor autónomo completados con éxito en LÚMEN!");

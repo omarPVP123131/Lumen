@@ -1,0 +1,78 @@
+// Suite variada 1 — Quicksort de 100k enteros con intercambio por índice.
+// Llenado 0..n-1, shuffle determinista (LCG x=42, a=1103515245, c=12345,
+// m=2^31), quicksort ITERATIVO con pila explícita de rangos (todo local:
+// las escrituras a[i]=v usan el fast path ArraySetVar). Checksum =
+// suma de a[i] * (i+1) → 333333333300000 (independiente del orden inicial).
+
+funcion numero bench_sort(entero n) {
+    sea a = [];
+    entero i = 0;
+    mientras (i < n) {
+        a.agregar(i);
+        i = i + 1;
+    }
+    // Shuffle determinista con LCG (x=42).
+    entero x = 42;
+    i = 0;
+    mientras (i < n) {
+        x = (x * 1103515245 + 12345) % 2147483648;
+        entero j = x % n;
+        entero t = a[i];
+        a[i] = a[j];
+        a[j] = t;
+        i = i + 1;
+    }
+    // Pila explícita de rangos (pre-dimensionada a n: peor caso de
+    // profundidad; con el shuffle real la profundidad es ~log n).
+    sea pi = [];
+    sea pj = [];
+    entero k = 0;
+    mientras (k < n) {
+        pi.agregar(0);
+        pj.agregar(0);
+        k = k + 1;
+    }
+    entero top = 0;
+    pi[0] = 0;
+    pj[0] = n - 1;
+    mientras (top >= 0) {
+        entero izq = pi[top];
+        entero der = pj[top];
+        top = top - 1;
+        si (izq < der) {
+            entero pivote = a[izq];
+            entero i2 = izq;
+            entero j2 = der;
+            mientras (i2 <= j2) {
+                mientras (a[i2] < pivote) {
+                    i2 = i2 + 1;
+                }
+                mientras (a[j2] > pivote) {
+                    j2 = j2 - 1;
+                }
+                si (i2 <= j2) {
+                    entero t = a[i2];
+                    a[i2] = a[j2];
+                    a[j2] = t;
+                    i2 = i2 + 1;
+                    j2 = j2 - 1;
+                }
+            }
+            top = top + 1;
+            pi[top] = izq;
+            pj[top] = j2;
+            top = top + 1;
+            pi[top] = i2;
+            pj[top] = der;
+        }
+    }
+    numero total = 0;
+    i = 0;
+    mientras (i < n) {
+        total = total + a[i] * (i + 1);
+        i = i + 1;
+    }
+    retornar total;
+}
+
+imprimir("sort:" + bench_sort(100000));

@@ -1,0 +1,105 @@
+// ============================================================================
+// LÚMEN — Demostración de las 6 Fases de Evolución del Lenguaje
+// examples/demo_fases_completas.nv
+// ============================================================================
+
+importar ingles;
+importar "arena.nv";
+importar "pipeline.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║        LÚMEN — DEMOSTRACIÓN DE LAS 6 FASES DE EVOLUCIÓN              ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝\n");
+
+// ── FASE 1: Sistema de Tipos, Enums y Azúcar Opcional (T?) ────────────
+imprimir("── [FASE 1] Tipos Opcionales (T?) y Enums Modernos ──");
+
+enum EstadoServidor {
+    Activo,
+    Mantenimiento,
+    ErrorCritico,
+}
+
+funcion texto? buscar_nodo(entero id) {
+    si id == 42 {
+        retornar algun("Servidor-Principal-Alpha");
+    }
+    retornar ninguno;
+}
+
+texto? nodo_encontrado = buscar_nodo(42);
+elegir (nodo_encontrado) {
+    caso algun(nombre): imprimir("  ✓ Nodo encontrado con tipo opcional (texto?): ", nombre);
+    defecto: imprimir("  ✗ No encontrado");
+}
+
+EstadoServidor estado = EstadoServidor::Activo;
+imprimir("  ✓ Estado de servidor (Enum): ", estado);
+
+
+// ── FASE 2: Ergonomía, Operador Pipe (|>) y Comprensión de Listas ────
+imprimir("\n── [FASE 2] Operador Pipe (|>) y Comprensiones ──");
+
+funcion entero triplicar(entero n) {
+    retornar n * 3;
+}
+
+funcion entero sumar_diez(entero n) {
+    retornar n + 10;
+}
+
+entero resultado_pipe = 5 |> triplicar() |> sumar_diez();
+imprimir("  ✓ Pipeline funcional (5 |> triplicar |> sumar_diez): ", resultado_pipe);
+
+lista<entero> numeros_base = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+lista<entero> pares_al_cuadrado = [n * n para n en numeros_base si n % 2 == 0];
+imprimir("  ✓ Comprensión [n * n para n en 1..10 si par]: ", pares_al_cuadrado);
+
+lista<entero> rango_comprension = [x * 10 para x en 1..=5];
+imprimir("  ✓ Comprensión con rangos [x * 10 para x en 1..=5]: ", rango_comprension);
+
+
+// ── FASE 3 & 4: Optimizaciones y Ejecución Rápida ────────────────────
+imprimir("\n── [FASE 3 & 4] Rendimiento y Optimización de Bucles ──");
+
+funcion entero calcular_fibonacci(entero n) {
+    si n <= 1 { retornar n; }
+    entero a = 0;
+    entero b = 1;
+    para (entero i = 2; i <= n; i = i + 1) {
+        entero temp = a + b;
+        a = b;
+        b = temp;
+    }
+    retornar b;
+}
+
+entero fib25 = calcular_fibonacci(25);
+imprimir("  ✓ Fibonacci iterativo optimizado fib(25): ", fib25);
+
+
+// ── FASE 5: Memoria por Regiones (Arena Allocator) y Defer ───────────
+imprimir("\n── [FASE 5] Modelo de Memoria (Arena Allocator) y Defer ──");
+
+arena_RegionArena mi_arena = arena_crear(2048);
+mi_arena = mi_arena.asignar("Tensor_Weights_Layer1");
+mi_arena = mi_arena.asignar("Tensor_Bias_Layer1");
+imprimir("  ✓ Bloques asignados en Arena: ", mi_arena.total_asignaciones());
+imprimir("  ✓ Recuperando bloque #0: ", mi_arena.obtener(0));
+mi_arena = mi_arena.reiniciar();
+imprimir("  ✓ Arena reiniciada en O(1). Asignaciones activas: ", mi_arena.total_asignaciones());
+
+posponer {
+    imprimir("  ✓ Limpieza de recursos pospuesta (posponer/defer) ejecutada correctamente.");
+}
+
+
+// ── FASE 6: Resumen de Pipeline Completo ──────────────────────────────
+imprimir("\n── [FASE 6] Pipeline stdlib y Verificación Final ──");
+lista<entero> datos = [10, 15, 20, 25, 30, 35, 40];
+lista<entero> procesados = pipeline_pipe_filtrar_pares(datos);
+entero total = pipeline_pipe_sumar_todos(procesados);
+imprimir("  ✓ Datos filtrados pares: ", procesados);
+imprimir("  ✓ Suma total procesada: ", total);
+
+imprimir("\n🎉 ¡Las 6 fases operando en 100% armonía y alto rendimiento en LÚMEN!");

@@ -1,0 +1,12 @@
+// Benchmark — closures: llamadas a lambda en bucle
+funcion entero principal() {
+    sea doble = |x| x * 2;
+    numero acc = 0;
+    entero i = 0;
+    mientras (i < 200000) {
+        acc = acc + doble(i);
+        i = i + 1;
+    }
+    imprimir("closures:" + a_texto(acc));
+    retornar 0;
+}

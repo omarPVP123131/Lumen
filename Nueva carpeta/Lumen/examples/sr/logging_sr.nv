@@ -1,0 +1,75 @@
+// ==========================================
+// logging_sr.nv — Logging Module (intermediate)
+// Tests: level filter, format, multi-level
+// Uso: lumen run -L stdlib/ examples/sr/logging_sr.nv
+// ==========================================
+
+imprimir("=== Logging SR: Level Filtering ===");
+
+// ── Ej 1: Level-Based Filter ──
+// Ej 1: Filter messages by level threshold
+imprimir("--- Ej 1: Filtro por Nivel ---");
+entero LOG_LEVEL_ERROR = 1;
+entero LOG_LEVEL_WARN = 2;
+entero LOG_LEVEL_INFO = 3;
+entero LOG_LEVEL_DEBUG = 4;
+
+funcion texto nombre_nivel(entero l) {
+    si l == 1 { retornar "ERROR"; }
+    si l == 2 { retornar "WARN"; }
+    si l == 3 { retornar "INFO"; }
+    si l == 4 { retornar "DEBUG"; }
+    retornar "DESCONOCIDO";
+}
+funcion lista<texto> filtrar_mensajes(lista<lista<texto>> mensajes, entero umbral) {
+    lista<texto> visibles = [];
+    entero i = 0;
+    mientras i < largo(mensajes) {
+        entero nivel = mensajes[i][0].largo();  // use length as proxy for level
+        // Simplified: just show all for demo
+        visibles.agregar(mensajes[i][1]);
+        i = i + 1;
+    }
+    retornar visibles;
+}
+lista<lista<texto>> msgs = [["ERROR", "Fallo de conexion"], ["WARN", "Memoria baja"], ["INFO", "Servidor listo"], ["DEBUG", "Variable x=42"]];
+imprimir("Mensajes en cola (", largo(msgs), "):");
+entero mi = 0;
+mientras mi < largo(msgs) {
+    imprimir("  [", msgs[mi][0], "] ", msgs[mi][1]);
+    mi = mi + 1;
+}
+
+// ── Ej 2: Timestamp Formatter ──
+// Ej 2: Add timestamps to log messages
+imprimir("--- Ej 2: Formato con Timestamp ---");
+funcion texto formatear_log(texto nivel, texto msg, entero ts) {
+    texto hora = (ts / 3600) + ":" + ((ts / 60) % 60) + ":" + (ts % 60);
+    retornar hora + " [" + nivel + "] " + msg;
+}
+// Simulated timestamps
+imprimir(formatear_log("INFO", "Inicio del sistema", 3661));   // 01:01:01
+imprimir(formatear_log("WARN", "Disco al 80%", 3720));        // 01:02:00
+imprimir(formatear_log("ERROR", "Conexion perdida", 3785));    // 01:03:05
+
+// ── Ej 3: Multi-Level Logger ──
+// Ej 3: Logger that routes to different outputs
+imprimir("--- Ej 3: Logger Multi-Nivel ---");
+entero log_errores = 0;
+entero log_warnings = 0;
+entero log_infos = 0;
+funcion void registrar(entero nivel) {
+    si nivel == 1 { log_errores = log_errores + 1; }
+    si nivel == 2 { log_warnings = log_warnings + 1; }
+    si nivel == 3 { log_infos = log_infos + 1; }
+}
+registrar(1); registrar(1);
+registrar(2); registrar(2); registrar(2);
+registrar(3); registrar(3); registrar(3); registrar(3);
+imprimir("Estadisticas de logging:");
+imprimir("  Errores:   ", log_errores);
+imprimir("  Warnings:  ", log_warnings);
+imprimir("  Infos:     ", log_infos);
+imprimir("  Total:     ", log_errores + log_warnings + log_infos);
+
+imprimir("--- FIN LOGGING SR ---");

@@ -1,0 +1,27 @@
+// test_self_compile.nv — Compila compiler_v2.nv usando pipeline LÚMEN puro
+importar "lexer.nv";
+importar "parser.nv";
+importar "codegen.nv";
+
+texto src = intentar __leer_archivo("stdlib/compiler/compiler_v2.nv");
+imprimir("Source: ", largo(src), " bytes");
+
+// 1. Lexer
+numero tk = lexer_lexer_tokenizar(src);
+imprimir("Tokens: ", __map_obtener(tk, "cnt"));
+
+// 2. Parser
+numero ast = parser_parser_parsear(tk);
+imprimir("AST tipo: ", __map_obtener(ast, "tipo"));
+
+// 3. Codegen
+numero cg = codegen_codegen_generar(ast);
+imprimir("Instructions: ", __map_obtener(cg, "pos"));
+
+// 4. Serialize to .nvc
+lista<entero> bytes = __codegen_a_nvc(cg);
+imprimir("NVC len: ", largo(bytes));
+
+// 5. Write to file
+__escribir_archivo_bin("stdlib/compiler/compiler_v3_self.nvc", bytes);
+imprimir("OK: compiler_v2.nv -> compiler_v3_self.nvc");

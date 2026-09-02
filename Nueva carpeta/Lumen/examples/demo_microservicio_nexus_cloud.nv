@@ -1,0 +1,66 @@
+// ============================================================================
+// LÚMEN v2.4.6 — DEMO: MICROSERVICIO CLOUD CON NEXUS & BASES DE DATOS
+// Combina: nexus.nv + postgres.nv + redis.nv + crypto.nv
+// ============================================================================
+
+importar "nexus.nv";
+importar "postgres.nv";
+importar "redis.nv";
+importar "crypto.nv";
+
+funcion vacio principal() {
+    imprimir("╔══════════════════════════════════════════════════════════════════╗");
+    imprimir("║   LÚMEN v2.4.6 — MICROSERVICIO CLOUD NEXUS & WIRE PROTOCOLS      ║");
+    imprimir("╚══════════════════════════════════════════════════════════════════╝\n");
+
+    // 1. Inicializar Framework Web Nexus
+    imprimir("1. CONFIGURANDO APLICACIÓN NEXUS WEB & CONTRATO OPENAPI:");
+    nexus_NexusApp app = nexus_crear_app("Nexus Cloud Enterprise", "2.4.6", "API de microservicios en LÚMEN");
+    
+    // Registrar rutas REST tipadas
+    app = nexus_get(app, "/api/v1/health", "salud_sistema", "Comprueba el estado del servidor y bases de datos", "Sistema");
+    app = nexus_get(app, "/api/v1/usuarios", "listar_usuarios", "Obtiene lista de usuarios registrados", "Usuarios");
+    app = nexus_post(app, "/api/v1/usuarios", "crear_usuario", "Registra un nuevo usuario con hash de contraseña", "Usuarios");
+    app = nexus_get(app, "/api/v1/sesiones/{id}", "obtener_sesion", "Consulta sesión activa desde Redis", "Autenticacion");
+
+    // Generar contrato OpenAPI 3.0 y Swagger UI
+    texto openapi_json = nexus_generar_openapi_json(app);
+    texto swagger_html = nexus_generar_swagger_ui_html(app);
+    imprimir("   • Contrato OpenAPI 3.0 generado con éxito (", largo(openapi_json), "bytes).");
+    imprimir("   • Swagger UI interactivo disponible en /docs (", largo(swagger_html), "bytes).");
+
+    // 2. Conexión y Consultas a PostgreSQL (Wire Protocol 3.0)
+    imprimir("\n2. CONSULTANDO CLÚSTER POSTGRESQL (WIRE PROTOCOL 3.0):");
+    postgres_PostgresConexion db = postgres_conectar("db-primary.lumen-cloud.internal", 5432, "postgres", "lumen_prod");
+    postgres_PostgresResultado usuarios = postgres_ejecutar(db, "SELECT id, nombre, email, activo FROM usuarios");
+    
+    imprimir("   • Columnas OID recibidas:", largo(usuarios.columnas));
+    imprimir("   • Filas procesadas:");
+    para (entero i = 0; i < largo(usuarios.filas); i = i + 1) {
+        imprimir("     [ID:", usuarios.filas[i].valores[0], "]", usuarios.filas[i].valores[1], "-", usuarios.filas[i].valores[2]);
+    }
+
+    // 3. Gestión de Caché y Sesiones en Redis (RESP3)
+    imprimir("\n3. CACHE DISTRIBUIDA REDIS RESP3 & PIPELINE:");
+    redis_RedisCliente cache = redis_conectar("redis-cluster.lumen-cloud.internal", 6379, 0);
+    
+    texto token_firma = crypto_sha256("sesion_usuario_1_auth");
+    redis_set(cache, "sesion:usr_1", token_firma, 3600);
+    imprimir("   • Sesión guardada en Redis con token criptográfico SHA-256:", token_firma);
+
+    // Ejecutar pipeline por lotes
+    cache = redis_pipeline_agregar(cache, "INCR metricas:peticiones_totales");
+    cache = redis_pipeline_agregar(cache, "INCR metricas:usuarios_activos");
+    cache = redis_pipeline_agregar(cache, "SET cache:config_version 2.4.6");
+    lista<redis_RedisRespuesta> respuestas_pipe = redis_pipeline_ejecutar(cache);
+    imprimir("   • Pipeline ejecutado en lote: ", largo(respuestas_pipe), "comandos en 1 sola llamada de red.");
+
+    // 4. Simulación de Despacho de Petición HTTP
+    imprimir("\n4. DESPACHANDO PETICIÓN HTTP EN MEMORIA:");
+    texto res_http = nexus_despachar(app, "GET", "/api/v1/usuarios", "");
+    imprimir("   • Respuesta HTTP:", res_http);
+
+    imprimir("\n✓ Microservicio Cloud Nexus operando al 100% de rendimiento.");
+}
+
+principal();

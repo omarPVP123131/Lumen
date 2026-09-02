@@ -1,0 +1,14 @@
+funcion entero contador() {
+    sea n = 0;
+    funcion entero inc() {
+        n = n + 1;
+        retornar n;
+    }
+    retornar inc;
+}
+sea a = contador();
+sea b = contador();
+imprimir("a1:" + a());
+imprimir("b1:" + b());
+imprimir("a2:" + a());
+imprimir("b2:" + b());

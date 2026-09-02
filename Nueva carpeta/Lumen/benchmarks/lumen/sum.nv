@@ -1,0 +1,12 @@
+// Benchmark 2 — bucles/enteros: suma de 0..10M
+funcion entero suma(entero n) {
+    sea acc = 0;
+    entero i = 0;
+    mientras (i < n) {
+        acc = acc + i;
+        i = i + 1;
+    }
+    retornar acc;
+}
+
+imprimir("sum:" + suma(10000000));

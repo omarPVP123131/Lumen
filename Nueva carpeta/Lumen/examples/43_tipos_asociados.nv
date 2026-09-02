@@ -1,0 +1,24 @@
+// Ejemplo de Tipos Asociados en Lúmen
+rasgo Contenedor {
+    tipo Item;
+    funcion Item obtener_valor(este);
+}
+
+estructura Caja {
+    valor: entero,
+}
+
+impl Contenedor para Caja {
+    tipo Item = entero;
+
+    funcion entero obtener_valor(este) {
+        retornar este.valor;
+    }
+}
+
+funcion entero principal() {
+    sea c = Caja { valor: 100 };
+    sea val = c.obtener_valor();
+    imprimir("Valor obtenido del contenedor: " + a_texto(val));
+    retornar 0;
+}

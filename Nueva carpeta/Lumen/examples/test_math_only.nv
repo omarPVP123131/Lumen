@@ -1,0 +1,9 @@
+importar "matematicas.nv";
+imprimir("abs(-5) = ", matematicas_abs(-5));
+imprimir("max(3, 7) = ", matematicas_max(3, 7));
+imprimir("min(3, 7) = ", matematicas_min(3, 7));
+imprimir("potencia(2, 8) = ", matematicas_potencia(2, 8));
+imprimir("raiz(16) = ", matematicas_raiz(16));
+imprimir("seno(0) = ", matematicas_seno(0));
+imprimir("coseno(0) = ", matematicas_coseno(0));
+imprimir("--- OK ---");

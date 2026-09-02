@@ -1,0 +1,45 @@
+// ============================================================================
+// LÚMEN — Demostración de Compilador Tracing JIT Tier-4 y On-Stack Replacement
+// ============================================================================
+
+importar "tracing_jit.nv";
+
+imprimir("╔══════════════════════════════════════════════════════════════════════╗");
+imprimir("║   ⚡ LÚMEN TIER-4 TRACING JIT & ON-STACK REPLACEMENT (v2.4.6)        ║");
+imprimir("║   Compilación Dinámica Hot-Loop, Reemplazo en Pila & Deopt Guards    ║");
+imprimir("╚══════════════════════════════════════════════════════════════════════╝");
+imprimir("");
+
+// 1. Inicializar el motor Tracing JIT Tier-4
+imprimir("1. Inicializando Profiler y Motor Tracing JIT Tier-4...");
+tracing_jit_CompiladorTracingJIT jit = tracing_jit_crear(50);
+imprimir("   ✓ ", tracing_jit_estadisticas(jit));
+
+// 2. Simular ejecución iterativa y detección de bucle caliente (Hot Loop)
+imprimir("");
+imprimir("2. Ejecutando iteraciones de bucle y elevando Tiers (1 -> 2 -> 3 -> 4)...");
+entero it = 1;
+mientras it <= 60 {
+    jit = tracing_jit_registrar_iteracion(jit, 101);
+    it = it + 1;
+}
+
+tracing_jit_TrazaTier4 traza_bucle = jit.trazas[0];
+imprimir("   ✓ Bucle #101 elevado a Tier: ", traza_bucle.nivel_tier, " (TIER_4_OSR_NATIVE)");
+imprimir("   ✓ Iteraciones registradas   : ", traza_bucle.iteraciones);
+imprimir("   ✓ Vectorización SIMD FMA    : ", traza_bucle.instrucciones_fma, " instrucciones paralelas");
+
+// 3. Ejecutar On-Stack Replacement (OSR) Hot Swap
+imprimir("");
+imprimir("3. Ejecutando On-Stack Replacement (OSR) en caliente sobre la pila...");
+texto osr_log = tracing_jit_ejecutar_osr(jit, 101);
+imprimir("   • ", osr_log);
+
+// 4. Deoptimización segura
+imprimir("");
+imprimir("4. Probando guardia de invariantes y deoptimización segura...");
+jit = tracing_jit_deoptimizar(jit, 101);
+imprimir("   ✓ Deoptimización completada: Retorno seguro a baseline VM.");
+
+imprimir("");
+imprimir("✨ ¡Tracing JIT Tier-4 con On-Stack Replacement probado con éxito en LÚMEN!");

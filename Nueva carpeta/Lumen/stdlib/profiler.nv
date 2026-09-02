@@ -1,0 +1,171 @@
+// Modulo profiler — Perfilado CPU/Memoria / CPU/Memory profiling
+// Rastrea tiempo de ejecucion y uso de recursos
+// Tracks execution time and resource usage
+// Uso: importar "profiler.nv"
+// Todas las funciones tienen alias en ingles / All functions have English aliases
+
+// ── Almacenamiento ──────────────────────────────────────
+cualquiera __perfil_datos = __map_nuevo();
+
+/// Inicia el perfilado de una funcion o seccion de codigo
+/// Start profiling a function or code section
+funcion void perfil_iniciar(texto nombre) {
+    cualquiera entrada = __map_nuevo();
+    entrada = __map_poner(entrada, "inicio", __tiempo_ahora());
+    entrada = __map_poner(entrada, "contador", 1);
+    entrada = __map_poner(entrada, "tiempo_total", 0);
+    entrada = __map_poner(entrada, "tiempo_min", 999999);
+    entrada = __map_poner(entrada, "tiempo_max", 0);
+    __perfil_datos = __map_poner(__perfil_datos, nombre, entrada);
+}
+/// Start profiling (English alias)
+funcion void profile_start(texto name) { perfil_iniciar(name); }
+
+/// Finaliza el perfilado y retorna la duracion en microsegundos
+/// End profiling and return duration in microseconds
+funcion entero perfil_finalizar(texto nombre) {
+    cualquiera entrada = __map_obtener(__perfil_datos, nombre);
+    entero inicio = __map_obtener(entrada, "inicio") como entero;
+    entero fin = __tiempo_ahora();
+    entero duracion = fin - inicio;
+    entero contador = __map_obtener(entrada, "contador") como entero;
+    entero tiempo_total = (__map_obtener(entrada, "tiempo_total") como entero) + duracion;
+    entero tiempo_min = __map_obtener(entrada, "tiempo_min") como entero;
+    entero tiempo_max = __map_obtener(entrada, "tiempo_max") como entero;
+
+    si tiempo_min - duracion > 0 {
+        tiempo_min = duracion;
+    }
+    si duracion - tiempo_max > 0 {
+        tiempo_max = duracion;
+    }
+
+    entrada = __map_poner(entrada, "fin", fin);
+    entrada = __map_poner(entrada, "duracion", duracion);
+    entrada = __map_poner(entrada, "contador", contador);
+    entrada = __map_poner(entrada, "tiempo_total", tiempo_total);
+    entrada = __map_poner(entrada, "tiempo_min", tiempo_min);
+    entrada = __map_poner(entrada, "tiempo_max", tiempo_max);
+    entrada = __map_poner(entrada, "ultima_ejecucion", fin);
+    __perfil_datos = __map_poner(__perfil_datos, nombre, entrada);
+    retornar duracion;
+}
+/// End profiling (English alias)
+funcion entero profile_end(texto name) { retornar perfil_finalizar(name); }
+
+/// Obtiene la ultima duracion registrada
+/// Get the last recorded duration
+funcion entero perfil_duracion(texto nombre) {
+    cualquiera entrada = __map_obtener(__perfil_datos, nombre);
+    retornar __map_obtener(entrada, "duracion");
+}
+/// Get last duration (English alias)
+funcion entero profile_duration(texto name) { retornar perfil_duracion(name); }
+
+/// Obtiene el contador de llamadas
+/// Get call count
+funcion entero perfil_contador(texto nombre) {
+    cualquiera entrada = __map_obtener(__perfil_datos, nombre);
+    retornar __map_obtener(entrada, "contador");
+}
+/// Get call count (English alias)
+funcion entero profile_count(texto name) { retornar perfil_contador(name); }
+
+/// Obtiene el tiempo total acumulado
+/// Get total accumulated time
+funcion entero perfil_tiempo_total(texto nombre) {
+    cualquiera entrada = __map_obtener(__perfil_datos, nombre);
+    retornar __map_obtener(entrada, "tiempo_total");
+}
+/// Get total time (English alias)
+funcion entero profile_total_time(texto name) { retornar perfil_tiempo_total(name); }
+
+/// Obtiene el tiempo promedio de ejecucion
+/// Get average execution time
+funcion entero perfil_promedio(texto nombre) {
+    cualquiera entrada = __map_obtener(__perfil_datos, nombre);
+    entero total = __map_obtener(entrada, "tiempo_total") como entero;
+    entero cont = __map_obtener(entrada, "contador") como entero;
+    si cont == 0 {
+        retornar 0;
+    }
+    retornar total / cont;
+}
+/// Get average time (English alias)
+funcion entero profile_avg(texto name) { retornar perfil_promedio(name); }
+
+/// Genera un reporte completo de perfilado
+/// Generate a full profiling report
+funcion texto perfil_reporte() {
+    texto r = "=== PROFILER REPORT ===\n";
+    r = r + "========================\n";
+    cualquiera claves = __map_claves(__perfil_datos);
+    entero total = largo(claves);
+    entero i = 0;
+    mientras total - i > 0 {
+        texto nombre = claves[i];
+        cualquiera entrada = __map_obtener(__perfil_datos, nombre);
+        entero dur = __map_obtener(entrada, "duracion") como entero;
+        entero cont = __map_obtener(entrada, "contador") como entero;
+        entero tiempo_total = __map_obtener(entrada, "tiempo_total") como entero;
+        entero tiempo_min = __map_obtener(entrada, "tiempo_min") como entero;
+        entero tiempo_max = __map_obtener(entrada, "tiempo_max") como entero;
+        entero prom = 0;
+        si cont - 0 > 0 {
+            prom = tiempo_total / cont;
+        }
+        r = r + nombre + ":\n";
+        r = r + "  Llamadas:  " + a_texto(cont) + "\n";
+        r = r + "  Total:     " + a_texto(tiempo_total) + "us\n";
+        r = r + "  Promedio:  " + a_texto(prom) + "us\n";
+        r = r + "  Min:       " + a_texto(tiempo_min) + "us\n";
+        r = r + "  Max:       " + a_texto(tiempo_max) + "us\n";
+        r = r + "  Ultima:    " + a_texto(dur) + "us\n";
+        i = i + 1;
+    }
+    r = r + "========================\n";
+    r = r + "Total funciones: " + a_texto(total) + "\n";
+    retornar r;
+}
+/// Generate profiling report (English alias)
+funcion texto profile_report() { retornar perfil_reporte(); }
+
+/// Genera un reporte resumido (solo nombres y promedios)
+/// Generate a summary report (names and averages only)
+funcion texto perfil_resumen() {
+    texto r = "=== PROFILER SUMMARY ===\n";
+    cualquiera claves = __map_claves(__perfil_datos);
+    entero total = largo(claves);
+    entero i = 0;
+    mientras total - i > 0 {
+        texto nombre = claves[i];
+        cualquiera entrada = __map_obtener(__perfil_datos, nombre);
+        entero cont = __map_obtener(entrada, "contador") como entero;
+        entero tiempo_total = __map_obtener(entrada, "tiempo_total") como entero;
+        entero prom = 0;
+        si cont - 0 > 0 {
+            prom = tiempo_total / cont;
+        }
+        r = r + "  " + nombre + ": " + a_texto(cont) + " calls, avg=" + a_texto(prom) + "us, total=" + a_texto(tiempo_total) + "us\n";
+        i = i + 1;
+    }
+    retornar r;
+}
+/// Generate summary report (English alias)
+funcion texto profile_summary() { retornar perfil_resumen(); }
+
+/// Memoria usada (aproximada via conteo de entradas)
+/// Memory used (approximate via entry count)
+funcion entero perfil_memoria() {
+    retornar __map_longitud(__perfil_datos);
+}
+/// Get memory usage estimate (English alias)
+funcion entero profile_memory() { retornar perfil_memoria(); }
+
+/// Limpia todos los datos de perfilado
+/// Clear all profiling data
+funcion void perfil_limpiar() {
+    __perfil_datos = __map_nuevo();
+}
+/// Clear profiling data (English alias)
+funcion void profile_clear() { perfil_limpiar(); }

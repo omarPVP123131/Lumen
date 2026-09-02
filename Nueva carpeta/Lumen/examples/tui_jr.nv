@@ -1,0 +1,22 @@
+// Ejemplo TUI Básico (Fase 152-153) - API actual
+// Uso: lumen run examples/tui_jr.nv
+importar "tui.nv";
+// Headless/CI guard — demo requiere display/SDL2/consola interactiva
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo omitida (requiere display)");
+    retornar;
+}
+
+imprimir("=== TUI Básico ===");
+booleano tui_ok = tui_iniciar();
+imprimir("init: ", tui_ok);
+
+texto w = tui_ventana("Mi Ventana", "Hola Lumen TUI!");
+imprimir("window: ", w);
+
+booleano c = tui_cerrar();
+imprimir("close: ", c);
+imprimir("OK");

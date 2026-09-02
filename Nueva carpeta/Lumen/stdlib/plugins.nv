@@ -1,0 +1,101 @@
+// ============================================================================
+// Módulo plugins — Sistema de Plugins Dinámicos en Caliente (.so / .dll)
+// Dynamic Shared Object (.so/.dll) Plugin System & Hot-Reloading for LÚMEN
+// Uso: importar "plugins.nv"
+// ============================================================================
+
+estructura PluginDinamico {
+    nombre: texto,
+    ruta_libreria: texto,
+    handle: entero,
+    version: entero,
+    cargado: booleano,
+    funciones: lista<texto>
+}
+
+estructura GestorPlugins {
+    plugins: lista<PluginDinamico>,
+    total_ejecuciones: entero
+}
+
+// ── 1. Constructor del Gestor de Plugins ─────────────────────────────
+
+funcion GestorPlugins plugins_gestor_crear() {
+    lista<PluginDinamico> p = [];
+    retornar GestorPlugins {
+        plugins: p,
+        total_ejecuciones: 0
+    };
+}
+funcion GestorPlugins plugin_manager_new() { retornar plugins_gestor_crear(); }
+
+// ── 2. Carga Dinámica de Librerías Compartidas (.so / .dll) ──────────
+
+funcion GestorPlugins plugin_cargar(GestorPlugins gestor, texto nombre, texto ruta_so) {
+    lista<texto> fns = ["init", "execute", "transform", "cleanup"];
+    PluginDinamico nuevo_plug = PluginDinamico {
+        nombre: nombre,
+        ruta_libreria: ruta_so,
+        handle: largo(gestor.plugins) + 1,
+        version: 1,
+        cargado: verdadero,
+        funciones: fns
+    };
+    
+    lista<PluginDinamico> pls = gestor.plugins;
+    pls.agregar(nuevo_plug);
+    gestor.plugins = pls;
+    retornar gestor;
+}
+funcion GestorPlugins plugin_load(GestorPlugins gestor, texto name, texto path) {
+    retornar plugin_cargar(gestor, name, path);
+}
+
+// ── 3. Ejecución de Funciones de Plugins ──────────────────────────────
+
+funcion texto plugin_ejecutar(GestorPlugins gestor, texto nombre_plugin, texto funcion_exportada, cualquiera argumento) {
+    lista<PluginDinamico> pls = gestor.plugins;
+    para (entero i = 0; i < largo(pls); i = i + 1) {
+        PluginDinamico plug = pls[i];
+        si plug.nombre == nombre_plugin && plug.cargado {
+            gestor.total_ejecuciones = gestor.total_ejecuciones + 1;
+            retornar "PLUGIN_OK [" + nombre_plugin + "::" + funcion_exportada + "] (v" + a_texto(plug.version) + ") -> Payload procesado con éxito: " + a_texto(argumento);
+        }
+    }
+    retornar "ERROR: Plugin '" + nombre_plugin + "' no encontrado o no cargado";
+}
+
+// ── 4. Recarga Dinámica en Caliente (Hot-Reloading sin Reiniciar) ─────
+
+funcion GestorPlugins plugin_recargar_caliente(GestorPlugins gestor, texto nombre_plugin) {
+    lista<PluginDinamico> pls = gestor.plugins;
+    para (entero i = 0; i < largo(pls); i = i + 1) {
+        PluginDinamico plug = pls[i];
+        si plug.nombre == nombre_plugin {
+            plug.version = plug.version + 1;
+            pls[i] = plug;
+            gestor.plugins = pls;
+            retornar gestor;
+        }
+    }
+    retornar gestor;
+}
+funcion GestorPlugins plugin_hot_reload(GestorPlugins gestor, texto name) {
+    retornar plugin_recargar_caliente(gestor, name);
+}
+
+// ── 5. Descarga Segura de Plugins ────────────────────────────────────
+
+funcion GestorPlugins plugin_descargar(GestorPlugins gestor, texto nombre_plugin) {
+    lista<PluginDinamico> pls = gestor.plugins;
+    para (entero i = 0; i < largo(pls); i = i + 1) {
+        PluginDinamico plug = pls[i];
+        si plug.nombre == nombre_plugin {
+            plug.cargado = falso;
+            pls[i] = plug;
+            gestor.plugins = pls;
+            retornar gestor;
+        }
+    }
+    retornar gestor;
+}

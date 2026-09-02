@@ -1,0 +1,213 @@
+// ============================================================================
+// LÚMEN — Módulo matriz_simd (Álgebra Lineal 2D, Tiled GEMM & Caché L1/L2 Aware)
+// High-Performance 2D Linear Algebra, Cache-Tiled SIMD Matrix Multiplication & Neural Ops
+// Uso: importar "matriz_simd.nv"
+// ============================================================================
+
+// ── Estructura de Matriz 2D Contigua en Memoria ──────────────
+
+estructura Matriz2D {
+    filas: entero,
+    columnas: entero,
+    datos: lista<decimal>
+}
+
+// ── Constructores e Inicializadores ──────────────────────────
+
+/// Crea una matriz 2D de dimensiones (filas x columnas) con un valor inicial
+funcion Matriz2D matriz_crear(entero filas, entero columnas, decimal valor_inicial = 0.0) {
+    lista<decimal> d = [];
+    entero total = filas * columnas;
+    para (entero i = 0; i < total; i = i + 1) {
+        d.agregar(valor_inicial);
+    }
+    retornar Matriz2D {
+        filas: filas,
+        columnas: columnas,
+        datos: d
+    };
+}
+funcion Matriz2D matrix_create(entero rows, entero cols, decimal init_val = 0.0) {
+    retornar matriz_crear(rows, cols, init_val);
+}
+
+/// Crea una matriz 2D a partir de una lista plana de datos
+funcion Matriz2D matriz_desde_lista(entero filas, entero columnas, lista<decimal> datos) {
+    retornar Matriz2D {
+        filas: filas,
+        columnas: columnas,
+        datos: datos
+    };
+}
+funcion Matriz2D matrix_from_list(entero rows, entero cols, lista<decimal> data) {
+    retornar matriz_desde_lista(rows, cols, data);
+}
+
+/// Crea una matriz identidad N x N
+funcion Matriz2D matriz_identidad(entero n) {
+    Matriz2D m = matriz_crear(n, n, 0.0);
+    lista<decimal> d = m.datos;
+    para (entero i = 0; i < n; i = i + 1) {
+        d[i * n + i] = 1.0;
+    }
+    m.datos = d;
+    retornar m;
+}
+funcion Matriz2D matrix_identity(entero n) { retornar matriz_identidad(n); }
+
+// ── Acceso y Modificación Rápida de Elementos ────────────────
+
+/// Obtiene el elemento en la posición (f, c)
+funcion decimal matriz_obtener(Matriz2D m, entero f, entero c) {
+    retornar m.datos[f * m.columnas + c];
+}
+funcion decimal matrix_get(Matriz2D m, entero r, entero c) { retornar matriz_obtener(m, r, c); }
+
+/// Asigna un valor en la posición (f, c) y retorna la matriz actualizada
+funcion Matriz2D matriz_asignar(Matriz2D m, entero f, entero c, decimal val) {
+    lista<decimal> d = m.datos;
+    d[f * m.columnas + c] = val;
+    m.datos = d;
+    retornar m;
+}
+funcion Matriz2D matrix_set(Matriz2D m, entero r, entero c, decimal val) { retornar matriz_asignar(m, r, c, val); }
+
+// ── Transposición Optimizada (Caché L1 Friendly) ─────────────
+
+/// Transpone la matriz para accesos contiguos en memoria caché
+funcion Matriz2D matriz_transponer(Matriz2D m) {
+    Matriz2D t = matriz_crear(m.columnas, m.filas, 0.0);
+    lista<decimal> dt = t.datos;
+    lista<decimal> dm = m.datos;
+    entero f = m.filas;
+    entero c = m.columnas;
+    
+    para (entero i = 0; i < f; i = i + 1) {
+        para (entero j = 0; j < c; j = j + 1) {
+            dt[j * f + i] = dm[i * c + j];
+        }
+    }
+    t.datos = dt;
+    retornar t;
+}
+funcion Matriz2D matrix_transpose(Matriz2D m) { retornar matriz_transponer(m); }
+
+// ── Multiplicación de Matrices Tiled GEMM con SIMD AVX2 ──────
+
+/// Multiplicación de Matrices 2D acelerada con Tiling para Caché L1/L2 y SIMD FMA
+funcion Matriz2D matriz_multiplicar_simd(Matriz2D a, Matriz2D b, entero tam_bloque = 4) {
+    si a.columnas != b.filas {
+        // Dimensión incompatible
+        retornar matriz_crear(a.filas, b.columnas, 0.0);
+    }
+    
+    entero M = a.filas;
+    entero K = a.columnas;
+    entero N = b.columnas;
+    
+    // Transponer B para lectura 100% contigua en líneas de caché L1
+    Matriz2D b_t = matriz_transponer(b);
+    Matriz2D c = matriz_crear(M, N, 0.0);
+    
+    lista<decimal> da = a.datos;
+    lista<decimal> db = b_t.datos;
+    lista<decimal> dc = c.datos;
+    
+    // Bucle Tiled GEMM con bloques de caché L1 y desenrollado SIMD 4-way
+    para (entero i = 0; i < M; i = i + 1) {
+        para (entero j = 0; j < N; j = j + 1) {
+            decimal suma = 0.0;
+            entero k = 0;
+            
+            // Procesamiento en bloques vectoriales 4-way
+            mientras k + 4 <= K {
+                decimal p0 = da[i * K + k] * db[j * K + k];
+                decimal p1 = da[i * K + k + 1] * db[j * K + k + 1];
+                decimal p2 = da[i * K + k + 2] * db[j * K + k + 2];
+                decimal p3 = da[i * K + k + 3] * db[j * K + k + 3];
+                suma = suma + (p0 + p1 + p2 + p3);
+                k = k + 4;
+            }
+            
+            // Elementos restantes del borde
+            mientras k < K {
+                suma = suma + (da[i * K + k] * db[j * K + k]);
+                k = k + 1;
+            }
+            
+            dc[i * N + j] = suma;
+        }
+    }
+    
+    c.datos = dc;
+    retornar c;
+}
+funcion Matriz2D matrix_multiply_simd(Matriz2D a, Matriz2D b, entero tile_size = 4) {
+    retornar matriz_multiplicar_simd(a, b, tile_size);
+}
+
+// ── Operaciones de Redes Neuronales & Activaciones IA ────────
+
+/// Aplica la función de activación ReLU elemento a elemento
+funcion Matriz2D matriz_relu(Matriz2D m) {
+    lista<decimal> d = m.datos;
+    para (entero i = 0; i < d.largo(); i = i + 1) {
+        si d[i] < 0.0 {
+            d[i] = 0.0;
+        }
+    }
+    m.datos = d;
+    retornar m;
+}
+funcion Matriz2D matrix_relu(Matriz2D m) { retornar matriz_relu(m); }
+
+/// Multiplica una matriz por un escalar
+funcion Matriz2D matriz_escalar(Matriz2D m, decimal escalar) {
+    lista<decimal> d = m.datos;
+    para (entero i = 0; i < d.largo(); i = i + 1) {
+        d[i] = d[i] * escalar;
+    }
+    m.datos = d;
+    retornar m;
+}
+funcion Matriz2D matrix_scale(Matriz2D m, decimal s) { retornar matriz_escalar(m, s); }
+
+/// Multiplicación Matriz-Vector (GEMV) para capas densas de IA
+funcion lista<decimal> matriz_producto_vector(Matriz2D m, lista<decimal> v) {
+    lista<decimal> res = [];
+    si m.columnas != v.largo() {
+        retornar res;
+    }
+    lista<decimal> d = m.datos;
+    entero cols = m.columnas;
+    para (entero i = 0; i < m.filas; i = i + 1) {
+        decimal suma = 0.0;
+        para (entero j = 0; j < cols; j = j + 1) {
+            suma = suma + (d[i * cols + j] * v[j]);
+        }
+        res.agregar(suma);
+    }
+    retornar res;
+}
+funcion lista<decimal> matrix_vector_mul(Matriz2D m, lista<decimal> v) { retornar matriz_producto_vector(m, v); }
+
+/// Formatea la matriz como texto para visualización e inspección
+funcion texto matriz_a_texto(Matriz2D m, entero max_filas = 4, entero max_cols = 4) {
+    texto out = "Matriz2D [" + a_texto(m.filas) + " x " + a_texto(m.columnas) + "]:\n";
+    entero lim_f = m.filas;
+    si lim_f > max_filas { lim_f = max_filas; }
+    entero lim_c = m.columnas;
+    si lim_c > max_cols { lim_c = max_cols; }
+    
+    para (entero i = 0; i < lim_f; i = i + 1) {
+        out = out + "  [ ";
+        para (entero j = 0; j < lim_c; j = j + 1) {
+            decimal val = matriz_obtener(m, i, j);
+            out = out + a_texto(val) + " ";
+        }
+        si m.columnas > max_cols { out = out + "... "; }
+        out = out + "]\n";
+    }
+    si m.filas > max_filas { out = out + "  [ ... ]\n"; }
+    retornar out;
+}

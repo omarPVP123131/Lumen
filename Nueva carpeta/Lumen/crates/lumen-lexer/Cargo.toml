@@ -1,0 +1,16 @@
+[package]
+name = "lumen-lexer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Léxico/Lexer del lenguaje de programación LÚMEN — análisis léxico con tokens en español"
+keywords = ["lumen", "language", "lexer", "tokenizer", "educational"]
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

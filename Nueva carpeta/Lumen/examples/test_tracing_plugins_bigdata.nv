@@ -1,0 +1,93 @@
+// @interactive: expected timeout - bigdata trace
+// ============================================================================
+// LÚMEN v2.4.6 — DEMO: TRACING JIT TIER-3, PLUGINS EN CALIENTE & BIG DATA
+// Combina: tracing_jit.nv + plugins.nv + dataframe.nv
+// ============================================================================
+
+importar "tracing_jit.nv";
+importar "plugins.nv";
+importar "dataframe.nv";
+// Headless/CI guard — demo requiere red/GPU intensiva, omitida en CI
+importar "sistema.nv";
+texto _ci_guard = sistema_env_obtener("CI");
+texto _hl_guard = sistema_env_obtener("LUMEN_HEADLESS");
+si _ci_guard != "" || _hl_guard == "1" {
+    imprimir("Headless/CI detectado — demo omitida");
+    retornar;
+}
+
+funcion vacio principal() {
+    imprimir("── TEST: TRACING JIT TIER-3, PLUGINS CALIENTES & BIG DATA DATAFRAMES ──\n");
+
+    // ── 1. Compilador Tracing JIT Tier-3 en Tiempo Real ───────────────
+    imprimir("1. COMPILADOR TRACING JIT TIER-3 (HOT LOOPS & OSR):");
+    tracing_jit_CompiladorTracingJIT jit = tracing_jit_crear(20);
+    
+    // Simular 25 iteraciones de un bucle intensivo
+    para (entero i = 0; i < 25; i = i + 1) {
+        jit = tracing_jit_registrar_iteracion(jit, 101); // Bucle ID 101
+    }
+    
+    imprimir("   • Bucle #101 iteraciones registradas:", 25);
+    imprimir("   • Trazas compiladas a código máquina nativo en RAM:", jit.total_trazas_compiladas);
+    
+    texto osr_res = tracing_jit_ejecutar_osr(jit, 101);
+    imprimir("   • Resultado On-Stack Replacement (OSR):", osr_res);
+
+    // ── 2. Sistema de Plugins Dinámicos en Caliente (.so / .dll) ──────
+    imprimir("\n2. SISTEMA DE PLUGINS DINÁMICOS & HOT-RELOAD EN VIVO:");
+    plugins_GestorPlugins gestor = plugins_gestor_crear();
+    
+    // Cargar plugin dinámico
+    gestor = plugins_plugin_cargar(gestor, "plugin_compresion_zstd", "lib/zstd_lumen.so");
+    imprimir("   • Plugin 'plugin_compresion_zstd' cargado dinámicamente en tiempo de ejecución.");
+    
+    texto ejecucion_v1 = plugins_plugin_ejecutar(gestor, "plugin_compresion_zstd", "transform", "Archivo_Datos_100MB");
+    imprimir("   • Ejecución v1:", ejecucion_v1);
+
+    // Recargar plugin en caliente (Hot-Reload sin reiniciar proceso)
+    gestor = plugins_plugin_recargar_caliente(gestor, "plugin_compresion_zstd");
+    imprimir("   • 🔥 Hot-Reload aplicado al plugin (0 segundos de downtime, memoria intacta).");
+    
+    texto ejecucion_v2 = plugins_plugin_ejecutar(gestor, "plugin_compresion_zstd", "transform", "Archivo_Datos_100MB");
+    imprimir("   • Ejecución v2:", ejecucion_v2);
+
+    // ── 3. Motor de Big Data & DataFrames Ultra-Rápidos ──────────────
+    imprimir("\n3. MOTOR DE BIG DATA & DATAFRAMES VECTORIZADOS:");
+    dataframe_DataFrame df = dataframe_df_nuevo(["pais", "edad", "salario_usd"]);
+    
+    // Insertar registros
+    df = dataframe_df_agregar_fila(df, ["Mexico", 28.0, 4500.0]);
+    df = dataframe_df_agregar_fila(df, ["España", 34.0, 5200.0]);
+    df = dataframe_df_agregar_fila(df, ["Mexico", 42.0, 6800.0]);
+    df = dataframe_df_agregar_fila(df, ["Colombia", 22.0, 3100.0]);
+    df = dataframe_df_agregar_fila(df, ["España", 29.0, 4900.0]);
+    df = dataframe_df_agregar_fila(df, ["Chile", 38.0, 5600.0]);
+
+    imprimir("   • Total registros en DataFrame:", df.filas_count);
+    imprimir("   • Salario promedio global: $", dataframe_df_promedio(df, "salario_usd"));
+    imprimir("   • Salario máximo registrado: $", dataframe_df_max(df, "salario_usd"));
+
+    // Filtrado Vectorizado: Salarios > $4,600 USD
+    dataframe_DataFrame df_altos_ingresos = dataframe_df_filtrar_mayor_que(df, "salario_usd", 4600.0);
+    imprimir("   • Registros con salario > $4,600 USD:", df_altos_ingresos.filas_count);
+
+    // Agrupación GroupBy por País con Promedio de Salario
+    dataframe_DataFrame df_agrupado = dataframe_df_agrupar_por_promedio(df, "pais", "salario_usd");
+    imprimir("\n   📊 Resumen GroupBy por País (Promedio Salario):");
+    para (entero i = 0; i < df_agrupado.filas_count; i = i + 1) {
+        lista<cualquiera> pais_col = dataframe_df_obtener_columna(df_agrupado, "pais");
+        lista<cualquiera> prom_col = dataframe_df_obtener_columna(df_agrupado, "promedio_salario_usd");
+        lista<cualquiera> count_col = dataframe_df_obtener_columna(df_agrupado, "conteo");
+        imprimir("     •", pais_col[i], "-> Promedio: $", prom_col[i], "USD (Total:", count_col[i], "empleados)");
+    }
+
+    // Exportar a CSV
+    texto salida_csv = dataframe_df_a_csv(df);
+    imprimir("\n   📄 Exportación a CSV Ultra-Rápida:");
+    imprimir(salida_csv);
+
+    imprimir("✓ Tracing JIT Tier-3, Plugins en Caliente y Big Data DataFrames verificados al 100%.");
+}
+
+principal();

@@ -1,0 +1,10 @@
+funcion texto repetir_t(texto s, entero n) {
+    texto res = "";
+    entero i = 0;
+    mientras i < n {
+        res = res + s;
+        i = i + 1;
+    }
+    retornar res;
+}
+imprimir(repetir_t("x", 5));

@@ -1,0 +1,21 @@
+// Módulo archivos — funciones para operaciones de archivos
+// Uso: importar "archivos.nv"
+// Las funciones se importan con prefijo archivos_
+
+// Leer contenido de un archivo
+// Retorna: resultado<texto, texto>
+funcion resultado<texto, texto> leer_archivo(texto ruta) {
+    retornar __leer_archivo(ruta);
+}
+
+// Escribir contenido a un archivo
+// Retorna: resultado<booleano, texto>
+funcion resultado<booleano, texto> escribir_archivo(texto ruta, texto contenido) {
+    retornar __escribir_archivo(ruta, contenido);
+}
+
+// Verificar si un archivo existe
+// Retorna: booleano
+funcion booleano existe_archivo(texto ruta) {
+    retornar __existe_archivo(ruta);
+}

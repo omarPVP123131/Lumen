@@ -1,0 +1,20 @@
+// Módulo serial — puerto serie vía FFI a kernel32.dll
+// Serial module — pure LÚMEN via CreateFileA FFI, dual ES/EN API
+// Uso: importar "serial.nv"
+
+cualquiera __k32 = __ffi_cargar("kernel32.dll");
+
+// CreateFileA constantes
+entero GENERIC_READ = 0x80000000;
+entero GENERIC_WRITE = 0x40000000;
+entero OPEN_EXISTING = 3;
+
+funcion booleano abrir(texto nombre) {
+    texto com = "\\\\.\\" + nombre;
+    entero handle = __ffi_llamar(__k32, "CreateFileA",
+        "texto,entero,entero,entero,entero,entero,entero",
+        [com, GENERIC_READ + GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0],
+        "entero");
+    retornar handle != -1 && handle != 0;
+}
+funcion booleano open(texto name) { retornar abrir(name); }

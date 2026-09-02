@@ -1,0 +1,36 @@
+// ==========================================
+// matematicas_jr.nv — Math operations (junior)
+// Uso: lumen run -L stdlib/ examples/jr/matematicas_jr.nv
+// ==========================================
+importar "matematicas.nv";
+
+imprimir("=== Matematicas JR: Basic Math ===");
+
+// ── Example 1: Absolute Value ──
+imprimir("--- Ej 1: Valor Absoluto (abs) ---");
+imprimir("abs(-5)   = ", matematicas_abs(-5));
+imprimir("abs(3.14) = ", matematicas_abs(3.14));
+imprimir("abs(-0.5) = ", matematicas_abs(-0.5));
+imprimir("abs(0)    = ", matematicas_abs(0));
+
+// ── Example 2: Max and Min ──
+imprimir("--- Ej 2: Máximo y Mínimo ---");
+imprimir("max(3, 7)     = ", matematicas_max(3, 7));
+imprimir("max(-2, -5)   = ", matematicas_max(-2, -5));
+imprimir("max(4.5, 2.1) = ", matematicas_max(4.5, 2.1));
+
+imprimir("min(3, 7)     = ", matematicas_min(3, 7));
+imprimir("min(-2, -5)   = ", matematicas_min(-2, -5));
+imprimir("min(4.5, 2.1) = ", matematicas_min(4.5, 2.1));
+
+// ── Example 3: Powers (potencia) ──
+imprimir("--- Ej 3: Potencias ---");
+imprimir("potencia(2, 0)  = ", matematicas_potencia(2, 0));
+imprimir("potencia(2, 1)  = ", matematicas_potencia(2, 1));
+imprimir("potencia(2, 3)  = ", matematicas_potencia(2, 3));
+imprimir("potencia(2, 8)  = ", matematicas_potencia(2, 8));
+imprimir("potencia(5, 3)  = ", matematicas_potencia(5, 3));
+imprimir("potencia(10, -1) = ", matematicas_potencia(10, -1));
+imprimir("potencia(2, -2)  = ", matematicas_potencia(2, -2));
+
+imprimir("--- FIN MATEMATICAS JR ---");

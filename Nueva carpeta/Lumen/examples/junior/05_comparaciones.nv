@@ -1,0 +1,11 @@
+importar ingles;
+
+integer x = 5;
+integer y = 10;
+
+print(x == y);
+print(x != y);
+print(x < y);
+print(x > y);
+print(x <= y);
+print(x >= y);

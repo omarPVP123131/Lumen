@@ -1,0 +1,20 @@
+importar ingles;
+
+funcion texto clasificar(texto s) {
+    elegir (s) {
+        caso "hola": retornar "saludo";
+        caso "adios": retornar "despedida";
+        caso "si" | "cierto": retornar "afirmacion";
+        caso "no" | "falso": retornar "negacion";
+        defecto: retornar "otro";
+    }
+}
+
+funcion entero principal() {
+    imprimir(clasificar("hola"));
+    imprimir(clasificar("adios"));
+    imprimir(clasificar("si"));
+    imprimir(clasificar("no"));
+    imprimir(clasificar("maybe"));
+    retornar 0;
+}

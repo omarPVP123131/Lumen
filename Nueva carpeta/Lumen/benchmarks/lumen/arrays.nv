@@ -1,0 +1,18 @@
+// Benchmark 5 — arrays dinámicos: push de 200k enteros y suma
+funcion numero bench_arrays(entero n) {
+    sea xs = [];
+    entero i = 0;
+    mientras (i < n) {
+        xs.agregar(i);
+        i = i + 1;
+    }
+    numero acc = 0;
+    entero j = 0;
+    mientras (j < n) {
+        acc = acc + xs[j];
+        j = j + 1;
+    }
+    retornar acc;
+}
+
+imprimir("arrays:" + bench_arrays(200000));

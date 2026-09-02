@@ -1,0 +1,438 @@
+// @should_error — compiler self-test, not for lumen run (use cargo test / fuego.ps1)
+imprimir("skip: compiler self-test — use cargo test"); retornar;
+// test_parser4.nv — Parser with numero types for map values
+// Key: use numero (not entero/texto) for __map_obtener results
+// Only a_texto() (builtin) for string conversion
+
+// ═══════════════════════════════════════════════════════════════
+// ── Lexer ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+funcion numero tokenizar(texto src) {
+    numero kw = __map_nuevo();
+    kw = __map_poner(kw, "si", 1); kw = __map_poner(kw, "if", 1);
+    kw = __map_poner(kw, "sino", 1); kw = __map_poner(kw, "else", 1);
+    kw = __map_poner(kw, "mientras", 1); kw = __map_poner(kw, "while", 1);
+    kw = __map_poner(kw, "para", 1); kw = __map_poner(kw, "for", 1);
+    kw = __map_poner(kw, "funcion", 1); kw = __map_poner(kw, "function", 1);
+    kw = __map_poner(kw, "retornar", 1); kw = __map_poner(kw, "return", 1);
+    kw = __map_poner(kw, "entero", 1); kw = __map_poner(kw, "texto", 1);
+    kw = __map_poner(kw, "booleano", 1); kw = __map_poner(kw, "decimal", 1);
+    kw = __map_poner(kw, "numero", 1); kw = __map_poner(kw, "void", 1);
+    kw = __map_poner(kw, "verdadero", 1); kw = __map_poner(kw, "true", 1);
+    kw = __map_poner(kw, "falso", 1); kw = __map_poner(kw, "false", 1);
+    kw = __map_poner(kw, "imprimir", 1); kw = __map_poner(kw, "estructura", 1);
+    kw = __map_poner(kw, "importar", 1); kw = __map_poner(kw, "romper", 1);
+    kw = __map_poner(kw, "continuar", 1);
+
+    entero n = largo(src); entero i = 0;
+    numero toks = __map_nuevo(); entero c = 0;
+
+    mientras (i < n) {
+        texto ch = src[i];
+
+        si (ch == " " || ch == "\t") { i = i + 1; continuar; }
+        si (ch == "\n" || ch == "\r") { i = i + 1; continuar; }
+
+        // Skip //
+        si (ch == "/" && i + 1 < n && src[i + 1] == "/") {
+            i = i + 2;
+            mientras (i < n && src[i] != "\n") { i = i + 1; }
+            continuar;
+        }
+
+        // String
+        si (ch == "\"") {
+            texto s = ""; i = i + 1;
+            mientras (i < n && src[i] != "\"") { s = s + src[i]; i = i + 1; }
+            i = i + 1;
+            numero t = __map_nuevo(); t = __map_poner(t, "t", 3); t = __map_poner(t, "v", s);
+            toks = __map_poner(toks, a_texto(c), t); c = c + 1; continuar;
+        }
+
+        // Number
+        si (ch >= "0" && ch <= "9") {
+            texto num = "";
+            mientras (i < n && src[i] >= "0" && src[i] <= "9") { num = num + src[i]; i = i + 1; }
+            si (i < n && src[i] == ".") {
+                num = num + "."; i = i + 1;
+                mientras (i < n && src[i] >= "0" && src[i] <= "9") { num = num + src[i]; i = i + 1; }
+            }
+            numero t = __map_nuevo(); t = __map_poner(t, "t", 2); t = __map_poner(t, "v", num);
+            toks = __map_poner(toks, a_texto(c), t); c = c + 1; continuar;
+        }
+
+        // Ident/Keyword
+        si ((ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_") {
+            texto id = "";
+            mientras (i < n && ((src[i] >= "a" && src[i] <= "z") || (src[i] >= "A" && src[i] <= "Z") || (src[i] >= "0" && src[i] <= "9") || src[i] == "_")) {
+                id = id + src[i]; i = i + 1;
+            }
+            entero tp = 1;
+            numero kwv = __map_obtener(kw, id);
+            si (kwv == 1) { tp = 6; }
+            numero t = __map_nuevo(); t = __map_poner(t, "t", tp); t = __map_poner(t, "v", id);
+            toks = __map_poner(toks, a_texto(c), t); c = c + 1; continuar;
+        }
+
+        // Operators
+        texto op = ch;
+        si (i + 1 < n) {
+            texto nxt = src[i + 1];
+            si (ch == "&" && nxt == "&") { op = "&&"; i = i + 1; }
+            si (ch == "|" && nxt == "|") { op = "||"; i = i + 1; }
+            si (ch == ">" && nxt == "=") { op = ">="; i = i + 1; }
+            si (ch == "<" && nxt == "=") { op = "<="; i = i + 1; }
+            si (ch == "!" && nxt == "=") { op = "!="; i = i + 1; }
+            si (ch == "=" && nxt == "=") { op = "=="; i = i + 1; }
+        }
+        numero t = __map_nuevo(); t = __map_poner(t, "t", 4); t = __map_poner(t, "v", op);
+        toks = __map_poner(toks, a_texto(c), t); c = c + 1; i = i + 1;
+    }
+
+    numero t = __map_nuevo(); t = __map_poner(t, "t", 99); t = __map_poner(t, "v", "");
+    toks = __map_poner(toks, a_texto(c), t); toks = __map_poner(toks, "cnt", c);
+    retornar toks;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── Parser State (numero for map values, entero for literals) ──
+// ═══════════════════════════════════════════════════════════════
+
+numero _pr_tokens = __map_nuevo();
+numero _pr_pos = 0;
+numero _pr_cnt = 0;
+
+funcion numero _tk() { retornar __map_obtener(_pr_tokens, a_texto(_pr_pos)); }
+funcion numero _tt() { numero t = _tk(); retornar __map_obtener(t, "t"); }
+funcion numero _tv() { numero t = _tk(); retornar __map_obtener(t, "v"); }
+funcion booleano _eof() { retornar _tt() == 99; }
+funcion void _av() { _pr_pos = _pr_pos + 1; }
+
+funcion booleano _ch(numero tt, texto vv) {
+    numero t = _tk(); numero a = __map_obtener(t, "t"); numero b = __map_obtener(t, "v");
+    retornar a == tt && b == vv;
+}
+
+funcion booleano _kw(texto w) { retornar _tt() == 6 && _tv() == w; }
+
+funcion booleano _tp() {
+    texto v = a_texto(_tv());
+    retornar _tt() == 6 && (v == "entero" || v == "texto" || v == "decimal" || v == "booleano" || v == "numero" || v == "void");
+}
+
+funcion void _sk() { si (_ch(5, ";")) { _av(); } }
+
+// --- AST builders ---
+funcion numero _nd(texto tp) { numero n = __map_nuevo(); n = __map_poner(n, "tipo", tp); retornar n; }
+funcion numero _n1(texto tp, texto k, numero v) { numero n = _nd(tp); n = __map_poner(n, k, v); retornar n; }
+funcion numero _n2(texto tp, texto k1, numero v1, texto k2, numero v2) { numero n = _n1(tp, k1, v1); n = __map_poner(n, k2, v2); retornar n; }
+funcion numero _n3(texto tp, texto k1, numero v1, texto k2, numero v2, texto k3, numero v3) { numero n = _n2(tp, k1, v1, k2, v2); n = __map_poner(n, k3, v3); retornar n; }
+funcion numero _n4(texto tp, texto k1, numero v1, texto k2, numero v2, texto k3, numero v3, texto k4, numero v4) { numero n = _n3(tp, k1, v1, k2, v2, k3, v3); n = __map_poner(n, k4, v4); retornar n; }
+funcion numero _ls(numero items, numero cnt) { items = __map_poner(items, "cnt", cnt); retornar items; }
+
+// Fwd decls
+funcion numero parse_stmt();
+funcion numero parse_blk();
+funcion numero parse_expr();
+
+// ═══════════════════════════════════════════════════════════════
+// ── Expression Parser ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+funcion numero parse_pr() {
+    numero tt = _tt(); texto tv = a_texto(_tv());
+
+    si (tt == 3) { _av(); retornar _n1("Texto", "v", tv); }
+    si (tt == 2) { _av(); retornar _n1("Literal", "v", tv); }
+    si (tt == 6 && (tv == "verdadero" || tv == "true" || tv == "falso" || tv == "false")) { _av(); retornar _n1("Bool", "v", tv); }
+
+    si (tt == 1 || (tt == 6 && !_tp() && tv != "verdadero" && tv != "true" && tv != "falso" && tv != "false")) {
+        texto nm = tv; _av();
+        si (_ch(5, "(")) {
+            _av(); numero args = __map_nuevo(); numero ac = 0;
+            mientras (!_eof()) {
+                si (_ch(5, ")")) { romper; }
+                si (ac > 0) { si (_ch(5, ",")) { _av(); } }
+                args = __map_poner(args, a_texto(ac), parse_expr()); ac = ac + 1;
+            }
+            _av(); retornar _n2("Call", "callee", nm, "args", _ls(args, ac));
+        }
+        retornar _n1("Ident", "nombre", nm);
+    }
+
+    si (_ch(5, "(")) { _av(); numero e = parse_expr(); _av(); retornar e; }
+    si (tt == 4 && (tv == "-" || tv == "!")) { _av(); retornar _n2("Unary", "op", tv, "expr", parse_pr()); }
+    _av(); retornar _n1("Literal", "v", "0");
+}
+
+funcion entero _prec(texto op) {
+    si (op == "||") { retornar 1; } si (op == "&&") { retornar 2; }
+    si (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=") { retornar 3; }
+    si (op == "+" || op == "-") { retornar 4; } si (op == "*" || op == "/" || op == "%") { retornar 5; }
+    retornar 0;
+}
+
+funcion numero parse_bin(entero mp) {
+    numero izq = parse_pr();
+    mientras (_tt() == 4) {
+        texto op = a_texto(_tv()); entero p = _prec(op);
+        si (p < mp) { romper; }
+        _av(); numero der = parse_bin(p + 1);
+        izq = _n3("Binary", "op", op, "izq", izq, "der", der);
+    }
+    retornar izq;
+}
+
+funcion numero parse_expr() { retornar parse_bin(0); }
+
+// ═══════════════════════════════════════════════════════════════
+// ── Block ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+funcion numero parse_blk() {
+    _av(); numero stmts = __map_nuevo(); numero sc = 0;
+    mientras (!_eof()) {
+        si (_ch(5, "}")) { romper; }
+        stmts = __map_poner(stmts, a_texto(sc), parse_stmt()); sc = sc + 1;
+    }
+    _av(); retornar _n1("Block", "cuerpo", _ls(stmts, sc));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── Statement ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+funcion numero parse_stmt() {
+    si (_eof()) { retornar _nd("Vacio"); }
+    numero tt = _tt(); texto tv = a_texto(_tv());
+
+    // Var decl: tipo nombre [= expr];
+    si (tt == 6 && _tp()) {
+        texto tvar = tv; _av();
+        texto nm = a_texto(_tv()); _av();
+        numero vl = _nd("Vacio");
+        si (_ch(4, "=")) { _av(); vl = parse_expr(); }
+        _sk(); retornar _n3("VarDecl", "nombre", nm, "tipo_var", tvar, "valor", vl);
+    }
+
+    // If
+    si (tt == 6 && (tv == "si" || tv == "if")) {
+        _av(); numero cond = parse_expr(); numero cuerpo = parse_blk();
+        numero _else = _nd("Vacio");
+        si (_kw("sino") || _kw("else")) {
+            _av();
+            si (_kw("si") || _kw("if")) { _else = parse_stmt(); }
+            sino { _else = parse_blk(); }
+        }
+        retornar _n3("If", "cond", cond, "cuerpo", cuerpo, "sino", _else);
+    }
+
+    // While
+    si (tt == 6 && (tv == "mientras" || tv == "while")) {
+        _av(); numero cond = parse_expr(); numero cuerpo = parse_blk();
+        retornar _n2("While", "cond", cond, "cuerpo", cuerpo);
+    }
+
+    // Return
+    si (tt == 6 && (tv == "retornar" || tv == "return")) {
+        _av(); numero vl = _nd("Vacio");
+        si (!_ch(5, ";") && !_ch(5, "}") && !_eof()) { vl = parse_expr(); }
+        _sk(); retornar _n1("Return", "valor", vl);
+    }
+
+    // Break/Continue
+    si (tt == 6 && (tv == "romper" || tv == "break")) { _av(); _sk(); retornar _nd("Break"); }
+    si (tt == 6 && tv == "continuar") { _av(); _sk(); retornar _nd("Continue"); }
+
+    // Import
+    si (tt == 6 && (tv == "importar" || tv == "import")) {
+        _av(); texto rt = a_texto(_tv()); _av(); _sk(); retornar _n1("Import", "ruta", rt);
+    }
+
+    // Assignment or expression
+    si (tt == 1 || tt == 6) {
+        texto nm = a_texto(_tv());
+        numero nxt = __map_obtener(_pr_tokens, a_texto(_pr_pos + 1));
+        numero nt = __map_obtener(nxt, "t"); texto nv = a_texto(__map_obtener(nxt, "v"));
+        si (nt == 4 && nv == "=") { _av(); _av(); numero vl = parse_expr(); _sk(); retornar _n2("Assign", "nombre", nm, "valor", vl); }
+        numero ex = parse_expr(); _sk(); retornar _n1("ExprStmt", "expr", ex);
+    }
+
+    si (!_eof()) { numero ex = parse_expr(); _sk(); retornar _n1("ExprStmt", "expr", ex); }
+    retornar _nd("Vacio");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── Declaration ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+funcion numero parse_decl() {
+    si (_eof()) { retornar _nd("Vacio"); }
+    numero tt = _tt(); texto tv = a_texto(_tv());
+
+    si (tt == 6 && (tv == "funcion" || tv == "function")) {
+        _av(); texto tr = "void";
+        si (_tp()) { tr = a_texto(_tv()); _av(); }
+        texto nm = a_texto(_tv()); _av();
+        _av(); // (
+        numero prms = __map_nuevo(); numero pc = 0;
+        mientras (!_eof()) {
+            si (_ch(5, ")")) { romper; }
+            si (pc > 0) { si (_ch(5, ",")) { _av(); } }
+            texto pt = a_texto(_tv()); _av();
+            texto pn = a_texto(_tv()); _av();
+            numero pm = __map_nuevo(); pm = __map_poner(pm, "nombre", pn); pm = __map_poner(pm, "tipo", pt);
+            prms = __map_poner(prms, a_texto(pc), pm); pc = pc + 1;
+        }
+        _av(); // )
+        numero bd = parse_blk();
+        retornar _n4("Func", "nombre", nm, "tipo_ret", tr, "params", _ls(prms, pc), "cuerpo", bd);
+    }
+    retornar parse_stmt();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── Program ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+funcion numero parser_prog() {
+    numero prog = _nd("Programa");
+    numero stmts = __map_nuevo(); numero sc = 0;
+    mientras (!_eof()) {
+        si (_ch(5, ";") || _ch(5, "}")) { _av(); continuar; }
+        numero tt = _tt(); texto tv = a_texto(_tv());
+        si (tt == 6 && (tv == "funcion" || tv == "function" || tv == "estructura" || tv == "importar" || tv == "import")) {
+            stmts = __map_poner(stmts, a_texto(sc), parse_decl()); sc = sc + 1;
+        } sino {
+            stmts = __map_poner(stmts, a_texto(sc), parse_stmt()); sc = sc + 1;
+        }
+    }
+    prog = __map_poner(prog, "cuerpo", _ls(stmts, sc));
+    retornar prog;
+}
+
+funcion numero parser_parse(numero tokens) {
+    _pr_tokens = tokens; _pr_pos = 0; _pr_cnt = __map_obtener(tokens, "cnt");
+    retornar parser_prog();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── AST Printer ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+funcion texto ast_prn(numero nodo, entero prof) {
+    texto tp = a_texto(__map_obtener(nodo, "tipo"));
+    texto pad = ""; entero i = 0;
+    mientras (i < prof) { pad = pad + "  "; i = i + 1; }
+
+    si (tp == "Programa") {
+        texto r = pad + "Programa\n";
+        numero stmts = __map_obtener(nodo, "cuerpo");
+        numero sc = __map_obtener(stmts, "cnt"); numero j = 0;
+        mientras (j < sc) { r = r + ast_prn(__map_obtener(stmts, a_texto(j)), prof + 1); j = j + 1; }
+        retornar r;
+    }
+    si (tp == "VarDecl") {
+        texto nm = a_texto(__map_obtener(nodo, "nombre"));
+        texto tvar = a_texto(__map_obtener(nodo, "tipo_var"));
+        numero vl = __map_obtener(nodo, "valor");
+        texto r = pad + "VarDecl(" + tvar + " " + nm;
+        si (a_texto(__map_obtener(vl, "tipo")) != "Vacio") { r = r + " = " + ast_prn(vl, 0); }
+        retornar r + ")\n";
+    }
+    si (tp == "Assign") {
+        texto nm = a_texto(__map_obtener(nodo, "nombre"));
+        retornar pad + "Assign(" + nm + " = " + ast_prn(__map_obtener(nodo, "valor"), 0) + ")\n";
+    }
+    si (tp == "If") {
+        texto r = pad + "If\n";
+        r = r + pad + "  cond: " + ast_prn(__map_obtener(nodo, "cond"), 0);
+        r = r + pad + "  cuerpo:\n" + ast_prn(__map_obtener(nodo, "cuerpo"), prof + 2);
+        numero _else = __map_obtener(nodo, "sino");
+        si (a_texto(__map_obtener(_else, "tipo")) != "Vacio") { r = r + pad + "  sino:\n" + ast_prn(_else, prof + 2); }
+        retornar r;
+    }
+    si (tp == "While") {
+        texto r = pad + "While\n";
+        r = r + pad + "  cond: " + ast_prn(__map_obtener(nodo, "cond"), 0);
+        r = r + pad + "  cuerpo:\n" + ast_prn(__map_obtener(nodo, "cuerpo"), prof + 2);
+        retornar r;
+    }
+    si (tp == "Return") {
+        numero vl = __map_obtener(nodo, "valor");
+        si (a_texto(__map_obtener(vl, "tipo")) == "Vacio") { retornar pad + "Return\n"; }
+        retornar pad + "Return(" + ast_prn(vl, 0) + ")\n";
+    }
+    si (tp == "Func") {
+        texto nm = a_texto(__map_obtener(nodo, "nombre"));
+        texto tr = a_texto(__map_obtener(nodo, "tipo_ret"));
+        texto r = pad + "Func(" + nm + " -> " + tr + ")\n";
+        numero prms = __map_obtener(nodo, "params");
+        numero pc = __map_obtener(prms, "cnt"); numero j = 0;
+        mientras (j < pc) {
+            numero p = __map_obtener(prms, a_texto(j));
+            r = r + pad + "  param: " + a_texto(__map_obtener(p, "tipo")) + " " + a_texto(__map_obtener(p, "nombre")) + "\n";
+            j = j + 1;
+        }
+        r = r + ast_prn(__map_obtener(nodo, "cuerpo"), prof + 1);
+        retornar r;
+    }
+    si (tp == "Block") {
+        texto r = pad + "Block\n";
+        numero stmts = __map_obtener(nodo, "cuerpo");
+        numero sc = __map_obtener(stmts, "cnt"); numero j = 0;
+        mientras (j < sc) { r = r + ast_prn(__map_obtener(stmts, a_texto(j)), prof + 1); j = j + 1; }
+        retornar r;
+    }
+    si (tp == "Call") {
+        texto cl = a_texto(__map_obtener(nodo, "callee"));
+        numero args = __map_obtener(nodo, "args");
+        numero ac = __map_obtener(args, "cnt"); texto r = pad + "Call(" + cl; numero j = 0;
+        mientras (j < ac) { r = r + " " + ast_prn(__map_obtener(args, a_texto(j)), 0); j = j + 1; }
+        retornar r + ")\n";
+    }
+    si (tp == "Binary") {
+        texto op = a_texto(__map_obtener(nodo, "op"));
+        retornar pad + "Binary(" + ast_prn(__map_obtener(nodo, "izq"), 0) + " " + op + " " + ast_prn(__map_obtener(nodo, "der"), 0) + ")\n";
+    }
+    si (tp == "Unary") {
+        texto op = a_texto(__map_obtener(nodo, "op"));
+        retornar pad + "Unary(" + op + ast_prn(__map_obtener(nodo, "expr"), 0) + ")\n";
+    }
+    si (tp == "Ident") { retornar a_texto(__map_obtener(nodo, "nombre")); }
+    si (tp == "Literal") { retornar a_texto(__map_obtener(nodo, "v")); }
+    si (tp == "Texto") { retornar "\"" + a_texto(__map_obtener(nodo, "v")) + "\""; }
+    si (tp == "Bool") { retornar a_texto(__map_obtener(nodo, "v")); }
+    si (tp == "ExprStmt") { retornar pad + ast_prn(__map_obtener(nodo, "expr"), prof); }
+    si (tp == "Import") { retornar pad + "Import(" + a_texto(__map_obtener(nodo, "ruta")) + ")\n"; }
+    si (tp == "Break") { retornar pad + "Break\n"; }
+    si (tp == "Continue") { retornar pad + "Continue\n"; }
+    si (tp == "Vacio") { retornar ""; }
+    retornar pad + tp + "(?)\n";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── Tests ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+funcion void probar(texto nm, texto src) {
+    imprimir(""); imprimir("=== ", nm, " ===");
+    imprimir("Source: ", src);
+    numero toks = tokenizar(src);
+    numero ast = parser_parse(toks);
+    texto sal = ast_prn(ast, 0);
+    imprimir(sal);
+}
+
+probar("Test 1: VarDecl", "entero x = 42;");
+probar("Test 2: Call", "imprimir(\"hola\");");
+probar("Test 3: Assign", "x = 10;");
+probar("Test 4: Return", "retornar x;");
+probar("Test 5: If", "si x > 5 { imprimir(x); }");
+probar("Test 6: Func", "funcion entero suma(entero a, entero b) { retornar a + b; }");
+probar("Test 7: If-Else", "si x > 0 { imprimir(x); } sino { imprimir(0); }");
+probar("Test 8: While", "mientras x > 0 { x = x - 1; }");
+probar("Test 9: Multi", "entero x = 42; texto y = \"ok\";");
+
+imprimir(""); imprimir("=== TODAS LAS PRUEBAS COMPLETADAS ===");

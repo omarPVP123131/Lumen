@@ -1,0 +1,46 @@
+// ==========================================
+// texto_jr.nv — String operations (junior)
+// Uso: lumen run -L stdlib/ examples/jr/texto_jr.nv
+// ==========================================
+importar "texto.nv";
+
+imprimir("=== Texto JR: String Operations ===");
+
+// ── Example 1: Uppercase, Lowercase, Length ──
+imprimir("--- Ej 1: Mayúsculas/Minúsculas/Longitud ---");
+sea nombre = "Lúmen";
+imprimir("original:    ", nombre);
+imprimir("mayúsculas:  ", texto_mayusculas(nombre));
+imprimir("minúsculas:  ", texto_minusculas(nombre));
+imprimir("longitud:    ", texto_longitud(nombre));
+
+// English aliases
+imprimir("uppercase:   ", texto_uppercase("hello"));
+imprimir("lowercase:   ", texto_lowercase("WORLD"));
+imprimir("length:      ", texto_length("abc"));
+
+// ── Example 2: Contains & Trim ──
+imprimir("--- Ej 2: Contiene y Recortar ---");
+sea frase = "  Hola Mundo Lúmen  ";
+imprimir("frase:            '", frase, "'");
+imprimir("recortar:         '", texto_recortar(frase), "'");
+imprimir("contiene 'Mundo': ", texto_contiene(frase, "Mundo"));
+imprimir("contiene 'Luna':  ", texto_contiene(frase, "Luna"));
+
+// English aliases
+imprimir("trim:             '", texto_trim("  spaces  "), "'");
+imprimir("contains 'pen':   ", texto_contains("pencil", "pen"));
+imprimir("contains 'xyz':   ", texto_contains("pencil", "xyz"));
+
+// ── Example 3: Padding ──
+imprimir("--- Ej 3: Padding ---");
+sea codigo = "42";
+imprimir("original:      ", codigo);
+imprimir("pad_start(5):  '", texto_padding_inicio(codigo, 5, "0"), "'");
+imprimir("pad_end(5):    '", texto_padding_fin(codigo, 5, "."), "'");
+
+// English aliases
+imprimir("pad_start(6):  '", texto_pad_start("A1", 6, "#"), "'");
+imprimir("pad_end(6):    '", texto_pad_end("B2", 6, "-"), "'");
+
+imprimir("--- FIN TEXTO JR ---");

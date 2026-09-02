@@ -1,0 +1,13 @@
+// Prueba de Compilación Cruzada Multi-Target en LÚMEN
+funcion entero suma(entero a, entero b) {
+    retornar a + b;
+}
+
+funcion vacio principal() {
+    imprimir("── BINARIO NATIVO MULTI-ARQUITECTURA LÚMEN ──");
+    entero res = suma(100, 250);
+    imprimir("• Resultado en hardware nativo:", res);
+    imprimir("✓ Ejecución multi-target exitosa.");
+}
+
+principal();

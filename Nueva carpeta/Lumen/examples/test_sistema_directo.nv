@@ -1,0 +1,32 @@
+// @expected_failure: Add requires numbers - sistema_temp_archivo cross-platform (fixed in sistema.nv)
+importar "sistema.nv";
+importar "archivos.nv";
+
+imprimir("=== Sistema Test ===");
+
+sea res = sistema_ejecutar("echo Hola Mundo");
+imprimir("echo: ", res);
+
+sea ruta_var = sistema_env_obtener("PATH");
+imprimir("PATH exists: ", ruta_var);
+
+sistema_env_asignar("LUMEN_TEST", "funciona");
+sea val_test = sistema_env_obtener("LUMEN_TEST");
+imprimir("LUMEN_TEST: ", val_test);
+
+sea lista_vars = sistema_env_listar();
+imprimir("vars count: ", lista_vars.largo());
+
+sea unido = sistema_path_unir("carpeta", "archivo.txt");
+imprimir("unido: ", unido);
+
+sea ext = sistema_path_extension("documento.pdf");
+imprimir("extension: ", ext);
+
+sea tmp_dir = sistema_temp_directorio();
+imprimir("temp dir: ", tmp_dir);
+
+sea tmp_file = sistema_temp_archivo();
+imprimir("temp file existe: ", archivos_existe_archivo(tmp_file));
+
+imprimir("--- FIN ---");
